@@ -1,0 +1,26 @@
+# Android / Gradle
+*.iml
+.gradle/
+/build
+/app/build
+/core/*/build
+/feature/*/build
+/build-logic/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# IDE
+/.idea/
+.DS_Store
+
+# Подпись — никогда не коммитить
+*.jks
+*.keystore
+*.pepk
+
+# Артефакты сборки базы
+/tools/builddb/.venv/
+/tools/builddb/cache/
+/tools/builddb/out/
