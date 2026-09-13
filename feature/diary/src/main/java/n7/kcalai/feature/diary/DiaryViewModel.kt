@@ -40,6 +40,7 @@ import n7.kcalai.repositories.DaySummary
 import n7.kcalai.repositories.DayTotals
 import n7.kcalai.repositories.DiaryRepository
 import n7.kcalai.repositories.FoodRepository
+import n7.kcalai.repositories.LabelReading
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.resolver.TextFoodResolver
 
@@ -57,14 +58,27 @@ sealed interface Overlay {
      * Промах скана — и это основной исход, а не сбой: российских товаров
      * в Open Food Facts порядка тридцати шести тысяч.
      *
-     * [draft] сегодня всегда пуст. Поле существует ради v2, где таблицу с упаковки
-     * прочитает OCR: подключить его тогда — это заполнить черновик, а не переделывать
-     * форму. Стоит это сейчас одного параметра.
+     * [draft] приходит со съёмки этикетки, [numbers] — запасной путь на случай,
+     * когда числа прочитались, но не сошлись между собой: форма покажет их чипсами.
      */
     data class NewProduct(
         val gtin: String,
         val draft: ProductDraft = ProductDraft.EMPTY,
+        val numbers: List<String> = emptyList(),
     ) : Overlay
+
+    /**
+     * Съёмка таблицы пищевой ценности.
+     *
+     * [current] — то, что уже набрано в форме. Едет сюда и возвращается обратно
+     * не для красоты: уход на камеру выбрасывает форму из `when`, и всё набранное
+     * пропало бы вместе с `remember`. Отмена съёмки обязана вернуть человека
+     * ровно туда, откуда он ушёл, а не на пустую форму.
+     *
+     * Имя в нём особенно ценно: распознаватель латинский и кириллицу не прочитает
+     * никогда, так что название — единственное, что может прийти только от человека.
+     */
+    data class LabelScan(val gtin: String, val current: ProductDraft) : Overlay
 }
 
 /** Всё, что посчитали модели персонализации для этого дня. */
@@ -414,6 +428,38 @@ class DiaryViewModel(
             scanned.value = candidate.toScannedItem(EntrySource.MANUAL)
             onContributionQueued()
         }
+    }
+
+    /** Человек пошёл снимать этикетку. Набранное едет с ним — см. [Overlay.LabelScan]. */
+    fun onScanLabel(gtin: String, current: ProductDraft) {
+        overlay.value = Overlay.LabelScan(gtin, current)
+    }
+
+    /**
+     * Этикетка снята — возвращаемся в форму.
+     *
+     * Распознанные цифры перекрывают набранные: за ними человек и ходил. А имя
+     * и порция берутся из формы — их OCR не даёт вовсе, и затирать введённое
+     * пустотой было бы прямой потерей работы.
+     *
+     * Числа передаются всегда, даже когда разбор сошёлся: сверять подставленное
+     * с упаковкой всё равно человеку, и если значение встало не туда, поправить
+     * его тапом по чипсу быстрее, чем набирать заново.
+     */
+    fun onLabelRead(gtin: String, current: ProductDraft, reading: LabelReading) {
+        overlay.value = Overlay.NewProduct(
+            gtin = gtin,
+            draft = reading.draft.copy(
+                name = current.name,
+                servingG = current.servingG,
+            ),
+            numbers = reading.numbers,
+        )
+    }
+
+    /** Съёмку закрыли, ничего не сняв. Форма обязана вернуться такой, какой была. */
+    fun onLabelCancelled(gtin: String, current: ProductDraft) {
+        overlay.value = Overlay.NewProduct(gtin = gtin, draft = current)
     }
 
     /**

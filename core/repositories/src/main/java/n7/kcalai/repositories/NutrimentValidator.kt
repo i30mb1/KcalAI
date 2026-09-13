@@ -41,8 +41,27 @@ object NutrimentValidator {
      */
     private const val BALANCE_MIN_KCAL = 20
 
-    /** Допуск четверть — клетчатка, многоатомные спирты и округление на этикетке. */
-    private const val BALANCE_TOLERANCE = 0.25
+    /**
+     * Допуск четверть — клетчатка, многоатомные спирты и округление на этикетке.
+     *
+     * Публичный, потому что тем же допуском разбор этикетки выбирает, какое
+     * из распознанных чисел белок, а какое жир: расходись эти два числа —
+     * разбор предлагал бы наборы, которые форма тут же помечает подозрительными.
+     */
+    const val BALANCE_TOLERANCE = 0.25
+
+    /**
+     * Сколько килокалорий дают макросы по Этуотеру: 4 ккал на грамм белка
+     * и углеводов, 9 — на грамм жира.
+     *
+     * Вынесена из [check], потому что считает по ней не только валидатор.
+     * `LabelParser` расставляет по ней безымянные числа с этикетки, и обе стороны
+     * обязаны считать одинаково: разойдясь, они дадут продукты, которые разбор
+     * подставил, а валидатор здесь же и забраковал.
+     */
+    fun atwaterKcal(n: Nutriments): Double =
+        // Макросы в сотых грамма, поэтому делим на сто: (сг * 4) / 100 = г * 4.
+        (n.prot100 * 4 + n.fat100 * 9 + n.carb100 * 4) / 100.0
 
     fun check(n: Nutriments): NutrimentCheck {
         val error = firstError(n)
@@ -78,8 +97,7 @@ object NutrimentValidator {
     private fun balanceWarning(n: Nutriments): String? {
         if (n.kcal100 <= BALANCE_MIN_KCAL) return null
 
-        // Макросы в сотых грамма, поэтому делим на сто: (сг * 4) / 100 = г * 4.
-        val fromMacros = (n.prot100 * 4 + n.fat100 * 9 + n.carb100 * 4) / 100.0
+        val fromMacros = atwaterKcal(n)
         if (abs(n.kcal100 - fromMacros) <= n.kcal100 * BALANCE_TOLERANCE) return null
 
         return "По белкам, жирам и углеводам выходит ${fromMacros.toInt()} ккал, " +

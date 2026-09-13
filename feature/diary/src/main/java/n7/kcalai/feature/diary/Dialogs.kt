@@ -2,16 +2,25 @@ package n7.kcalai.feature.diary
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -20,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -213,22 +223,31 @@ fun GramsEditor(
  * заполненное здесь оседает локально и находится мгновенно навсегда, а копия уезжает
  * на сервер, чтобы следующий человек с этой же пачкой формы уже не увидел.
  *
- * [draft] — вход для v2, где таблицу с упаковки прочитает OCR. Сегодня он пуст,
- * и форма от этого не отличается от написанной без него.
+ * Пять значений с мобильной клавиатуры, три из них дробные, — это то место,
+ * где люди бросают приложение. Поэтому здесь есть съёмка этикетки: [draft]
+ * приходит из [n7.kcalai.repositories.LabelParser], а [numbers] — распознанные
+ * числа, которые разбор не смог разложить сам.
  */
 @Composable
 fun NewProductDialog(
     gtin: String,
     draft: ProductDraft,
+    numbers: List<String>,
     onConfirm: (name: String, nutriments: Nutriments, servingG: Int?) -> Unit,
+    onScanLabel: (ProductDraft) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var name by remember { mutableStateOf(draft.name.orEmpty()) }
-    var kcal by remember { mutableStateOf(draft.kcal100?.toString().orEmpty()) }
-    var prot by remember { mutableStateOf(draft.prot100.toGramsInput()) }
-    var fat by remember { mutableStateOf(draft.fat100.toGramsInput()) }
-    var carb by remember { mutableStateOf(draft.carb100.toGramsInput()) }
-    var serving by remember { mutableStateOf(draft.servingG?.toString().orEmpty()) }
+    // Ключ по draft обязателен: после съёмки форма возвращается тем же composable,
+    // и без ключа remember удержал бы значения, которые человек как раз и заменял.
+    var name by remember(draft) { mutableStateOf(draft.name.orEmpty()) }
+    var kcal by remember(draft) { mutableStateOf(draft.kcal100?.toString().orEmpty()) }
+    var prot by remember(draft) { mutableStateOf(draft.prot100.toGramsInput()) }
+    var fat by remember(draft) { mutableStateOf(draft.fat100.toGramsInput()) }
+    var carb by remember(draft) { mutableStateOf(draft.carb100.toGramsInput()) }
+    var serving by remember(draft) { mutableStateOf(draft.servingG?.toString().orEmpty()) }
+
+    /** Куда подставит число тап по чипсу. Живёт дольше фокуса — см. [ScannedNumbers]. */
+    var focused by remember { mutableStateOf<LabelField?>(null) }
 
     // Незаполненный макрос — это ноль, а не отказ сохранять: у растительного масла
     // белков действительно нет, и заставлять человека печатать «0» незачем.
@@ -257,6 +276,34 @@ fun NewProductDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
+                OutlinedButton(
+                    onClick = {
+                        onScanLabel(
+                            ProductDraft(
+                                name = name.takeIf(String::isNotBlank),
+                                kcal100 = kcal.toIntOrNull(),
+                                prot100 = prot.toCentigrams(),
+                                fat100 = fat.toCentigrams(),
+                                carb100 = carb.toCentigrams(),
+                                servingG = serving.toIntOrNull(),
+                            )
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text("Снять этикетку")
+                }
+
+                // Название распознаватель не прочитает: ML Kit не умеет кириллицу.
+                // Говорим об этом прямо, иначе съёмка выглядит наполовину сломанной.
+                Text(
+                    "Цифры снимутся с таблицы пищевой ценности. Название придётся ввести самому.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -266,13 +313,31 @@ fun NewProductDialog(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 )
 
-                NumberField(kcal, { kcal = it }, "Калории на 100 г")
+                NumberField(kcal, { kcal = it }, "Калории на 100 г", Modifier.focusAs(LabelField.KCAL) { focused = it })
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DecimalField(prot, { prot = it }, "Белки, г", Modifier.weight(1f))
-                    DecimalField(fat, { fat = it }, "Жиры, г", Modifier.weight(1f))
-                    DecimalField(carb, { carb = it }, "Углеводы, г", Modifier.weight(1f))
+                    DecimalField(prot, { prot = it }, "Белки, г", Modifier.weight(1f).focusAs(LabelField.PROT) { focused = it })
+                    DecimalField(fat, { fat = it }, "Жиры, г", Modifier.weight(1f).focusAs(LabelField.FAT) { focused = it })
+                    DecimalField(carb, { carb = it }, "Углеводы, г", Modifier.weight(1f).focusAs(LabelField.CARB) { focused = it })
                 }
-                NumberField(serving, { serving = it }, "Порция, г — необязательно")
+                NumberField(
+                    serving,
+                    { serving = it },
+                    "Порция, г — необязательно",
+                    Modifier.focusAs(LabelField.SERVING) { focused = it },
+                )
+
+                if (numbers.isNotEmpty()) {
+                    ScannedNumbers(numbers, focused) { value ->
+                        when (focused) {
+                            LabelField.KCAL -> kcal = value.filter(Char::isDigit)
+                            LabelField.PROT -> prot = value
+                            LabelField.FAT -> fat = value
+                            LabelField.CARB -> carb = value
+                            LabelField.SERVING -> serving = value.filter(Char::isDigit)
+                            null -> Unit
+                        }
+                    }
+                }
 
                 // Ошибка гасит кнопку, замечание — нет. Расходящиеся цифры бывают
                 // напечатаны на реальной упаковке, и спорить с упаковкой мы не вправе.
@@ -300,6 +365,57 @@ fun NewProductDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
+}
+
+/** Поля, в которые можно подставить число с этикетки. */
+enum class LabelField { KCAL, PROT, FAT, CARB, SERVING }
+
+/**
+ * Запоминает поле, когда в него встаёт курсор.
+ *
+ * Фокус именно запоминается, а не читается в момент тапа: нажатие на чипс фокус
+ * с поля снимает, и спрашивать о нём было бы уже поздно.
+ */
+private fun Modifier.focusAs(field: LabelField, onFocused: (LabelField) -> Unit): Modifier =
+    onFocusChanged { state -> if (state.isFocused) onFocused(field) }
+
+/**
+ * Числа, которые распознались, но которые разбор не разложил сам.
+ *
+ * Так выглядит честный отказ: приложение не угадывает, куда поставить цифру,
+ * а показывает всё, что увидело, и отдаёт решение человеку. Четыре тапа —
+ * всё равно несопоставимо быстрее, чем набрать «12,4» на мобильной клавиатуре.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ScannedNumbers(
+    numbers: List<String>,
+    focused: LabelField?,
+    onPick: (String) -> Unit,
+) {
+    Column {
+        Text(
+            if (focused == null) {
+                "Распознано с этикетки — коснитесь поля, потом числа"
+            } else {
+                "Распознано с этикетки"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            numbers.distinct().forEach { value ->
+                SuggestionChip(
+                    onClick = { onPick(value) },
+                    enabled = focused != null,
+                    label = { Text(value, style = MaterialTheme.typography.labelMedium) },
+                )
+            }
+        }
+    }
 }
 
 /** Сотые грамма в то, что человек ожидает увидеть в поле: «12.34», но «5», а не «5.0». */

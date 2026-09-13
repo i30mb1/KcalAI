@@ -49,6 +49,7 @@ import kotlin.math.abs
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.totals
+import n7.kcalai.feature.scanner.LabelScannerDialog
 import n7.kcalai.feature.scanner.ScannerDialog
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.MealType
@@ -106,10 +107,19 @@ fun DiaryRoute(viewModel: DiaryViewModel) {
         is Overlay.NewProduct -> NewProductDialog(
             gtin = overlay.gtin,
             draft = overlay.draft,
+            numbers = overlay.numbers,
             onConfirm = { name, nutriments, servingG ->
                 viewModel.onSaveNewProduct(overlay.gtin, name, nutriments, servingG)
             },
+            onScanLabel = { current -> viewModel.onScanLabel(overlay.gtin, current) },
             onDismiss = viewModel::onDismissOverlay,
+        )
+
+        is Overlay.LabelScan -> LabelScannerDialog(
+            onRead = { reading -> viewModel.onLabelRead(overlay.gtin, overlay.current, reading) },
+            // Закрыть съёмку — вернуться в форму, а не потерять её вместе
+            // с набранным именем и введённым кодом.
+            onDismiss = { viewModel.onLabelCancelled(overlay.gtin, overlay.current) },
         )
     }
 }
