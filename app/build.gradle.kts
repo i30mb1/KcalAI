@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
@@ -31,12 +32,43 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
+    androidResources {
+        // seed.db копируется из assets потоком; несжатый ассет отдаёт честную длину,
+        // по которой SeedInstaller решает, нужно ли переустанавливать копию.
+        noCompress += "db"
+    }
+
+    buildFeatures {
+        compose = true
+    }
 }
 
 dependencies {
-    implementation(libs.androidx.appcompat)
+    implementation(project(":core:model"))
+    implementation(project(":core:fooddb"))
+    implementation(project(":core:database"))
+    implementation(project(":core:repositories"))
+    implementation(project(":core:resolver"))
+    implementation(project(":feature:diary"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)
+    implementation(libs.kotlinx.coroutines.android)
+    // Драйвер справочника создаётся здесь, в месте сборки графа зависимостей.
+    implementation(libs.androidx.sqlite.bundled)
+
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    debugImplementation(libs.androidx.compose.ui.tooling)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)

@@ -26,3 +26,9 @@ dependencyResolutionManagement {
 rootProject.name = "Kcal AI"
 include(":app")
 include(":core:model")
+include(":core:fooddb")
+include(":core:database")
+include(":core:personal")
+include(":core:repositories")
+include(":core:resolver")
+include(":feature:diary")
