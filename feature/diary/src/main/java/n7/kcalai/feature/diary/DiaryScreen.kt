@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlin.math.abs
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.totals
@@ -154,9 +156,6 @@ fun DiaryScreen(
         }
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            TotalsHeader(state.totals, state.goal)
-            HorizontalDivider()
-
             state.personal.mealGap?.let { gap ->
                 GapBanner(
                     gap = gap,
@@ -165,20 +164,31 @@ fun DiaryScreen(
                 )
             }
 
+            // Шапка и график уезжают вместе со списком, а не висят закреплёнными:
+            // триста точек несдвигаемой высоты на небольшом экране не оставили бы
+            // места самим записям. Закреплена только строка ввода.
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(vertical = 8.dp),
+                contentPadding = PaddingValues(bottom = 8.dp),
             ) {
+                item { GoalCard(state.totals, state.goal) }
+
+                item {
+                    WeekChart(
+                        days = state.week,
+                        goalKcal = state.goal?.kcal,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
+                    )
+                }
+
                 if (state.entries.isEmpty()) {
                     item { EmptyHint() }
                 } else {
-                    items(state.entries, key = { it.id }) { entry ->
-                        EntryRow(
-                            entry = entry,
-                            onEdit = { onEditEntry(entry) },
-                            onDelete = { onDeleteEntry(entry.id) },
-                        )
-                    }
+                    mealSections(
+                        entries = state.entries,
+                        onEditEntry = onEditEntry,
+                        onDeleteEntry = onDeleteEntry,
+                    )
                 }
 
                 state.personal.dayPlan?.let { plan ->
@@ -198,47 +208,76 @@ fun DiaryScreen(
     }
 }
 
+/**
+ * Цель и остаток до неё.
+ *
+ * Крупным числом стоит остаток, а не съеденное, и это главная перемена на экране:
+ * трекер открывают с вопросом «сколько мне ещё можно», а не «сколько я уже съел».
+ * Второе выводится из первого, обратное — нет.
+ *
+ * Крупное число на экране ровно одно: соревнование двух заголовков за внимание
+ * означает, что не читается ни один.
+ */
 @Composable
-private fun TotalsHeader(totals: NutrimentTotals, goal: DailyGoalEntity?) {
-    Column {
+private fun GoalCard(totals: NutrimentTotals, goal: DailyGoalEntity?) {
+    val target = goal?.kcal?.takeIf { it > 0 }
+    val remaining = target?.let { it - totals.kcal }
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text(
+            when {
+                remaining == null -> "Съедено за день"
+                remaining >= 0 -> "Осталось"
+                else -> "Перебор"
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Text(
+            (remaining?.let { abs(it) } ?: totals.kcal).toString(),
+            style = MaterialTheme.typography.displayMedium,
+            fontWeight = FontWeight.Bold,
+            // Перебор выделяется цветом, но остаётся числом, а не упрёком:
+            // подпись выше уже сказала, что произошло.
+            color = if (remaining != null && remaining < 0) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+        )
+
+        Text(
+            if (target == null) {
+                "ккал · задайте цель, чтобы видеть остаток"
+            } else {
+                "ккал · съедено ${totals.kcal} из $target"
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        if (target != null) {
+            LinearProgressIndicator(
+                progress = { (totals.kcal.toFloat() / target).coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+            )
+        }
+
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    if (goal == null) "${totals.kcal}" else "${totals.kcal} / ${goal.kcal}",
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    "ккал за день",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
             Macro("Б", totals.protCg)
             Macro("Ж", totals.fatCg)
             Macro("У", totals.carbCg)
-        }
-
-        // Прогресс не ограничивается единицей намеренно: перебор надо видеть,
-        // а полоса, упёршаяся в край, врёт о том, насколько именно перебрал.
-        if (goal != null && goal.kcal > 0) {
-            LinearProgressIndicator(
-                progress = { (totals.kcal.toFloat() / goal.kcal).coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
     }
 }
 
 @Composable
 private fun Macro(label: String, centigrams: Int) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(start = 20.dp),
-    ) {
+    Column {
         Text(formatCentigrams(centigrams), style = MaterialTheme.typography.titleMedium)
         Text(
             label,
@@ -247,6 +286,70 @@ private fun Macro(label: String, centigrams: Int) {
         )
     }
 }
+
+/**
+ * Записи дня, разложенные по приёмам пищи.
+ *
+ * `MealType` проставляется каждой записи по времени добавления и до сих пор жил
+ * только внутри моделей персонализации. Здесь он наконец виден: день, разбитый
+ * на завтрак-обед-ужин, читается с одного взгляда, а плоский список — нет.
+ *
+ * Пустые приёмы не показываются. Пустая секция «Ужин» в три часа дня — это не
+ * структура, а упрёк; про действительно пропущенный приём отдельно спрашивает
+ * [GapBanner], и делает это по данным, а не по часам.
+ */
+private fun LazyListScope.mealSections(
+    entries: List<DiaryEntryEntity>,
+    onEditEntry: (DiaryEntryEntity) -> Unit,
+    onDeleteEntry: (Long) -> Unit,
+) {
+    val byMeal = entries.groupBy { it.meal }
+
+    MEAL_ORDER.forEach { meal ->
+        val mealEntries = byMeal[meal].orEmpty()
+        if (mealEntries.isEmpty()) return@forEach
+
+        item(key = "meal-$meal") {
+            MealHeader(meal, mealEntries.sumOf { it.totals().kcal })
+        }
+        items(mealEntries, key = { it.id }) { entry ->
+            EntryRow(
+                entry = entry,
+                onEdit = { onEditEntry(entry) },
+                onDelete = { onDeleteEntry(entry.id) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MealHeader(meal: MealType, kcal: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            mealName(meal),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "$kcal ккал",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Порядок секций — по ходу дня, а не по алфавиту и не по тому, что записали раньше. */
+private val MEAL_ORDER = listOf(
+    MealType.BREAKFAST,
+    MealType.LUNCH,
+    MealType.DINNER,
+    MealType.SNACK,
+)
 
 @Composable
 private fun EmptyHint() {

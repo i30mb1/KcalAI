@@ -36,6 +36,7 @@ import n7.kcalai.personal.PersonalRepository
 import n7.kcalai.personal.PortionObservation
 import n7.kcalai.personal.ShownCandidate
 import n7.kcalai.personal.TdeeEstimate
+import n7.kcalai.repositories.DaySummary
 import n7.kcalai.repositories.DayTotals
 import n7.kcalai.repositories.DiaryRepository
 import n7.kcalai.repositories.FoodRepository
@@ -94,6 +95,8 @@ data class DiaryUiState(
     val scanned: ResolvedItem? = null,
     val entries: List<DiaryEntryEntity> = emptyList(),
     val totals: NutrimentTotals = NutrimentTotals.ZERO,
+    /** Калории по дням за неделю, последний элемент — сегодня. Всегда семь элементов. */
+    val week: List<DaySummary> = emptyList(),
     val date: LocalDate = LocalDate.now(),
     val goal: DailyGoalEntity? = null,
     val personal: PersonalState = PersonalState(),
@@ -143,9 +146,12 @@ class DiaryViewModel(
     private val goal = diary.observeGoal(today)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    private val week = diary.observeWeek(today)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     private val typing = combine(input, suggestions, scanned, searching, overlay, ::TypingState)
 
-    val state = combine(typing, day, goal, personalState) { typed, dayTotals, dailyGoal, models ->
+    val state = combine(typing, day, goal, personalState, week) { typed, dayTotals, dailyGoal, models, days ->
         DiaryUiState(
             input = typed.input,
             suggestions = typed.suggestions,
@@ -153,6 +159,7 @@ class DiaryViewModel(
             searching = typed.searching,
             entries = dayTotals.entries,
             totals = dayTotals.totals,
+            week = days,
             date = LocalDate.now(clock),
             goal = dailyGoal,
             personal = models,

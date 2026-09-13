@@ -24,6 +24,18 @@ data class DayTotals(
     }
 }
 
+/**
+ * Калории одного дня — точка графика за неделю.
+ *
+ * Только калории: график отвечает на вопрос «как я шёл всю неделю», и макросы
+ * на нём превратились бы во второй масштаб на одной оси, то есть в выдуманную
+ * связь между величинами разного порядка.
+ */
+data class DaySummary(
+    val dateEpochDay: Long,
+    val kcal: Int,
+)
+
 /** Что именно кладём в дневник: продукт, вес и чем он был распознан. */
 data class DiaryAddition(
     val candidate: FoodCandidate,
@@ -76,6 +88,31 @@ class DiaryRepository(
         diaryDao.observeDay(date).map { entries ->
             DayTotals(entries = entries, totals = entries.sumTotals())
         }
+
+    /**
+     * Калории по дням за последние [days] суток, включая сегодня.
+     *
+     * Ряд всегда полной длины: день без записей это ноль, а не пропуск. «Я ничего
+     * не записал в четверг» и «четверга не было» — разные утверждения, и решать,
+     * какое из них показывать, должен слой данных, а не композиция.
+     *
+     * Суммирование идёт поэлементно через [totals], а не `SUM()` в SQL. Итог дня
+     * в шапке экрана считается так же, с округлением на каждой записи; агрегат
+     * в SQL округлял бы один раз в конце и расходился бы с шапкой на единицы
+     * килокалорий — в одном экране, на глазах у человека.
+     */
+    fun observeWeek(todayEpochDay: Long, days: Int = 7): Flow<List<DaySummary>> {
+        val from = todayEpochDay - (days - 1)
+        return diaryDao.observeSince(from).map { entries ->
+            val byDay = entries.groupBy { it.dateEpochDay }
+            (from..todayEpochDay).map { day ->
+                DaySummary(
+                    dateEpochDay = day,
+                    kcal = byDay[day]?.sumTotals()?.kcal ?: 0,
+                )
+            }
+        }
+    }
 
     suspend fun delete(id: Long) = diaryDao.delete(id)
 

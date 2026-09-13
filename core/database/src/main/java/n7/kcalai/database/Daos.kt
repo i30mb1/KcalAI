@@ -36,6 +36,15 @@ interface DiaryDao {
     @Query("SELECT * FROM diary_entry WHERE dateEpochDay >= :fromEpochDay ORDER BY dateEpochDay, createdAt, id")
     suspend fun since(fromEpochDay: Long): List<DiaryEntryEntity>
 
+    /**
+     * То же окно, но потоком — для графика за неделю.
+     *
+     * Отдельно от [since] намеренно: модели персонализации читают историю разово
+     * в момент пересчёта, а график обязан шевелиться от каждой добавленной записи.
+     */
+    @Query("SELECT * FROM diary_entry WHERE dateEpochDay >= :fromEpochDay ORDER BY dateEpochDay, createdAt, id")
+    fun observeSince(fromEpochDay: Long): Flow<List<DiaryEntryEntity>>
+
     @Query("SELECT * FROM diary_entry WHERE id = :id")
     suspend fun findById(id: Long): DiaryEntryEntity?
 

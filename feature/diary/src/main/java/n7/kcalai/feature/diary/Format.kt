@@ -25,6 +25,14 @@ fun formatDate(date: LocalDate): String {
 fun formatGrams(grams: Int): String =
     if (grams >= 1000) "${formatCentigrams(grams / 10)} кг" else "$grams г"
 
+/** «пн», «вт» — ось графика за неделю: полное название дня туда семь раз не помещается. */
+fun formatWeekdayShort(date: LocalDate): String =
+    date.dayOfWeek.getDisplayName(TextStyle.SHORT, RU).trimEnd('.')
+
+/** «13 сентября» — без дня недели: на графике он уже подписан буквами. */
+fun formatDayMonth(date: LocalDate): String =
+    "${date.dayOfMonth} ${date.month.getDisplayName(TextStyle.FULL, RU)}"
+
 /** Название приёма пищи в именительном падеже. */
 fun mealName(meal: MealType): String = when (meal) {
     MealType.BREAKFAST -> "Завтрак"
