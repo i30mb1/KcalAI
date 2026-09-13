@@ -50,6 +50,7 @@ dependencies {
     implementation(project(":core:database"))
     implementation(project(":core:repositories"))
     implementation(project(":core:resolver"))
+    implementation(project(":core:remote"))
     implementation(project(":feature:diary"))
 
     implementation(libs.androidx.core.ktx)
@@ -57,6 +58,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     // Драйвер справочника создаётся здесь, в месте сборки графа зависимостей.
     implementation(libs.androidx.sqlite.bundled)
+    // Отправка вкладов переживает потерю сети, закрытие приложения и перезагрузку.
+    implementation(libs.androidx.work.runtime.ktx)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

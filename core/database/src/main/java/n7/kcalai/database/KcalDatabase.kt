@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
     entities = [
         DiaryEntryEntity::class,
         UserFoodEntity::class,
+        CachedProductEntity::class,
+        ContributionEntity::class,
         DailyGoalEntity::class,
         BodyMetricEntity::class,
         SuggestionEventEntity::class,
@@ -19,12 +21,14 @@ import kotlinx.coroutines.Dispatchers
         RankerStateEntity::class,
         MealGapDismissEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class KcalDatabase : RoomDatabase() {
     abstract fun diaryDao(): DiaryDao
     abstract fun userFoodDao(): UserFoodDao
+    abstract fun cachedProductDao(): CachedProductDao
+    abstract fun contributionDao(): ContributionDao
     abstract fun goalDao(): GoalDao
     abstract fun bodyMetricDao(): BodyMetricDao
     abstract fun personalDao(): PersonalDao

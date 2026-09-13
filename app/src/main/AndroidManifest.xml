@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+        Сеть нужна только при промахе локального поиска: опрос сервера и Open Food
+        Facts по штрих-коду плюс отправка заведённых вручную продуктов.
+        Разрешение камеры объявляет :feature:scanner — там оно и живёт.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name=".KcalApp"
         android:allowBackup="true"

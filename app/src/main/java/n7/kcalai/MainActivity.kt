@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import n7.kcalai.feature.diary.DiaryRoute
 import n7.kcalai.feature.diary.DiaryViewModel
 import n7.kcalai.ui.KcalTheme
+import n7.kcalai.work.ContributionWorker
 
 class MainActivity : ComponentActivity() {
 
@@ -25,6 +26,10 @@ class MainActivity : ComponentActivity() {
                             diary = container.diaryRepository,
                             resolver = container.textResolver,
                             personal = container.personalRepository,
+                            food = container.foodRepository,
+                            // Продукт сохранён локально и уже работает; отправку
+                            // берёт на себя WorkManager, когда появится сеть.
+                            onContributionQueued = { ContributionWorker.enqueue(applicationContext) },
                         )
                     )
                 )

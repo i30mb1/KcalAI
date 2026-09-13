@@ -18,6 +18,9 @@ dependencies {
     api(project(":core:personal"))
     api(project(":core:repositories"))
     api(project(":core:resolver"))
+    // Сканер — оверлей поверх дневника, а не отдельный экран: точка входа в него
+    // живёт в строке ввода, и разводить их по разным местам незачем.
+    api(project(":feature:scanner"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

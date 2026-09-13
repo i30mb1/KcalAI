@@ -64,6 +64,36 @@ interface UserFoodDao {
 }
 
 @Dao
+interface CachedProductDao {
+
+    /** Свежий ответ вытесняет прошлый: цифры на упаковке меняются, и наш кэш не архив. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(product: CachedProductEntity)
+
+    @Query("SELECT * FROM cached_product WHERE gtin = :gtin LIMIT 1")
+    suspend fun findByGtin(gtin: String): CachedProductEntity?
+}
+
+/**
+ * Очередь вкладов.
+ *
+ * Читается только фоновой отправкой — экранов у неё нет и не предполагается:
+ * человек отправляет продукт тем, что заполняет форму, и знать про очередь не должен.
+ */
+@Dao
+interface ContributionDao {
+
+    @Insert
+    suspend fun insert(contribution: ContributionEntity): Long
+
+    @Query("SELECT * FROM contribution WHERE sentAt IS NULL ORDER BY createdAt LIMIT :limit")
+    suspend fun pending(limit: Int): List<ContributionEntity>
+
+    @Query("UPDATE contribution SET sentAt = :sentAt WHERE id IN (:ids)")
+    suspend fun markSent(ids: List<Long>, sentAt: Long)
+}
+
+@Dao
 interface GoalDao {
 
     @Upsert

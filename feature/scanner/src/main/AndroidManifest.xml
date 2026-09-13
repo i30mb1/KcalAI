@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        Разрешение объявляется здесь, а не в :app: камера нужна этому модулю
+        и исчезнет вместе с ним. Отказ не тупик — сканер переключается
+        на ручной ввод цифр, поэтому камера и не required.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
+</manifest>

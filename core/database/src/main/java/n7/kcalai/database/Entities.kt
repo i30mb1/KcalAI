@@ -5,6 +5,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.MealType
+import n7.kcalai.model.ProductOrigin
 
 /**
  * Запись дневника.
@@ -40,6 +41,54 @@ data class UserFoodEntity(
     val fat100: Int,
     val carb100: Int,
     val createdAt: Long,
+)
+
+/**
+ * Ответ сети, сохранённый до следующего раза.
+ *
+ * Отдельная таблица, а не строки в `user_food`, — и причина не в удобстве.
+ * [ProductOrigin] помечает происхождение, а разделение хранилищ гарантирует, что
+ * пришедшее из Open Food Facts физически не может попасть в очередь отправки:
+ * [ContributionEntity] собирается из `user_food`, куда сеть не пишет никогда.
+ *
+ * Побочная польза обычная: повторный скан того же товара работает в самолёте.
+ */
+@Entity(tableName = "cached_product")
+data class CachedProductEntity(
+    @PrimaryKey val gtin: String,
+    val name: String,
+    val brand: String?,
+    val kcal100: Int,
+    val prot100: Int,
+    val fat100: Int,
+    val carb100: Int,
+    val servingG: Int?,
+    val origin: ProductOrigin,
+    val fetchedAt: Long,
+)
+
+/**
+ * Продукт, заведённый руками, в очереди на отправку.
+ *
+ * Дубликат `user_food` по содержимому, и это намеренно: человек вправе переименовать
+ * или удалить свой продукт, а уже отправленный вклад от этого меняться не должен.
+ * Очередь — журнал того, что мы обещали отдать, а не проекция текущего состояния.
+ *
+ * [sentAt] `null` означает «ещё не ушло». Строки не удаляются после отправки:
+ * повторная отправка того же GTIN стоит дешевле, чем потерянный вклад.
+ */
+@Entity(tableName = "contribution", indices = [Index("sentAt")])
+data class ContributionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val gtin: String,
+    val name: String,
+    val kcal100: Int,
+    val prot100: Int,
+    val fat100: Int,
+    val carb100: Int,
+    val servingG: Int?,
+    val createdAt: Long,
+    val sentAt: Long? = null,
 )
 
 /**

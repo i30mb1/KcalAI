@@ -13,9 +13,14 @@ import n7.kcalai.fooddb.FoodDb
 import n7.kcalai.fooddb.FoodDbFactory
 import n7.kcalai.fooddb.SeedInstaller
 import n7.kcalai.personal.PersonalRepository
+import n7.kcalai.remote.ChainedProductSource
+import n7.kcalai.remote.ContributionUploader
+import n7.kcalai.remote.KcalServerSource
+import n7.kcalai.remote.OffProductSource
 import n7.kcalai.repositories.DiaryRepository
 import n7.kcalai.repositories.FoodDbSource
 import n7.kcalai.repositories.FoodRepository
+import n7.kcalai.repositories.RemoteProductSource
 import n7.kcalai.resolver.TextFoodResolver
 
 /**
@@ -51,8 +56,36 @@ class AppContainer(context: Context) {
 
     val database: KcalDatabase by lazy { KcalDatabase.build(appContext) }
 
+    /**
+     * Свой сервер. Пока пуст — источник просто пропускается, и цепочка идёт в OFF.
+     *
+     * Сервер пишется отдельно и клиент не блокирует: весь путь до него уже написан
+     * и проверяется на OFF, а появление адреса здесь ничего больше не потребует.
+     */
+    private val kcalServer by lazy { KcalServerSource(baseUrl = SERVER_BASE_URL, userAgent = USER_AGENT) }
+
+    /**
+     * Свой сервер спрашивается раньше Open Food Facts.
+     *
+     * Порядок содержательный: в своём пуле лежат российские товары, заведённые
+     * людьми вручную, — тех самых, которых в OFF нет и не появится. И только ответ
+     * своего сервера мы вправе раздавать дальше: OFF лежит под ODbL.
+     */
+    val remoteProductSource: RemoteProductSource by lazy {
+        ChainedProductSource(listOf(kcalServer, OffProductSource(USER_AGENT)))
+    }
+
+    val contributionUploader: ContributionUploader get() = kcalServer
+
     val foodRepository: FoodRepository by lazy {
-        FoodRepository(foodDbSource, database.userFoodDao(), foodDbDispatcher)
+        FoodRepository(
+            foodDb = foodDbSource,
+            userFoodDao = database.userFoodDao(),
+            cachedProductDao = database.cachedProductDao(),
+            contributionDao = database.contributionDao(),
+            remote = remoteProductSource,
+            dispatcher = foodDbDispatcher,
+        )
     }
 
     val diaryRepository: DiaryRepository by lazy {
@@ -75,5 +108,18 @@ class AppContainer(context: Context) {
 
     val textResolver: TextFoodResolver by lazy {
         TextFoodResolver(foodRepository, personalRepository)
+    }
+
+    private companion object {
+        /** Появится, когда появится сервер. Пустая строка означает «источника нет». */
+        const val SERVER_BASE_URL = ""
+
+        /**
+         * Open Food Facts режет запросы без описательного User-Agent — это их прямое
+         * требование к клиентам, а не рекомендация. Когда появится публичный адрес
+         * проекта или почта для связи, их стоит подставить сюда: так у OFF будет
+         * кого спросить, если наш клиент начнёт вести себя неправильно.
+         */
+        const val USER_AGENT = "KcalAI/1.0 (Android; n7.kcalai)"
     }
 }

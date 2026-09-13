@@ -24,6 +24,8 @@ import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
+import n7.kcalai.model.Nutriments
+import n7.kcalai.model.ProductDraft
 import n7.kcalai.model.parseFoodRef
 import n7.kcalai.model.serialize
 import n7.kcalai.personal.ConfirmedPick
@@ -36,6 +38,7 @@ import n7.kcalai.personal.ShownCandidate
 import n7.kcalai.personal.TdeeEstimate
 import n7.kcalai.repositories.DayTotals
 import n7.kcalai.repositories.DiaryRepository
+import n7.kcalai.repositories.FoodRepository
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.resolver.TextFoodResolver
 
@@ -45,6 +48,22 @@ sealed interface Overlay {
     data object Goal : Overlay
     data object Weight : Overlay
     data class EditGrams(val entry: DiaryEntryEntity) : Overlay
+
+    /** Камера. */
+    data object Scan : Overlay
+
+    /**
+     * Промах скана — и это основной исход, а не сбой: российских товаров
+     * в Open Food Facts порядка тридцати шести тысяч.
+     *
+     * [draft] сегодня всегда пуст. Поле существует ради v2, где таблицу с упаковки
+     * прочитает OCR: подключить его тогда — это заполнить черновик, а не переделывать
+     * форму. Стоит это сейчас одного параметра.
+     */
+    data class NewProduct(
+        val gtin: String,
+        val draft: ProductDraft = ProductDraft.EMPTY,
+    ) : Overlay
 }
 
 /** Всё, что посчитали модели персонализации для этого дня. */
@@ -64,6 +83,15 @@ data class DiaryUiState(
     /** Чем может быть набранное блюдо. Каждое предложение — готовая к добавлению позиция. */
     val suggestions: List<ResolvedItem> = emptyList(),
     val searching: Boolean = false,
+    /**
+     * Товар, найденный по штрих-коду.
+     *
+     * Отдельно от [suggestions] намеренно, хотя рисуется тем же чипсом. Список
+     * предложений — это выдача поиска, и тап по нему учит ранжирующую модель.
+     * Скан выдачей не является: человек не выбирал из вариантов, и считать его тап
+     * исправлением ранжирования значило бы учить модель на том, чего она не показывала.
+     */
+    val scanned: ResolvedItem? = null,
     val entries: List<DiaryEntryEntity> = emptyList(),
     val totals: NutrimentTotals = NutrimentTotals.ZERO,
     val date: LocalDate = LocalDate.now(),
@@ -75,9 +103,9 @@ data class DiaryUiState(
     val nothingFound: Boolean
         get() = input.isNotBlank() && !searching && suggestions.isEmpty()
 
-    /** Предсказания уместны, только пока человек ничего не набрал. */
+    /** Предсказания уместны, только пока человек ничего не набрал и ничего не отсканировал. */
     val showPredictions: Boolean
-        get() = input.isBlank() && personal.predictions.isNotEmpty()
+        get() = input.isBlank() && scanned == null && personal.predictions.isNotEmpty()
 }
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
@@ -85,11 +113,20 @@ class DiaryViewModel(
     private val diary: DiaryRepository,
     private val resolver: TextFoodResolver,
     private val personal: PersonalRepository,
+    private val food: FoodRepository,
+    /**
+     * Пнуть очередь отправки после того, как человек завёл продукт.
+     *
+     * Колбэк, а не WorkManager напрямую: планировщик — деталь сборки приложения,
+     * и тащить его в модуль экрана ради одного вызова незачем.
+     */
+    private val onContributionQueued: () -> Unit = {},
     private val clock: Clock = Clock.systemDefaultZone(),
 ) : ViewModel() {
 
     private val input = MutableStateFlow("")
     private val suggestions = MutableStateFlow<List<ResolvedItem>>(emptyList())
+    private val scanned = MutableStateFlow<ResolvedItem?>(null)
     private val searching = MutableStateFlow(false)
     private val overlay = MutableStateFlow<Overlay>(Overlay.None)
     private val personalState = MutableStateFlow(PersonalState())
@@ -106,12 +143,13 @@ class DiaryViewModel(
     private val goal = diary.observeGoal(today)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val typing = combine(input, suggestions, searching, overlay, ::TypingState)
+    private val typing = combine(input, suggestions, scanned, searching, overlay, ::TypingState)
 
     val state = combine(typing, day, goal, personalState) { typed, dayTotals, dailyGoal, models ->
         DiaryUiState(
             input = typed.input,
             suggestions = typed.suggestions,
+            scanned = typed.scanned,
             searching = typed.searching,
             entries = dayTotals.entries,
             totals = dayTotals.totals,
@@ -125,6 +163,7 @@ class DiaryViewModel(
     private class TypingState(
         val input: String,
         val suggestions: List<ResolvedItem>,
+        val scanned: ResolvedItem?,
         val searching: Boolean,
         val overlay: Overlay,
     )
@@ -195,6 +234,8 @@ class DiaryViewModel(
     fun onInputChange(text: String) {
         input.value = text
         if (text.isBlank()) suggestions.value = emptyList()
+        // Человек начал набирать — значит, к отсканированному он не вернётся.
+        if (text.isNotBlank()) scanned.value = null
     }
 
     /**
@@ -284,6 +325,106 @@ class DiaryViewModel(
         )
     }
 
+    // --- Скан штрих-кода --------------------------------------------------------------
+
+    fun onOpenScan() {
+        overlay.value = Overlay.Scan
+    }
+
+    /**
+     * Код распознан — дальше цепочка: свои продукты, справочник, кэш, сеть.
+     *
+     * Найденное показывается чипсом и ждёт тапа, а не падает в дневник само.
+     * Скан опознаёт товар, но не знает, сколько его съели, и молча записать
+     * целую пачку было бы хуже, чем не записать ничего.
+     */
+    fun onScanned(gtin: String) {
+        overlay.value = Overlay.None
+        scanned.value = null
+
+        viewModelScope.launch {
+            searching.value = true
+            val candidate = try {
+                food.byBarcode(gtin)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                // Сюда входит и отсутствие сети. Промах и сбой ведут в одну и ту же
+                // форму, и различать их перед человеком незачем.
+                Log.e(TAG, "поиск по коду $gtin не удался", error)
+                null
+            } finally {
+                searching.value = false
+            }
+
+            if (candidate == null) {
+                overlay.value = Overlay.NewProduct(gtin)
+            } else {
+                scanned.value = candidate.toScannedItem(EntrySource.BARCODE)
+            }
+        }
+    }
+
+    /** Тап по отсканированному. Ранжирующая модель об этом не узнаёт — см. [DiaryUiState.scanned]. */
+    fun onPickScanned(item: ResolvedItem) {
+        val candidate = item.candidate ?: return
+        if (item.grams <= 0) return
+
+        scanned.value = null
+        viewModelScope.launch {
+            val context = context()
+            diary.add(
+                candidate = candidate,
+                grams = item.grams,
+                meal = context.meal,
+                date = context.dateEpochDay,
+                source = item.source,
+                now = clock.millis(),
+            )
+        }
+    }
+
+    /**
+     * Сохранение продукта, заведённого после промаха.
+     *
+     * Продукт оседает локально и находится мгновенно навсегда, а копия уходит
+     * в очередь отправки — чтобы следующий человек с той же пачкой форму уже не видел.
+     * Валидация цифр осталась в форме: сюда попадает только прошедшее её.
+     */
+    fun onSaveNewProduct(gtin: String, name: String, nutriments: Nutriments, servingG: Int?) {
+        overlay.value = Overlay.None
+
+        viewModelScope.launch {
+            val candidate = try {
+                food.saveOwnProduct(gtin, name, nutriments, servingG, clock.millis())
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                Log.e(TAG, "не удалось сохранить продукт $gtin", error)
+                return@launch
+            }
+
+            scanned.value = candidate.toScannedItem(EntrySource.MANUAL)
+            onContributionQueued()
+        }
+    }
+
+    /**
+     * Чипс для найденного товара.
+     *
+     * Вес берётся из типичной порции, а когда её нет — сто грамм, и это честно
+     * помечается [ResolvedItem.gramsGuessed]: число подставили мы, а не человек,
+     * и памяти личных порций такое наблюдение не годится.
+     */
+    private fun FoodCandidate.toScannedItem(source: EntrySource) = ResolvedItem(
+        sourceText = displayName,
+        candidate = this,
+        grams = servingG ?: DEFAULT_PORTION_G,
+        confidence = 1f,
+        source = source,
+        gramsGuessed = servingG == null,
+    )
+
     fun onDeleteEntry(id: Long) {
         viewModelScope.launch { diary.delete(id) }
     }
@@ -357,16 +498,21 @@ class DiaryViewModel(
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 250L
         const val TAG = "DiaryViewModel"
+
+        /** Когда у товара не указана порция: сто грамм — то, к чему привязан сам КБЖУ. */
+        const val DEFAULT_PORTION_G = 100
     }
 
     class Factory(
         private val diary: DiaryRepository,
         private val resolver: TextFoodResolver,
         private val personal: PersonalRepository,
+        private val food: FoodRepository,
+        private val onContributionQueued: () -> Unit = {},
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            DiaryViewModel(diary, resolver, personal) as T
+            DiaryViewModel(diary, resolver, personal, food, onContributionQueued) as T
     }
 }
 

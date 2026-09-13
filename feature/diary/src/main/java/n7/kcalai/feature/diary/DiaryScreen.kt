@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.MonitorWeight
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.totals
+import n7.kcalai.feature.scanner.ScannerDialog
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
@@ -61,6 +63,8 @@ fun DiaryRoute(viewModel: DiaryViewModel) {
         state = state,
         onInputChange = viewModel::onInputChange,
         onPick = { item -> viewModel.onPick(item) },
+        onPickScanned = viewModel::onPickScanned,
+        onOpenScan = viewModel::onOpenScan,
         onPickCandidate = { candidate -> viewModel.onPickPrediction(candidate) },
         onPickForMeal = viewModel::onPickPrediction,
         onPickPlan = { option -> option.items.forEach { viewModel.onPickPrediction(it) } },
@@ -91,6 +95,20 @@ fun DiaryRoute(viewModel: DiaryViewModel) {
             onConfirm = { grams -> viewModel.onEditGrams(overlay.entry.id, grams) },
             onDismiss = viewModel::onDismissOverlay,
         )
+
+        Overlay.Scan -> ScannerDialog(
+            onScanned = viewModel::onScanned,
+            onDismiss = viewModel::onDismissOverlay,
+        )
+
+        is Overlay.NewProduct -> NewProductDialog(
+            gtin = overlay.gtin,
+            draft = overlay.draft,
+            onConfirm = { name, nutriments, servingG ->
+                viewModel.onSaveNewProduct(overlay.gtin, name, nutriments, servingG)
+            },
+            onDismiss = viewModel::onDismissOverlay,
+        )
     }
 }
 
@@ -100,6 +118,8 @@ fun DiaryScreen(
     state: DiaryUiState,
     onInputChange: (String) -> Unit,
     onPick: (ResolvedItem) -> Unit,
+    onPickScanned: (ResolvedItem) -> Unit,
+    onOpenScan: () -> Unit,
     onPickCandidate: (FoodCandidate) -> Unit,
     onPickForMeal: (FoodCandidate, MealType) -> Unit,
     onPickPlan: (PlanOption) -> Unit,
@@ -170,6 +190,8 @@ fun DiaryScreen(
                 state = state,
                 onInputChange = onInputChange,
                 onPick = onPick,
+                onPickScanned = onPickScanned,
+                onOpenScan = onOpenScan,
                 onPickCandidate = onPickCandidate,
             )
         }
@@ -285,6 +307,8 @@ private fun InputArea(
     state: DiaryUiState,
     onInputChange: (String) -> Unit,
     onPick: (ResolvedItem) -> Unit,
+    onPickScanned: (ResolvedItem) -> Unit,
+    onOpenScan: () -> Unit,
     onPickCandidate: (FoodCandidate) -> Unit,
 ) {
     Surface(tonalElevation = 3.dp) {
@@ -293,7 +317,10 @@ private fun InputArea(
                 LinearProgressIndicator(Modifier.fillMaxWidth())
             }
 
-            if (state.suggestions.isNotEmpty()) {
+            if (state.scanned != null) {
+                ScannedRow(state.scanned, onPickScanned)
+                HorizontalDivider()
+            } else if (state.suggestions.isNotEmpty()) {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -320,6 +347,10 @@ private fun InputArea(
             // Кнопки отправки нет намеренно: добавляет только тап по чипсу.
             // Вторая точка входа означала бы выбор «первого попавшегося» вслепую —
             // ровно того, от чего предложения и защищают.
+            //
+            // Кнопка справа не отправляет, а переключает способ ввода: у товара
+            // в упаковке штрих-код точнее любого названия, и заставлять человека
+            // набирать «активиа натуральная 4%» вместо одного наведения камеры незачем.
             OutlinedTextField(
                 value = state.input,
                 onValueChange = onInputChange,
@@ -327,6 +358,11 @@ private fun InputArea(
                 placeholder = { Text("Что съели?") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                trailingIcon = {
+                    IconButton(onClick = onOpenScan) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = "Сканировать штрих-код")
+                    }
+                },
             )
         }
     }
@@ -375,6 +411,26 @@ private fun PredictionRow(predictions: List<FoodCandidate>, onPick: (FoodCandida
                 )
             }
         }
+    }
+}
+
+/**
+ * Товар, опознанный по штрих-коду.
+ *
+ * Тот же чипс, что и у текстовой выдачи, и то же правило: подтверждение остаётся
+ * за человеком. Скан знает, что это за товар, но не знает, сколько его съели, —
+ * и молча записать целую пачку было бы хуже, чем не записать ничего.
+ */
+@Composable
+private fun ScannedRow(item: ResolvedItem, onPick: (ResolvedItem) -> Unit) {
+    Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Text(
+            if (item.gramsGuessed) "Найдено по коду · вес поправьте после добавления" else "Найдено по коду",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+        )
+        SuggestionChip(item) { onPick(item) }
     }
 }
 

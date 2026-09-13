@@ -2,6 +2,10 @@ package n7.kcalai.repositories
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import n7.kcalai.database.CachedProductDao
+import n7.kcalai.database.CachedProductEntity
+import n7.kcalai.database.ContributionDao
+import n7.kcalai.database.ContributionEntity
 import n7.kcalai.database.UserFoodDao
 import n7.kcalai.database.UserFoodEntity
 import n7.kcalai.fooddb.FoodDb
@@ -9,6 +13,7 @@ import n7.kcalai.fooddb.ProductRow
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.FoodRef
 import n7.kcalai.model.Nutriments
+import n7.kcalai.model.ProductOrigin
 
 /**
  * Отложенное открытие справочника.
@@ -19,6 +24,27 @@ import n7.kcalai.model.Nutriments
  */
 fun interface FoodDbSource {
     suspend fun get(): FoodDb
+}
+
+/** Товар, пришедший по сети. [origin] решает, можно ли его отдавать дальше. */
+data class RemoteProduct(
+    val gtin: String,
+    val name: String,
+    val brand: String?,
+    val nutriments: Nutriments,
+    val servingG: Int?,
+    val origin: ProductOrigin,
+)
+
+/**
+ * Сеть глазами репозитория.
+ *
+ * `null` значит «не нашли» и «не смогли спросить» одновременно, и различать их здесь
+ * незачем: оба случая ведут в одну и ту же форму ручного ввода. Реализация обязана
+ * не бросать на сетевых сбоях — промах это штатный ход, а не исключительная ситуация.
+ */
+fun interface RemoteProductSource {
+    suspend fun fetch(gtin: String): RemoteProduct?
 }
 
 /**
@@ -33,15 +59,86 @@ fun interface FoodDbSource {
 class FoodRepository(
     private val foodDb: FoodDbSource,
     private val userFoodDao: UserFoodDao,
+    private val cachedProductDao: CachedProductDao,
+    private val contributionDao: ContributionDao,
+    private val remote: RemoteProductSource,
     private val dispatcher: CoroutineDispatcher,
 ) {
 
     private suspend fun <T> onDb(block: (FoodDb) -> T): T =
         withContext(dispatcher) { block(foodDb.get()) }
 
+    /**
+     * Цепочка поиска по штрих-коду: локальное, потом сеть.
+     *
+     * Каждый шаг дороже предыдущего, поэтому порядок не косметический. Свои продукты
+     * и справочник отвечают мгновенно и офлайн; кэш — это прошлые сетевые ответы,
+     * из-за него повторный скан того же товара работает в самолёте; и только потом
+     * поднимается радио.
+     *
+     * Сетевой ответ оседает в `cached_product` с пометкой источника. В `user_food`
+     * он не попадает никогда — там живёт только введённое человеком, и именно
+     * поэтому очередь отправки не может заразиться данными под ODbL.
+     */
     suspend fun byBarcode(gtin: String): FoodCandidate? {
         userFoodDao.findByBarcode(gtin)?.let { return it.toCandidate() }
-        return onDb { it.findByBarcode(gtin) }?.toCandidate()
+        onDb { it.findByBarcode(gtin) }?.let { return it.toCandidate() }
+        cachedProductDao.findByGtin(gtin)?.let { return it.toCandidate() }
+
+        val fetched = remote.fetch(gtin) ?: return null
+        cachedProductDao.insert(fetched.toEntity(fetchedAt = System.currentTimeMillis()))
+        return fetched.toCandidate()
+    }
+
+    /**
+     * Продукт, заведённый человеком после промаха скана.
+     *
+     * Две записи в одном вызове, и разводить их по разным местам нельзя: `user_food`
+     * закрывает вопрос для этого телефона навсегда и офлайн, `contribution` — обещание
+     * отдать находку остальным. Забыть второе означало бы, что каждый пользователь
+     * бьётся с одним и тем же промахом в одиночку.
+     */
+    suspend fun saveOwnProduct(
+        gtin: String?,
+        name: String,
+        nutriments: Nutriments,
+        servingG: Int?,
+        now: Long,
+    ): FoodCandidate {
+        val id = userFoodDao.insert(
+            UserFoodEntity(
+                barcode = gtin,
+                name = name,
+                kcal100 = nutriments.kcal100,
+                prot100 = nutriments.prot100,
+                fat100 = nutriments.fat100,
+                carb100 = nutriments.carb100,
+                createdAt = now,
+            )
+        )
+
+        // Без кода вклад бесполезен: у остальных нечем его найти.
+        if (gtin != null) {
+            contributionDao.insert(
+                ContributionEntity(
+                    gtin = gtin,
+                    name = name,
+                    kcal100 = nutriments.kcal100,
+                    prot100 = nutriments.prot100,
+                    fat100 = nutriments.fat100,
+                    carb100 = nutriments.carb100,
+                    servingG = servingG,
+                    createdAt = now,
+                )
+            )
+        }
+
+        return FoodCandidate(
+            ref = FoodRef.User(id),
+            displayName = name,
+            nutriments = nutriments,
+            servingG = servingG,
+        )
     }
 
     suspend fun search(query: String, limit: Int): List<FoodCandidate> {
@@ -76,9 +173,15 @@ class FoodRepository(
         else -> emptyMap()
     }
 
-    /** Актуальные значения по ссылке. `null`, если ссылка протухла после обновления справочника. */
+    /**
+     * Актуальные значения по ссылке. `null`, если ссылка протухла после обновления справочника.
+     *
+     * Кэш спрашивается наравне со справочником, но в сеть отсюда не ходим: это путь
+     * «повторить» и путь моделей персонализации, и ждать там радио неуместно.
+     */
     suspend fun nutrimentsFor(ref: FoodRef): Nutriments? = when (ref) {
         is FoodRef.Barcode -> onDb { it.findByBarcode(ref.gtin) }?.nutriments
+            ?: cachedProductDao.findByGtin(ref.gtin)?.toNutriments()
         is FoodRef.Generic -> onDb { it.genericById(ref.id) }?.nutriments
         is FoodRef.User -> userFoodDao.findById(ref.id)?.toNutriments()
     }
@@ -102,3 +205,47 @@ private fun UserFoodEntity.toCandidate(): FoodCandidate =
 
 private fun UserFoodEntity.toNutriments(): Nutriments =
     Nutriments(kcal100 = kcal100, prot100 = prot100, fat100 = fat100, carb100 = carb100)
+
+/**
+ * Бренд перед названием: «Активиа» и «Danone Активиа» человек ищет одинаково.
+ *
+ * Задвоение отсекается, потому что в Open Food Facts оно массовое: у Nutella
+ * и бренд, и название — «Nutella», и без проверки чипс подписан «Nutella Nutella».
+ */
+private fun brandedName(brand: String?, name: String): String {
+    val prefix = brand?.trim()?.takeIf { it.isNotEmpty() } ?: return name
+    return if (name.startsWith(prefix, ignoreCase = true)) name else "$prefix $name"
+}
+
+private fun CachedProductEntity.toCandidate(): FoodCandidate =
+    FoodCandidate(
+        ref = FoodRef.Barcode(gtin),
+        displayName = brandedName(brand, name),
+        nutriments = toNutriments(),
+        servingG = servingG,
+    )
+
+private fun CachedProductEntity.toNutriments(): Nutriments =
+    Nutriments(kcal100 = kcal100, prot100 = prot100, fat100 = fat100, carb100 = carb100)
+
+private fun RemoteProduct.toCandidate(): FoodCandidate =
+    FoodCandidate(
+        ref = FoodRef.Barcode(gtin),
+        displayName = brandedName(brand, name),
+        nutriments = nutriments,
+        servingG = servingG,
+    )
+
+private fun RemoteProduct.toEntity(fetchedAt: Long): CachedProductEntity =
+    CachedProductEntity(
+        gtin = gtin,
+        name = name,
+        brand = brand,
+        kcal100 = nutriments.kcal100,
+        prot100 = nutriments.prot100,
+        fat100 = nutriments.fat100,
+        carb100 = nutriments.carb100,
+        servingG = servingG,
+        origin = origin,
+        fetchedAt = fetchedAt,
+    )
