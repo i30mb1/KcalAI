@@ -573,12 +573,13 @@ git commit -m "feat(model): доменные типы КБЖУ с фиксиро
 
 ```sql
 CREATE TABLE generic (
-    id       INTEGER PRIMARY KEY,
-    name_key TEXT    NOT NULL UNIQUE,
-    kcal100  INTEGER NOT NULL,
-    prot100  INTEGER NOT NULL,
-    fat100   INTEGER NOT NULL,
-    carb100  INTEGER NOT NULL
+    id                INTEGER PRIMARY KEY,
+    name_key          TEXT    NOT NULL UNIQUE,
+    kcal100           INTEGER NOT NULL,
+    prot100           INTEGER NOT NULL,
+    fat100            INTEGER NOT NULL,
+    carb100           INTEGER NOT NULL,
+    default_portion_g INTEGER NOT NULL   -- типичная разовая порция, граммы
 );
 
 CREATE TABLE generic_alias (
@@ -631,18 +632,24 @@ CREATE TABLE meta (
 `tools/builddb/data/generic.csv`:
 
 ```csv
-id,name_key,kcal100,prot100,fat100,carb100
-1,buckwheat_boiled,110,410,110,2130
-2,chicken_breast_raw,113,2310,180,0
-3,egg_chicken_raw,157,1270,1150,70
-4,butter_82,748,50,8250,80
-5,rice_white_boiled,116,220,20,2500
-6,oats_boiled,88,300,170,1500
-7,cottage_cheese_5,121,1700,500,180
-8,banana,95,150,20,2130
-9,apple,47,40,40,980
-10,olive_oil,898,0,9980,0
+id,name_key,kcal100,prot100,fat100,carb100,default_portion_g
+1,buckwheat_boiled,110,410,110,2130,150
+2,chicken_breast_raw,113,2310,180,0,120
+3,egg_chicken_raw,157,1270,1150,70,60
+4,butter_82,748,50,8250,80,10
+5,rice_white_boiled,116,220,20,2500,150
+6,oats_boiled,88,300,170,1500,200
+7,cottage_cheese_5,121,1700,500,180,150
+8,banana,95,150,20,2130,120
+9,apple,47,40,40,980,180
+10,olive_oil,898,0,9980,0,10
 ```
+
+`default_portion_g` — типичная разовая порция. Она нужна, когда человек пишет «немного
+гречки» без всякого веса: вес взять неоткуда, и единственный честный ответ — предложить
+обычную порцию и дать поправить. Расплывчатые модификаторы становятся множителями к ней
+(«немного» ×0.5, без модификатора ×1, «много» ×1.5). Это данные, а не логика — сама
+подстановка живёт в Плане 2.
 
 `tools/builddb/data/generic_alias.csv`:
 
@@ -765,6 +772,24 @@ class BuildSeedTest(unittest.TestCase):
         ).fetchall()
         self.assertIn((1,), rows)
 
+    def test_default_portion_loaded(self):
+        grams = self.conn.execute(
+            "SELECT default_portion_g FROM generic WHERE name_key = 'buckwheat_boiled'"
+        ).fetchone()[0]
+        self.assertEqual(150, grams)
+
+    def test_every_generic_has_a_usable_default_portion(self):
+        bad = self.conn.execute(
+            "SELECT count(*) FROM generic WHERE default_portion_g < 1 OR default_portion_g > 2000"
+        ).fetchone()[0]
+        self.assertEqual(0, bad)
+
+    def test_verify_catches_absurd_default_portion(self):
+        self.conn.execute("UPDATE generic SET default_portion_g = 9000 WHERE id = 1")
+        self.conn.commit()
+        problems = build_seed.verify_seed(self.out)
+        self.assertTrue(any("default_portion_g" in p for p in problems), problems)
+
     def test_portion_unit_egg_is_60g(self):
         grams = self.conn.execute(
             "SELECT grams FROM portion_unit WHERE generic_id = 3 AND unit = 'шт'"
@@ -859,8 +884,8 @@ def _rows(path: Path) -> list[dict[str, str]]:
 
 def _load_generic(conn: sqlite3.Connection, path: Path) -> None:
     conn.executemany(
-        "INSERT INTO generic (id, name_key, kcal100, prot100, fat100, carb100) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO generic (id, name_key, kcal100, prot100, fat100, carb100, default_portion_g) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 int(r["id"]),
@@ -869,6 +894,7 @@ def _load_generic(conn: sqlite3.Connection, path: Path) -> None:
                 int(r["prot100"]),
                 int(r["fat100"]),
                 int(r["carb100"]),
+                int(r["default_portion_g"]),
             )
             for r in _rows(path)
         ],
@@ -941,6 +967,14 @@ def verify_seed(db_path: Path) -> list[str]:
             if bad:
                 problems.append(f"generic.{column}: {bad} значений вне диапазона 0..{MACRO_MAX_CG}")
 
+        bad_portion = conn.execute(
+            "SELECT count(*) FROM generic WHERE default_portion_g < 1 OR default_portion_g > 2000"
+        ).fetchone()[0]
+        if bad_portion:
+            problems.append(
+                f"generic.default_portion_g: {bad_portion} значений вне диапазона 1..2000"
+            )
+
         no_alias = conn.execute(
             "SELECT count(*) FROM generic g "
             "WHERE NOT EXISTS (SELECT 1 FROM generic_alias a WHERE a.generic_id = g.id)"
@@ -974,7 +1008,7 @@ Run:
 cd tools/builddb
 python -m unittest test_build_seed -v
 ```
-Expected: `OK`, 10 пройденных тестов.
+Expected: `OK`, 13 пройденных тестов.
 
 Если `test_fts_finds_russian_alias` падает — значит в сборке Python нет FTS5. Проверить: `python -c "import sqlite3; sqlite3.connect(':memory:').execute('CREATE VIRTUAL TABLE t USING fts5(x)')"`. На Android это неважно (там свой bundled SQLite), но для сборки нужен Python с FTS5.
 
@@ -1554,7 +1588,7 @@ git commit -m "feat(builddb): извлечение среза Open Food Facts и
   - `class FoodDb(connection: SQLiteConnection, hasFullDb: Boolean)` с `close()`
   - `object FoodDbFactory { fun open(driver: SQLiteDriver, seedPath: String, foodPath: String?): FoodDb }`
   - `data class ProductRow(barcode: String, name: String, brand: String?, nutriments: Nutriments, servingG: Int?)`
-  - `data class GenericRow(id: Long, nameKey: String, nutriments: Nutriments)`
+  - `data class GenericRow(id: Long, nameKey: String, nutriments: Nutriments, defaultPortionG: Int)`
   - `FoodDb.findByBarcode(gtin: String): ProductRow?`
   - `FoodDb.searchGeneric(query: String, limit: Int): List<GenericRow>`
   - `FoodDb.searchProducts(query: String, limit: Int): List<ProductRow>`
@@ -1649,7 +1683,8 @@ class FoodDbQueriesTest {
             conn.execSQL(
                 "CREATE TABLE generic (id INTEGER PRIMARY KEY, name_key TEXT NOT NULL UNIQUE, " +
                     "kcal100 INTEGER NOT NULL, prot100 INTEGER NOT NULL, " +
-                    "fat100 INTEGER NOT NULL, carb100 INTEGER NOT NULL)"
+                    "fat100 INTEGER NOT NULL, carb100 INTEGER NOT NULL, " +
+                    "default_portion_g INTEGER NOT NULL)"
             )
             conn.execSQL(
                 "CREATE TABLE generic_alias (generic_id INTEGER NOT NULL, alias TEXT NOT NULL, " +
@@ -1674,8 +1709,8 @@ class FoodDbQueriesTest {
                     "barcode UNINDEXED, tokenize = 'unicode61 remove_diacritics 2')"
             )
 
-            conn.execSQL("INSERT INTO generic VALUES (1, 'buckwheat_boiled', 110, 410, 110, 2130)")
-            conn.execSQL("INSERT INTO generic VALUES (3, 'egg_chicken_raw', 157, 1270, 1150, 70)")
+            conn.execSQL("INSERT INTO generic VALUES (1, 'buckwheat_boiled', 110, 410, 110, 2130, 150)")
+            conn.execSQL("INSERT INTO generic VALUES (3, 'egg_chicken_raw', 157, 1270, 1150, 70, 60)")
             conn.execSQL("INSERT INTO generic_alias VALUES (1, 'гречка', 'ru')")
             conn.execSQL("INSERT INTO generic_alias VALUES (3, 'яйцо', 'ru')")
             conn.execSQL("INSERT INTO generic_fts (alias, generic_id) VALUES ('гречка', 1)")
@@ -1784,6 +1819,7 @@ class FoodDbQueriesTest {
 
         assertEquals("buckwheat_boiled", row?.nameKey)
         assertEquals(Nutriments(110, 410, 110, 2130), row?.nutriments)
+        assertEquals(150, row?.defaultPortionG)
     }
 
     @Test
@@ -1903,6 +1939,8 @@ data class GenericRow(
     val id: Long,
     val nameKey: String,
     val nutriments: Nutriments,
+    /** Типичная разовая порция в граммах — подставляется, когда вес в тексте не указан. */
+    val defaultPortionG: Int,
 )
 ```
 
@@ -1931,13 +1969,14 @@ internal class FoodDbQueries(hasFullDb: Boolean) {
             "ORDER BY p.popularity DESC, p.name LIMIT ?"
 
     val searchGeneric: String =
-        "SELECT g.id, g.name_key, g.kcal100, g.prot100, g.fat100, g.carb100 " +
+        "SELECT g.id, g.name_key, g.kcal100, g.prot100, g.fat100, g.carb100, g.default_portion_g " +
             "FROM generic_fts f JOIN generic g ON g.id = f.generic_id " +
             "WHERE generic_fts MATCH ? " +
             "GROUP BY g.id ORDER BY g.id LIMIT ?"
 
     val genericById: String =
-        "SELECT id, name_key, kcal100, prot100, fat100, carb100 FROM generic WHERE id = ?"
+        "SELECT id, name_key, kcal100, prot100, fat100, carb100, default_portion_g " +
+            "FROM generic WHERE id = ?"
 
     val portionGrams: String =
         "SELECT grams FROM portion_unit WHERE generic_id = ? AND unit = ?"
@@ -2021,6 +2060,7 @@ class FoodDb internal constructor(
                                 fat100 = stmt.getInt(4),
                                 carb100 = stmt.getInt(5),
                             ),
+                            defaultPortionG = stmt.getInt(6),
                         )
                     )
                 }
@@ -2041,6 +2081,7 @@ class FoodDb internal constructor(
                         fat100 = stmt.getInt(4),
                         carb100 = stmt.getInt(5),
                     ),
+                    defaultPortionG = stmt.getInt(6),
                 )
             } else {
                 null
@@ -2682,7 +2723,7 @@ class FoodRepositoryTest {
             conn.execSQL(
                 "CREATE TABLE generic (id INTEGER PRIMARY KEY, name_key TEXT NOT NULL UNIQUE, " +
                     "kcal100 INTEGER NOT NULL, prot100 INTEGER NOT NULL, fat100 INTEGER NOT NULL, " +
-                    "carb100 INTEGER NOT NULL)"
+                    "carb100 INTEGER NOT NULL, default_portion_g INTEGER NOT NULL)"
             )
             conn.execSQL(
                 "CREATE VIRTUAL TABLE generic_fts USING fts5(alias, generic_id UNINDEXED, " +
@@ -2701,7 +2742,7 @@ class FoodRepositoryTest {
                 "CREATE VIRTUAL TABLE product_seed_fts USING fts5(name, brand, barcode UNINDEXED, " +
                     "tokenize = 'unicode61 remove_diacritics 2')"
             )
-            conn.execSQL("INSERT INTO generic VALUES (1, 'buckwheat_boiled', 110, 410, 110, 2130)")
+            conn.execSQL("INSERT INTO generic VALUES (1, 'buckwheat_boiled', 110, 410, 110, 2130, 150)")
             conn.execSQL("INSERT INTO generic_fts (alias, generic_id) VALUES ('гречка', 1)")
             conn.execSQL(
                 "INSERT INTO product_seed VALUES ('111', 'Гречка Мистраль', 'Мистраль', " +
@@ -2777,6 +2818,13 @@ class FoodRepositoryTest {
         val results = repo.search("гречка", limit = 10)
 
         assertEquals(FoodRef.User(id), results.first().ref)
+    }
+
+    @Test
+    fun `кандидат-генерик несёт типичную порцию`() = runTest {
+        val generic = repo.search("гречка", limit = 10).first { it.ref == FoodRef.Generic(1) }
+
+        assertEquals(150, generic.servingG)
     }
 
     @Test
@@ -2980,7 +3028,9 @@ class FoodRepository(
                 ref = FoodRef.Generic(it.id),
                 displayName = it.nameKey,
                 nutriments = it.nutriments,
-                servingG = null,
+                // для генерика "порция" — это типичная разовая порция; она заполняет чипс,
+                // когда в тексте нет веса ("немного гречки")
+                servingG = it.defaultPortionG,
             )
         }
         val taken = own.size + generic.size
@@ -3095,7 +3145,7 @@ Run:
 ```bash
 JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew :core:repositories:testDebugUnitTest --console=plain
 ```
-Expected: `BUILD SUCCESSFUL`, 15 пройденных тестов.
+Expected: `BUILD SUCCESSFUL`, 16 пройденных тестов.
 
 - [ ] **Step 7: Прогнать все тесты проекта**
 
@@ -3103,13 +3153,13 @@ Run:
 ```bash
 JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew testDebugUnitTest --console=plain
 ```
-Expected: `BUILD SUCCESSFUL`. Суммарно 51 тест Kotlin (9 model + 18 fooddb + 9 database + 15 repositories).
+Expected: `BUILD SUCCESSFUL`. Суммарно 52 теста Kotlin (9 model + 18 fooddb + 9 database + 16 repositories).
 
 И тесты сборщика базы:
 ```bash
 cd tools/builddb && python -m unittest discover -v
 ```
-Expected: `OK`, 22 теста (10 build_seed + 12 build_food).
+Expected: `OK`, 25 тестов (13 build_seed + 12 build_food).
 
 - [ ] **Step 8: Commit**
 
