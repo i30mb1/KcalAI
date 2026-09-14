@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import n7.kcalai.ocr.LabelOcr
@@ -23,7 +24,7 @@ import n7.kcalai.repositories.LabelTrace
  * @param available OCR поднялся на этом устройстве. `false` — не сбой, а режим:
  *        нативной библиотеки под этот ABI может не быть вовсе.
  */
-internal class LabelFrame(
+internal data class LabelFrame(
     /** Уже согласованное несколькими кадрами — см. [LabelConsensus]. */
     val reading: LabelReading,
     val elapsedMs: Long,
@@ -99,6 +100,9 @@ internal class LabelAnalyzer(
     @Volatile
     private var lastBarcode: String? = null
 
+    /** Последнее отданное наружу. Смазанный кадр повторяет его, чтобы счётчик кадров шёл. */
+    private var lastFrame: LabelFrame? = null
+
     override fun analyze(proxy: ImageProxy) {
         if (!busy.compareAndSet(false, true)) {
             proxy.close()
@@ -122,6 +126,19 @@ internal class LabelAnalyzer(
             try {
                 val started = SystemClock.elapsedRealtime()
                 val bitmap = frame.upright(rotation)
+
+                // Смазанный кадр не идёт ни в распознавание, ни в голосование.
+                // Распознаватель по нему отдаёт не пустоту, а кашу — «13010»
+                // вместо «1330 кДж/310 ккал», — и каша эта голосует наравне
+                // с честным чтением. Плюс шестьсот миллисекунд процессора
+                // на кадр, из которого заведомо ничего не выйдет.
+                val sharpness = bitmap.sharpness()
+                if (sharpness < MIN_SHARPNESS) {
+                    val note = "смазан · резкость ${sharpness.roundToInt()} < $MIN_SHARPNESS · пропущен"
+                    recorder?.add(bitmap, started, note, label = false)
+                    lastFrame?.let { onFrame(it.copy(elapsedMs = SystemClock.elapsedRealtime() - started)) }
+                    return@launch
+                }
 
                 // null — OCR на этом устройстве недоступен. Не событие, а состояние,
                 // и сказать о нём надо один раз: дальше кадры пойдут те же.
@@ -149,20 +166,24 @@ internal class LabelAnalyzer(
                 // Кадр кладётся вместе с тем, что из него вышло: снимок без
                 // расшифровки говорит только «вот что было видно», а с ней —
                 // «вот что было видно и вот где разбор ошибся».
-                recorder?.add(bitmap, started, verdict.report(lastBarcode), labelInView(verdict.reading.trace))
+                recorder?.add(
+                    bitmap, started,
+                    verdict.report(lastBarcode, sharpness),
+                    labelInView(verdict.reading.trace),
+                )
 
                 log(verdict, elapsed, size)
-                onFrame(
-                    LabelFrame(
-                        reading = verdict.reading,
-                        elapsedMs = elapsed,
-                        size = size,
-                        fields = verdict.fields,
-                        frames = verdict.frames,
-                        names = verdict.names,
-                        name = verdict.name,
-                    )
+                val next = LabelFrame(
+                    reading = verdict.reading,
+                    elapsedMs = elapsed,
+                    size = size,
+                    fields = verdict.fields,
+                    frames = verdict.frames,
+                    names = verdict.names,
+                    name = verdict.name,
                 )
+                lastFrame = next
+                onFrame(next)
             } finally {
                 busy.set(false)
             }
@@ -216,7 +237,60 @@ internal class LabelAnalyzer(
          * дают 19–30 строк, полки и ценники — от 1 до 12.
          */
         const val DENSE_LINES = 15
+
+        /**
+         * Ниже этой резкости кадр пропускается — см. [sharpness].
+         *
+         * Порог снят с записанных сессий, а не придуман. Квас читался
+         * начисто при 650–750, пирожные при 900–2000; при 335–577 с тех же
+         * пирожных выходили обрывки, при 40–250 с пастилы — только каша
+         * и ни одного верного числа. Двести пятьдесят отсекает заведомо
+         * безнадёжное и оставляет спорное: там ещё читается хотя бы название.
+         */
+        const val MIN_SHARPNESS = 250.0
     }
+}
+
+/**
+ * Резкость кадра: дисперсия лапласиана по яркости в центральной четверти.
+ *
+ * Лапласиан — вторая производная, и на резкой границе буквы он даёт всплеск,
+ * на размытой — пологий холмик. Дисперсия по площади собирает это в одно
+ * число: у смазанного кадра всплесков нет, и она мала. Считается только
+ * по центру кадра — там окно видоискателя и этикетка, а фон по краям
+ * (кухня, полка) резкости этикетки не касается, но число портил бы.
+ *
+ * Полное разрешение, без уменьшения: метрика калибровалась по сохранённым
+ * кадрам как есть, а уменьшение сглаживает границы и сдвигает шкалу.
+ * Триста тысяч пикселей — единицы миллисекунд, рядом с сотнями у распознавания.
+ */
+private fun Bitmap.sharpness(): Double {
+    val w = width / 2
+    val h = height / 2
+    if (w < 3 || h < 3) return 0.0
+    val pixels = IntArray(w * h)
+    getPixels(pixels, 0, w, width / 4, height / 4, w, h)
+
+    val luma = IntArray(w * h)
+    for (i in pixels.indices) {
+        val p = pixels[i]
+        luma[i] = ((p shr 16 and 0xFF) * 299 + (p shr 8 and 0xFF) * 587 + (p and 0xFF) * 114) / 1000
+    }
+
+    var sum = 0L
+    var squares = 0L
+    for (y in 1 until h - 1) {
+        val row = y * w
+        for (x in 1 until w - 1) {
+            val i = row + x
+            val lap = 4 * luma[i] - luma[i - 1] - luma[i + 1] - luma[i - w] - luma[i + w]
+            sum += lap
+            squares += lap.toLong() * lap
+        }
+    }
+    val count = ((w - 2) * (h - 2)).toDouble()
+    val mean = sum / count
+    return squares / count - mean * mean
 }
 
 /**
@@ -267,7 +341,7 @@ private fun Bitmap.upright(degrees: Int): Bitmap {
  * лежит всё: маршрут, подписи, доводка арифметикой, голоса кадров, имена
  * и сами строки. Кадр лежит рядом, и любое утверждение отсюда проверяется глазами.
  */
-internal fun LabelConsensus.Verdict.report(barcode: String?): String = buildString {
+internal fun LabelConsensus.Verdict.report(barcode: String?, sharpness: Double): String = buildString {
     val trace = reading.trace
 
     append(reading.summary())
@@ -275,6 +349,9 @@ internal fun LabelConsensus.Verdict.report(barcode: String?): String = buildStri
     // StringBuilder, и вместо «ккал 3/3 · Б 2/3» в файл уходила его же копия.
     append("\n голоса: ").append(this@report.toString())
     append(" · кадров в окне: ").append(frames)
+    // Рядом с прочитанным, чтобы порог смаза можно было перекалибровать
+    // по тем же файлам: вот резкость, вот что из неё вышло.
+    append(" · резкость ").append(sharpness.roundToInt())
 
     if (names.isNotEmpty()) {
         append("\n имя: ").append(names.first())
