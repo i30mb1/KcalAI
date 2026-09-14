@@ -64,12 +64,6 @@ class FoodDb internal constructor(
         return (exact + fuzzy).take(limit)
     }
 
-    fun genericById(id: Long): GenericRow? =
-        connection.prepare(FoodDbQueries.GENERIC_BY_ID).use { stmt ->
-            stmt.bindLong(1, id)
-            if (stmt.step()) stmt.readGeneric(exactMatch = false) else null
-        }
-
     /**
      * Все порционные единицы продукта разом.
      *

@@ -52,8 +52,6 @@ object BarcodeValidator {
         return expandUpcE(digits)
     }
 
-    fun isValid(raw: String): Boolean = normalize(raw) != null
-
     /**
      * Мод-10 со взвешиванием 3 и 1 от правого края.
      *

@@ -200,19 +200,6 @@ class FoodRepository(
         is FoodRef.Generic -> onDb { it.portionUnits(ref.id) }
         else -> emptyMap()
     }
-
-    /**
-     * Актуальные значения по ссылке. `null`, если ссылка протухла после обновления справочника.
-     *
-     * Кэш спрашивается наравне со справочником, но в сеть отсюда не ходим: это путь
-     * «повторить» и путь моделей персонализации, и ждать там радио неуместно.
-     */
-    suspend fun nutrimentsFor(ref: FoodRef): Nutriments? = when (ref) {
-        is FoodRef.Barcode -> onDb { it.findByBarcode(ref.gtin) }?.nutriments
-            ?: cachedProductDao.findByGtin(ref.gtin)?.toNutriments()
-        is FoodRef.Generic -> onDb { it.genericById(ref.id) }?.nutriments
-        is FoodRef.User -> userFoodDao.findById(ref.id)?.toNutriments()
-    }
 }
 
 private fun ProductRow.toCandidate(): FoodCandidate =

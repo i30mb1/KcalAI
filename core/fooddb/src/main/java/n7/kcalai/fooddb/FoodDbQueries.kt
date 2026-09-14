@@ -52,10 +52,6 @@ internal class FoodDbQueries(hasFullDb: Boolean) {
                 "WHERE f.generic_fts MATCH ? " +
                 "GROUP BY g.id ORDER BY MIN(length(f.alias)), g.id LIMIT ?"
 
-        const val GENERIC_BY_ID: String =
-            "SELECT g.id, g.name_key, g.name_ru, g.kcal100, g.prot100, g.fat100, g.carb100, " +
-                "g.default_portion_g FROM generic g WHERE g.id = ?"
-
         const val PORTION_UNITS: String =
             "SELECT unit, grams FROM portion_unit WHERE generic_id = ?"
     }

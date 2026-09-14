@@ -45,13 +45,6 @@ data class DaySummary(
     val goalKcal: Int? = null,
 )
 
-/** Что именно кладём в дневник: продукт, вес и чем он был распознан. */
-data class DiaryAddition(
-    val candidate: FoodCandidate,
-    val grams: Int,
-    val source: EntrySource,
-)
-
 class DiaryRepository(
     private val diaryDao: DiaryDao,
     private val goalDao: GoalDao,
@@ -66,32 +59,6 @@ class DiaryRepository(
         source: EntrySource,
         now: Long,
     ): Long = diaryDao.insert(candidate.toEntity(grams, meal, date, source, now))
-
-    /**
-     * Добавляет разом всё, что человек подтвердил одной фразой.
-     *
-     * `createdAt` разносится на миллисекунду, чтобы порядок в списке дня совпал
-     * с порядком слов во фразе — сортировка идёт по `createdAt, id`.
-     */
-    suspend fun addAll(
-        additions: List<DiaryAddition>,
-        meal: MealType,
-        date: Long,
-        now: Long,
-    ): List<Long> {
-        if (additions.isEmpty()) return emptyList()
-        return diaryDao.insertAll(
-            additions.mapIndexed { index, addition ->
-                addition.candidate.toEntity(
-                    grams = addition.grams,
-                    meal = meal,
-                    date = date,
-                    source = addition.source,
-                    now = now + index,
-                )
-            }
-        )
-    }
 
     fun observeDay(date: Long): Flow<DayTotals> =
         diaryDao.observeDay(date).map { entries ->

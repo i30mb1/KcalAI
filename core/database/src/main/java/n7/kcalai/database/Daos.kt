@@ -15,18 +15,11 @@ interface DiaryDao {
     @Insert
     suspend fun insert(entry: DiaryEntryEntity): Long
 
-    @Insert
-    suspend fun insertAll(entries: List<DiaryEntryEntity>): List<Long>
-
     @Query("SELECT * FROM diary_entry WHERE dateEpochDay = :dateEpochDay ORDER BY createdAt, id")
     fun observeDay(dateEpochDay: Long): Flow<List<DiaryEntryEntity>>
 
     @Query("DELETE FROM diary_entry WHERE id = :id")
     suspend fun delete(id: Long)
-
-    /** Недавно добавленное — источник быстрых подсказок «повторить». */
-    @Query("SELECT * FROM diary_entry ORDER BY createdAt DESC LIMIT :limit")
-    suspend fun recent(limit: Int): List<DiaryEntryEntity>
 
     /**
      * Вся история за окно — сырьё для моделей персонализации.
@@ -168,9 +161,6 @@ interface BodyMetricDao {
 
     @Query("SELECT * FROM body_metric WHERE dateEpochDay >= :fromEpochDay ORDER BY dateEpochDay")
     suspend fun since(fromEpochDay: Long): List<BodyMetricEntity>
-
-    @Query("SELECT * FROM body_metric ORDER BY dateEpochDay DESC LIMIT 1")
-    fun observeLatest(): Flow<BodyMetricEntity?>
 }
 
 /** Всё, что копится ради персонализации: журнал подтверждений, порции, веса модели. */
@@ -179,10 +169,6 @@ interface PersonalDao {
 
     @Insert
     suspend fun insertEvent(event: SuggestionEventEntity): Long
-
-    /** Необученный хвост журнала. Обучение инкрементально, переигрывать всё незачем. */
-    @Query("SELECT * FROM suggestion_event WHERE id > :afterId ORDER BY id LIMIT :limit")
-    suspend fun eventsAfter(afterId: Long, limit: Int): List<SuggestionEventEntity>
 
     @Insert
     suspend fun insertPortionSample(sample: PortionSampleEntity)

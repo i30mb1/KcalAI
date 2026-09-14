@@ -3,12 +3,6 @@ package n7.kcalai.resolver
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
 
-sealed interface ResolveInput {
-    data class Barcode(val gtin: String) : ResolveInput
-    data class FreeText(val text: String) : ResolveInput
-    // v2: data class Photo(val uri: Uri) : ResolveInput
-}
-
 /**
  * Одна разобранная позиция.
  *
@@ -33,14 +27,7 @@ data class ResolvedItem(
     val portionUnit: String? = null,
     val portionCount: Double = 1.0,
 ) {
-    val isResolved: Boolean get() = candidate != null && grams > 0
-
     /** Вес одной единицы — то, что уходит в память личных порций. */
     val gramsPerUnit: Int
         get() = if (portionCount <= 0.0) grams else Math.round(grams / portionCount).toInt()
-}
-
-interface FoodResolver {
-    fun handles(input: ResolveInput): Boolean
-    suspend fun resolve(input: ResolveInput): List<ResolvedItem>
 }

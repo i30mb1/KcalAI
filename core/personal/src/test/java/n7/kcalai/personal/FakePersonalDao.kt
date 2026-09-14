@@ -29,9 +29,6 @@ internal class FakePersonalDao : PersonalDao {
         return id
     }
 
-    override suspend fun eventsAfter(afterId: Long, limit: Int): List<SuggestionEventEntity> =
-        events.filter { it.id > afterId }.sortedBy { it.id }.take(limit)
-
     override suspend fun insertPortionSample(sample: PortionSampleEntity) {
         samples += sample.copy(id = nextId++)
     }

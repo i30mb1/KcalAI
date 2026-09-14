@@ -27,7 +27,7 @@ class TextFoodResolver(
      * не подтвердил, персонализировать нечем.
      */
     private val personalization: Personalization? = null,
-) : FoodResolver {
+) {
 
     /**
      * Одно блюдо -> до [limit] вариантов того, чем оно может быть.
@@ -62,10 +62,10 @@ class TextFoodResolver(
      * Фраза из нескольких блюд -> по лучшему варианту на каждое.
      *
      * Сегментация по запятой и «и». Нужна для перечислений: состав блюда в меню,
-     * результат распознавания фото. В ручном вводе не используется.
+     * результат распознавания фото. В ручном вводе не используется — и пока
+     * не используется нигде: это задел под фото-режим.
      */
-    override suspend fun resolve(input: ResolveInput): List<ResolvedItem> {
-        val text = (input as? ResolveInput.FreeText)?.text.orEmpty()
+    suspend fun resolve(text: String): List<ResolvedItem> {
         if (text.isBlank()) return emptyList()
 
         return parsePhrase(text).map { segment ->
@@ -80,8 +80,6 @@ class TextFoodResolver(
             segment.toResolved(best)
         }
     }
-
-    override fun handles(input: ResolveInput): Boolean = input is ResolveInput.FreeText
 
     /**
      * Личные граммовки ложатся поверх табличных.
@@ -110,29 +108,6 @@ class TextFoodResolver(
 
     private companion object {
         const val SUGGESTION_LIMIT = 6
-    }
-}
-
-/** Резолвер штрих-кода: ответ всегда один и всегда точный, вес берётся из порции. */
-class BarcodeFoodResolver(
-    private val foods: FoodRepository,
-) : FoodResolver {
-
-    override fun handles(input: ResolveInput): Boolean = input is ResolveInput.Barcode
-
-    override suspend fun resolve(input: ResolveInput): List<ResolvedItem> {
-        val gtin = (input as? ResolveInput.Barcode)?.gtin ?: return emptyList()
-        val candidate = foods.byBarcode(gtin) ?: return emptyList()
-        return listOf(
-            ResolvedItem(
-                sourceText = gtin,
-                candidate = candidate,
-                grams = candidate.servingG ?: 100,
-                confidence = 1f,
-                source = EntrySource.BARCODE,
-                gramsGuessed = candidate.servingG == null,
-            )
-        )
     }
 }
 

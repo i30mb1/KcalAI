@@ -76,11 +76,6 @@ class LabelOcr(
         }
     }
 
-    /** Готов ли движок. Нужен UI, чтобы не обещать человеку того, чего не будет. */
-    suspend fun isAvailable(): Boolean = withContext(dispatcher) {
-        synchronized(nativeLock) { engineOrNull() != null }
-    }
-
     private fun engineOrNull(): OcrEngine? {
         if (closed) return null
         engine?.let { return it }

@@ -292,8 +292,6 @@ internal class LabelConsensus(
         const val FAT_KCAL_PER_G = 9
         const val CARB_KCAL_PER_G = 4
 
-        const val MACRO_MAX_CG = 100 * 100
-
         /** Полграмма запаса: клетчатка и округление на пачке дают остаток чуть мимо нуля. */
         const val DERIVE_SLACK_CG = 50
 
