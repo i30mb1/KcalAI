@@ -256,8 +256,19 @@ object LabelParser {
      * Строки, которые могут оказаться названием продукта.
      *
      * Отбор грубый и не претендует на большее: цифры, единицы измерения, служебные
-     * надписи и всё короткое — не название. Остальное сортируется по высоте букв,
-     * потому что название на упаковке печатают крупнее состава.
+     * надписи и всё короткое — не название.
+     *
+     * **Крупнее — не значит вернее, и это здесь главное.** Самая крупная надпись
+     * на пачке это логотип, а логотип набран рисованным шрифтом: вензеля, тени,
+     * растянутые буквы. Распознающая модель обучена на печатном тексте и на таком
+     * шрифте не отказывается, а честно выдаёт свою лучшую догадку — «Ннаьуи»
+     * вместо «Danone». Сортировка по одной высоте ставила эту догадку первой,
+     * и в поле попадал набор символов.
+     *
+     * Поэтому голосуют три вещи сразу: уверенность распознавателя (на вензелях
+     * она проседает), доля высоты от самой крупной строки в кадре и форма самого
+     * слова — см. [readsLikeWords]. Состав, набранный мелко и чётко, обгоняет
+     * логотип, прочитанный крупно и мимо.
      *
      * Кандидаты приводятся к виду, который человек согласится увидеть в дневнике:
      * с пачки они приходят капсом, в кавычках-ёлочках и с хвостами распознавания,
@@ -268,14 +279,23 @@ object LabelParser {
      * Угадывать молча тут всё равно нельзя: человек смотрит на пачку, и дать ему
      * выбор честнее, чем настаивать на догадке.
      */
-    fun nameCandidates(lines: List<TextLine>, limit: Int = NAME_LIMIT): List<String> =
-        lines.asSequence()
+    fun nameCandidates(lines: List<TextLine>, limit: Int = NAME_LIMIT): List<String> {
+        val tallest = lines.maxOfOrNull { it.height }?.takeIf { it > 0f } ?: return emptyList()
+        return lines.asSequence()
             .filterNot { NOT_A_NAME.containsMatchIn(it.text) }
-            .sortedByDescending { it.height }
-            .mapNotNull { humanizeName(it.text) }
+            // Строка, в которой не уверен сам распознаватель, не может быть
+            // названием: ошибку в подписи «Белки» ловит арифметика, а ошибку
+            // в названии — никто, она уедет в дневник как есть.
+            .filter { it.confidence >= NAME_MIN_CONFIDENCE }
+            .mapNotNull { line ->
+                humanizeName(line.text)?.let { it to line.confidence * (line.height / tallest) }
+            }
+            .sortedByDescending { it.second }
+            .map { it.first }
             .distinct()
             .take(limit)
             .toList()
+    }
 
     /**
      * Распознанная строка в человеческое название — или `null`, если это не оно.
@@ -296,6 +316,7 @@ object LabelParser {
         val letters = cleaned.count(Char::isLetter)
         if (letters < cleaned.length * NAME_MIN_LETTER_SHARE) return null
         if (letters < cleaned.count(Char::isDigit)) return null
+        if (!readsLikeWords(cleaned)) return null
 
         // Капс с пачки — не выделение, а типографика упаковки. Переносить её
         // в ленту незачем: там «ТВОРОГ» кричит рядом с «Гречка».
@@ -308,6 +329,73 @@ object LabelParser {
 
         return normalized.replaceFirstChar { it.titlecase(RU) }
     }
+
+    /**
+     * Читается ли строка как слова, а не как догадка распознавателя.
+     *
+     * Доли букв недостаточно, и это тонкое место: «Ннаьуи» состоит из букв
+     * на все сто процентов и любую проверку по символам проходит. Отличается
+     * оно не составом, а **строением**: настоящее слово подчиняется фонетике
+     * языка, на котором напечатано, а собранное по глифам — нет.
+     *
+     * Трёх признаков хватает, и каждый ловит свой вид мусора:
+     *
+     * 1. **Два алфавита в одном слове.** Кириллическая «А» и латинская «l» рядом
+     *    не встречаются ни в одном настоящем слове — так распознаватель признаётся,
+     *    что выбирал глифы поодиночке. Целиком латинское слово при этом законно:
+     *    «Alpen Gold» напечатан именно так.
+     * 2. **Слово без гласных.** Их нет ни в русском, ни в английском.
+     * 3. **Пять согласных подряд или буква трижды кряду.** «Вздрогнув» даёт
+     *    четыре, а пять — уже не язык.
+     *
+     * Судится не строка целиком, а каждое слово, и решает перевес букв: на пачке
+     * рядом с названием стоят и «БЗМЖ», и обрывки состава. «Творог БЗМЖ» — это
+     * название, где одно слово из двух аббревиатура, и терять его незачем.
+     */
+    private fun readsLikeWords(cleaned: String): Boolean {
+        var wordly = 0
+        var garbled = 0
+        for (word in cleaned.split(SPACES)) {
+            val letters = word.filter(Char::isLetter)
+            // Предлоги и проценты формой ничего не доказывают ни в ту, ни в другую
+            // сторону: в «с» нет согласных подряд, но нет и слова.
+            if (letters.length < WORD_MIN_LENGTH) continue
+            if (letters.readsLikeWord()) wordly += letters.length else garbled += letters.length
+        }
+        return wordly > garbled
+    }
+
+    /** @receiver только буквы слова, без знаков и цифр. */
+    private fun CharSequence.readsLikeWord(): Boolean {
+        val cyrillic = count { it in CYRILLIC }
+        if (cyrillic != 0 && cyrillic != length) return false
+        val lower = toString().lowercase(RU)
+        if (lower.none { it in VOWELS }) return false
+        if (CONSONANT_RUN.containsMatchIn(lower)) return false
+        if (TRIPLED_LETTER.containsMatchIn(lower)) return false
+        return true
+    }
+
+    private val CYRILLIC = 'Ѐ'..'ӿ'
+
+    private const val VOWELS = "аеёиоуыэюяaeiouy"
+
+    /** Согласные обоих алфавитов; твёрдый и мягкий знаки идут с ними — гласными они не являются. */
+    private val CONSONANT_RUN = Regex("""[бвгджзйклмнпрстфхцчшщъьbcdfghjklmnpqrstvwxz]{5,}""")
+
+    private val TRIPLED_LETTER = Regex("""(\p{L})\1\1""")
+
+    /** Короче этого слово формой ничего не доказывает — см. [readsLikeWords]. */
+    private const val WORD_MIN_LENGTH = 3
+
+    /**
+     * Ниже этой уверенности строка в названия не идёт.
+     *
+     * Порог низкий намеренно: он отсекает не сомнительное, а то, где модель сама
+     * себе не верит, — вензеля логотипа и текст под бликом. Настоящее название,
+     * даже прочитанное с опечаткой в букве, держится заметно выше.
+     */
+    private const val NAME_MIN_CONFIDENCE = 0.6f
 
     /** Подписи таблицы и служебные надписи: названием продукта они не бывают. */
     private val NOT_A_NAME = Regex(
