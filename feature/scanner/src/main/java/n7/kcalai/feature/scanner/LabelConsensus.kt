@@ -89,6 +89,14 @@ internal class LabelConsensus(
          * целиком, и чипсы под пальцем прыгали бы, пока человек в них целится.
          */
         val names: List<String> = emptyList(),
+        /**
+         * Название, которое подтвердило несколько кадров, — или `null`, пока такого нет.
+         *
+         * Отдельно от [names] по той же причине, по какой числа уходят в поля только
+         * набранными: [names] это список для чипсов, где место есть и догадке,
+         * а в поле должно попадать лишь то, за что кадры проголосовали.
+         */
+        val name: String? = null,
     ) {
         /** Все четыре значения набраны и сходятся между собой. */
         val settled: Boolean get() = reading.confident
@@ -132,6 +140,7 @@ internal class LabelConsensus(
             latest.draft
         }
 
+        val nameVotes = countNames()
         return Verdict(
             reading = latest.copy(draft = draft, confident = agreed),
             kcal = kcal,
@@ -139,7 +148,8 @@ internal class LabelConsensus(
             fat = fat,
             carb = carb,
             frames = readings.size,
-            names = voteNames(),
+            names = voteNames(nameVotes),
+            name = confirmedName(nameVotes),
         )
     }
 
@@ -160,22 +170,37 @@ internal class LabelConsensus(
      * Равные по голосам идут в том порядке, в каком их отдал разбор, — а он
      * взвешивает уверенность распознавателя и размер надписи на пачке.
      */
-    private fun voteNames(): List<String> {
-        val counts = LinkedHashMap<String, Int>()
-        readings.forEach { reading ->
-            reading.names.forEach { name -> counts.merge(name, 1, Int::plus) }
-        }
-        val best = counts.values.maxOrNull() ?: return emptyList()
+    private fun voteNames(votes: Map<String, Int>): List<String> {
+        val best = votes.values.maxOrNull() ?: return emptyList()
         val confirmed = if (best >= NAME_MIN_VOTES) {
-            counts.filterValues { it >= NAME_MIN_VOTES }
+            votes.filterValues { it >= NAME_MIN_VOTES }
         } else {
-            counts
+            votes
         }
         return confirmed.entries
             .sortedByDescending { it.value }
             .map { it.key }
             .take(NAME_LIMIT)
     }
+
+    /**
+     * Сколько кадров прочитали каждое название.
+     *
+     * Порядок вставки значим и сохраняется: внутри одного кадра разбор уже
+     * отсортировал кандидатов по уверенности и размеру надписи, и при равных
+     * голосах побеждает его порядок, а не случайный обход хеш-таблицы.
+     */
+    private fun countNames(): Map<String, Int> {
+        val counts = LinkedHashMap<String, Int>()
+        readings.forEach { reading ->
+            reading.names.forEach { name -> counts.merge(name, 1, Int::plus) }
+        }
+        return counts
+    }
+
+    /** Лучшее из подтверждённых. Ничего не набрало голосов — `null`, и поле остаётся пустым. */
+    private fun confirmedName(votes: Map<String, Int>): String? =
+        votes.entries.filter { it.value >= NAME_MIN_VOTES }.maxByOrNull { it.value }?.key
 
     /**
      * Победившее значение с допуском на разброс распознавания.

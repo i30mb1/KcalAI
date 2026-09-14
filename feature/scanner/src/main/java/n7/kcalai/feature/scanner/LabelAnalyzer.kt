@@ -34,6 +34,8 @@ internal class LabelFrame(
     val frames: Int = 0,
     /** Что на пачке может быть названием, по убыванию числа подтвердивших кадров. */
     val names: List<String> = emptyList(),
+    /** Название, за которое проголосовали кадры. `null` — ещё не набралось. */
+    val name: String? = null,
 )
 
 /**
@@ -157,6 +159,7 @@ internal class LabelAnalyzer(
                         fields = verdict.fields,
                         frames = verdict.frames,
                         names = verdict.names,
+                        name = verdict.name,
                     )
                 )
             } finally {
