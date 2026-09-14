@@ -17,6 +17,9 @@ dependencies {
     api(project(":core:repositories"))
     // Распознавание текста на этикетке: PP-OCRv5 через LiteRT.
     api(project(":core:ocr"))
+    // Палитра и типографика: сканер — такой же экран приложения, а не системный
+    // оверлей, и выглядеть должен так же.
+    api(project(":core:ui"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

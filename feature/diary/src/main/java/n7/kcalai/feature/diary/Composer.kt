@@ -36,6 +36,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.resolver.ResolvedItem
+import n7.kcalai.ui.CapsLabel
+import n7.kcalai.ui.ChipNumbers
+import n7.kcalai.ui.KcalChip
+import n7.kcalai.ui.MacroDot
+import n7.kcalai.ui.colors
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
 

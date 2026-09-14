@@ -86,6 +86,9 @@ fun DiaryRoute(viewModel: DiaryViewModel) {
 
         is Overlay.LabelScan -> LabelScannerDialog(
             onRead = { reading -> viewModel.onLabelRead(overlay.gtin, overlay.current, reading) },
+            // Код с промаха скана: экран его не читает, но показывает — по нему
+            // заведённый продукт найдут другие.
+            gtin = overlay.gtin,
             // Закрыть съёмку — вернуться в форму, а не потерять её вместе
             // с набранным именем и введённым кодом.
             onDismiss = { viewModel.onLabelCancelled(overlay.gtin, overlay.current) },

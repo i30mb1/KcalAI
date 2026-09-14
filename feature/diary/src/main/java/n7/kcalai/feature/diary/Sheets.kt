@@ -53,6 +53,13 @@ import n7.kcalai.database.totals
 import n7.kcalai.model.MealType
 import n7.kcalai.personal.TdeeEstimate
 import n7.kcalai.personal.TdeeEstimator
+import n7.kcalai.ui.CapsLabel
+import n7.kcalai.ui.KcalChip
+import n7.kcalai.ui.Macro
+import n7.kcalai.ui.MacroDot
+import n7.kcalai.ui.WideButton
+import n7.kcalai.ui.colors
+import n7.kcalai.ui.tileLabel
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
 
@@ -501,33 +508,6 @@ private fun Sheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
         ) {
             content()
         }
-    }
-}
-
-/** Единственная кнопка с надписью на экране — там, где действие нельзя назвать данными. */
-@Composable
-private fun WideButton(
-    text: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val colors = KcalTheme.colors
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .clip(RoundedCornerShape(KcalShapes.tile))
-            .background(if (enabled) colors.bubble else colors.chip)
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text,
-            style = KcalTheme.type.input,
-            color = if (enabled) colors.onBubble else colors.text3,
-        )
     }
 }
 

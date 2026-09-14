@@ -13,7 +13,6 @@ import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,10 +32,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -53,6 +51,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -67,6 +67,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import n7.kcalai.ocr.LabelOcr
 import n7.kcalai.repositories.LabelReading
+import n7.kcalai.ui.CapsLabel
+import n7.kcalai.ui.KcalTheme
+import n7.kcalai.ui.Macro
+import n7.kcalai.ui.WideButton
+import n7.kcalai.ui.colors
 
 /**
  * Съёмка таблицы пищевой ценности.
@@ -93,6 +98,15 @@ import n7.kcalai.repositories.LabelReading
 fun LabelScannerDialog(
     onRead: (LabelReading) -> Unit,
     onDismiss: () -> Unit,
+    /**
+     * Код, с промаха которого пришли сюда.
+     *
+     * Экран его не читает и прочитать не может — камера смотрит на таблицу
+     * пищевой ценности, а код напечатан на другой стороне пачки. Но показать
+     * его надо: код делает заведённый продукт находимым у других людей, и его
+     * наличие или отсутствие человек должен видеть до сохранения, а не после.
+     */
+    gtin: String? = null,
     debug: Boolean = false,
 ) {
     val context = LocalContext.current
@@ -120,30 +134,24 @@ fun LabelScannerDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize()) {
-                when {
-                    granted -> CameraPane(onRead, debug)
-                    // Без камеры снимать нечего: форма остаётся, человек заполнит руками.
-                    answered -> NoCamera()
-                    else -> Waiting()
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Закрыть съёмку этикетки")
-                    }
-                }
+        Surface(Modifier.fillMaxSize(), color = KcalTheme.colors.bg) {
+            when {
+                granted -> CameraPane(gtin, onRead, onDismiss, debug)
+                // Без камеры снимать нечего: форма остаётся, человек заполнит руками.
+                answered -> NoCamera(onDismiss)
+                else -> Waiting(onDismiss)
             }
         }
     }
 }
 
 @Composable
-private fun CameraPane(onRead: (LabelReading) -> Unit, debug: Boolean) {
+private fun CameraPane(
+    gtin: String?,
+    onRead: (LabelReading) -> Unit,
+    onDismiss: () -> Unit,
+    debug: Boolean,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val controller = remember { LifecycleCameraController(context) }
@@ -158,6 +166,15 @@ private fun CameraPane(onRead: (LabelReading) -> Unit, debug: Boolean) {
      * выносится через состояние, а не через захваченную переменную.
      */
     var frame by remember { mutableStateOf(LabelFrame(LabelReading.EMPTY, 0)) }
+
+    /**
+     * Сколько кадров прошло через распознавание с начала съёмки.
+     *
+     * Не то же, что окно согласия: то держит последние восемь и стоит на восьми.
+     * Здесь нужен именно растущий счётчик — он единственное на экране, что
+     * доказывает, что съёмка идёт, пока ни одно значение ещё не набралось.
+     */
+    var seen by remember { mutableIntStateOf(0) }
     val deliver by rememberUpdatedState(onRead)
     val autoClose by rememberUpdatedState(!debug)
 
@@ -171,6 +188,7 @@ private fun CameraPane(onRead: (LabelReading) -> Unit, debug: Boolean) {
         val analyzer = LabelAnalyzer(ocr, scope, recorder) { read ->
             ContextCompat.getMainExecutor(context).execute {
                 frame = read
+                if (read.available) seen++
                 // Разбор сошёлся — дальше держать человека перед камерой незачем.
                 if (autoClose && read.reading.confident && delivered.compareAndSet(false, true)) {
                     deliver(read.reading)
@@ -225,47 +243,75 @@ private fun CameraPane(onRead: (LabelReading) -> Unit, debug: Boolean) {
             },
         )
 
-        // Рамка в распознавании не участвует — движок смотрит весь кадр.
-        // Она нужна человеку: без неё непонятно, куда наводить. В тестовом режиме
-        // её нет: там весь экран занят разбором, и обводить нечего.
-        if (!debug) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .fillMaxWidth(0.85f)
-                    .height(220.dp)
-                    .border(2.dp, Color.White, RoundedCornerShape(12.dp))
-            )
-        }
+        // Камера и панель разбора делят экран, а не лежат друг на друге: панель
+        // высокая, и всплыви она поверх превью — закрыла бы ровно тот угол кадра,
+        // который человек пытается навести.
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                // В тестовом режиме окна нет: там весь экран занят разбором,
+                // и обводить нечего.
+                if (!debug) Viewfinder(Modifier.fillMaxSize())
 
-        if (debug) {
-            DebugPane(
-                frame = frame,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(start = 8.dp, end = 8.dp, top = 56.dp)
-                    .fillMaxHeight(0.7f),
-            )
-        }
+                ScanTopBar(
+                    title = "сканирование",
+                    meta = if (seen > 0) "кадр $seen · ${frame.elapsedMs} мс" else null,
+                    onDismiss = onDismiss,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // В тестовом режиме то же самое сказано подробнее и выше по экрану.
-            if (!debug) Progress(frame)
+                if (debug) {
+                    DebugPane(
+                        frame = frame,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .statusBarsPadding()
+                            .padding(start = 8.dp, end = 8.dp, top = 56.dp)
+                            .fillMaxHeight(0.8f),
+                    )
+                }
 
-            Button(
-                enabled = frame.reading.numbers.isNotEmpty(),
-                onClick = {
-                    if (delivered.compareAndSet(false, true)) deliver(frame.reading)
-                },
-            ) { Text("Готово") }
+                // Подсказка живёт, пока не прочитан первый кадр. Дальше о том же
+                // говорят полоски, и держать её значило бы объяснять очевидное.
+                if (!debug && seen == 0) {
+                    HintPill(
+                        text = if (frame.available) {
+                            "Держите таблицу пищевой ценности в рамке"
+                        } else {
+                            "Распознавание на этом устройстве недоступно"
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 32.dp, vertical = 20.dp),
+                    )
+                }
+            }
+
+            if (!debug) {
+                ScanResultPanel(
+                    frame = frame,
+                    gtin = gtin,
+                    onDeliver = {
+                        if (delivered.compareAndSet(false, true)) deliver(frame.reading)
+                    },
+                )
+            } else {
+                // В тестовом режиме панель разбора не нужна: всё то же самое
+                // сказано подробнее и выше по экрану.
+                Box(Modifier.fillMaxWidth().background(KcalTheme.colors.surface)) {
+                    ScanActions(
+                        primary = "Готово",
+                        primaryEnabled = true,
+                        onPrimary = {
+                            if (delivered.compareAndSet(false, true)) deliver(frame.reading)
+                        },
+                        secondary = "Закрыть",
+                        onSecondary = onDismiss,
+                        modifier = Modifier
+                            .navigationBarsPadding()
+                            .padding(16.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -278,62 +324,124 @@ private fun CameraPane(onRead: (LabelReading) -> Unit, debug: Boolean) {
  * Всё это время экран без объяснений выглядит зависшим, и человек либо уводит
  * камеру раньше времени, либо решает, что приложение сломалось.
  *
- * Поэтому показывается не «идёт поиск», а поимённо: калории найдены, белки
- * найдены, жиры ищем. Видно и то, что работа движется, и то, **на чём именно**
- * она застряла, — а это уже действие: подвинуть камеру, убрать блик с той самой
- * строки, поднести ближе.
+ * Поэтому показывается не «идёт поиск», а поимённо и полосками: калории набраны,
+ * белки набраны, углеводы на сорока шести процентах. Видно и то, что работа идёт,
+ * и то, **на чём именно** она стоит, — а это уже действие: подвинуть камеру,
+ * убрать блик с той самой строки, поднести ближе.
+ *
+ * Название и штрих-код стоят за разделителем и подписаны «необяз.»: без них
+ * продукт сохраняется, и человек не должен ждать их заполнения.
  */
 @Composable
-private fun Progress(frame: LabelFrame) {
-    Column(
-        modifier = Modifier
-            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(
-            when {
-                !frame.available -> "Распознавание недоступно"
-                frame.frames == 0 -> "Наведите на таблицу пищевой ценности"
-                frame.reading.confident -> "Готово"
-                else -> "Читаем этикетку"
-            },
-            style = MaterialTheme.typography.titleMedium,
-            color = Color.White,
-        )
+private fun ScanResultPanel(
+    frame: LabelFrame,
+    gtin: String?,
+    onDeliver: () -> Unit,
+) {
+    val colors = KcalTheme.colors
+    val draft = frame.reading.draft
+    val fields = frame.fields.toMap()
+    val name = draft.name ?: frame.reading.names.firstOrNull()
 
-        frame.fields.forEach { (name, field) ->
-            FoundRow(name, field)
+    val required = REQUIRED.map { key -> fields[key]?.progress ?: 0f }
+    val requiredDone = REQUIRED.count { key -> fields[key]?.settled == true }
+    val optionalDone = listOfNotNull(name, gtin).size
+    val overall = if (required.isEmpty()) 0f else required.average().toFloat()
+
+    ScanPanel(Modifier.navigationBarsPadding()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ProgressRing(overall)
+
+            Column(Modifier.padding(start = 16.dp)) {
+                Text(
+                    name ?: "Этикетка",
+                    style = KcalTheme.type.title,
+                    color = if (name != null) colors.text else colors.text3,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                CapsLabel(
+                    "${requiredDone + optionalDone} из 6 полей · обязательных $requiredDone / 4",
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
         }
+
+        Spacer(Modifier.size(18.dp))
+
+        ScanFieldRow(
+            label = "калории",
+            value = draft.kcal100?.takeIf { fields["ккал"]?.settled == true }?.let { "$it ккал" },
+            fraction = fields["ккал"]?.progress ?: 0f,
+            // Калории — не макрос, и своего цвета у них нет: они складываются
+            // из всех трёх. Поэтому цвет чернил, как у остатка в шапке дневника.
+            color = colors.text,
+        )
+        Spacer(Modifier.size(11.dp))
+        MacroRow("белки", draft.prot100, fields["Б"], Macro.PROTEIN)
+        Spacer(Modifier.size(11.dp))
+        MacroRow("жиры", draft.fat100, fields["Ж"], Macro.FAT)
+        Spacer(Modifier.size(11.dp))
+        MacroRow("углеводы", draft.carb100, fields["У"], Macro.CARB)
+
+        HorizontalDivider(
+            color = colors.line,
+            modifier = Modifier.padding(vertical = 14.dp),
+        )
+
+        ScanFieldRow(
+            label = "название",
+            value = name,
+            fraction = if (name != null) 1f else 0f,
+            color = colors.text3,
+            optional = true,
+        )
+        Spacer(Modifier.size(10.dp))
+        ScanFieldRow(
+            label = "штрихкод",
+            value = gtin,
+            fraction = if (gtin != null) 1f else 0f,
+            color = colors.text3,
+            optional = true,
+        )
+
+        // Кнопка одна, и это не упрощение макета. Экран ничего не сохраняет сам:
+        // он отдаёт разобранное в форму продукта, где человек его подтверждает.
+        // «Сохранить» и «ввести вручную» — один и тот же переход, и разводить его
+        // на две кнопки значило бы предложить выбор, которого нет.
+        //
+        // Сошедшийся разбор до кнопки обычно не доживает: экран закрывается сам.
+        // Поэтому по умолчанию на ней написано то, что и происходит на деле, —
+        // дальше заполнять руками, с уже подставленным тем, что успело прочитаться.
+        WideButton(
+            text = if (frame.reading.confident) "Сохранить" else "Заполнить вручную",
+            enabled = true,
+            onClick = onDeliver,
+            modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp),
+        )
     }
 }
 
-/** Одно значение: нашли или ещё ищем, и насколько близко. */
+/** Макрос: то же поле, но подписью и полоской своего цвета. */
 @Composable
-private fun FoundRow(name: String, field: LabelConsensus.Field) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            FIELD_NAMES[name] ?: name,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (field.settled) Color.White else Color.White.copy(alpha = 0.6f),
-            modifier = Modifier.width(88.dp),
-        )
-        LinearProgressIndicator(
-            progress = { field.progress },
-            modifier = Modifier.width(96.dp),
-            color = if (field.settled) Color(0xFF69F0AE) else Color(0xFFFFD54F),
-            trackColor = Color.White.copy(alpha = 0.25f),
-        )
-    }
+private fun MacroRow(
+    label: String,
+    centigrams: Int?,
+    field: LabelConsensus.Field?,
+    macro: Macro,
+) {
+    ScanFieldRow(
+        label = label,
+        // Число показывается только набранное голосами. Последний кадр рисовать
+        // на его месте значило бы мигать цифрами, которым сами не верим.
+        value = centigrams?.takeIf { field?.settled == true }?.let { "${it.grams()} г" },
+        fraction = field?.progress ?: 0f,
+        color = macro.colors().fill,
+    )
 }
 
-/** Подписи для человека: в панели разбора хватает «Б» и «Ж», здесь — нет. */
-private val FIELD_NAMES = mapOf(
-    "ккал" to "Калории",
-    "Б" to "Белки",
-    "Ж" to "Жиры",
-    "У" to "Углеводы",
-)
+/** Ключи полей в [LabelConsensus.Verdict.fields] — обязательная четвёрка. */
+private val REQUIRED = listOf("ккал", "Б", "Ж", "У")
 
 /**
  * Разбор целиком, поверх превью.
@@ -415,12 +523,14 @@ private fun DebugPane(frame: LabelFrame, modifier: Modifier = Modifier) {
 private fun VoteRow(name: String, field: LabelConsensus.Field) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Line(name.padEnd(5), Color(0xFFB0BEC5))
-        LinearProgressIndicator(
-            progress = { field.progress },
-            modifier = Modifier.width(72.dp),
-            color = if (field.settled) Color(0xFFB9F6CA) else Color(0xFFFFE082),
-            trackColor = Color.White.copy(alpha = 0.2f),
-        )
+        Box(Modifier.width(72.dp).height(4.dp).background(Color.White.copy(alpha = 0.2f))) {
+            Box(
+                Modifier
+                    .fillMaxWidth(field.progress)
+                    .height(4.dp)
+                    .background(if (field.settled) Color(0xFFB9F6CA) else Color(0xFFFFE082))
+            )
+        }
         Spacer(Modifier.size(6.dp))
         Line("${field.votes}/${field.needed}", Color(0xFFB0BEC5))
     }
@@ -437,25 +547,45 @@ private fun Line(text: String, color: Color) {
 }
 
 @Composable
-private fun NoCamera() {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("Доступ к камере не разрешён", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.size(8.dp))
-        Text(
-            "Снять этикетку не получится — заполните КБЖУ вручную.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+private fun NoCamera(onDismiss: () -> Unit) {
+    Message(
+        title = "Доступ к камере не разрешён",
+        text = "Снять этикетку не получится — заполните КБЖУ вручную.",
+        onDismiss = onDismiss,
+    )
 }
 
 @Composable
-private fun Waiting() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Запрашиваем доступ к камере…", style = MaterialTheme.typography.bodyLarge)
+private fun Waiting(onDismiss: () -> Unit) {
+    Message(
+        title = "Запрашиваем доступ к камере",
+        text = "Без камеры этикетку не прочитать.",
+        onDismiss = onDismiss,
+    )
+}
+
+/** Экран без камеры: тот же фон и тот же крестик, чтобы выход был на месте. */
+@Composable
+private fun Message(title: String, text: String, onDismiss: () -> Unit) {
+    Box(Modifier.fillMaxSize().background(KcalTheme.colors.bg)) {
+        ScanTopBar(
+            title = "сканирование",
+            meta = null,
+            onDismiss = onDismiss,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
+        Column(
+            modifier = Modifier.align(Alignment.Center).padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(title, style = KcalTheme.type.title, color = KcalTheme.colors.text)
+            Spacer(Modifier.size(8.dp))
+            Text(
+                text,
+                style = KcalTheme.type.body,
+                color = KcalTheme.colors.text2,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }

@@ -31,6 +31,11 @@ import kotlin.math.abs
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.repositories.DaySummary
+import n7.kcalai.ui.CapsLabel
+import n7.kcalai.ui.Macro
+import n7.kcalai.ui.MiniBar
+import n7.kcalai.ui.colors
+import n7.kcalai.ui.tileLabel
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
 

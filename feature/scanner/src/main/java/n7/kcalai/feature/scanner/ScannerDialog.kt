@@ -8,6 +8,7 @@ import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -41,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
@@ -54,6 +57,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import n7.kcalai.repositories.BarcodeValidator
+import n7.kcalai.ui.KcalTheme
+import n7.kcalai.ui.WideButton
 
 /**
  * Скан штрих-кода поверх дневника.
@@ -96,7 +101,7 @@ fun ScannerDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(Modifier.fillMaxSize()) {
+        Surface(Modifier.fillMaxSize(), color = KcalTheme.colors.bg) {
             Box(Modifier.fillMaxSize()) {
                 when {
                     granted && !manual -> CameraPane(onScanned)
@@ -111,10 +116,33 @@ fun ScannerDialog(
                     else -> WaitingForPermission()
                 }
 
-                TopBar(
-                    showManualSwitch = granted && !manual,
-                    onManual = { manual = true },
+                ScanTopBar(
+                    title = "штрих-код",
+                    meta = null,
                     onDismiss = onDismiss,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    action = if (granted && !manual) {
+                        {
+                            // Ручной ввод рядом с крестиком, а не вместо камеры:
+                            // смазанный код на мятой пачке не читается никогда,
+                            // и цифры под ним — рабочий путь, а не аварийный.
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(KcalTheme.colors.surface.copy(alpha = 0.92f))
+                                    .clickable { manual = true }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                            ) {
+                                Text(
+                                    "Ввести код",
+                                    style = KcalTheme.type.label,
+                                    color = KcalTheme.colors.text,
+                                )
+                            }
+                        }
+                    } else {
+                        null
+                    },
                 )
             }
         }
@@ -168,24 +196,16 @@ private fun CameraPane(onScanned: (String) -> Unit) {
         )
 
         // Рамка не участвует в распознавании — ML Kit смотрит весь кадр.
-        // Она нужна человеку: без неё непонятно, куда наводить.
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .fillMaxWidth(0.8f)
-                .height(160.dp)
-                .border(2.dp, Color.White, RoundedCornerShape(12.dp))
-        )
+        // Она нужна человеку: без неё непонятно, куда наводить. Окно ниже
+        // и уже, чем у этикетки: штрих-код — узкая полоса, а не таблица.
+        Viewfinder(Modifier.fillMaxSize(), windowHeight = 0.22f)
 
-        Text(
-            "Наведите на штрих-код",
-            style = MaterialTheme.typography.titleMedium,
-            color = Color.White,
+        HintPill(
+            text = "Наведите на штрих-код",
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(32.dp)
-                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .navigationBarsPadding()
+                .padding(32.dp),
         )
     }
 }
@@ -193,7 +213,11 @@ private fun CameraPane(onScanned: (String) -> Unit) {
 @Composable
 private fun WaitingForPermission() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Запрашиваем доступ к камере…", style = MaterialTheme.typography.bodyLarge)
+        Text(
+            "Запрашиваем доступ к камере…",
+            style = KcalTheme.type.body,
+            color = KcalTheme.colors.text2,
+        )
     }
 }
 
@@ -216,7 +240,7 @@ private fun ManualEntry(hint: String, onSubmit: (String) -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(hint, style = MaterialTheme.typography.titleMedium)
+        Text(hint, style = KcalTheme.type.title, color = KcalTheme.colors.text)
         Spacer(Modifier.size(16.dp))
 
         OutlinedTextField(
@@ -238,32 +262,22 @@ private fun ManualEntry(hint: String, onSubmit: (String) -> Unit) {
                 normalized == null -> "Код не сходится — проверьте цифры"
                 else -> "Код верный"
             },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
+            style = KcalTheme.type.time,
+            color = if (value.isNotEmpty() && normalized == null) {
+                KcalTheme.colors.error
+            } else {
+                KcalTheme.colors.text3
+            },
+            modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
         )
 
         Spacer(Modifier.size(16.dp))
-        Button(
+        WideButton(
+            text = "Найти",
             enabled = normalized != null,
             onClick = { normalized?.let(onSubmit) },
-        ) { Text("Найти") }
-    }
-}
-
-@Composable
-private fun TopBar(showManualSwitch: Boolean, onManual: () -> Unit, onDismiss: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onDismiss) {
-            Icon(Icons.Default.Close, contentDescription = "Закрыть сканер")
-        }
-        Spacer(Modifier.weight(1f))
-        if (showManualSwitch) {
-            TextButton(onClick = onManual) { Text("Ввести код") }
-        }
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

@@ -36,6 +36,13 @@ import n7.kcalai.model.MealType
 import n7.kcalai.personal.DayOutline
 import n7.kcalai.personal.MealGap
 import n7.kcalai.personal.PlanOption
+import n7.kcalai.ui.CapsLabel
+import n7.kcalai.ui.ChipNumbers
+import n7.kcalai.ui.KcalChip
+import n7.kcalai.ui.Macro
+import n7.kcalai.ui.MacroDot
+import n7.kcalai.ui.colors
+import n7.kcalai.ui.letter
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
 
