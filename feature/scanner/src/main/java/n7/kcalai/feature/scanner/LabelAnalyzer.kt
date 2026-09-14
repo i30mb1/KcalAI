@@ -92,6 +92,10 @@ internal class LabelAnalyzer(
     /** Последнее, что попало в лог. Пишем на смену результата, а не на кадр — см. [log]. */
     private var lastLogged: String? = null
 
+    /** Последний пойманный код. Идёт в отчёт по кадру: ловится он редко и не в тот же миг. */
+    @Volatile
+    private var lastBarcode: String? = null
+
     override fun analyze(proxy: ImageProxy) {
         if (!busy.compareAndSet(false, true)) {
             proxy.close()
@@ -130,7 +134,10 @@ internal class LabelAnalyzer(
                 // Код ищется по тому же кадру и результата не ждёт: разбор
                 // не должен ни на миллисекунду зависеть от того, попал ли
                 // в кадр штрих-код.
-                barcodes.read(bitmap, onBarcode)
+                barcodes.read(bitmap) { code ->
+                    lastBarcode = code
+                    onBarcode(code)
+                }
 
                 val verdict = consensus.add(LabelParser.parseLines(lines))
                 val elapsed = SystemClock.elapsedRealtime() - started
@@ -139,7 +146,7 @@ internal class LabelAnalyzer(
                 // Кадр кладётся вместе с тем, что из него вышло: снимок без
                 // расшифровки говорит только «вот что было видно», а с ней —
                 // «вот что было видно и вот где разбор ошибся».
-                recorder?.add(bitmap, started, verdict.reading.summary())
+                recorder?.add(bitmap, started, verdict.report(lastBarcode))
 
                 log(verdict, elapsed, size)
                 onFrame(
@@ -225,6 +232,53 @@ private fun Bitmap.upright(degrees: Int): Bitmap {
     val rotated = Bitmap.createBitmap(this, 0, 0, width, height, matrix, true).opaque()
     if (rotated !== this) recycle()
     return rotated
+}
+
+/**
+ * Разбор кадра целиком — то, ради чего кадры и сохраняются.
+ *
+ * Короткого итога мало: «не сошлось» не говорит ни где ошибся разбор, ни что
+ * вообще прочитал распознаватель. Улучшать алгоритм можно только по строкам,
+ * которые он увидел, и по тому, как из них собиралось решение, — поэтому здесь
+ * лежит всё: маршрут, подписи, доводка арифметикой, голоса кадров, имена
+ * и сами строки. Кадр лежит рядом, и любое утверждение отсюда проверяется глазами.
+ */
+internal fun LabelConsensus.Verdict.report(barcode: String?): String = buildString {
+    val trace = reading.trace
+
+    append(reading.summary())
+    append("\n голоса: ").append(toString())
+    append(" · кадров в окне: ").append(frames)
+
+    if (names.isNotEmpty()) {
+        append("\n имя: ").append(names.first())
+        if (names.size > 1) {
+            append(" · ещё: ").append(names.drop(1).joinToString(" · "))
+        }
+    }
+    barcode?.let { append("\n код: ").append(it) }
+
+    if (trace.readLabels.isNotEmpty()) {
+        append("\n по подписям: ").append(trace.readLabels.joinToString(", "))
+    }
+    if (trace.derivedLabels.isNotEmpty()) {
+        // Не прочитано, а посчитано из остальных трёх по Этуотеру. Видеть это
+        // надо: число верное, но взялось оно не с пачки.
+        append("\n досчитано по Этуотеру: ").append(trace.derivedLabels.joinToString(", "))
+    }
+    if (trace.zeroedLabels.isNotEmpty()) {
+        // Самый неочевидный шаг разбора: подписи на этикетке нет — значит,
+        // макроса в продукте нет, и правильный ответ ноль. Отличить это
+        // от ошибки по готовой форме невозможно, а здесь видно прямо.
+        append("\n подписи нет, принято за ноль: ").append(trace.zeroedLabels.joinToString(", "))
+    }
+    if (reading.numbers.isNotEmpty()) {
+        append("\n числа: ").append(reading.numbers.joinToString(" "))
+    }
+    if (trace.lines.isNotEmpty()) {
+        append("\n строк ").append(trace.lines.size).append(": ")
+        append(trace.lines.joinToString(" | "))
+    }
 }
 
 /** Строка разбора для лога и для экрана: одна и та же, чтобы их можно было сличать. */

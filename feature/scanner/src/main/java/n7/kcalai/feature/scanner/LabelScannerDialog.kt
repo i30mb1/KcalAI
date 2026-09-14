@@ -173,7 +173,10 @@ fun LabelScannerDialog(
 
                 ProductCard(
                     state = state,
-                    onSave = { onSave(state.gtin, state.name.text.trim(), it, state.servingG) },
+                    onSave = {
+                        state.onSaved()
+                        onSave(state.gtin, state.name.text.trim(), it, state.servingG)
+                    },
                 )
             }
         }
@@ -235,7 +238,12 @@ private fun CameraFeed(state: ScanState) {
             // Запись — уже после остановки анализа и не на этом потоке: там
             // несколько мегабайт, а мы на главном. Свой поток, а не executor
             // анализа: тот сейчас закрывается.
-            Thread { recorder.save(startedAt) }.start()
+            //
+            // Итог снимается здесь же: к моменту закрытия экрана поля уже
+            // содержат то, с чем человек согласился, — а расхождение с тем,
+            // что предлагала камера, и есть материал для правки разбора.
+            val outcome = state.outcome(state.saved)
+            Thread { recorder.save(startedAt, outcome) }.start()
             executor.shutdown()
         }
     }

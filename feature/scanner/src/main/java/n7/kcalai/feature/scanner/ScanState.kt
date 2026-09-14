@@ -38,7 +38,9 @@ internal class ScanField(initial: String = "", manual: Boolean = false) {
     var manual by mutableStateOf(manual)
         private set
 
-    private var rejected by mutableStateOf<String?>(null)
+    /** Значение, снятое крестиком. Видно снаружи: это прямая разметка ошибки разбора. */
+    var rejected by mutableStateOf<String?>(null)
+        private set
 
     /** Распознавание предлагает значение. Молча уступает человеку — и снятому. */
     fun offer(value: String?) {
@@ -99,6 +101,14 @@ internal class ScanState(initialGtin: String?) {
      */
     var seen by mutableIntStateOf(0)
         private set
+
+    /** Человек нажал «Сохранить». Нужно диагностике: см. [outcome]. */
+    var saved by mutableStateOf(false)
+        private set
+
+    fun onSaved() {
+        saved = true
+    }
 
     fun onFrame(next: LabelFrame) {
         frame = next
@@ -171,6 +181,43 @@ internal class ScanState(initialGtin: String?) {
     /** Кольцо считает обязательную четвёрку: без неё сохранять нечего. */
     val overall: Float
         get() = REQUIRED.map(::progress).average().toFloat()
+
+    /**
+     * Чем кончилась съёмка — последняя и самая ценная строка диагностики.
+     *
+     * Кадры показывают, что видел распознаватель. Эта строка показывает, где он
+     * ошибся: рядом стоит то, что предложила камера, и то, что человек оставил
+     * в поле. Расхождение и есть готовая разметка — по ней правится разбор,
+     * а без неё остаётся гадать, почему съёмку бросили.
+     */
+    fun outcome(saved: Boolean): String = buildString {
+        append(if (saved) "сохранено" else "закрыто без сохранения")
+        line("название", name)
+        line("ккал", kcal)
+        line("Б", prot)
+        line("Ж", fat)
+        line("У", carb)
+        line("порция", serving)
+        line("код", barcode)
+    }
+
+    private fun StringBuilder.line(label: String, field: ScanField) {
+        if (!field.filled && field.rejected == null) return
+
+        append("\n ").append(label).append(": ")
+        append(field.text.ifEmpty { "—" })
+        append(
+            when {
+                // Самый интересный случай: камера прочитала своё, человек стёр
+                // и написал другое. Здесь виден и её ответ, и верный.
+                field.rejected != null && field.manual ->
+                    " (руками, камера читала «${field.rejected}»)"
+                field.rejected != null -> " (снято крестиком, камера читала «${field.rejected}»)"
+                field.manual -> " (руками)"
+                else -> " (камера)"
+            }
+        )
+    }
 
     companion object {
         val REQUIRED = listOf("ккал", "Б", "Ж", "У")

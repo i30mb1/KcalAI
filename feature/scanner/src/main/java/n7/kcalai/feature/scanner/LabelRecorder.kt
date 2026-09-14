@@ -67,7 +67,7 @@ internal class LabelRecorder(
      *
      * Вызывать с фонового потока: тут несколько мегабайт.
      */
-    fun save(startedAtMs: Long): File? {
+    fun save(startedAtMs: Long, outcome: String? = null): File? {
         val taken = drain()
         if (taken.isEmpty()) return null
 
@@ -77,8 +77,19 @@ internal class LabelRecorder(
             taken.forEachIndexed { index, shot ->
                 val name = "frame-%02d.jpg".format(index)
                 File(dir, name).writeBytes(shot.jpeg)
-                notes.append("$name  +${shot.atMs - taken.first().atMs} мс  ${shot.note}\n")
+                notes.append(name)
+                    .append("  +")
+                    .append(shot.atMs - taken.first().atMs)
+                    .append(" мс  ")
+                    // Отчёт по кадру многострочный, и продолжения отбиваются
+                    // отступом: иначе имя кадра тонет в строках распознавания.
+                    .append(shot.note.trimEnd().replace("\n", "\n" + INDENT))
+                    .append("\n\n")
             }
+
+            // Итог идёт последним, а не первым: читают файл сверху вниз, от того,
+            // что видела камера, к тому, чем всё кончилось.
+            outcome?.let { notes.append("итог: ").append(it.trimEnd()).append("\n\n") }
             // Частота примерно та, с какой кадры и приходили: анализ идёт около
             // шести десятых секунды на кадр, так что ролик получится в реальном
             // времени, а не ускоренным вчетверо.
@@ -117,6 +128,9 @@ internal class LabelRecorder(
         private const val JPEG_QUALITY = 80
         private const val JPEG_HINT_BYTES = 256 * 1024
         private const val KEEP_SESSIONS = 5
+
+        /** Отступ продолжений многострочной заметки о кадре. */
+        private const val INDENT = "              "
 
         /**
          * Куда складывать: внутреннее хранилище приложения.
