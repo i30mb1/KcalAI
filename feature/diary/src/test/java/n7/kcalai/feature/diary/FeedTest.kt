@@ -58,9 +58,19 @@ class FeedTest {
     @Test
     fun `в зазоре после часа тишины — перекус`() {
         val breakfast = entry(1, hour = 9, meal = MealType.BREAKFAST)
+        val dinner = entry(2, hour = 19, meal = MealType.DINNER)
 
         assertEquals(MealType.SNACK, mealForHour(11, breakfast, nowMillis = at(11, 30)))
-        assertEquals(MealType.SNACK, mealForHour(23, lastEntry = null, nowMillis = at(23)))
+        assertEquals(MealType.SNACK, mealForHour(23, dinner, nowMillis = at(23)))
+    }
+
+    @Test
+    fun `первая еда дня перекусом не бывает`() {
+        // На пустом дневнике зазор отдаётся ближайшему прошедшему приёму.
+        assertEquals(MealType.BREAKFAST, mealForHour(11, lastEntry = null, nowMillis = at(11)))
+        assertEquals(MealType.LUNCH, mealForHour(16, lastEntry = null, nowMillis = at(16)))
+        assertEquals(MealType.DINNER, mealForHour(23, lastEntry = null, nowMillis = at(23)))
+        assertEquals(MealType.DINNER, mealForHour(2, lastEntry = null, nowMillis = at(2)))
     }
 
     // --- Пузырьки ------------------------------------------------------------------------
