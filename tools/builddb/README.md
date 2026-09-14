@@ -9,7 +9,7 @@
 
 ```bash
 python3 build_seed.py            # собрать и проверить инварианты
-python3 build_seed.py --install  # то же + положить в app/src/main/assets/
+python3 build_seed.py --install  # то же + положить в app/src/main/assets/ и server/data/seed/
 
 python3 merge_generated.py items.json --dry-run  # посмотреть, что примется
 python3 merge_generated.py items.json            # влить новые позиции в CSV

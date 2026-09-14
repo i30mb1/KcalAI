@@ -57,9 +57,26 @@
 По дизайну (`specs/2026-09-13-kcal-ai-design.md`) запланировано, но не реализовано:
 
 - **Полный срез Open Food Facts** докачкой (План 4). Сейчас брендовые товары ищутся только в `seed.db`, промах уходит в сеть; `foodPath = null` в `AppContainer`.
-- **Свой сервер** для вкладов и товаров: клиентская сторона написана и проверяется на OFF, адрес пуст (`SERVER_BASE_URL`), очередь копится локально и ждёт.
 - **Экспорт/импорт** дневника.
 - **Фото еды** (v2) и **LLM-фолбэк** для непонятых фраз (v1.1). Единственный след — `TextFoodResolver.resolve(text)` для перечислений через запятую, пока никем не вызывается.
+
+## Локальный сервер
+
+`server/` — Ktor-сервер на компьютере разработчика, отдельный Gradle-проект. Отдаёт товары по штрих-коду, раздаёт свежий `seed.db`, принимает вклады и сессии съёмки этикеток. Ничего не сливает автоматически: собранное лежит в `server/data/` и попадает в справочник руками. Контракт — `docs/server-contract.md`.
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+cd server; .\gradlew.bat run          # http://0.0.0.0:8080, данные в server/data/
+```
+
+Один раз: пропустить порт в брандмауэре (от администратора):
+`netsh advfirewall firewall add rule name="Kcal AI server" dir=in action=allow protocol=TCP localport=8080`.
+
+Телефон в той же сети; адрес компьютера — в `local.properties`: `kcal.server=http://192.168.1.10:8080` (в git не попадает; debug-сборка разрешает http без TLS). Дальше само:
+
+- `python tools/builddb/build_seed.py --install` кладёт свежий `seed.db` и на сервер — приложение докачает его при следующем старте, а поставит при следующем за ним.
+- заведённые руками продукты уезжают в очередь `contribution`; `python server/tools/publish.py <gtin>` переносит их в `product`, и с этого момента штрих-код находится по сети.
+- сессии съёмки этикеток (`filesDir/label-scans`) уезжают в `server/data/scans/<scan-id>/` — кадры и `readings.txt`.
 
 ## Модули
 
@@ -105,5 +122,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 | Ввод веса из строки, форматирование | `WeightInputTest`, `FormatTest` |
 | Шесть моделей персонализации | `NextFoodModelTest`, `CandidateRankerTest`, `PortionMemoryTest`, `MealGapDetectorTest`, `RemainingDayPlannerTest`, `TdeeEstimatorTest` |
 | Пересчёт КБЖУ, ссылки на продукт | `NutrimentsTest`, `FoodRefTest` |
+| Подхват докачанного справочника | `SeedInstallerTest` |
+| Сервер: маршруты, хранилище, GTIN | `server/src/test` (`cd server; .\gradlew.bat test`) |
 
 Без юнит-тестов остались `DiaryViewModel` (приоритет рядов композера, поток скана) и `FoodRepository.search` (порядок источников) — им нужны интерфейсы вместо классов и SQLite на JVM. Инструментальный `LabelReadingTest` в `:feature:scanner` гоняет распознавание на реальных снимках этикеток и требует устройство.
