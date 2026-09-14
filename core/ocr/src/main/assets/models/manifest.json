@@ -1,20 +1,20 @@
 {
-  "version": 4,
+  "version": 5,
   "models": [
     {
       "name": "ocr_detection",
       "type": "tflite",
       "assetPath": "models/ocr_det_fp16.tflite",
       "targetPath": "ocr_det_fp16.tflite",
-      "sha256": "f02bb7693e98dacd08075ac911dbdfdb0184b5f582cabb0c49ca41c5120fe189",
-      "sizeBytes": 2444316,
+      "sha256": "039400b404653619455118f367c9f32b17bf3e29c6ba0159d100eb38f04ff500",
+      "sizeBytes": 2434212,
       "required": true,
-      "description": "PP-OCRv5 text detection model (FP16). Script-agnostic, shared by all languages.",
+      "description": "PP-OCRv5 text detection model (FP16), input 1280x960 = the analysis frame 1:1. Script-agnostic. Built by tools/ocr-models/convert_det.sh.",
       "source": "https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det",
       "inputShape": [
         1,
-        640,
-        640,
+        1280,
+        960,
         3
       ],
       "quantization": "FP16"

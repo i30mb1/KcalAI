@@ -110,6 +110,19 @@ class LabelAnchorsTest {
     }
 
     @Test
+    fun `«100 мл» с нулями-буквами остаётся подписью, а не значением`() {
+        val lines = listOf(
+            line("углеводы, г/1о0 мп", y = 140f), line("6,0", y = 140f, x = 300f),
+            line("ккал/1о0 мп", y = 220f), line("25,0", y = 220f, x = 300f),
+            line("кДж/1О0 мл", y = 260f), line("110,0", y = 260f, x = 300f),
+        )
+
+        val reading = LabelParser.parseLines(lines)
+        assertEquals(25, reading.draft.kcal100)
+        assertEquals(600, reading.draft.carb100)
+    }
+
+    @Test
     fun `точная подпись без числа нулём не становится`() {
         val lines = listOf(
             line("Белки", y = 100f), line("17,2", y = 100f, x = 300f),
