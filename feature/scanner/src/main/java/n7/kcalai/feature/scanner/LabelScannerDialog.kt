@@ -193,8 +193,19 @@ fun LabelScannerDialog(
 @Composable
 private fun CameraFeed(state: ScanState, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    CameraFrames(modifier) { labelAnalysis(context, state) }
+    CameraFrames(modifier, zoom = LABEL_ZOOM) { labelAnalysis(context, state) }
 }
+
+/**
+ * Двукратное приближение.
+ *
+ * Строка таблицы пищевой ценности с расстояния, на котором камера ещё
+ * фокусируется, занимает в кадре 13–16 пикселей; детектор ужимает кадр
+ * в 640×640 и видит 6–8 — и не находит строку вовсе. Вдвое крупнее —
+ * 13–16 в детекторе, читается. Больше не нужно: таблица перестаёт влезать,
+ * и человеку приходится водить камерой по строкам.
+ */
+private const val LABEL_ZOOM = 2f
 
 /**
  * Разбор этикетки: распознавание текста, согласие кадров, попутный штрих-код

@@ -34,12 +34,19 @@ import kotlinx.coroutines.awaitCancellation
  * не умел, и разворачивать кадр приходилось своим `Canvas` — лишняя копия
  * на пять мегабайт на каждом кадре.
  *
+ * @param zoom во сколько раз приблизить картинку. Основная камера не наводится
+ *        ближе восьми-десяти сантиметров, а с этого расстояния мелкий шрифт
+ *        этикетки в кадре 960×1280 выходит в десяток пикселей — детектору
+ *        текста этого мало. Двигать телефон ближе нельзя: размоет. Зато сенсор
+ *        отдаёт тот же кадр с половины поля, и текст вдвое крупнее при той же
+ *        дистанции, где фокус ещё держится. Обрезается до предела камеры.
  * @param analysis собрать анализ кадров. Зовётся один раз за сессию: внутри
  *        живут нативные модели и потоки, и пересоздавать их на перерисовке нельзя.
  */
 @Composable
 internal fun CameraFrames(
     modifier: Modifier = Modifier,
+    zoom: Float = 1f,
     analysis: () -> FrameAnalysis,
 ) {
     val context = LocalContext.current
@@ -56,12 +63,14 @@ internal fun CameraFrames(
             setSurfaceProvider { incoming -> request = incoming }
         }
         try {
-            provider.bindToLifecycle(
+            val camera = provider.bindToLifecycle(
                 lifecycleOwner,
                 CameraSelector.DEFAULT_BACK_CAMERA,
                 preview,
                 frames.useCase,
             )
+            val maxZoom = camera.cameraInfo.zoomState.value?.maxZoomRatio ?: 1f
+            camera.cameraControl.setZoomRatio(zoom.coerceIn(1f, maxZoom))
             // Сессия живёт, пока жив экран. Отвязка — в finally, чтобы камера
             // отпускалась и при обычном закрытии, и при отмене корутины.
             awaitCancellation()
