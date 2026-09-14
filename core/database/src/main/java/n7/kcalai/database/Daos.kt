@@ -87,11 +87,20 @@ interface UserFoodDao {
     @Query("SELECT * FROM user_food WHERE id = :id")
     suspend fun findById(id: Long): UserFoodEntity?
 
-    @Query(
-        "SELECT * FROM user_food WHERE name LIKE '%' || :query || '%' " +
-            "ORDER BY length(name), createdAt DESC LIMIT :limit"
-    )
-    suspend fun search(query: String, limit: Int): List<UserFoodEntity>
+    /**
+     * Все свои продукты — отбор идёт в Kotlin, а не в SQL.
+     *
+     * Отбирать здесь было бы нечем. `LIKE` по-русски не работает: встроенный
+     * в SQLite он складывает регистр только у латиницы, и «Начинка», заведённая
+     * с этикетки, не находилась по набранному строчными «начинка» вовсе. FTS-таблица
+     * ради своих продуктов — молотилка не по масштабу: их у человека десятки,
+     * а правило поиска уже написано и живёт в `:core:fooddb` рядом с остальными.
+     *
+     * Порядок — от новых: человек ищет то, что завёл недавно. Окончательный
+     * задаёт репозиторий, когда уже знает, что чему совпало.
+     */
+    @Query("SELECT * FROM user_food ORDER BY createdAt DESC")
+    suspend fun all(): List<UserFoodEntity>
 }
 
 @Dao

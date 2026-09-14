@@ -1,15 +1,12 @@
 package n7.kcalai.feature.scanner
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.view.CameraController
-import androidx.camera.view.LifecycleCameraController
-import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,13 +32,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.camera.core.ImageAnalysis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -49,11 +47,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import n7.kcalai.repositories.BarcodeValidator
@@ -152,48 +148,10 @@ fun ScannerDialog(
 @Composable
 private fun CameraPane(onScanned: (String) -> Unit) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val controller = remember { LifecycleCameraController(context) }
-
-    /**
-     * Распознавание идёт на каждом кадре, и один и тот же код прилетает подряд
-     * десятки раз. Защёлка вместо флага состояния — потому что срабатывает она
-     * на потоке анализа, а не в композиции.
-     */
-    val delivered = remember { AtomicBoolean(false) }
-
-    DisposableEffect(lifecycleOwner) {
-        val executor = Executors.newSingleThreadExecutor()
-        val analyzer = BarcodeAnalyzer { code ->
-            if (delivered.compareAndSet(false, true)) {
-                ContextCompat.getMainExecutor(context).execute { onScanned(code) }
-            }
-        }
-
-        // Съёмка и видео не нужны: без них не создаются их use case'ы,
-        // а камера стартует заметно быстрее.
-        controller.setEnabledUseCases(CameraController.IMAGE_ANALYSIS)
-        controller.setImageAnalysisAnalyzer(executor, analyzer)
-        controller.bindToLifecycle(lifecycleOwner)
-
-        onDispose {
-            controller.clearImageAnalysisAnalyzer()
-            controller.unbind()
-            analyzer.close()
-            executor.shutdown()
-        }
-    }
+    val deliver by rememberUpdatedState(onScanned)
 
     Box(Modifier.fillMaxSize()) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { ctx ->
-                PreviewView(ctx).apply {
-                    this.controller = controller
-                    scaleType = PreviewView.ScaleType.FILL_CENTER
-                }
-            },
-        )
+        CameraFrames { barcodeAnalysis(context) { code -> deliver(code) } }
 
         // Рамка не участвует в распознавании — ML Kit смотрит весь кадр.
         // Она нужна человеку: без неё непонятно, куда наводить. Окно ниже
@@ -207,6 +165,37 @@ private fun CameraPane(onScanned: (String) -> Unit) {
                 .navigationBarsPadding()
                 .padding(32.dp),
         )
+    }
+}
+
+/**
+ * Разбор штрих-кода.
+ *
+ * Формат кадра остаётся тем, что даёт камера: ML Kit принимает YUV напрямую,
+ * без перекладывания в цвет, и разбор идёт по кадру камеры, а не по его копии.
+ *
+ * Один и тот же код прилетает подряд десятки раз, поэтому защёлка: отдать его
+ * наружу надо однажды. Срабатывает она на потоке анализа, отсюда атомарность.
+ */
+private fun barcodeAnalysis(context: Context, onScanned: (String) -> Unit): FrameAnalysis {
+    val executor = Executors.newSingleThreadExecutor()
+    val main = ContextCompat.getMainExecutor(context)
+    val delivered = AtomicBoolean(false)
+
+    val analyzer = BarcodeAnalyzer { code ->
+        if (delivered.compareAndSet(false, true)) {
+            main.execute { onScanned(code) }
+        }
+    }
+
+    val useCase = ImageAnalysis.Builder()
+        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+        .build()
+        .apply { setAnalyzer(executor, analyzer) }
+
+    return FrameAnalysis(useCase) {
+        analyzer.close()
+        executor.shutdown()
     }
 }
 

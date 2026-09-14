@@ -10,6 +10,7 @@ import n7.kcalai.database.UserFoodDao
 import n7.kcalai.database.UserFoodEntity
 import n7.kcalai.fooddb.FoodDb
 import n7.kcalai.fooddb.ProductRow
+import n7.kcalai.fooddb.matchesQuery
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.FoodRef
 import n7.kcalai.model.Nutriments
@@ -156,7 +157,7 @@ class FoodRepository(
     suspend fun search(query: String, limit: Int): List<FoodCandidate> {
         if (query.isBlank() || limit <= 0) return emptyList()
 
-        val own = userFoodDao.search(query, limit).map { it.toCandidate() }
+        val own = ownMatches(query, limit)
         if (own.size >= limit) return own.take(limit)
 
         return onDb { db ->
@@ -178,6 +179,21 @@ class FoodRepository(
             }
         }
     }
+
+    /**
+     * Свои продукты, отвечающие запросу.
+     *
+     * Первыми — короткие названия: чем короче название, тем большую его долю
+     * покрыл запрос, а значит, тем точнее попадание. При равной длине выигрывает
+     * заведённое позже — свежая находка человеку нужнее прошлогодней. Тот же
+     * порядок, что был у SQL-запроса до того, как отбор переехал сюда.
+     */
+    private suspend fun ownMatches(query: String, limit: Int): List<FoodCandidate> =
+        userFoodDao.all()
+            .filter { matchesQuery(it.name, query) }
+            .sortedWith(compareBy({ it.name.length }, { -it.createdAt }))
+            .take(limit)
+            .map { it.toCandidate() }
 
     /** Порционная единица конкретного продукта: «шт» у яйца — 60 г, у банана — 120 г. */
     suspend fun portionUnits(ref: FoodRef): Map<String, Int> = when (ref) {

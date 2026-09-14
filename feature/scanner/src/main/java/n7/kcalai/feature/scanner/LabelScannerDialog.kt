@@ -4,15 +4,13 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Context
 import android.os.Process
 import android.util.Size
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
-import androidx.camera.view.CameraController
-import androidx.camera.view.LifecycleCameraController
-import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -64,7 +61,6 @@ import androidx.compose.ui.text.input.ImeAction
 import n7.kcalai.model.Nutriments
 import n7.kcalai.ui.KcalChip
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
@@ -195,87 +191,84 @@ fun LabelScannerDialog(
 
 /** Превью и распознавание. Всё, что оно находит, уходит в [state]. */
 @Composable
-private fun CameraFeed(state: ScanState) {
+private fun CameraFeed(state: ScanState, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val controller = remember { LifecycleCameraController(context) }
+    CameraFrames(modifier) { labelAnalysis(context, state) }
+}
 
-    DisposableEffect(lifecycleOwner) {
-        // Разбор кадра целиком уходит на потоки пониженного приоритета, и это
-        // не микрооптимизация. Распознавание занимает сотни миллисекунд и грузит
-        // все ядра; с обычным приоритетом оно конкурирует за процессор с отрисовкой
-        // превью, и камера начинает дёргаться ровно тогда, когда человек наводит.
-        // Кадром позже разбор ничего не теряет, дёрганое превью — теряет наводку.
-        val executor = Executors.newSingleThreadExecutor(unhurried("label-frame"))
-        val inference = Executors.newSingleThreadExecutor(unhurried("label-ocr"))
-        val dispatcher = inference.asCoroutineDispatcher()
+/**
+ * Разбор этикетки: распознавание текста, согласие кадров, попутный штрих-код
+ * и запись кадров на диск.
+ *
+ * Собирается один раз за сессию и закрывается вместе с ней. Всё тяжёлое — на
+ * потоках пониженного приоритета: распознавание занимает сотни миллисекунд
+ * и грузит все ядра, а конкурировать за процессор с отрисовкой превью ему
+ * незачем. Кадром позже разбор ничего не теряет, дёрганое превью — теряет наводку.
+ */
+private fun labelAnalysis(context: Context, state: ScanState): FrameAnalysis {
+    val executor = Executors.newSingleThreadExecutor(unhurried("label-frame"))
+    val inference = Executors.newSingleThreadExecutor(unhurried("label-ocr"))
+    val dispatcher = inference.asCoroutineDispatcher()
 
-        val ocr = LabelOcr(context, dispatcher)
-        val scope = CoroutineScope(SupervisorJob() + dispatcher)
-        val recorder = LabelRecorder(LabelRecorder.directory(context))
-        val startedAt = System.currentTimeMillis()
-        val main = ContextCompat.getMainExecutor(context)
+    val ocr = LabelOcr(context, dispatcher)
+    val scope = CoroutineScope(SupervisorJob() + dispatcher)
+    val recorder = LabelRecorder(LabelRecorder.directory(context))
+    val startedAt = System.currentTimeMillis()
+    val main = ContextCompat.getMainExecutor(context)
 
-        val analyzer = LabelAnalyzer(
-            ocr = ocr,
-            scope = scope,
-            recorder = recorder,
-            onBarcode = { code -> main.execute { state.onBarcode(code) } },
-            onFrame = { read -> main.execute { state.onFrame(read) } },
-        )
+    val analyzer = LabelAnalyzer(
+        ocr = ocr,
+        scope = scope,
+        recorder = recorder,
+        onBarcode = { code -> main.execute { state.onBarcode(code) } },
+        onFrame = { read -> main.execute { state.onFrame(read) } },
+    )
 
-        controller.setEnabledUseCases(CameraController.IMAGE_ANALYSIS)
+    val useCase = ImageAnalysis.Builder()
         // Разрешение анализа по умолчанию — примерно 640×480, и на таблице пищевой
         // ценности этого не хватает: подписи там набраны шестым кеглем, и в кадре
         // от буквы остаётся два-три пикселя. Детектор строку находит, распознавание
         // отдаёт по ней кашу. Просить больше 1280×960 незачем — инференс растёт
         // квадратично, а разборчивее уже не становится.
-        controller.imageAnalysisResolutionSelector = ResolutionSelector.Builder()
-            .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
-            .setResolutionStrategy(
-                ResolutionStrategy(
-                    Size(1280, 960),
-                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+        .setResolutionSelector(
+            ResolutionSelector.Builder()
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                .setResolutionStrategy(
+                    ResolutionStrategy(
+                        Size(1280, 960),
+                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                    )
                 )
-            )
-            .build()
+                .build()
+        )
         // RGBA напрямую от камеры: иначе кадр приходит в YUV, и `toBitmap()`
         // перекладывает его в цвет сам, на каждом кадре и на потоке анализа.
-        controller.imageAnalysisOutputImageFormat = ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888
-        controller.imageAnalysisBackpressureStrategy = ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST
-        controller.setImageAnalysisAnalyzer(executor, analyzer)
-        controller.bindToLifecycle(lifecycleOwner)
+        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+        // Поворот делает камера. Сенсор смонтирован боком почти во всех телефонах,
+        // и без этого в анализ уходит лежащий на боку кадр: детектор его размечает,
+        // а распознающая модель обучена на горизонтальных строках и отдаёт мусор.
+        // Разворачивать своим `Canvas` — лишняя копия на пять мегабайт на кадре.
+        .setOutputImageRotationEnabled(true)
+        .build()
+        .apply { setAnalyzer(executor, analyzer) }
 
-        onDispose {
-            controller.clearImageAnalysisAnalyzer()
-            controller.unbind()
-            scope.cancel()
-            // Нативные сессии надо отпустить: они держат модели в памяти.
-            ocr.close()
-            analyzer.close()
-            // Запись — уже после остановки анализа и не на этом потоке: там
-            // несколько мегабайт, а мы на главном. Свой поток, а не executor
-            // анализа: тот сейчас закрывается.
-            //
-            // Итог снимается здесь же: к моменту закрытия экрана поля уже
-            // содержат то, с чем человек согласился, — а расхождение с тем,
-            // что предлагала камера, и есть материал для правки разбора.
-            val outcome = state.outcome(state.saved)
-            Thread { recorder.save(startedAt, outcome) }.start()
-            executor.shutdown()
-            inference.shutdown()
-        }
+    return FrameAnalysis(useCase) {
+        scope.cancel()
+        // Нативные сессии надо отпустить: они держат модели в памяти. Закрытие
+        // OCR встаёт в ту же очередь, что и кадры, поэтому executor гасится
+        // мягко — уже поставленное успеет доработать.
+        ocr.close()
+        analyzer.close()
+        // Итог снимается здесь: к моменту закрытия экрана поля содержат то,
+        // с чем человек согласился, — а расхождение с тем, что предлагала
+        // камера, и есть материал для правки разбора.
+        val outcome = state.outcome(state.saved)
+        // Запись — не на этом потоке: там несколько мегабайт, а мы на главном.
+        Thread { recorder.save(startedAt, outcome) }.start()
+        executor.shutdown()
+        inference.shutdown()
     }
-
-    AndroidView(
-        modifier = Modifier.fillMaxSize(),
-        factory = { ctx ->
-            PreviewView(ctx).apply {
-                this.controller = controller
-                scaleType = PreviewView.ScaleType.FILL_CENTER
-            }
-        },
-    )
 }
 
 /**
