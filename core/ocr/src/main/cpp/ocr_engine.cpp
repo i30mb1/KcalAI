@@ -384,40 +384,50 @@ namespace ppocrv5 {
             AcceleratorType accelerator_type) {
 
         auto engine = std::unique_ptr<OcrEngine>(new OcrEngine());
-        int start_index = GetFallbackStartIndex(accelerator_type);
+        const int start_index = GetFallbackStartIndex(accelerator_type);
 
+        // Ускоритель выбирается для каждой модели отдельно. Детектор на GPU
+        // не компилируется — делегат не знает DEQUANTIZE и TRANSPOSE_CONV v4
+        // из его графа, — и раньше это роняло на CPU обе модели разом. А узкое
+        // место — распознаватель: два десятка строк по двадцать миллисекунд
+        // против ста у детектора. Ему GPU и достаётся, детектору — что выйдет.
+        AcceleratorType det_accelerator = AcceleratorType::kCpu;
         for (size_t i = start_index; i < kAcceleratorCandidates.size(); ++i) {
-            AcceleratorType current_accelerator = kAcceleratorCandidates[i];
-            LOGD(TAG, "Attempting to initialize with %s accelerator",
-                 AcceleratorName(current_accelerator));
-
-            auto detector = TextDetector::Create(det_model_path, current_accelerator);
-            if (!detector) {
-                LOGD(TAG, "TextDetector failed with %s, trying next",
-                     AcceleratorName(current_accelerator));
-                continue;
-            }
-
-            auto recognizer = TextRecognizer::Create(rec_model_path, keys_path, current_accelerator);
-            if (!recognizer) {
-                LOGD(TAG, "TextRecognizer failed with %s, trying next",
-                     AcceleratorName(current_accelerator));
-                continue;
-            }
-
+            const AcceleratorType candidate = kAcceleratorCandidates[i];
+            LOGD(TAG, "TextDetector: trying %s", AcceleratorName(candidate));
+            auto detector = TextDetector::Create(det_model_path, candidate);
+            if (!detector) continue;
             engine->detector_ = std::move(detector);
-            engine->recognizer_ = std::move(recognizer);
-            engine->active_accelerator_ = current_accelerator;
-
-            LOGD(TAG, "OcrEngine initialized with %s accelerator",
-                 AcceleratorName(current_accelerator));
-
-            engine->WarmUp();
-            return engine;
+            det_accelerator = candidate;
+            break;
+        }
+        if (!engine->detector_) {
+            LOGE(TAG, "Failed to initialize TextDetector with any accelerator");
+            return nullptr;
         }
 
-        LOGE(TAG, "Failed to initialize OcrEngine with any accelerator");
-        return nullptr;
+        AcceleratorType rec_accelerator = AcceleratorType::kCpu;
+        for (size_t i = start_index; i < kAcceleratorCandidates.size(); ++i) {
+            const AcceleratorType candidate = kAcceleratorCandidates[i];
+            LOGD(TAG, "TextRecognizer: trying %s", AcceleratorName(candidate));
+            auto recognizer = TextRecognizer::Create(rec_model_path, keys_path, candidate);
+            if (!recognizer) continue;
+            engine->recognizer_ = std::move(recognizer);
+            rec_accelerator = candidate;
+            break;
+        }
+        if (!engine->recognizer_) {
+            LOGE(TAG, "Failed to initialize TextRecognizer with any accelerator");
+            return nullptr;
+        }
+
+        // Наружу отдаётся ускоритель распознавателя: он и определяет скорость.
+        engine->active_accelerator_ = rec_accelerator;
+        LOGD(TAG, "OcrEngine initialized: detector on %s, recognizer on %s",
+             AcceleratorName(det_accelerator), AcceleratorName(rec_accelerator));
+
+        engine->WarmUp();
+        return engine;
     }
 
     const std::vector<OcrResult> &OcrEngine::ProcessView(const uint8_t *image_data,
