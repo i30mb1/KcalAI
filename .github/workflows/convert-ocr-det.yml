@@ -1,0 +1,107 @@
+# Переэкспорт детектора текста PP-OCRv5 под другой размер входа.
+#
+# Готовая модель в core/ocr/src/main/assets/models зашита на 640×640, и кадр
+# 960×1280 ужимается в неё вдвое: мелкий шрифт этикетки детектор не находит.
+# Конвейер тот же, что у апстрима (iFleey/PPOCRv5-Android): Paddle → ONNX →
+# onnxsim со статической формой → onnx2tf → TFLite FP16. На Windows этой
+# машины с Python 3.14 он не собирается, на ubuntu с Python 3.10 — собирается.
+#
+# Запуск: gh workflow run convert-ocr-det.yml -f sizes=1280x960,960x736
+# Размеры — ВЫСОТАxШИРИНА, кратные 32. Результат — артефакт ocr-det-<размер>.
+name: Convert OCR detector
+
+on:
+  workflow_dispatch:
+    inputs:
+      sizes:
+        description: "Размеры входа детектора, ВЫСОТАxШИРИНА через запятую"
+        required: true
+        default: "1280x960"
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Зависимости
+        run: |
+          pip install paddlepaddle paddle2onnx onnxsim huggingface_hub numpy psutil
+          pip install onnx==1.15.0 onnx_graphsurgeon
+          pip install tensorflow==2.15.0 tf_keras
+          pip install sng4onnx onnx2tf==1.22.3
+
+      - name: Модель детектора с Hugging Face
+        run: |
+          python3 - <<'EOF'
+          from huggingface_hub import snapshot_download
+          snapshot_download(repo_id="PaddlePaddle/PP-OCRv5_mobile_det", local_dir="det")
+          EOF
+          paddle2onnx --model_dir det --model_filename inference.json \
+            --params_filename inference.pdiparams --save_file det.onnx --opset_version 14
+
+      - name: Конвертация под каждый размер
+        run: |
+          IFS=',' read -ra SIZES <<< "${{ github.event.inputs.sizes }}"
+          for size in "${SIZES[@]}"; do
+            H="${size%x*}"; W="${size#*x}"
+            echo "=== $H x $W"
+            python3 - "$H" "$W" <<'EOF'
+          import sys, onnx, numpy as np
+          from onnxsim import simplify
+          import onnx_graphsurgeon as gs
+
+          h, w = int(sys.argv[1]), int(sys.argv[2])
+
+          # HardSigmoid раскладывается в Mul/Add/Max/Min: делегаты его не знают.
+          def decompose_hardsigmoid(graph, node):
+              alpha = node.attrs.get("alpha", 0.2)
+              beta = node.attrs.get("beta", 0.5)
+              c = lambda name, v: gs.Constant(f"{node.name}_{name}", np.array([v], dtype=np.float32))
+              mul_out = gs.Variable(f"{node.name}_mul_out")
+              add_out = gs.Variable(f"{node.name}_add_out")
+              max_out = gs.Variable(f"{node.name}_max_out")
+              graph.nodes.extend([
+                  gs.Node("Mul", f"{node.name}_mul", inputs=[node.inputs[0], c("alpha", alpha)], outputs=[mul_out]),
+                  gs.Node("Add", f"{node.name}_add", inputs=[mul_out, c("beta", beta)], outputs=[add_out]),
+                  gs.Node("Max", f"{node.name}_max", inputs=[add_out, c("zero", 0.0)], outputs=[max_out]),
+                  gs.Node("Min", f"{node.name}_min", inputs=[max_out, c("one", 1.0)], outputs=[node.outputs[0]]),
+              ])
+              node.outputs.clear()
+
+          model = onnx.load("det.onnx")
+          simplified, ok = simplify(model, overwrite_input_shapes={"x": [1, 3, h, w]},
+                                    perform_optimization=True)
+          if ok:
+              model = simplified
+          graph = gs.import_onnx(model)
+          for node in [n for n in graph.nodes if n.op == "HardSigmoid"]:
+              decompose_hardsigmoid(graph, node)
+          graph.cleanup().toposort()
+          model = gs.export_onnx(graph)
+          for node in model.graph.node:
+              if node.op_type == "Resize":
+                  for attr in node.attribute:
+                      if attr.name == "coordinate_transformation_mode" and attr.s == b"half_pixel":
+                          attr.s = b"asymmetric"
+          onnx.save(model, f"det_{h}x{w}.onnx")
+          EOF
+            onnx2tf -i "det_${H}x${W}.onnx" -o "out_${H}x${W}" -b 1 -ois "x:1,3,${H},${W}" -n
+            mkdir -p "artifacts/${H}x${W}"
+            cp "$(find "out_${H}x${W}" -name '*float16.tflite' | head -1)" "artifacts/${H}x${W}/ocr_det_fp16.tflite"
+            cp "$(find "out_${H}x${W}" -name '*float32.tflite' | head -1)" "artifacts/${H}x${W}/ocr_det_fp32.tflite"
+            python3 - "artifacts/${H}x${W}/ocr_det_fp16.tflite" <<'EOF'
+          import sys, tensorflow as tf
+          i = tf.lite.Interpreter(model_path=sys.argv[1]); i.allocate_tensors()
+          print("input", [(d["name"], list(d["shape"])) for d in i.get_input_details()])
+          print("output", [(d["name"], list(d["shape"])) for d in i.get_output_details()])
+          EOF
+          done
+          ls -laR artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ocr-det
+          path: artifacts
