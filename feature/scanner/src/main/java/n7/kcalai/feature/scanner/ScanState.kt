@@ -119,15 +119,18 @@ internal class ScanState(initialGtin: String?) {
 
         val fields = next.fields.toMap()
         votes = fields
-        val draft = next.reading.draft
 
-        // В поля уходит только набранное голосами. Показывать последний кадр
-        // значило бы мигать цифрами, которым сами не верим, — и мигать ими
-        // в поле, куда человек в этот момент, возможно, печатает.
-        kcal.offer(draft.kcal100?.takeIf { fields["ккал"]?.settled == true }?.toString())
-        prot.offer(draft.prot100.centigramsToField(fields["Б"]))
-        fat.offer(draft.fat100.centigramsToField(fields["Ж"]))
-        carb.offer(draft.carb100.centigramsToField(fields["У"]))
+        // В поля уходит только набранное голосами, и берётся оно у самого
+        // голосования, а не из черновика кадра. Черновик, пока четвёрка
+        // не сошлась целиком, показывает последний кадр как есть — и когда
+        // человек уже отвёл камеру на полку, это ценник «2.49 5.53», разобранный
+        // арифметикой. Поле белков при этом всё ещё считалось набранным:
+        // три кадра с этикетки из окна не ушли, — и в него уезжало 5,5 с ценника
+        // вместо нуля, за который кадры голосовали.
+        kcal.offer(fields["ккал"]?.settledValue?.toString())
+        prot.offer(fields["Б"]?.settledValue.centigramsToField())
+        fat.offer(fields["Ж"]?.settledValue.centigramsToField())
+        carb.offer(fields["У"]?.settledValue.centigramsToField())
 
         // Название не пересматривается на каждом кадре, в отличие от чисел,
         // и это не мелочь, а разница в природе величины. Числа на этикетке
@@ -274,8 +277,8 @@ private val ScanStateSaver: Saver<ScanState, Any> = listSaver(
 )
 
 /** Сотые грамма в то, что человек ожидает увидеть в поле: «12,4», но «5», а не «5,0». */
-private fun Int?.centigramsToField(field: LabelConsensus.Field?): String? {
-    if (this == null || field?.settled != true) return null
+private fun Int?.centigramsToField(): String? {
+    if (this == null) return null
     return if (this % 100 == 0) (this / 100).toString() else "${this / 100},${(this % 100) / 10}"
 }
 

@@ -59,6 +59,9 @@ internal class LabelConsensus(
     ) {
         val settled: Boolean get() = value != null && votes >= needed
 
+        /** Значение, за которое проголосовали кадры, — или `null`, пока голосов мало. */
+        val settledValue: Int? get() = value?.takeIf { settled }
+
         /** Насколько набралось, 0..1 — для полоски прогресса. */
         val progress: Float
             get() = when {

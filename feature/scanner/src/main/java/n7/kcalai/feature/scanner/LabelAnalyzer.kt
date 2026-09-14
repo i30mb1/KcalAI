@@ -250,7 +250,9 @@ internal fun LabelConsensus.Verdict.report(barcode: String?): String = buildStri
     val trace = reading.trace
 
     append(reading.summary())
-    append("\n голоса: ").append(toString())
+    // Именно приёмник отчёта: внутри buildString голый toString() достаётся
+    // StringBuilder, и вместо «ккал 3/3 · Б 2/3» в файл уходила его же копия.
+    append("\n голоса: ").append(this@report.toString())
     append(" · кадров в окне: ").append(frames)
 
     if (names.isNotEmpty()) {
