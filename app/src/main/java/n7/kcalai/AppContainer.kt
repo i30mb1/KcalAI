@@ -17,6 +17,8 @@ import n7.kcalai.remote.ChainedProductSource
 import n7.kcalai.remote.ContributionUploader
 import n7.kcalai.remote.KcalServerSource
 import n7.kcalai.remote.OffProductSource
+import n7.kcalai.remote.ScanUploader
+import n7.kcalai.remote.SeedSource
 import n7.kcalai.repositories.DiaryRepository
 import n7.kcalai.repositories.FoodDbSource
 import n7.kcalai.repositories.FoodRepository
@@ -76,6 +78,8 @@ class AppContainer(context: Context) {
     }
 
     val contributionUploader: ContributionUploader get() = kcalServer
+    val seedSource: SeedSource get() = kcalServer
+    val scanUploader: ScanUploader get() = kcalServer
 
     /** Есть ли куда отправлять вклады. Без адреса очередь копится и ждёт. */
     val contributionsEnabled: Boolean get() = SERVER_BASE_URL.isNotBlank()

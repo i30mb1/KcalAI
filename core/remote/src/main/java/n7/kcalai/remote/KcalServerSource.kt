@@ -1,6 +1,7 @@
 package n7.kcalai.remote
 
 import android.util.Log
+import java.io.File
 import java.net.HttpURLConnection
 import n7.kcalai.database.ContributionEntity
 import n7.kcalai.model.Nutriments
@@ -26,7 +27,7 @@ import org.json.JSONObject
 class KcalServerSource(
     private val baseUrl: String?,
     private val userAgent: String,
-) : RemoteProductSource, ContributionUploader {
+) : RemoteProductSource, ContributionUploader, SeedSource, ScanUploader {
 
     private val root: String? get() = baseUrl?.trim()?.trimEnd('/')?.takeIf { it.isNotEmpty() }
 
@@ -108,6 +109,42 @@ class KcalServerSource(
         }
     }
 
+    override suspend fun seedManifest(): SeedManifest? {
+        val base = root ?: return null
+        val response = Http.get("$base/v1/seed/manifest.json", userAgent) ?: return null
+        if (!response.isSuccess) return null
+
+        return try {
+            val json = JSONObject(response.body)
+            val url = json.getString("url").let { if (it.startsWith("http")) it else base + it }
+            SeedManifest(
+                version = json.optInt("version", 0),
+                sha256 = json.getString("sha256"),
+                size = json.optLong("size", 0),
+                url = url,
+            )
+        } catch (error: org.json.JSONException) {
+            Log.w(TAG, "манифест справочника не разобрался", error)
+            null
+        }
+    }
+
+    override suspend fun downloadSeed(manifest: SeedManifest, to: File): Boolean =
+        Http.download(manifest.url, userAgent, to)
+
+    override suspend fun uploadScan(id: String, readings: String, frames: List<ScanFrame>): Boolean {
+        val base = root ?: return false
+        val response = Http.postMultipart(
+            url = "$base/v1/scans",
+            userAgent = userAgent,
+            headers = mapOf("X-Scan-Id" to id),
+            fields = mapOf("readings" to readings),
+            files = frames.map { Triple("frame", it.name, it.bytes) },
+        ) ?: return false
+        if (!response.isSuccess) Log.i(TAG, "сессия $id не принята: HTTP ${response.code}")
+        return response.isSuccess
+    }
+
     private fun ContributionEntity.toJson(): JSONObject = JSONObject().apply {
         put("gtin", gtin)
         put("name", name)
@@ -137,4 +174,19 @@ fun interface ContributionUploader {
      *         «ничего не ушло» — и строки очереди остаются непомеченными.
      */
     suspend fun upload(items: List<ContributionEntity>): Set<String>
+}
+
+data class SeedManifest(val version: Int, val sha256: String, val size: Long, val url: String)
+
+/** Свежий справочник с сервера. `null`/`false` — сервера нет или он молчит; это штатно. */
+interface SeedSource {
+    suspend fun seedManifest(): SeedManifest?
+    suspend fun downloadSeed(manifest: SeedManifest, to: File): Boolean
+}
+
+class ScanFrame(val name: String, val bytes: ByteArray)
+
+/** Сессия съёмки этикетки уезжает на сервер целиком. `true` — принято (в том числе повторно). */
+fun interface ScanUploader {
+    suspend fun uploadScan(id: String, readings: String, frames: List<ScanFrame>): Boolean
 }
