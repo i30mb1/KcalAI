@@ -79,8 +79,11 @@ internal class LabelRecorder(
                 File(dir, name).writeBytes(shot.jpeg)
                 notes.append("$name  +${shot.atMs - taken.first().atMs} мс  ${shot.note}\n")
             }
+            // Частота примерно та, с какой кадры и приходили: анализ идёт около
+            // шести десятых секунды на кадр, так что ролик получится в реальном
+            // времени, а не ускоренным вчетверо.
             notes.append(
-                "\nСобрать ролик: ffmpeg -framerate 5 -i frame-%02d.jpg -pix_fmt yuv420p scan.mp4\n"
+                "\nСобрать ролик: ffmpeg -framerate 2 -i frame-%02d.jpg -pix_fmt yuv420p scan.mp4\n"
             )
             File(dir, "readings.txt").writeText(notes.toString())
 
