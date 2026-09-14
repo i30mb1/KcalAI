@@ -5,18 +5,27 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.feature.scanner.LabelDebugDialog
@@ -171,10 +180,70 @@ private fun Feed(
     onPickPlan: (PlanOption) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    /*
+     * Лента прилипает к низу — но только пока человек сам не отмотал её вверх.
+     *
+     * Раньше низ навязывался на каждое изменение размера ленты, и это ломалось
+     * ровно там, где человек читает записи. Реплика «ничего не нашлось» входит
+     * в ленту и уходит из неё по мере набора текста, так что на каждой второй
+     * букве лента дёргалась вниз, обрывая начатую прокрутку. Со стороны это
+     * и выглядит как «подлагивает и возвращает обратно»: тянешь вверх, а список
+     * отматывается назад, потому что в этот момент пришло новое состояние.
+     *
+     * Прокрутка человека сильнее: отмотал вверх — лента остаётся там, куда он её
+     * поставил, сколько бы реплик ни пришло. Вернулся к низу — прилипание
+     * включается обратно. Признак того и другого один: после того как жест
+     * кончился, доскролливать вперёд некуда.
+     */
+    var stick by remember { mutableStateOf(true) }
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            // Первое значение — не жест человека, а состояние покоя при запуске.
+            .drop(1)
+            .filter { scrolling -> !scrolling }
+            .collect { stick = !listState.canScrollForward }
+    }
+
     // Новая реплика всегда внизу — как в любом диалоге. Без этого добавленный
     // продукт оказывается за нижним краем, и человек не видит, что его записали.
-    LaunchedEffect(feed.size) {
-        if (feed.isNotEmpty()) listState.animateScrollToItem(feed.lastIndex)
+    //
+    // Первый заход — без анимации: прокручивать ленту дня на глазах у человека,
+    // который только что открыл экран, незачем, он этих записей ещё не видел.
+    var landed by remember { mutableStateOf(false) }
+    LaunchedEffect(feed.size, feed.lastOrNull()?.key) {
+        if (feed.isEmpty() || !stick) return@LaunchedEffect
+        if (landed) {
+            listState.animateScrollToItem(feed.lastIndex)
+        } else {
+            listState.scrollToItem(feed.lastIndex)
+            landed = true
+        }
+    }
+
+    /*
+     * Клавиатура укорачивает ленту, а не накрывает её.
+     *
+     * Композер несёт `imePadding()`, поэтому при открытии клавиатуры он вырастает,
+     * а лента под `weight(1f)` на столько же сжимается. Само по себе это ленту
+     * не двигает: `LazyColumn` держится за верхний край, и всё, что было внизу,
+     * уезжает под композер — последняя реплика пропадает ровно в тот момент,
+     * когда человек садится писать следующую.
+     *
+     * Поэтому низ доводится вручную, и на каждый шаг анимации клавиатуры, а не
+     * на факт её появления: она выезжает за три десятка кадров, и одного рывка
+     * в начале не хватило бы — лента снова отстала бы к концу выезда. Прокрутка
+     * здесь мгновенная: анимировать поверх анимации клавиатуры значит получить
+     * две, живущие каждая своей жизнью.
+     */
+    val ime = WindowInsets.ime
+    val density = LocalDensity.current
+    val items by rememberUpdatedState(feed)
+    LaunchedEffect(listState, ime, density) {
+        snapshotFlow { ime.getBottom(density) }
+            .collect {
+                if (stick && items.isNotEmpty()) listState.scrollToItem(items.lastIndex)
+            }
     }
 
     LazyColumn(
