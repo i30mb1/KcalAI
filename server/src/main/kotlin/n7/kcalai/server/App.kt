@@ -1,4 +1,4 @@
-﻿package n7.kcalai.server
+package n7.kcalai.server
 
 import io.ktor.server.application.Application
 import io.ktor.server.routing.route
