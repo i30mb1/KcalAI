@@ -14,6 +14,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -153,6 +154,8 @@ class DiaryViewModel(
     private val onContributionQueued: () -> Unit = {},
     /** Экран съёмки этикетки закрылся — сессия записана, её можно отправлять. */
     private val onScanFinished: () -> Unit = {},
+    /** Очередь отправки. `null` — сервера нет, и пузырька про него не будет. */
+    private val outbox: DiaryOutbox? = null,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) : ViewModel() {
 
@@ -170,6 +173,9 @@ class DiaryViewModel(
      * отчёты о прошлых разговорах.
      */
     private val sessionReplies = MutableStateFlow<List<FeedItem>>(emptyList())
+
+    /** Что ждёт отправки. `null` — пусто или сервера нет; пузырька нет. */
+    private val outboxItem = MutableStateFlow<FeedItem.Outbox?>(null)
 
     /**
      * Сегодняшняя дата — одна на экран и на записи.
@@ -194,15 +200,16 @@ class DiaryViewModel(
     private val typing = combine(input, answer, scanned, overlay, ::TypingState)
 
     /** Вложенный combine: у типизированного [combine] потолок в пять потоков, а их больше. */
-    private val typingAndReplies = combine(typing, sessionReplies, date) { typed, replies, today ->
-        Triple(typed, replies, today)
+    private val typingAndReplies = combine(typing, sessionReplies, date, outboxItem) { typed, replies, today, pending ->
+        Session(typed, replies, today, pending)
     }
 
     val state = combine(typingAndReplies, day, goal, personalState, week) {
-        (typed, replies, today), dayTotals, dailyGoal, models, days ->
+        session, dayTotals, dailyGoal, models, days ->
+        val (typed, replies, today, pending) = session
         DiaryUiState(
             input = typed.input,
-            feed = buildFeed(dayTotals, dailyGoal, days, models, typed, replies),
+            feed = buildFeed(dayTotals, dailyGoal, days, models, typed, replies, pending),
             composer = composerRow(typed, models),
             totals = dayTotals.totals,
             week = days,
@@ -227,6 +234,14 @@ class DiaryViewModel(
      * запрос, на который она отвечает, а не то, что стоит в строке сейчас.
      */
     private class Answer(val query: String, val items: List<ResolvedItem>)
+
+    /** То, что живёт только в этой сессии экрана: набор, реплики, дата, очередь. */
+    private data class Session(
+        val typed: TypingState,
+        val replies: List<FeedItem>,
+        val today: LocalDate,
+        val outbox: FeedItem.Outbox?,
+    )
 
     private class TypingState(
         val input: String,
@@ -284,6 +299,8 @@ class DiaryViewModel(
                 .collect { answer.value = it }
         }
 
+        refreshOutbox()
+
         // Модели пересчитываются от любого изменения дня или цели. Ставить пересчёт
         // в каждый обработчик по отдельности означало бы рано или поздно забыть один
         // из них и показывать вчерашние предсказания.
@@ -309,6 +326,7 @@ class DiaryViewModel(
         models: PersonalState,
         typed: TypingState,
         replies: List<FeedItem>,
+        pending: FeedItem.Outbox?,
     ): List<FeedItem> {
         val zone = clock.zone
         val now = clock.millis()
@@ -326,6 +344,7 @@ class DiaryViewModel(
         }
         feed += body
         feed += replies
+        pending?.let { feed += it }
 
         // Перебор вытесняет остаток, а не дополняет его: это один и тот же ответ
         // на один и тот же вопрос, и показывать оба значило бы спорить с собой.
@@ -604,6 +623,7 @@ class DiaryViewModel(
     fun onSaveNewProduct(gtin: String?, name: String, nutriments: Nutriments, servingG: Int?) {
         overlay.value = Overlay.None
         onScanFinished()
+        refreshOutbox()
 
         viewModelScope.launch {
             val candidate = try {
@@ -652,6 +672,7 @@ class DiaryViewModel(
     fun onLabelDebugRead(reading: LabelReading) {
         overlay.value = Overlay.None
         onScanFinished()
+        refreshOutbox()
 
         val draft = reading.draft
         Log.i(TAG, "этикетка: ${reading.trace.route.title}, " +
@@ -720,7 +741,73 @@ class DiaryViewModel(
     fun onDismissOverlay() {
         val closing = overlay.value
         overlay.value = Overlay.None
-        if (closing is Overlay.LabelScan || closing == Overlay.LabelDebug) onScanFinished()
+        if (closing is Overlay.LabelScan || closing == Overlay.LabelDebug) {
+            onScanFinished()
+            refreshOutbox()
+        }
+    }
+
+    // --- Очередь отправки ---------------------------------------------------------------
+
+    /**
+     * Пересчитать, что ждёт отправки.
+     *
+     * Сессия съёмки пишется на диск в отдельном потоке уже после закрытия экрана,
+     * поэтому счёт берётся с паузой — иначе пузырёк не увидел бы только что снятое.
+     */
+    private fun refreshOutbox() {
+        val source = outbox ?: return
+        viewModelScope.launch {
+            delay(OUTBOX_SETTLE_MS)
+            val count = try {
+                source.pending()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                Log.e(TAG, "очередь отправки не посчиталась", error)
+                return@launch
+            }
+            outboxItem.value = if (count.isEmpty) null else FeedItem.Outbox(count, sending = false)
+        }
+    }
+
+    /** Тап по «Отправить»: та же отправка, что у воркеров, только с ответом в ленте. */
+    fun onSendOutbox() {
+        val source = outbox ?: return
+        val current = outboxItem.value ?: return
+        if (current.sending) return
+        outboxItem.value = current.copy(sending = true)
+
+        viewModelScope.launch {
+            val result = try {
+                source.send()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                Log.e(TAG, "отправка не удалась", error)
+                OutboxResult.Unreachable
+            }
+            reply(
+                when {
+                    // Фоновая отправка могла успеть раньше кнопки — это не ошибка.
+                    result is OutboxResult.Sent && result.scans + result.products == 0 ->
+                        "Всё уже ушло на сервер"
+                    result is OutboxResult.Sent ->
+                        "Отправлено на сервер: ${describeOutbox(result.scans, result.products)}"
+                    else -> "Сервер не ответил — отправлю позже сам"
+                }
+            )
+            outboxItem.value = null
+            refreshOutbox()
+        }
+    }
+
+    private fun reply(text: String) {
+        sessionReplies.value += FeedItem.Reply(
+            id = sessionReplies.value.size,
+            text = text,
+            time = formatTime(clock.millis(), clock.zone),
+        )
     }
 
     fun onSetGoal(kcal: Int, prot: Int, fat: Int, carb: Int) {
@@ -784,6 +871,7 @@ class DiaryViewModel(
 
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 250L
+        const val OUTBOX_SETTLE_MS = 3_000L
         const val TAG = "DiaryViewModel"
 
         /** Когда у товара не указана порция: сто грамм — то, к чему привязан сам КБЖУ. */
@@ -797,10 +885,11 @@ class DiaryViewModel(
         private val food: FoodRepository,
         private val onContributionQueued: () -> Unit = {},
         private val onScanFinished: () -> Unit = {},
+        private val outbox: DiaryOutbox? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            DiaryViewModel(diary, resolver, personal, food, onContributionQueued, onScanFinished) as T
+            DiaryViewModel(diary, resolver, personal, food, onContributionQueued, onScanFinished, outbox) as T
     }
 }
 

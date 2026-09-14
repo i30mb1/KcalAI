@@ -83,6 +83,21 @@ sealed interface FeedItem {
     data class WeightLogged(val id: Int, val grams: Int, val time: String) : FeedItem {
         override val key get() = "weight-$id"
     }
+
+    /**
+     * Очередь отправки на сервер: что скопилось и кнопка «отправить».
+     *
+     * Воркеры шлют сами, но молча — а человеку надо видеть, что ушло.
+     * Пузырёк есть, только пока очередь не пуста.
+     */
+    data class Outbox(val count: OutboxCount, val sending: Boolean) : FeedItem {
+        override val key get() = "outbox"
+    }
+
+    /** Ответ на действие: «Отправлено: 2 сессии». Живёт до конца сессии экрана, как [WeightLogged]. */
+    data class Reply(val id: Int, val text: String, val time: String) : FeedItem {
+        override val key get() = "reply-$id"
+    }
 }
 
 /**

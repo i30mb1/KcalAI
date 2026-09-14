@@ -409,6 +409,40 @@ fun WeightBubble(item: FeedItem.WeightLogged) {
     }
 }
 
+/** Ответ на действие — «Отправлено: 2 сессии». */
+@Composable
+fun ReplyBubble(item: FeedItem.Reply) {
+    IncomingBubble(time = item.time) {
+        BubbleText(item.text)
+    }
+}
+
+/**
+ * Очередь отправки: что скопилось и кнопка.
+ *
+ * Воркеры уносят это сами, когда есть сеть, — но молча, и человек не знает,
+ * ушло ли. Кнопка делает то же самое сейчас и отвечает репликой.
+ */
+@Composable
+fun OutboxBubble(item: FeedItem.Outbox, onSend: () -> Unit) {
+    val colors = KcalTheme.colors
+
+    IncomingBubble {
+        BubbleText("Не отправлено на сервер: ${describeOutbox(item.count.scans, item.count.products)}")
+        KcalChip(
+            onClick = if (item.sending) null else onSend,
+            background = if (item.sending) colors.chip else colors.bubble,
+            modifier = Modifier.padding(top = 10.dp),
+        ) {
+            Text(
+                if (item.sending) "Отправляю…" else "Отправить",
+                style = KcalTheme.type.chip,
+                color = if (item.sending) colors.text3 else colors.onBubble,
+            )
+        }
+    }
+}
+
 /** Предсказанный продукт: тап добавляет его целиком, вместе с типичной порцией. */
 @Composable
 fun CandidateChip(candidate: FoodCandidate, onClick: () -> Unit) {

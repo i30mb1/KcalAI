@@ -56,6 +56,14 @@ class FormatTest {
     }
 
     @Test
+    fun `очередь отправки описывается по-русски`() {
+        assertEquals("1 сессия съёмки", describeOutbox(1, 0))
+        assertEquals("2 сессии съёмки и 1 продукт", describeOutbox(2, 1))
+        assertEquals("5 сессий съёмки и 12 продуктов", describeOutbox(5, 12))
+        assertEquals("3 продукта", describeOutbox(0, 3))
+    }
+
+    @Test
     fun `приветствие по часу`() {
         assertEquals("Доброе утро!", greeting(8))
         assertEquals("Добрый день!", greeting(14))

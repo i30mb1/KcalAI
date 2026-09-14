@@ -9,6 +9,7 @@ import n7.kcalai.feature.diary.DiaryRoute
 import n7.kcalai.feature.diary.DiaryViewModel
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.work.ContributionWorker
+import n7.kcalai.work.Outbox
 import n7.kcalai.work.ScanUploadWorker
 
 class MainActivity : ComponentActivity() {
@@ -32,6 +33,8 @@ class MainActivity : ComponentActivity() {
                             // берёт на себя WorkManager, когда появится сеть.
                             onContributionQueued = { ContributionWorker.enqueue(applicationContext) },
                             onScanFinished = { ScanUploadWorker.enqueue(applicationContext) },
+                            // Пузырёк «не отправлено» — только когда есть куда отправлять.
+                            outbox = if (container.serverConfigured) Outbox(applicationContext, container) else null,
                         )
                     )
                 )

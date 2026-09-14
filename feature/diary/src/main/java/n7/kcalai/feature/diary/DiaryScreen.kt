@@ -63,6 +63,7 @@ fun DiaryRoute(viewModel: DiaryViewModel) {
         onPickForMeal = viewModel::onPickPrediction,
         onPickPlan = { option -> option.items.forEach { viewModel.onPickPrediction(it) } },
         onDismissGap = viewModel::onDismissMealGap,
+        onSendOutbox = viewModel::onSendOutbox,
         onEditEntry = viewModel::onEditEntry,
         onLogWeight = viewModel::onLogWeight,
         onOpenGoal = viewModel::onOpenGoal,
@@ -128,6 +129,7 @@ fun DiaryScreen(
     onPickForMeal: (FoodCandidate, MealType) -> Unit,
     onPickPlan: (PlanOption) -> Unit,
     onDismissGap: (MealType) -> Unit,
+    onSendOutbox: () -> Unit,
     onEditEntry: (DiaryEntryEntity) -> Unit,
     onLogWeight: () -> Unit,
     onOpenGoal: (GoalField) -> Unit,
@@ -194,6 +196,7 @@ fun DiaryScreen(
             onEditEntry = onEditEntry,
             onPickForMeal = onPickForMeal,
             onDismissGap = onDismissGap,
+            onSendOutbox = onSendOutbox,
             onPickPlan = onPickPlan,
             modifier = Modifier.weight(1f).nestedScroll(expandOnPull),
         )
@@ -227,6 +230,7 @@ private fun Feed(
     onEditEntry: (DiaryEntryEntity) -> Unit,
     onPickForMeal: (FoodCandidate, MealType) -> Unit,
     onDismissGap: (MealType) -> Unit,
+    onSendOutbox: () -> Unit,
     onPickPlan: (PlanOption) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -360,6 +364,8 @@ private fun Feed(
                     is FeedItem.NotFound -> NotFoundBubble(item)
 
                     is FeedItem.WeightLogged -> WeightBubble(item)
+                    is FeedItem.Reply -> ReplyBubble(item)
+                    is FeedItem.Outbox -> OutboxBubble(item, onSendOutbox)
                 }
             }
         }

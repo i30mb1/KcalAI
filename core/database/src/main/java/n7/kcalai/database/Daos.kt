@@ -122,6 +122,10 @@ interface ContributionDao {
     @Query("SELECT * FROM contribution WHERE sentAt IS NULL ORDER BY createdAt LIMIT :limit")
     suspend fun pending(limit: Int): List<ContributionEntity>
 
+    /** Для пузырька «не отправлено» — экран показывает очередь, хоть и не управляет ею. */
+    @Query("SELECT count(*) FROM contribution WHERE sentAt IS NULL")
+    suspend fun pendingCount(): Int
+
     @Query("UPDATE contribution SET sentAt = :sentAt WHERE id IN (:ids)")
     suspend fun markSent(ids: List<Long>, sentAt: Long)
 }

@@ -128,3 +128,23 @@ fun daysWord(count: Int): String {
         else -> "дней"
     }
 }
+
+/** «2 сессии съёмки и 1 продукт» — что лежит в очереди отправки. */
+fun describeOutbox(scans: Int, products: Int): String {
+    val parts = buildList {
+        if (scans > 0) add("$scans ${plural(scans, "сессия", "сессии", "сессий")} съёмки")
+        if (products > 0) add("$products ${plural(products, "продукт", "продукта", "продуктов")}")
+    }
+    return parts.joinToString(" и ")
+}
+
+/** Русское счётное слово по тому же правилу, что [daysWord]. */
+private fun plural(count: Int, one: String, few: String, many: String): String {
+    val tens = count % 100
+    if (tens in 11..14) return many
+    return when (count % 10) {
+        1 -> one
+        2, 3, 4 -> few
+        else -> many
+    }
+}

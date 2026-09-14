@@ -9,6 +9,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import n7.kcalai.AppContainer
 import n7.kcalai.KcalApp
 
 /**
@@ -35,36 +36,46 @@ class ContributionWorker(
         // будет просыпаться каждые пять часов до конца жизни установки.
         if (!container.serverConfigured) return Result.success()
 
-        val dao = container.database.contributionDao()
-
-        // Пачками, но в один запуск: `retry()` между пачками ставил бы каждую
-        // следующую на нарастающую паузу, хотя ничего не ломалось.
-        while (true) {
-            val pending = dao.pending(BATCH_SIZE)
-            if (pending.isEmpty()) return Result.success()
-
-            val accepted = container.contributionUploader.upload(pending)
-            if (accepted.isEmpty()) {
-                // Сервер недоступен или не принял ничего. Повтор с нарастающей
-                // паузой этот случай переживает без вреда: строки просто ждут дальше.
-                Log.i(TAG, "ни один из ${pending.size} вкладов не принят, попробуем позже")
-                return Result.retry()
-            }
-
-            val sentIds = pending.filter { it.gtin in accepted }.map { it.id }
-            dao.markSent(sentIds, System.currentTimeMillis())
-            Log.i(TAG, "отправлено вкладов: ${sentIds.size}")
-
-            // Часть пачки сервер отверг — она останется в очереди и уйдёт в следующий
-            // раз. Крутиться на ней сейчас бессмысленно: ответ был бы тем же.
-            if (sentIds.size < pending.size || pending.size < BATCH_SIZE) return Result.success()
-        }
+        val outcome = uploadPending(container)
+        // Сервер недоступен или не принял ничего. Повтор с нарастающей
+        // паузой этот случай переживает без вреда: строки просто ждут дальше.
+        return if (outcome.reachable == false) Result.retry() else Result.success()
     }
 
     companion object {
         private const val TAG = "ContributionWorker"
         private const val BATCH_SIZE = 50
         private const val WORK_NAME = "contributions"
+
+        /**
+         * Отправить всё, что ждёт. Общая для воркера и кнопки на экране.
+         *
+         * Пачками, но в один вызов: `retry()` между пачками ставил бы каждую
+         * следующую на нарастающую паузу, хотя ничего не ломалось.
+         */
+        suspend fun uploadPending(container: AppContainer): UploadOutcome {
+            val dao = container.database.contributionDao()
+            var sent = 0
+            while (true) {
+                val pending = dao.pending(BATCH_SIZE)
+                if (pending.isEmpty()) return UploadOutcome(sent, reachable = if (sent > 0) true else null)
+
+                val accepted = container.contributionUploader.upload(pending)
+                if (accepted.isEmpty()) {
+                    Log.i(TAG, "ни один из ${pending.size} вкладов не принят, попробуем позже")
+                    return UploadOutcome(sent, reachable = false)
+                }
+
+                val sentIds = pending.filter { it.gtin in accepted }.map { it.id }
+                dao.markSent(sentIds, System.currentTimeMillis())
+                sent += sentIds.size
+                Log.i(TAG, "отправлено вкладов: ${sentIds.size}")
+
+                // Часть пачки сервер отверг — она останется в очереди и уйдёт в следующий
+                // раз. Крутиться на ней сейчас бессмысленно: ответ был бы тем же.
+                if (sentIds.size < pending.size || pending.size < BATCH_SIZE) return UploadOutcome(sent, reachable = true)
+            }
+        }
 
         /**
          * Ставится в двух местах: после сохранения продукта и один раз при старте
