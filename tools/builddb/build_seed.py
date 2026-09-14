@@ -301,6 +301,17 @@ def main() -> int:
         (ASSETS / "seed.db.sha256").write_text(digest, encoding="utf-8")
         print(f"ОК: скопировано в {ASSETS / 'seed.db'} (sha256 {digest[:12]}…)")
 
+        # Та же сборка уезжает и на локальный сервер: телефон докачает её без релиза APK.
+        # Версия — просто счётчик установок; клиент сравнивает хеш, а версия для глаз.
+        server_seed = HERE.parent.parent / "server" / "data" / "seed"
+        server_seed.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(out, server_seed / "seed.db")
+        (server_seed / "seed.db.sha256").write_text(digest, encoding="utf-8")
+        version_file = server_seed / "version.txt"
+        version = int(version_file.read_text().strip() or 0) + 1 if version_file.exists() else 1
+        version_file.write_text(str(version), encoding="utf-8")
+        print(f"ОК: сервер получит версию {version} в {server_seed}")
+
     return 0
 
 

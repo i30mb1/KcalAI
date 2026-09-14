@@ -11,6 +11,7 @@ fun Application.kcalServer(db: Db, dataDir: File) {
         route("/v1") {
             productRoutes(db)
             contributionRoutes(db)
+            seedRoutes(File(dataDir, "seed"))
         }
     }
 }
