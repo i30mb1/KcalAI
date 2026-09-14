@@ -20,8 +20,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.drop
@@ -124,9 +127,34 @@ fun DiaryScreen(
 ) {
     val listState = rememberLazyListState()
 
-    // Шапка сжимается ровно тогда, когда лента сдвинулась с начала: любой порог
-    // в точках означал бы состояние «уже скроллю, а шапка ещё целая».
-    val collapsed by remember { derivedStateOf { listState.canScrollBackward } }
+    /*
+     * Шапка сжимается ровно тогда, когда лента сдвинулась с начала: любой порог
+     * в точках означал бы состояние «уже скроллю, а шапка ещё целая».
+     *
+     * А вот раскрывается она не по положению ленты, а по жесту — тянуть вниз,
+     * когда выше уже ничего нет. Вывести оба состояния из одного
+     * `canScrollBackward` нельзя: высота шапки сама меняет высоту ленты. Стоило
+     * реплике не влезть на пару строк, как лента сдвигалась, шапка сжималась,
+     * лента получала её место и целиком помещалась — смещение сбрасывалось
+     * в ноль, шапка раскрывалась, реплика снова не влезала. Экран прыгал,
+     * пока анимации гонялись друг за другом. Жест человека в эту петлю
+     * не входит: высота шапки на него не влияет.
+     */
+    var collapsed by remember { mutableStateOf(false) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.canScrollBackward }
+            .filter { it }
+            .collect { collapsed = true }
+    }
+    val expandOnPull = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                // Не потраченная лентой прокрутка вниз — значит, она уже наверху.
+                if (available.y > 0f) collapsed = false
+                return Offset.Zero
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize().background(KcalTheme.colors.bg)) {
         Header(
@@ -145,7 +173,7 @@ fun DiaryScreen(
             onPickForMeal = onPickForMeal,
             onDismissGap = onDismissGap,
             onPickPlan = onPickPlan,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).nestedScroll(expandOnPull),
         )
 
         Composer(
