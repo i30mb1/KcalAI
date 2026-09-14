@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -39,6 +41,7 @@ import n7.kcalai.model.MealType
 import n7.kcalai.personal.PlanOption
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.ui.KcalTheme
+import n7.kcalai.ui.popIn
 
 @Composable
 fun DiaryRoute(viewModel: DiaryViewModel) {
@@ -274,6 +277,19 @@ private fun Feed(
             }
     }
 
+    /*
+     * Какие реплики появляются с пружиной: только те, что пришли в ленту после
+     * первого захода. Записи дня, выскакивающие все разом при открытии, — каша.
+     *
+     * «Пришла в ленту» и «попала на экран» — разное: LazyColumn компонует
+     * элемент заново всякий раз, когда его домотали, и реплика прыгала бы при
+     * каждой прокрутке к ней. Поэтому запоминаются ключи, а не композиции:
+     * ключ, который уже был в ленте, не анимируется, ушедший из ленты —
+     * забывается и при возвращении сыграет снова.
+     */
+    val seen = remember { HashSet<String>() }
+    SideEffect { seen.retainAll(feed.mapTo(HashSet()) { it.key }) }
+
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         state = listState,
@@ -282,6 +298,7 @@ private fun Feed(
     ) {
         items(feed.size, key = { index -> feed[index].key }) { index ->
             val item = feed[index]
+            val fresh = remember { seen.add(item.key) && landed }
 
             // Обёртка нужна ради animateItem: пузырьки о своём месте в списке
             // не знают и знать не должны.
@@ -291,7 +308,19 @@ private fun Feed(
             // при этом оказался за нижним краем — а «ничего не нашлось» стоит
             // ровно там, — анимация не доигрывается, и реплика с прошлым запросом
             // висит на экране. Пропадать реплика обязана сразу.
-            Box(Modifier.animateItem(fadeOutSpec = null)) {
+            //
+            // Реплика вырастает из своего «хвоста»: исходящая — справа снизу,
+            // ответ — слева снизу, как в любом мессенджере.
+            val origin = when (item) {
+                FeedItem.DaySeparator -> TransformOrigin.Center
+                is FeedItem.Meal -> TransformOrigin(1f, 1f)
+                else -> TransformOrigin(0f, 1f)
+            }
+            Box(
+                Modifier
+                    .animateItem(fadeOutSpec = null)
+                    .popIn(origin = origin, lift = 12.dp, enabled = fresh)
+            ) {
                 when (item) {
                     FeedItem.DaySeparator -> DaySeparator()
 

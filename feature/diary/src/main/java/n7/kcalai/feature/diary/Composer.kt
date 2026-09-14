@@ -1,5 +1,12 @@
 package n7.kcalai.feature.diary
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -13,6 +20,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,10 +47,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.resolver.ResolvedItem
@@ -50,6 +60,8 @@ import n7.kcalai.ui.CapsLabel
 import n7.kcalai.ui.ChipNumbers
 import n7.kcalai.ui.KcalChip
 import n7.kcalai.ui.MacroDot
+import n7.kcalai.ui.PopSpring
+import n7.kcalai.ui.popIn
 import n7.kcalai.ui.colors
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
@@ -210,8 +222,34 @@ private fun HintRow(
     onPickCandidate: (FoodCandidate) -> Unit,
     onLogWeight: () -> Unit,
 ) {
-    if (row is ComposerRow.None) return
+    // Ряд разворачивается и сворачивается, а не выскакивает: иначе композер
+    // меняет высоту скачком, и лента над ним дёргается на каждую подсказку.
+    // На время сворачивания держится последний непустой ряд — сворачиваться
+    // должны чипсы, а не пустое место.
+    var shown by remember { mutableStateOf(row) }
+    if (row !is ComposerRow.None) shown = row
 
+    AnimatedVisibility(
+        visible = row !is ComposerRow.None,
+        enter = expandVertically(PopSpring.forInt()) + fadeIn(),
+        exit = shrinkVertically() + fadeOut(),
+    ) {
+        HintChips(shown, onPick, onPickScanned, onPickCandidate, onLogWeight)
+    }
+}
+
+/** Пружина по высоте для expand/shrink: у них свой тип, но характер тот же. */
+private fun SpringSpec<Float>.forInt(): SpringSpec<IntSize> =
+    spring(dampingRatio = dampingRatio, stiffness = stiffness, visibilityThreshold = IntSize(1, 1))
+
+@Composable
+private fun HintChips(
+    row: ComposerRow,
+    onPick: (ResolvedItem) -> Unit,
+    onPickScanned: (ResolvedItem) -> Unit,
+    onPickCandidate: (FoodCandidate) -> Unit,
+    onLogWeight: () -> Unit,
+) {
     val caption = when (row) {
         is ComposerRow.Weight -> "похоже на вес"
         is ComposerRow.Results -> "нашлось"
@@ -224,31 +262,51 @@ private fun HintRow(
     Column {
         CapsLabel(caption, Modifier.padding(start = 16.dp, bottom = 8.dp))
 
+        // Ключ — позиция плюс продукт: чипс подпрыгивает, когда на его месте
+        // появилось что-то другое, и стоит на месте, пока выдача та же. Один
+        // продукт может стоять в ряду дважды («молоко и молоко»), поэтому
+        // ключ без позиции падал бы на дубликате.
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
             modifier = Modifier.padding(bottom = 10.dp),
         ) {
             when (row) {
-                is ComposerRow.Weight -> item { WeightChip(row.grams, onLogWeight) }
+                is ComposerRow.Weight -> item(key = "weight") {
+                    Chip { WeightChip(row.grams, onLogWeight) }
+                }
 
-                is ComposerRow.Results -> items(row.items.size) { index ->
+                is ComposerRow.Results -> items(
+                    count = row.items.size,
+                    key = { index -> "$index:${row.items[index].candidate?.ref ?: row.items[index].sourceText}" },
+                ) { index ->
                     val resolved = row.items[index]
-                    ResolvedChip(resolved) { onPick(resolved) }
+                    Chip { ResolvedChip(resolved) { onPick(resolved) } }
                 }
 
-                is ComposerRow.Scanned -> item {
-                    ResolvedChip(row.item) { onPickScanned(row.item) }
+                is ComposerRow.Scanned -> item(key = "scanned:${row.item.candidate?.ref}") {
+                    Chip { ResolvedChip(row.item) { onPickScanned(row.item) } }
                 }
 
-                is ComposerRow.Predictions -> items(row.items.size) { index ->
+                is ComposerRow.Predictions -> items(
+                    count = row.items.size,
+                    key = { index -> "$index:${row.items[index].ref}" },
+                ) { index ->
                     val candidate = row.items[index]
-                    PredictionChip(candidate) { onPickCandidate(candidate) }
+                    Chip { PredictionChip(candidate) { onPickCandidate(candidate) } }
                 }
 
                 ComposerRow.None -> Unit
             }
         }
+    }
+}
+
+/** Чипс вырастает из своего левого нижнего угла — оттуда, где стоит курсор. */
+@Composable
+private fun LazyItemScope.Chip(content: @Composable () -> Unit) {
+    Box(Modifier.animateItem(fadeOutSpec = null).popIn(origin = TransformOrigin(0f, 1f))) {
+        content()
     }
 }
 
