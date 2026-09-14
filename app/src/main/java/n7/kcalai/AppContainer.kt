@@ -81,8 +81,8 @@ class AppContainer(context: Context) {
     val seedSource: SeedSource get() = kcalServer
     val scanUploader: ScanUploader get() = kcalServer
 
-    /** Есть ли куда отправлять вклады. Без адреса очередь копится и ждёт. */
-    val contributionsEnabled: Boolean get() = SERVER_BASE_URL.isNotBlank()
+    /** Задан ли адрес сервера. Без него вклады и сессии копятся и ждут, справочник не докачивается. */
+    val serverConfigured: Boolean get() = SERVER_BASE_URL.isNotBlank()
 
     val foodRepository: FoodRepository by lazy {
         FoodRepository(

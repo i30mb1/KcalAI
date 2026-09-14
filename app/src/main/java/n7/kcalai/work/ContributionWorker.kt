@@ -33,7 +33,7 @@ class ContributionWorker(
         // Сервера пока нет. Строки ждут его в очереди, а не в бесконечном
         // бэкоффе WorkManager: `retry()` без адреса — это работа, которая
         // будет просыпаться каждые пять часов до конца жизни установки.
-        if (!container.contributionsEnabled) return Result.success()
+        if (!container.serverConfigured) return Result.success()
 
         val dao = container.database.contributionDao()
 
