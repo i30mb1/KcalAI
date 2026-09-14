@@ -30,25 +30,35 @@ class ContributionWorker(
 
     override suspend fun doWork(): Result {
         val container = (applicationContext as KcalApp).container
+        // Сервера пока нет. Строки ждут его в очереди, а не в бесконечном
+        // бэкоффе WorkManager: `retry()` без адреса — это работа, которая
+        // будет просыпаться каждые пять часов до конца жизни установки.
+        if (!container.contributionsEnabled) return Result.success()
+
         val dao = container.database.contributionDao()
 
-        val pending = dao.pending(BATCH_SIZE)
-        if (pending.isEmpty()) return Result.success()
+        // Пачками, но в один запуск: `retry()` между пачками ставил бы каждую
+        // следующую на нарастающую паузу, хотя ничего не ломалось.
+        while (true) {
+            val pending = dao.pending(BATCH_SIZE)
+            if (pending.isEmpty()) return Result.success()
 
-        val accepted = container.contributionUploader.upload(pending)
-        if (accepted.isEmpty()) {
-            // Сервера может не быть вовсе — он пишется отдельно. Повтор с нарастающей
-            // паузой этот случай переживает без вреда: строки просто ждут дальше.
-            Log.i(TAG, "ни один из ${pending.size} вкладов не принят, попробуем позже")
-            return Result.retry()
+            val accepted = container.contributionUploader.upload(pending)
+            if (accepted.isEmpty()) {
+                // Сервер недоступен или не принял ничего. Повтор с нарастающей
+                // паузой этот случай переживает без вреда: строки просто ждут дальше.
+                Log.i(TAG, "ни один из ${pending.size} вкладов не принят, попробуем позже")
+                return Result.retry()
+            }
+
+            val sentIds = pending.filter { it.gtin in accepted }.map { it.id }
+            dao.markSent(sentIds, System.currentTimeMillis())
+            Log.i(TAG, "отправлено вкладов: ${sentIds.size}")
+
+            // Часть пачки сервер отверг — она останется в очереди и уйдёт в следующий
+            // раз. Крутиться на ней сейчас бессмысленно: ответ был бы тем же.
+            if (sentIds.size < pending.size || pending.size < BATCH_SIZE) return Result.success()
         }
-
-        val sentIds = pending.filter { it.gtin in accepted }.map { it.id }
-        dao.markSent(sentIds, System.currentTimeMillis())
-        Log.i(TAG, "отправлено вкладов: ${sentIds.size}")
-
-        // Очередь могла быть длиннее одной пачки — дотолкаем следующим запуском.
-        return if (pending.size < BATCH_SIZE) Result.success() else Result.retry()
     }
 
     companion object {

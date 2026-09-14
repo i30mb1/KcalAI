@@ -69,7 +69,8 @@ object TdeeEstimator {
 
     /**
      * @param weightsByDay вес в граммах по дням; пропуски допустимы и ожидаемы
-     * @param intakeByDay съеденные калории по дням; дни без записей передавать НЕ нужно
+     * @param intakeByDay съеденные калории по дням; дни без записей передавать НЕ нужно.
+     *        Сегодняшний день в расчёт не входит — он ещё не закончился
      * @return `null`, если данных не хватает — это нормальное состояние первых недель
      */
     fun estimate(
@@ -79,7 +80,9 @@ object TdeeEstimator {
     ): TdeeEstimate? {
         val from = today - WINDOW_DAYS + 1
         val weights = weightsByDay.filterKeys { it in from..today }
-        val intake = intakeByDay.filterKeys { it in from..today }
+        // Сегодняшний день ещё не съеден до конца: половина обеда в среднем
+        // читалась бы как разгрузочный день и занижала бы расход.
+        val intake = intakeByDay.filterKeys { it in from until today }
 
         if (weights.size < MIN_WEIGHT_DAYS || intake.size < MIN_INTAKE_DAYS) return null
 

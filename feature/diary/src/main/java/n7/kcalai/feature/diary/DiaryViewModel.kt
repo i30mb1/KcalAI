@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -169,39 +170,52 @@ class DiaryViewModel(
     private val sessionReplies = MutableStateFlow<List<FeedItem>>(emptyList())
 
     /**
+     * Сегодняшняя дата — одна на экран и на записи.
+     *
      * День берётся в локальной зоне, а не из UTC-инстанта: иначе при перелёте
-     * запись уезжает в соседние сутки.
+     * запись уезжает в соседние сутки. Состояние, а не `LocalDate.now()` на каждое
+     * обращение: экран, оставленный открытым через полночь, показывал бы вчера,
+     * а записывал в сегодня. Обновляется в [onResume].
      */
-    private val today: Long get() = LocalDate.now(clock).toEpochDay()
+    private val date = MutableStateFlow(LocalDate.now(clock))
+    private val today: Long get() = date.value.toEpochDay()
 
-    private val day = diary.observeDay(today)
+    private val day = date.flatMapLatest { diary.observeDay(it.toEpochDay()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DayTotals.EMPTY)
 
-    private val goal = diary.observeGoal(today)
+    private val goal = date.flatMapLatest { diary.observeGoal(it.toEpochDay()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val week = diary.observeWeek(today)
+    private val week = date.flatMapLatest { diary.observeWeek(it.toEpochDay()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val typing = combine(input, answer, scanned, overlay, ::TypingState)
 
-    /** Вложенный combine: у типизированного [combine] потолок в пять потоков, а их шесть. */
-    private val typingAndReplies = combine(typing, sessionReplies) { typed, replies -> typed to replies }
+    /** Вложенный combine: у типизированного [combine] потолок в пять потоков, а их больше. */
+    private val typingAndReplies = combine(typing, sessionReplies, date) { typed, replies, today ->
+        Triple(typed, replies, today)
+    }
 
     val state = combine(typingAndReplies, day, goal, personalState, week) {
-        (typed, replies), dayTotals, dailyGoal, models, days ->
+        (typed, replies, today), dayTotals, dailyGoal, models, days ->
         DiaryUiState(
             input = typed.input,
             feed = buildFeed(dayTotals, dailyGoal, days, models, typed, replies),
             composer = composerRow(typed, models),
             totals = dayTotals.totals,
             week = days,
-            date = LocalDate.now(clock),
+            date = today,
             goal = dailyGoal,
             tdee = models.tdee,
             overlay = typed.overlay,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiaryUiState())
+
+    /** Экран снова на виду. Если за это время наступил новый день — переключаемся на него. */
+    fun onResume() {
+        val now = LocalDate.now(clock)
+        if (now != date.value) date.value = now
+    }
 
     /**
      * Что нашлось на [query].
@@ -352,7 +366,9 @@ class DiaryViewModel(
             null
         } else {
             val hit = withGoal.count { it.kcal <= (it.goalKcal ?: 0) }
-            "За неделю вы уложились в цель $hit ${daysWord(hit)} из ${week.size}"
+            // Знаменатель — дни, когда цель вообще была: поставленная позавчера
+            // цель не может быть «выполнена 2 дня из 7».
+            "За неделю вы уложились в цель $hit ${daysWord(hit)} из ${withGoal.size}"
         }
 
         return FeedItem.Summary(
@@ -792,7 +808,9 @@ class DiaryViewModel(
  * число часть названия.
  */
 private fun ResolvedItem.withTypedGrams(input: String): ResolvedItem {
-    val grams = TRAILING_GRAMS.find(input.trim())
+    // Ищем только в дописанном хвосте: «Кола 0,5» в названии товара — не 5 грамм.
+    val typed = input.removePrefix(sourceText)
+    val grams = TRAILING_GRAMS.find(typed.trim())
         ?.groupValues
         ?.get(1)
         ?.toIntOrNull()

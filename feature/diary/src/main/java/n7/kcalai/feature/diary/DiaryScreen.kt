@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.feature.scanner.LabelDebugDialog
@@ -46,6 +47,12 @@ import n7.kcalai.ui.popIn
 @Composable
 fun DiaryRoute(viewModel: DiaryViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // Экран мог пролежать в фоне через полночь — дата пересматривается на каждом возврате.
+    LifecycleResumeEffect(Unit) {
+        viewModel.onResume()
+        onPauseOrDispose { }
+    }
 
     DiaryScreen(
         state = state,

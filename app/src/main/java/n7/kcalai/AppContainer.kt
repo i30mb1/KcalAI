@@ -77,6 +77,9 @@ class AppContainer(context: Context) {
 
     val contributionUploader: ContributionUploader get() = kcalServer
 
+    /** Есть ли куда отправлять вклады. Без адреса очередь копится и ждёт. */
+    val contributionsEnabled: Boolean get() = SERVER_BASE_URL.isNotBlank()
+
     val foodRepository: FoodRepository by lazy {
         FoodRepository(
             foodDb = foodDbSource,

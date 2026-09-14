@@ -80,7 +80,7 @@ private val WORD_NUMBERS: Map<String, Double> = mapOf(
     "полтора" to 1.5, "полторы" to 1.5,
     "один" to 1.0, "одна" to 1.0, "одно" to 1.0, "одну" to 1.0,
     "пара" to 2.0, "пары" to 2.0, "пару" to 2.0,
-    "два" to 2.0, "две" to 2.0, "двe" to 2.0,
+    "два" to 2.0, "две" to 2.0,
     "три" to 3.0, "четыре" to 4.0, "пять" to 5.0, "шесть" to 6.0,
     "семь" to 7.0, "восемь" to 8.0, "девять" to 9.0, "десять" to 10.0,
 )
@@ -141,6 +141,9 @@ private val UNIT_PHRASES: List<Pair<Regex, String>> = listOf(
 
 private val TOKEN_SPLIT = Regex("[^\\p{L}\\p{Nd}.,%]+")
 
+/** «200г», «2шт» — слитно пишут чаще, чем через пробел. */
+private val DIGIT_BEFORE_LETTER = Regex("(?<=\\d)(?=\\p{L})")
+
 /** Десятичная запятая внутри числа: «1,5» — одно число, а не граница сегмента. */
 private val DECIMAL_COMMA = Regex("(\\d),(\\d)")
 
@@ -172,6 +175,7 @@ fun parseSegment(segment: String): ParsedSegment? {
     for ((pattern, replacement) in UNIT_PHRASES) {
         text = pattern.replace(text, replacement)
     }
+    text = DIGIT_BEFORE_LETTER.replace(text, " ")
 
     val tokens = text.split(TOKEN_SPLIT)
         .map { it.trim('.', ',', '%') }
@@ -190,7 +194,8 @@ fun parseSegment(segment: String): ParsedSegment? {
     var vague: Double? = null
     val nameTokens = mutableListOf<String>()
 
-    for (token in tokens) {
+    for ((index, token) in tokens.withIndex()) {
+        val afterNumber = index > 0 && NUMBER.matches(tokens[index - 1])
         when {
             number == null && NUMBER.matches(token) ->
                 number = token.replace(',', '.').toDoubleOrNull()
@@ -200,8 +205,15 @@ fun parseSegment(segment: String): ParsedSegment? {
                 numberFromWord = true
             }
 
-            weightGrams == null && portionUnit == null && WEIGHT_UNITS.containsKey(token) ->
+            // Число с единицей веса вплотную — явный вес, и он сильнее названной
+            // раньше порционной единицы: «банка кукурузы 340 г» — это 340 грамм.
+            weightGrams == null && (portionUnit == null || afterNumber) && WEIGHT_UNITS.containsKey(token) -> {
                 weightGrams = WEIGHT_UNITS[token]
+                if (afterNumber) {
+                    number = tokens[index - 1].replace(',', '.').toDoubleOrNull()
+                    numberFromWord = false
+                }
+            }
 
             weightGrams == null && portionUnit == null && PORTION_UNITS.containsKey(token) ->
                 portionUnit = PORTION_UNITS[token]
@@ -212,6 +224,11 @@ fun parseSegment(segment: String): ParsedSegment? {
             // Числа, не ставшие количеством, в название не идут: FTS-поиск по «3.2»
             // ничего не найдёт и заодно отсечёт по AND всё остальное.
             NUMBER.matches(token) -> Unit
+
+            // Вторая единица («банка кукурузы 340 г») и повторённое «чуть-чуть» —
+            // не продукт. В названии они отсекли бы по AND всю выдачу.
+            WEIGHT_UNITS.containsKey(token) || PORTION_UNITS.containsKey(token) -> Unit
+            VAGUE.containsKey(token) -> Unit
 
             else -> nameTokens += token
         }
