@@ -1,6 +1,7 @@
 package n7.kcalai.repositories
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryDao
@@ -34,6 +35,14 @@ data class DayTotals(
 data class DaySummary(
     val dateEpochDay: Long,
     val kcal: Int,
+    /**
+     * Цель, действовавшая именно в этот день, — `null`, если её тогда не было.
+     *
+     * Своя у каждого дня, а не одна общая на график: цель версионируется датой,
+     * и рисовать сегодняшние 2100 поверх недели, когда полнедели было 1800,
+     * значило бы задним числом переписать историю на глазах у человека.
+     */
+    val goalKcal: Int? = null,
 )
 
 /** Что именно кладём в дневник: продукт, вес и чем он был распознан. */
@@ -103,18 +112,26 @@ class DiaryRepository(
      */
     fun observeWeek(todayEpochDay: Long, days: Int = 7): Flow<List<DaySummary>> {
         val from = todayEpochDay - (days - 1)
-        return diaryDao.observeSince(from).map { entries ->
+        return combine(diaryDao.observeSince(from), goalDao.observeAll()) { entries, goals ->
             val byDay = entries.groupBy { it.dateEpochDay }
             (from..todayEpochDay).map { day ->
                 DaySummary(
                     dateEpochDay = day,
                     kcal = byDay[day]?.sumTotals()?.kcal ?: 0,
+                    // Цели отсортированы по возрастанию, поэтому последняя из тех,
+                    // что начались не позже этого дня, и есть действовавшая.
+                    goalKcal = goals.lastOrNull { it.fromDateEpochDay <= day }
+                        ?.kcal
+                        ?.takeIf { it > 0 },
                 )
             }
         }
     }
 
     suspend fun delete(id: Long) = diaryDao.delete(id)
+
+    /** Человек сказал, что это был обед, а не ужин. Правило по времени тут ни при чём. */
+    suspend fun moveToMeal(id: Long, meal: MealType) = diaryDao.updateMeal(id, meal)
 
     suspend fun goalFor(date: Long): DailyGoalEntity? = goalDao.goalFor(date)
 

@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.ZoneId
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.nutriments
+import n7.kcalai.database.totals
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.FoodRef
 import n7.kcalai.model.MealType
@@ -30,6 +31,15 @@ class FoodHistory private constructor(
     val transitions: Map<String, Map<String, Int>>,
     /** Часы, в которые начинался каждый приём пищи. Сырьё для детектора пропусков. */
     val mealFirstHours: Map<MealType, List<Int>>,
+    /**
+     * Калории каждого приёма пищи по дням: один элемент — один день, в который
+     * этот приём был. Сырьё для раскладки типичного дня.
+     *
+     * Складывается здесь, а не считается заново поверх `diary_entry`: история
+     * уже прочитана и уже разложена по дням, и второй проход по тем же строкам
+     * ради тех же сумм означал бы два места, которые могут разойтись.
+     */
+    val mealKcal: Map<MealType, List<Int>>,
     val totalEntries: Int,
     private val today: Long,
 ) {
@@ -112,19 +122,34 @@ class FoodHistory private constructor(
             val accumulators = LinkedHashMap<String, Accumulator>()
             val transitions = HashMap<String, MutableMap<String, Int>>()
             val mealFirstHours = HashMap<MealType, MutableList<Int>>()
+            val mealKcal = HashMap<MealType, MutableList<Int>>()
 
             var prevKey: String? = null
             var prevDay = Long.MIN_VALUE
             val mealsSeenToday = HashSet<MealType>()
+            val kcalToday = HashMap<MealType, Int>()
+
+            /** Дневные суммы по приёмам уходят в копилку, когда день закончился. */
+            fun flushDay() {
+                kcalToday.forEach { (meal, kcal) ->
+                    mealKcal.getOrPut(meal) { mutableListOf() } += kcal
+                }
+                kcalToday.clear()
+            }
 
             for (entry in entries) {
                 if (entry.dateEpochDay != prevDay) {
+                    flushDay()
                     prevKey = null
                     prevDay = entry.dateEpochDay
                     mealsSeenToday.clear()
                 }
 
                 val hour = Instant.ofEpochMilli(entry.createdAt).atZone(zone).hour
+
+                // Калории приёма считаются до разбора ссылки: съеденное остаётся
+                // съеденным, даже если продукт больше не найти в справочнике.
+                kcalToday.merge(entry.meal, entry.totals().kcal, Int::plus)
 
                 // Записи без разбираемой ссылки в моделях не участвуют: повторить
                 // такую позицию всё равно нельзя, а счётчики она бы засоряла.
@@ -147,11 +172,13 @@ class FoodHistory private constructor(
                 }
                 prevKey = key
             }
+            flushDay()
 
             return FoodHistory(
                 items = accumulators.mapValues { (_, accumulator) -> accumulator.build() },
                 transitions = transitions,
                 mealFirstHours = mealFirstHours,
+                mealKcal = mealKcal,
                 totalEntries = entries.size,
                 today = today,
             )

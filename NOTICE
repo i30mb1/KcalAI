@@ -42,6 +42,17 @@ core/ocr/src/main/assets/models — модели обнаружения и ра�
     Licensed under the Apache License, Version 2.0
 
 
+Шрифты
+------
+
+core/ui/src/main/res/font — вариативные начертания интерфейса.
+
+    Manrope: https://github.com/sharanda/manrope
+    JetBrains Mono: https://github.com/JetBrains/JetBrainsMono
+    Licensed under the SIL Open Font License, Version 1.1
+    https://openfontlicense.org/
+
+
 Open Food Facts
 ---------------
 

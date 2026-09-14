@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import java.time.Clock
 import java.time.LocalDate
 import java.time.LocalTime
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -29,6 +30,7 @@ import n7.kcalai.model.ProductDraft
 import n7.kcalai.model.parseFoodRef
 import n7.kcalai.model.serialize
 import n7.kcalai.personal.ConfirmedPick
+import n7.kcalai.personal.DayOutline
 import n7.kcalai.personal.DayPlan
 import n7.kcalai.personal.MealGap
 import n7.kcalai.personal.PersonalContext
@@ -44,12 +46,18 @@ import n7.kcalai.repositories.LabelReading
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.resolver.TextFoodResolver
 
-/** Что сейчас поверх экрана. Диалоги взаимоисключающие, поэтому это одно состояние, а не три флага. */
+/** Поле шита цели, в котором должен стоять курсор при открытии. */
+enum class GoalField { KCAL, PROT, FAT, CARB }
+
+/** Что сейчас поверх экрана. Шиты и диалоги взаимоисключающие, поэтому это одно состояние. */
 sealed interface Overlay {
     data object None : Overlay
-    data object Goal : Overlay
-    data object Weight : Overlay
-    data class EditGrams(val entry: DiaryEntryEntity) : Overlay
+
+    /** Цель на день. [field] — куда человек ткнул: остаток или конкретная плитка. */
+    data class Goal(val field: GoalField = GoalField.KCAL) : Overlay
+
+    /** Правка записи: вес, приём пищи, удаление. Открывается тапом по чипсу в пузырьке. */
+    data class EditEntry(val entry: DiaryEntryEntity) : Overlay
 
     /** Камера. */
     data object Scan : Overlay
@@ -97,8 +105,28 @@ sealed interface Overlay {
      * в базе. Здесь то же распознавание запускается сразу и показывает себя
      * целиком: строки, маршрут разбора, что принято за ноль. В дневник отсюда
      * не попадает ничего.
+     *
+     * Точка входа — долгое нажатие на кнопку камеры: кнопок в шапке экран
+     * больше не носит, а отладке отдельный жест дешевле отдельной кнопки.
      */
     data object LabelDebug : Overlay
+}
+
+/** Что стоит над строкой ввода. Ряд ровно один — выбор между ними делает состояние. */
+sealed interface ComposerRow {
+    data object None : ComposerRow
+
+    /** Набранное похоже на вес. Поиск не запускался вовсе. */
+    data class Weight(val grams: Int) : ComposerRow
+
+    /** Идея 1: что человек, скорее всего, съест сейчас. Поле пустое. */
+    data class Predictions(val items: List<FoodCandidate>) : ComposerRow
+
+    /** Выдача поиска по набранному. */
+    data class Results(val items: List<ResolvedItem>) : ComposerRow
+
+    /** Товар, опознанный по штрих-коду. */
+    data class Scanned(val item: ResolvedItem) : ComposerRow
 }
 
 /** Всё, что посчитали модели персонализации для этого дня. */
@@ -111,39 +139,25 @@ data class PersonalState(
     val dayPlan: DayPlan? = null,
     /** Идея 6: расход по факту веса и съеденного. */
     val tdee: TdeeEstimate? = null,
+    /** Раскладка типичного дня — для сводки в начале дня. */
+    val dayOutline: DayOutline? = null,
 )
 
 data class DiaryUiState(
     val input: String = "",
-    /** Чем может быть набранное блюдо. Каждое предложение — готовая к добавлению позиция. */
-    val suggestions: List<ResolvedItem> = emptyList(),
-    val searching: Boolean = false,
-    /**
-     * Товар, найденный по штрих-коду.
-     *
-     * Отдельно от [suggestions] намеренно, хотя рисуется тем же чипсом. Список
-     * предложений — это выдача поиска, и тап по нему учит ранжирующую модель.
-     * Скан выдачей не является: человек не выбирал из вариантов, и считать его тап
-     * исправлением ранжирования значило бы учить модель на том, чего она не показывала.
-     */
-    val scanned: ResolvedItem? = null,
-    val entries: List<DiaryEntryEntity> = emptyList(),
+    /** Готовая лента: экран её только рисует. */
+    val feed: List<FeedItem> = emptyList(),
+    /** Ряд чипсов над строкой ввода. */
+    val composer: ComposerRow = ComposerRow.None,
     val totals: NutrimentTotals = NutrimentTotals.ZERO,
     /** Калории по дням за неделю, последний элемент — сегодня. Всегда семь элементов. */
     val week: List<DaySummary> = emptyList(),
     val date: LocalDate = LocalDate.now(),
     val goal: DailyGoalEntity? = null,
-    val personal: PersonalState = PersonalState(),
+    /** Нужен шиту цели: расход по факту подставляется в калории одним тапом. */
+    val tdee: TdeeEstimate? = null,
     val overlay: Overlay = Overlay.None,
-) {
-    /** Есть что набрать, но ничего не нашлось — это состояние надо показать, а не молчать. */
-    val nothingFound: Boolean
-        get() = input.isNotBlank() && !searching && suggestions.isEmpty()
-
-    /** Предсказания уместны, только пока человек ничего не набрал и ничего не отсканировал. */
-    val showPredictions: Boolean
-        get() = input.isBlank() && scanned == null && personal.predictions.isNotEmpty()
-}
+)
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class DiaryViewModel(
@@ -169,6 +183,15 @@ class DiaryViewModel(
     private val personalState = MutableStateFlow(PersonalState())
 
     /**
+     * Реплики, которые сказало приложение в этой сессии.
+     *
+     * Не в базе: «Записал 82,4 кг» — это ответ на действие, а не запись дневника,
+     * и возвращать его при каждом открытии экрана значило бы копить в ленте
+     * отчёты о прошлых разговорах.
+     */
+    private val sessionReplies = MutableStateFlow<List<FeedItem>>(emptyList())
+
+    /**
      * День берётся в локальной зоне, а не из UTC-инстанта: иначе при перелёте
      * запись уезжает в соседние сутки.
      */
@@ -185,18 +208,20 @@ class DiaryViewModel(
 
     private val typing = combine(input, suggestions, scanned, searching, overlay, ::TypingState)
 
-    val state = combine(typing, day, goal, personalState, week) { typed, dayTotals, dailyGoal, models, days ->
+    /** Вложенный combine: у типизированного [combine] потолок в пять потоков, а их шесть. */
+    private val typingAndReplies = combine(typing, sessionReplies) { typed, replies -> typed to replies }
+
+    val state = combine(typingAndReplies, day, goal, personalState, week) {
+        (typed, replies), dayTotals, dailyGoal, models, days ->
         DiaryUiState(
             input = typed.input,
-            suggestions = typed.suggestions,
-            scanned = typed.scanned,
-            searching = typed.searching,
-            entries = dayTotals.entries,
+            feed = buildFeed(dayTotals, dailyGoal, days, models, typed, replies),
+            composer = composerRow(typed, models),
             totals = dayTotals.totals,
             week = days,
             date = LocalDate.now(clock),
             goal = dailyGoal,
-            personal = models,
+            tdee = models.tdee,
             overlay = typed.overlay,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiaryUiState())
@@ -207,7 +232,14 @@ class DiaryViewModel(
         val scanned: ResolvedItem?,
         val searching: Boolean,
         val overlay: Overlay,
-    )
+    ) {
+        /** Вес распознаётся до поиска: «вес 82,4» — это не блюдо. */
+        val weightGrams: Int? = parseWeight(input)
+
+        /** Есть что набрать, но ничего не нашлось — это состояние надо показать, а не молчать. */
+        val nothingFound: Boolean
+            get() = input.isNotBlank() && weightGrams == null && !searching && suggestions.isEmpty()
+    }
 
     init {
         // Предложения пересобираются на паузу в наборе, а не на каждый символ:
@@ -217,7 +249,9 @@ class DiaryViewModel(
                 .debounce(SEARCH_DEBOUNCE_MS)
                 .distinctUntilChanged()
                 .mapLatest { text ->
-                    if (text.isBlank()) {
+                    // Вес в поиск не уходит: «82.4 кг» не блюдо, и выдача по нему
+                    // была бы шумом поверх единственного осмысленного действия.
+                    if (text.isBlank() || parseWeight(text) != null) {
                         emptyList()
                     } else {
                         searching.value = true
@@ -247,6 +281,107 @@ class DiaryViewModel(
         }
     }
 
+    // --- Сборка ленты -----------------------------------------------------------------
+
+    /**
+     * Лента целиком.
+     *
+     * Порядок реплик — порядок разговора: сначала то, что записал человек, потом
+     * то, что на это отвечает приложение. Поэтому остаток и перебор стоят в конце,
+     * а сводка дня — в начале и только пока записей нет.
+     */
+    private fun buildFeed(
+        dayTotals: DayTotals,
+        goal: DailyGoalEntity?,
+        week: List<DaySummary>,
+        models: PersonalState,
+        typed: TypingState,
+        replies: List<FeedItem>,
+    ): List<FeedItem> {
+        val zone = clock.zone
+        val now = clock.millis()
+        val hour = LocalTime.now(clock).hour
+        val feed = mutableListOf<FeedItem>(FeedItem.DaySeparator)
+
+        if (dayTotals.entries.isEmpty()) {
+            feed += summary(goal, week, models.dayOutline, hour)
+        }
+
+        val bubbles = groupIntoBubbles(dayTotals.entries, zone, now)
+        val body = bubbles.toMutableList<FeedItem>()
+        models.mealGap?.let { gap ->
+            body.add(gapPosition(bubbles, gap, zone), FeedItem.Gap(gap))
+        }
+        feed += body
+        feed += replies
+
+        // Перебор вытесняет остаток, а не дополняет его: это один и тот же ответ
+        // на один и тот же вопрос, и показывать оба значило бы спорить с собой.
+        val target = goal?.kcal?.takeIf { it > 0 }
+        if (target != null && dayTotals.totals.kcal > target) {
+            feed += FeedItem.Over(dayTotals.totals.kcal - target)
+        } else {
+            models.dayPlan?.let { feed += FeedItem.Remaining(it, nextMealTitle(hour)) }
+        }
+
+        if (typed.nothingFound) feed += FeedItem.NotFound(typed.input.trim())
+
+        return feed
+    }
+
+    /**
+     * Сводка дня.
+     *
+     * Первая фраза есть всегда, остальные — только если история их подтверждает.
+     * Пустая сводка честнее выдуманной: «обычно вы завтракаете в 8:00» на второй
+     * день использования это ложь, которую человек сразу заметит.
+     */
+    private fun summary(
+        goal: DailyGoalEntity?,
+        week: List<DaySummary>,
+        outline: DayOutline?,
+        hour: Int,
+    ): FeedItem.Summary {
+        val target = goal?.kcal?.takeIf { it > 0 }
+        val head = if (target != null) {
+            "${greeting(hour)} Сегодня можно $target ккал"
+        } else {
+            "Сегодня без цели — задайте её тапом по остатку"
+        }
+
+        // Сегодня входит в счёт: цель на него ещё не нарушена, и это правда.
+        // Неделя здесь — именно последние семь дней, а не шесть прошедших.
+        val withGoal = week.filter { it.goalKcal != null }
+        val weekLine = if (withGoal.isEmpty()) {
+            null
+        } else {
+            val hit = withGoal.count { it.kcal <= (it.goalKcal ?: 0) }
+            "За неделю вы уложились в цель $hit ${daysWord(hit)} из ${week.size}"
+        }
+
+        return FeedItem.Summary(
+            greeting = head,
+            weekLine = weekLine,
+            outline = outline,
+        )
+    }
+
+    /**
+     * Ряд над строкой ввода.
+     *
+     * Порядок проверок — порядок приоритета: вес важнее поиска, потому что он
+     * уже однозначен; скан важнее предсказаний, потому что человек только что
+     * навёл камеру.
+     */
+    private fun composerRow(typed: TypingState, models: PersonalState): ComposerRow = when {
+        typed.weightGrams != null -> ComposerRow.Weight(typed.weightGrams)
+        typed.suggestions.isNotEmpty() -> ComposerRow.Results(typed.suggestions)
+        typed.scanned != null -> ComposerRow.Scanned(typed.scanned)
+        typed.input.isBlank() && models.predictions.isNotEmpty() ->
+            ComposerRow.Predictions(models.predictions)
+        else -> ComposerRow.None
+    }
+
     /**
      * Пересчёт всех шести моделей.
      *
@@ -262,6 +397,7 @@ class DiaryViewModel(
                 mealGap = personal.mealGap(context, entries),
                 dayPlan = personal.remainingPlan(context, entries),
                 tdee = personal.tdee(context.dateEpochDay),
+                dayOutline = personal.dayOutline(context),
             )
         } catch (cancellation: CancellationException) {
             throw cancellation
@@ -316,7 +452,7 @@ class DiaryViewModel(
     }
 
     /**
-     * Добавление предсказанного продукта — идеи 1 и 4.
+     * Добавление предсказанного продукта — идеи 1, 4 и 5.
      *
      * Ранжирующая модель об этом не узнаёт намеренно: человек выбирал не из выдачи
      * поиска, и считать это исправлением ранжирования значило бы учить её на том,
@@ -406,7 +542,7 @@ class DiaryViewModel(
         }
     }
 
-    /** Тап по отсканированному. Ранжирующая модель об этом не узнаёт — см. [DiaryUiState.scanned]. */
+    /** Тап по отсканированному. Ранжирующая модель об этом не узнаёт — см. [ComposerRow.Scanned]. */
     fun onPickScanned(item: ResolvedItem) {
         val candidate = item.candidate ?: return
         if (item.grams <= 0) return
@@ -551,30 +687,39 @@ class DiaryViewModel(
         gramsGuessed = servingG == null,
     )
 
-    fun onDeleteEntry(id: Long) {
-        viewModelScope.launch { diary.delete(id) }
+    // --- Правка записи: вес, приём пищи, удаление -------------------------------------
+
+    fun onEditEntry(entry: DiaryEntryEntity) {
+        overlay.value = Overlay.EditEntry(entry)
     }
 
-    // --- Правка веса записи: самый чистый сигнал для памяти порций --------------------
-
-    fun onStartEditGrams(entry: DiaryEntryEntity) {
-        overlay.value = Overlay.EditGrams(entry)
-    }
-
-    fun onEditGrams(entryId: Long, grams: Int) {
+    /**
+     * Шит правки сохранён.
+     *
+     * Вес и приём пищи пишутся только если действительно изменились. Это не
+     * экономия запросов: правка веса — самый чистый сигнал для памяти личных
+     * порций, и записывать его на каждое закрытие шита значило бы подтверждать
+     * подставленное число от имени человека.
+     */
+    fun onSaveEntry(entry: DiaryEntryEntity, grams: Int, meal: MealType) {
         overlay.value = Overlay.None
         if (grams <= 0) return
-        viewModelScope.launch { personal.onGramsEdited(entryId, grams, clock.millis()) }
+
+        viewModelScope.launch {
+            if (grams != entry.grams) personal.onGramsEdited(entry.id, grams, clock.millis())
+            if (meal != entry.meal) diary.moveToMeal(entry.id, meal)
+        }
+    }
+
+    fun onDeleteEntry(id: Long) {
+        overlay.value = Overlay.None
+        viewModelScope.launch { diary.delete(id) }
     }
 
     // --- Цель и вес -------------------------------------------------------------------
 
-    fun onOpenGoal() {
-        overlay.value = Overlay.Goal
-    }
-
-    fun onOpenWeight() {
-        overlay.value = Overlay.Weight
+    fun onOpenGoal(field: GoalField = GoalField.KCAL) {
+        overlay.value = Overlay.Goal(field)
     }
 
     fun onDismissOverlay() {
@@ -590,11 +735,25 @@ class DiaryViewModel(
         }
     }
 
-    fun onLogWeight(weightGrams: Int) {
-        overlay.value = Overlay.None
-        if (weightGrams <= 0) return
+    /**
+     * Вес из строки ввода — единственная точка ввода веса на экране.
+     *
+     * Отдельного диалога больше нет, и это не упрощение ради упрощения: поле,
+     * в котором человек и так пишет «овсянка 200», прекрасно принимает «вес 82,4»,
+     * а кнопка в шапке существовала только затем, чтобы открыть форму с одним полем.
+     */
+    fun onLogWeight() {
+        val grams = parseWeight(input.value) ?: return
+        input.value = ""
+        suggestions.value = emptyList()
+
         viewModelScope.launch {
-            personal.logWeight(today, weightGrams, clock.millis())
+            personal.logWeight(today, grams, clock.millis())
+            sessionReplies.value += FeedItem.WeightLogged(
+                id = sessionReplies.value.size,
+                grams = grams,
+                time = formatTime(clock.millis(), clock.zone),
+            )
             recompute(day.value.entries)
         }
     }
@@ -613,13 +772,18 @@ class DiaryViewModel(
         prevRefKey = prevRefKey,
     )
 
-    /** Приём пищи по времени суток: спрашивать об этом отдельно — лишний шаг. */
-    private fun mealForNow(): MealType = when (LocalTime.now(clock).hour) {
-        in 0..10 -> MealType.BREAKFAST
-        in 11..15 -> MealType.LUNCH
-        in 16..21 -> MealType.DINNER
-        else -> MealType.SNACK
-    }
+    /**
+     * Приём пищи по времени суток и по тому, что уже записано.
+     *
+     * Правило целиком живёт в [mealForHour]: его же применяет группировка ленты,
+     * и разойтись они не вправе — иначе подпись «новое добавится сюда» окажется
+     * под пузырьком, в который запись не попадёт.
+     */
+    private fun mealForNow(): MealType = mealForHour(
+        hour = LocalTime.now(clock).hour,
+        lastEntry = day.value.entries.lastOrNull(),
+        nowMillis = clock.millis(),
+    )
 
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 250L
@@ -645,3 +809,29 @@ class DiaryViewModel(
 /** Последний съеденный продукт — вход модели переходов. */
 private fun List<DiaryEntryEntity>.lastRefKey(): String? =
     lastOrNull()?.foodRef?.let(::parseFoodRef)?.serialize()
+
+/**
+ * «вес 82,4», «вес 82.4», «82.4 кг» — взвешивание, а не еда.
+ *
+ * Разбирается до поиска, потому что иначе «82.4 кг» уходит в резолвер как блюдо
+ * весом 82 килограмма. Границы обязательны: без них опечатка в весе пишет
+ * в историю величину, которую фильтр Калмана будет расхлёбывать неделю.
+ *
+ * @return вес в граммах или `null`, если это не вес
+ */
+internal fun parseWeight(text: String): Int? {
+    val match = WEIGHT_PATTERN.matchEntire(text.trim()) ?: return null
+    val number = match.groupValues.drop(1).firstOrNull(String::isNotEmpty) ?: return null
+    val kg = number.replace(',', '.').toDoubleOrNull() ?: return null
+    val grams = (kg * 1000).roundToInt()
+    return grams.takeIf { it in MIN_WEIGHT_G..MAX_WEIGHT_G }
+}
+
+private val WEIGHT_PATTERN = Regex(
+    """(?:вес\s+(\d{1,3}(?:[.,]\d{1,2})?)|(\d{1,3}(?:[.,]\d{1,2})?)\s*кг)""",
+    RegexOption.IGNORE_CASE,
+)
+
+/** Ниже — не человек, выше — не человек. Обе границы существуют только против опечаток. */
+private const val MIN_WEIGHT_G = 20_000
+private const val MAX_WEIGHT_G = 400_000

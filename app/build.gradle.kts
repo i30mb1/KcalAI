@@ -51,6 +51,7 @@ dependencies {
     implementation(project(":core:repositories"))
     implementation(project(":core:resolver"))
     implementation(project(":core:remote"))
+    implementation(project(":core:ui"))
     implementation(project(":feature:diary"))
 
     implementation(libs.androidx.core.ktx)

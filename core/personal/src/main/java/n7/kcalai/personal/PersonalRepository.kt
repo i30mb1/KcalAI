@@ -110,6 +110,15 @@ class PersonalRepository(
         personalDao.dismissMealGap(MealGapDismissEntity(dateEpochDay, meal))
     }
 
+    /**
+     * Раскладка типичного дня — для сводки в начале дня.
+     *
+     * Считается по той же истории, что и всё остальное, поэтому отдельной модели
+     * и отдельного кэша не заводит.
+     */
+    suspend fun dayOutline(context: PersonalContext): DayOutline? =
+        DayOutlineModel.build(history(context.dateEpochDay))
+
     // --- Идея 5: добор остатка дня ----------------------------------------------------
 
     suspend fun remainingPlan(

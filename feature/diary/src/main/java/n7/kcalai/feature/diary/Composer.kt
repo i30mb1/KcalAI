@@ -1,0 +1,311 @@
+package n7.kcalai.feature.diary
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MonitorWeight
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import n7.kcalai.model.FoodCandidate
+import n7.kcalai.resolver.ResolvedItem
+import n7.kcalai.ui.KcalShapes
+import n7.kcalai.ui.KcalTheme
+
+/**
+ * Композер: строка ввода и ряд подсказок над ней.
+ *
+ * Кнопки отправки нет — добавляет только тап по чипсу. Это не экономия места:
+ * поле принимает свободный текст, и кнопка «добавить» означала бы выбор первого
+ * попавшегося совпадения вслепую, ровно то, от чего предложения и защищают.
+ *
+ * Три способа ввода стоят рядом и равноправны: набрать, отсканировать код, снять
+ * этикетку. У каждого свой случай, и прятать любой из них в меню незачем.
+ */
+@Composable
+fun Composer(
+    input: String,
+    row: ComposerRow,
+    onInputChange: (String) -> Unit,
+    onPick: (ResolvedItem) -> Unit,
+    onPickScanned: (ResolvedItem) -> Unit,
+    onPickCandidate: (FoodCandidate) -> Unit,
+    onLogWeight: () -> Unit,
+    onOpenScan: () -> Unit,
+    onOpenLabelScan: () -> Unit,
+    onOpenLabelDebug: () -> Unit,
+) {
+    val colors = KcalTheme.colors
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(colors.bg)
+            .imePadding()
+            .navigationBarsPadding()
+            .padding(top = 10.dp, bottom = 10.dp)
+    ) {
+        HintRow(row, onPick, onPickScanned, onPickCandidate, onLogWeight)
+
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(KcalShapes.input))
+                .background(colors.surface)
+                .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.weight(1f)) {
+                BasicTextField(
+                    value = input,
+                    onValueChange = onInputChange,
+                    textStyle = KcalTheme.type.input.copy(color = colors.text),
+                    cursorBrush = SolidColor(colors.text),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (input.isEmpty()) {
+                    Text(
+                        "Написать, что съели…",
+                        style = KcalTheme.type.input,
+                        color = colors.text3,
+                    )
+                }
+            }
+
+            // Штрих-код опознаёт товар в упаковке точнее любого названия, и
+            // заставлять человека набирать «активиа натуральная 4%» вместо
+            // одного наведения камеры незачем.
+            TapTarget(onClick = onOpenScan, description = "Сканировать штрих-код") {
+                Icon(
+                    Icons.Default.QrCodeScanner,
+                    contentDescription = null,
+                    tint = colors.text2,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+
+            // Долгое нажатие уводит в отладочную съёмку: кнопок в шапке экран
+            // больше не носит, а проверять разбор этикетки по-прежнему нужно.
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .combinedClickable(
+                        onClick = onOpenLabelScan,
+                        onLongClick = onOpenLabelDebug,
+                    )
+                    .semantics { contentDescription = "Снять этикетку" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier.size(36.dp).clip(CircleShape).background(colors.bubble),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.PhotoCamera,
+                        contentDescription = null,
+                        tint = colors.onBubble,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Ряд подсказок.
+ *
+ * Ряд ровно один, и что в нём — решает состояние. Показывать предсказания вместе
+ * с выдачей поиска значило бы предлагать человеку выбирать между тем, что он
+ * набрал, и тем, что он обычно ест, — выбор, которого он не просил.
+ */
+@Composable
+private fun HintRow(
+    row: ComposerRow,
+    onPick: (ResolvedItem) -> Unit,
+    onPickScanned: (ResolvedItem) -> Unit,
+    onPickCandidate: (FoodCandidate) -> Unit,
+    onLogWeight: () -> Unit,
+) {
+    if (row is ComposerRow.None) return
+
+    val caption = when (row) {
+        is ComposerRow.Weight -> "похоже на вес"
+        is ComposerRow.Results -> "нашлось"
+        is ComposerRow.Scanned ->
+            if (row.item.gramsGuessed) "найдено по коду · вес поправьте" else "найдено по коду"
+        is ComposerRow.Predictions -> "обычно в это время"
+        ComposerRow.None -> ""
+    }
+
+    Column {
+        CapsLabel(caption, Modifier.padding(start = 16.dp, bottom = 8.dp))
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            modifier = Modifier.padding(bottom = 10.dp),
+        ) {
+            when (row) {
+                is ComposerRow.Weight -> item { WeightChip(row.grams, onLogWeight) }
+
+                is ComposerRow.Results -> items(row.items.size) { index ->
+                    val resolved = row.items[index]
+                    ResolvedChip(resolved) { onPick(resolved) }
+                }
+
+                is ComposerRow.Scanned -> item {
+                    ResolvedChip(row.item) { onPickScanned(row.item) }
+                }
+
+                is ComposerRow.Predictions -> items(row.items.size) { index ->
+                    val candidate = row.items[index]
+                    PredictionChip(candidate) { onPickCandidate(candidate) }
+                }
+
+                ComposerRow.None -> Unit
+            }
+        }
+    }
+}
+
+/**
+ * Единственная точка ввода веса тела.
+ *
+ * Отдельного диалога и кнопки в шапке больше нет: поле, в которое человек и так
+ * пишет «овсянка 200», прекрасно принимает «вес 82,4», а распознать это дешевле,
+ * чем заводить экран с одним числом.
+ */
+@Composable
+private fun WeightChip(grams: Int, onClick: () -> Unit) {
+    val colors = KcalTheme.colors
+
+    KcalChip(onClick = onClick, background = colors.bubble) {
+        Icon(
+            Icons.Default.MonitorWeight,
+            contentDescription = null,
+            tint = colors.onBubble,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            "Записать вес ${formatKg(grams)}",
+            style = KcalTheme.type.chip,
+            color = colors.onBubble,
+            modifier = Modifier.padding(start = 7.dp),
+        )
+    }
+}
+
+/**
+ * Предложение поиска или найденное по коду.
+ *
+ * Нажатие сразу кладёт позицию в дневник: выбор из списка и есть подтверждение,
+ * а второй шаг «вы уверены?» на десятой записи за день становится издевательством.
+ */
+@Composable
+private fun ResolvedChip(item: ResolvedItem, onClick: () -> Unit) {
+    val colors = KcalTheme.colors
+    val candidate = item.candidate
+
+    // Неопознанный сегмент фразы остаётся видимым, но не кликается: тап по нему
+    // добавил бы в дневник неизвестно что.
+    if (candidate == null) {
+        KcalChip(onClick = null, background = colors.chip) {
+            Text(item.sourceText, style = KcalTheme.type.chip, color = colors.text3, maxLines = 1)
+        }
+        return
+    }
+
+    KcalChip(onClick = onClick, background = colors.surface) {
+        MacroDot(dominantMacro(candidate.nutriments).colors().fill)
+        Text(
+            candidate.displayName,
+            style = KcalTheme.type.chip,
+            color = colors.text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 7.dp),
+        )
+        ChipNumbers(
+            "· ${formatGrams(item.grams)} · ${kcalFor(candidate, item.grams)}",
+            colors.text3,
+        )
+    }
+}
+
+/**
+ * Идея 1: что человек, скорее всего, съест прямо сейчас.
+ *
+ * Модель биграмм над личной историей знает, что после овсянки идёт кофе с молоком,
+ * и превращает самый частый сценарий трекинга из набора текста в один тап.
+ */
+@Composable
+private fun PredictionChip(candidate: FoodCandidate, onClick: () -> Unit) {
+    val colors = KcalTheme.colors
+    val grams = candidate.servingG ?: 0
+
+    KcalChip(onClick = onClick, background = colors.surface) {
+        MacroDot(dominantMacro(candidate.nutriments).colors().fill)
+        Text(
+            candidate.displayName,
+            style = KcalTheme.type.chip,
+            color = colors.text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 7.dp),
+        )
+        ChipNumbers("· ${formatGrams(grams)} · ${kcalFor(candidate, grams)}", colors.text3)
+    }
+}
+
+/** Тап-таргет 44dp вокруг иконки: визуальный размер иконки от этого не меняется. */
+@Composable
+private fun TapTarget(
+    onClick: () -> Unit,
+    description: String,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+        content = { content() },
+    )
+}
+
+private fun kcalFor(candidate: FoodCandidate, grams: Int): Int =
+    ((candidate.nutriments.kcal100.toLong() * grams + 50) / 100).toInt()

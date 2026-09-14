@@ -19,9 +19,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.KcalAI">
 
+        <!--
+            Экран — вертикальная лента с композером: альбомная раскладка
+            ничего не добавляет, а поворот рвёт ввод и сканер.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.KcalAI">
             <intent-filter>

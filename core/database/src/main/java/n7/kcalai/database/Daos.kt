@@ -51,6 +51,16 @@ interface DiaryDao {
     /** Правка веса уже добавленной записи. КБЖУ на 100 г остаётся снимком и не трогается. */
     @Query("UPDATE diary_entry SET grams = :grams WHERE id = :id")
     suspend fun updateGrams(id: Long, grams: Int)
+
+    /**
+     * Перенос записи в другой приём пищи.
+     *
+     * Правило по времени суток угадывает, и в 16:05 съеденный обед становится
+     * ужином. Указание человека сильнее правила — и должно доезжать до `meal`,
+     * потому что по нему считают все модели персонализации.
+     */
+    @Query("UPDATE diary_entry SET meal = :meal WHERE id = :id")
+    suspend fun updateMeal(id: Long, meal: MealType)
 }
 
 @Dao
@@ -116,6 +126,16 @@ interface GoalDao {
 
     @Query("SELECT * FROM daily_goal WHERE fromDateEpochDay <= :dateEpochDay ORDER BY fromDateEpochDay DESC LIMIT 1")
     fun observeGoalFor(dateEpochDay: Long): Flow<DailyGoalEntity?>
+
+    /**
+     * Все цели по возрастанию даты — для графика недели.
+     *
+     * Целиком, а не за окно графика: цель, действовавшая в прошлый вторник, могла
+     * быть поставлена месяц назад, и запрос «с прошлого вторника» её бы не увидел.
+     * Строк здесь столько, сколько раз человек менял цель, то есть единицы.
+     */
+    @Query("SELECT * FROM daily_goal ORDER BY fromDateEpochDay")
+    fun observeAll(): Flow<List<DailyGoalEntity>>
 }
 
 @Dao
