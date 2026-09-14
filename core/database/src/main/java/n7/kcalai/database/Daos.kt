@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import n7.kcalai.model.MealType
@@ -68,6 +69,17 @@ interface UserFoodDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(food: UserFoodEntity): Long
+
+    /**
+     * Правка уже заведённого продукта — по первичному ключу, а не вставкой поверх.
+     *
+     * `REPLACE` по уникальному коду выглядит тем же самым, но удаляет строку
+     * и вставляет новую, то есть меняет `id`. А `id` — это ссылка, по которой
+     * личная история узнаёт продукт: пересохранив ту же пачку с поправленной
+     * цифрой, человек молча обнулил бы всё, что модели о ней знают.
+     */
+    @Update
+    suspend fun update(food: UserFoodEntity)
 
     @Query("SELECT * FROM user_food WHERE barcode = :barcode LIMIT 1")
     suspend fun findByBarcode(barcode: String): UserFoodEntity?

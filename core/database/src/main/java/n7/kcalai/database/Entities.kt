@@ -30,7 +30,14 @@ data class DiaryEntryEntity(
     val createdAt: Long,
 )
 
-/** Продукт, заведённый пользователем после промаха сканера. */
+/**
+ * Продукт, заведённый пользователем после промаха сканера.
+ *
+ * [servingG] — та порция, которую человек указал на экране съёмки. Хранится,
+ * потому что иначе теряется при первом же повторном скане: продукт находится
+ * по коду мгновенно, но снова с подставленной сотней грамм, и указанное однажды
+ * приходится вводить заново каждый раз.
+ */
 @Entity(tableName = "user_food", indices = [Index(value = ["barcode"], unique = true)])
 data class UserFoodEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -40,6 +47,7 @@ data class UserFoodEntity(
     val prot100: Int,
     val fat100: Int,
     val carb100: Int,
+    val servingG: Int? = null,
     val createdAt: Long,
 )
 

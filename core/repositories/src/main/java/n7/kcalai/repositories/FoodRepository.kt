@@ -105,17 +105,29 @@ class FoodRepository(
         servingG: Int?,
         now: Long,
     ): FoodCandidate {
-        val id = userFoodDao.insert(
-            UserFoodEntity(
-                barcode = gtin,
-                name = name,
-                kcal100 = nutriments.kcal100,
-                prot100 = nutriments.prot100,
-                fat100 = nutriments.fat100,
-                carb100 = nutriments.carb100,
-                createdAt = now,
-            )
+        // Тот же код мог заводиться раньше: человек пересканировал пачку, чтобы
+        // поправить цифру. Тогда это правка существующей строки, а не новый
+        // продукт, — иначе `id` меняется, и личная история продукт не узнаёт.
+        val existing = gtin?.let { userFoodDao.findByBarcode(it) }
+        val entity = UserFoodEntity(
+            id = existing?.id ?: 0,
+            barcode = gtin,
+            name = name,
+            kcal100 = nutriments.kcal100,
+            prot100 = nutriments.prot100,
+            fat100 = nutriments.fat100,
+            carb100 = nutriments.carb100,
+            servingG = servingG,
+            // Дата заведения — дата первой встречи с продуктом, а не последней правки.
+            createdAt = existing?.createdAt ?: now,
         )
+
+        val id = if (existing != null) {
+            userFoodDao.update(entity)
+            existing.id
+        } else {
+            userFoodDao.insert(entity)
+        }
 
         // Без кода вклад бесполезен: у остальных нечем его найти.
         if (gtin != null) {
@@ -200,7 +212,7 @@ private fun UserFoodEntity.toCandidate(): FoodCandidate =
         ref = FoodRef.User(id),
         displayName = name,
         nutriments = toNutriments(),
-        servingG = null,
+        servingG = servingG,
     )
 
 private fun UserFoodEntity.toNutriments(): Nutriments =

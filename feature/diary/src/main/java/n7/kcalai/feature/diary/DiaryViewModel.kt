@@ -584,7 +584,12 @@ class DiaryViewModel(
                 return@launch
             }
 
+            // Тот же путь, что и у скана по коду: название уезжает в строку
+            // ввода, курсор за ним, чипс остаётся и считает от набранного веса.
+            // Человек только что заполнил карточку продукта — заставлять его
+            // после этого ещё и искать его в поиске было бы издевательством.
             scanned.value = candidate.toScannedItem(EntrySource.MANUAL)
+            input.value = "${candidate.displayName} "
             onContributionQueued()
         }
     }
@@ -639,6 +644,9 @@ class DiaryViewModel(
         grams = servingG ?: DEFAULT_PORTION_G,
         confidence = 1f,
         source = source,
+        // Порция продукта — не догадка: её указал человек, заводя продукт,
+        // либо она пришла из справочника вместе с товаром. Сотня грамм на её
+        // месте — как раз догадка, и это помечается честно.
         gramsGuessed = servingG == null,
     )
 
