@@ -229,7 +229,10 @@ class DiaryViewModel(
                 .mapLatest { text ->
                     // Вес в поиск не уходит: «82.4 кг» не блюдо, и выдача по нему
                     // была бы шумом поверх единственного осмысленного действия.
-                    if (text.isBlank() || parseWeight(text) != null) {
+                    // Поиск не идёт и по строке, дописываемой к отсканированному:
+                    // товар уже опознан кодом точнее любого совпадения по названию,
+                    // а выдача поверх него была бы шумом.
+                    if (text.isBlank() || parseWeight(text) != null || text.continuesScan()) {
                         emptyList()
                     } else {
                         searching.value = true
@@ -352,9 +355,11 @@ class DiaryViewModel(
      * навёл камеру.
      */
     private fun composerRow(typed: TypingState, models: PersonalState): ComposerRow = when {
+        // Скан идёт первым: пока в строке стоит опознанный товар, всё остальное
+        // в этом ряду было бы предложением заменить точное совпадение догадкой.
+        typed.scanned != null -> ComposerRow.Scanned(typed.scanned.withTypedGrams(typed.input))
         typed.weightGrams != null -> ComposerRow.Weight(typed.weightGrams)
         typed.suggestions.isNotEmpty() -> ComposerRow.Results(typed.suggestions)
-        typed.scanned != null -> ComposerRow.Scanned(typed.scanned)
         typed.input.isBlank() && models.predictions.isNotEmpty() ->
             ComposerRow.Predictions(models.predictions)
         else -> ComposerRow.None
@@ -386,11 +391,19 @@ class DiaryViewModel(
         }
     }
 
+    /** Строка продолжает отсканированное: к названию дописывают вес. */
+    private fun String.continuesScan(): Boolean =
+        scanned.value?.let { startsWith(it.sourceText) } == true
+
     fun onInputChange(text: String) {
         input.value = text
         if (text.isBlank()) suggestions.value = emptyList()
-        // Человек начал набирать — значит, к отсканированному он не вернётся.
-        if (text.isNotBlank()) scanned.value = null
+
+        // Отсканированное держится, пока в строке стоит его название: человек
+        // дописывает к нему вес, а не ищет другое блюдо. Стёр название — значит,
+        // от скана ушёл, и чипс уходит вместе с ним.
+        val scan = scanned.value
+        if (scan != null && !text.startsWith(scan.sourceText)) scanned.value = null
     }
 
     /**
@@ -517,7 +530,12 @@ class DiaryViewModel(
                 // остальное человек снимет камерой или наберёт сам.
                 overlay.value = Overlay.LabelScan(gtin)
             } else {
+                // Название уезжает в поле ввода, курсор — за ним. Скан опознал
+                // товар, но не знает, сколько его съели, и дописать «150» к уже
+                // готовой строке быстрее, чем открывать отдельный шит веса.
+                // Чипс при этом остаётся и считает калории от набранного.
                 scanned.value = candidate.toScannedItem(EntrySource.BARCODE)
+                input.value = "${candidate.displayName} "
             }
         }
     }
@@ -528,6 +546,7 @@ class DiaryViewModel(
         if (item.grams <= 0) return
 
         scanned.value = null
+        input.value = ""
         viewModelScope.launch {
             val context = context()
             diary.add(
@@ -741,6 +760,28 @@ class DiaryViewModel(
             DiaryViewModel(diary, resolver, personal, food, onContributionQueued) as T
     }
 }
+
+/**
+ * Вес, дописанный к отсканированному названию.
+ *
+ * Скан знает товар, но не знает порцию, и подставленная нами сотня грамм —
+ * догадка. Число в конце строки догадкой уже не является: его набрал человек,
+ * глядя на упаковку, — поэтому и помечается как названное им.
+ *
+ * Процент в конце («Творог 5%») весом не считается: единицы там нет, а само
+ * число часть названия.
+ */
+private fun ResolvedItem.withTypedGrams(input: String): ResolvedItem {
+    val grams = TRAILING_GRAMS.find(input.trim())
+        ?.groupValues
+        ?.get(1)
+        ?.toIntOrNull()
+        ?.takeIf { it > 0 }
+        ?: return this
+    return copy(grams = grams, gramsGuessed = false)
+}
+
+private val TRAILING_GRAMS = Regex("""(\d{1,4})\s*(?:г|гр|грамм\w*|мл)?$""", RegexOption.IGNORE_CASE)
 
 /** Последний съеденный продукт — вход модели переходов. */
 private fun List<DiaryEntryEntity>.lastRefKey(): String? =

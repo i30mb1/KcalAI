@@ -103,7 +103,7 @@ internal class LabelAnalyzer(
         // читается там же и по той же причине — он живёт в ImageProxy.
         val rotation = proxy.imageInfo.rotationDegrees
         val frame = try {
-            proxy.toBitmap()
+            proxy.toBitmap().opaque()
         } catch (error: Throwable) {
             busy.set(false)
             return
@@ -127,9 +127,9 @@ internal class LabelAnalyzer(
                     return@launch
                 }
 
-                // Код ищется до распознавания текста и результата не ждёт:
-                // разбор кадра не должен ни на миллисекунду зависеть от того,
-                // попал ли в кадр штрих-код.
+                // Код ищется по тому же кадру и результата не ждёт: разбор
+                // не должен ни на миллисекунду зависеть от того, попал ли
+                // в кадр штрих-код.
                 barcodes.read(bitmap, onBarcode)
 
                 val verdict = consensus.add(LabelParser.parseLines(lines))
@@ -189,6 +189,25 @@ internal class LabelAnalyzer(
 }
 
 /**
+ * Снимает с кадра альфа-канал.
+ *
+ * Камера отдаёт RGBA, и альфа в нём — мусор: у части устройств она приходит
+ * нулевой. Android считает такой битмап premultiplied, то есть уверен, что цвет
+ * уже умножен на прозрачность, и всё, что идёт через Canvas или кодек, честно
+ * доумножает его на ноль. Поворот кадра и запись в JPEG — как раз оно: снимок
+ * становится чёрным целиком.
+ *
+ * Заметить это по распознаванию нельзя: нативный разбор читает пиксели через
+ * `lockPixels`, минуя всякую логику прозрачности, и видит нормальную картинку.
+ * Расходятся именно кадр, который читает движок, и кадр, который видим мы, —
+ * а значит, диагностика показывает не то, что происходило на самом деле.
+ *
+ * Одна строка, и она обязана стоять до поворота: повёрнутая копия рисуется
+ * тем же Canvas.
+ */
+private fun Bitmap.opaque(): Bitmap = apply { setHasAlpha(false) }
+
+/**
  * Кадр камеры, повёрнутый так, как его видит человек.
  *
  * Сенсор смонтирован боком почти во всех телефонах, и в портретной ориентации
@@ -203,7 +222,7 @@ internal class LabelAnalyzer(
 private fun Bitmap.upright(degrees: Int): Bitmap {
     if (degrees == 0) return this
     val matrix = Matrix().apply { postRotate(degrees.toFloat()) }
-    val rotated = Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
+    val rotated = Bitmap.createBitmap(this, 0, 0, width, height, matrix, true).opaque()
     if (rotated !== this) recycle()
     return rotated
 }

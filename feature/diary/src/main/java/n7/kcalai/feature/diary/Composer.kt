@@ -25,6 +25,16 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +78,19 @@ fun Composer(
     onOpenLabelDebug: () -> Unit,
 ) {
     val colors = KcalTheme.colors
+    val requester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    // После скана в строке уже стоит название товара, и дописать к нему вес
+    // человек должен сразу — иначе подстановка экономит ровно ноль движений.
+    // Курсор уводится в конец строки: иначе он встаёт перед названием.
+    val scannedItem = (row as? ComposerRow.Scanned)?.item?.sourceText
+    LaunchedEffect(scannedItem) {
+        if (scannedItem != null) {
+            requester.requestFocus()
+            keyboard?.show()
+        }
+    }
 
     Column(
         Modifier
@@ -89,14 +112,38 @@ fun Composer(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.weight(1f)) {
+                // Поле держит собственное значение с курсором, а не отражает
+                // строку состояния напрямую. Причин две, и обе обязательные.
+                //
+                // Курсор: подставленное после скана название приходит извне,
+                // и без явной позиции он остаётся в нуле — вес дописывался бы
+                // перед названием.
+                //
+                // Рассинхрон: состояние едет через combine и возвращается на кадр
+                // позже набранного. Сверяйся поле с ним напрямую — оно на этот кадр
+                // откатывало бы последнюю букву. Поэтому сверка идёт с тем, что
+                // поле само отправило наружу: расходится только подстановка извне.
+                var field by remember { mutableStateOf(TextFieldValue(input)) }
+                var sent by remember { mutableStateOf(input) }
+                if (input != sent) {
+                    field = TextFieldValue(input, TextRange(input.length))
+                    sent = input
+                }
+
                 BasicTextField(
-                    value = input,
-                    onValueChange = onInputChange,
+                    value = field,
+                    onValueChange = { value ->
+                        field = value
+                        if (value.text != sent) {
+                            sent = value.text
+                            onInputChange(value.text)
+                        }
+                    },
                     textStyle = KcalTheme.type.input.copy(color = colors.text),
                     cursorBrush = SolidColor(colors.text),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().focusRequester(requester),
                 )
                 if (input.isEmpty()) {
                     Text(
@@ -169,7 +216,7 @@ private fun HintRow(
         is ComposerRow.Weight -> "похоже на вес"
         is ComposerRow.Results -> "нашлось"
         is ComposerRow.Scanned ->
-            if (row.item.gramsGuessed) "найдено по коду · вес поправьте" else "найдено по коду"
+            if (row.item.gramsGuessed) "найдено по коду · допишите вес" else "найдено по коду"
         is ComposerRow.Predictions -> "обычно в это время"
         ComposerRow.None -> ""
     }
