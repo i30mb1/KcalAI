@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Локальный сервер отвечает по http без TLS. Только в debug: release этот оверлей не видит. -->
+    <application android:networkSecurityConfig="@xml/network_security_config" />
+</manifest>

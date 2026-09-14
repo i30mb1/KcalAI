@@ -114,8 +114,8 @@ class AppContainer(context: Context) {
     }
 
     private companion object {
-        /** Появится, когда появится сервер. Пустая строка означает «источника нет». */
-        const val SERVER_BASE_URL = ""
+        /** Из `local.properties` (`kcal.server=…`). Пустая строка означает «источника нет». */
+        val SERVER_BASE_URL: String = BuildConfig.KCAL_SERVER
 
         /**
          * Open Food Facts режет запросы без описательного User-Agent — это их прямое

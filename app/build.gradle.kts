@@ -1,6 +1,13 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
+}
+
+// Адрес локального сервера — в local.properties (не в git): kcal.server=http://192.168.1.10:8080
+val localProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
 }
 
 android {
@@ -19,6 +26,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "KCAL_SERVER", "\"${localProperties.getProperty("kcal.server", "")}\"")
     }
 
     buildTypes {
@@ -41,6 +50,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
