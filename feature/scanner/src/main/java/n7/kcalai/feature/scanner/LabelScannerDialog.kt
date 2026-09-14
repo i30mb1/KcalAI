@@ -137,7 +137,14 @@ fun LabelScannerDialog(
     ) {
         Surface(Modifier.fillMaxSize(), color = KcalTheme.colors.bg) {
             Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1f).fillMaxWidth()) {
+                // Высота окна камеры — доля экрана, а не остаток от панели.
+                // Панель растёт и сжимается постоянно: пришли чипсы имён, встали
+                // числа с этикетки, ушла подсказка. Будь камера остатком, каждое
+                // такое изменение меняло бы размер превью, а `PreviewView` под
+                // капотом `SurfaceView`: смена размера — это пересоздание surface
+                // и переконфигурация сессии, то есть заметный рывок картинки
+                // ровно в тот момент, когда человек наводит на пачку.
+                Box(Modifier.fillMaxWidth().fillMaxHeight(CAMERA_SHARE)) {
                     if (granted) {
                         CameraFeed(state)
                         Viewfinder(Modifier.fillMaxSize())
@@ -175,6 +182,7 @@ fun LabelScannerDialog(
 
                 ProductCard(
                     state = state,
+                    modifier = Modifier.weight(1f),
                     onSave = {
                         state.onSaved()
                         onSave(state.gtin, state.name.text.trim(), it, state.servingG)
@@ -279,14 +287,18 @@ private fun CameraFeed(state: ScanState) {
  * камеру, убрать блик с той самой строки, поднести ближе.
  */
 @Composable
-private fun ProductCard(state: ScanState, onSave: (Nutriments) -> Unit) {
+private fun ProductCard(
+    state: ScanState,
+    onSave: (Nutriments) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = KcalTheme.colors
     val check = state.check
 
     /** Куда подставит число тап по чипсу. Живёт дольше фокуса — см. [ScannedNumbers]. */
     var focused by remember { mutableStateOf<ScanField?>(null) }
 
-    ScanPanel(Modifier.navigationBarsPadding().imePadding()) {
+    ScanPanel(modifier.navigationBarsPadding().imePadding()) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ProgressRing(state.overall)
@@ -590,6 +602,14 @@ private fun unhurried(name: String) = ThreadFactory { runnable ->
 
 /** Ниже интерфейсного нуля, выше фоновой десятки. */
 private const val FRAME_THREAD_PRIORITY = 4
+
+/**
+ * Какую долю экрана занимает камера.
+ *
+ * Доля, а не остаток: см. комментарий в разметке. Сорок два процента — окно
+ * видоискателя целиком плюс воздух вокруг него, дальше начинается панель.
+ */
+private const val CAMERA_SHARE = 0.42f
 
 /** EAN-13 — самый длинный из форматов, которые встречаются на еде. */
 private const val MAX_GTIN_DIGITS = 13
