@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import n7.kcalai.ocr.LabelOcr
 import n7.kcalai.repositories.LabelParser
 import n7.kcalai.repositories.LabelReading
+import n7.kcalai.repositories.LabelTrace
 
 /**
  * Один разобранный кадр.
@@ -148,7 +149,7 @@ internal class LabelAnalyzer(
                 // Кадр кладётся вместе с тем, что из него вышло: снимок без
                 // расшифровки говорит только «вот что было видно», а с ней —
                 // «вот что было видно и вот где разбор ошибся».
-                recorder?.add(bitmap, started, verdict.report(lastBarcode))
+                recorder?.add(bitmap, started, verdict.report(lastBarcode), labelInView(verdict.reading.trace))
 
                 log(verdict, elapsed, size)
                 onFrame(
@@ -193,8 +194,28 @@ internal class LabelAnalyzer(
         }
     }
 
+    /**
+     * Похоже ли, что камера смотрит на этикетку, а не на полку или в пол.
+     *
+     * Две приметы, любой достаточно. Первая — прочиталась подпись таблицы:
+     * «ккал», «белки», «жиры» на полке не печатают. Вторая — плотность текста:
+     * пачка вблизи это стена мелкого шрифта, состав, хранение, изготовитель,
+     * и распознаватель отдаёт по ней два-три десятка строк, а полка с ценниками
+     * — не больше дюжины. Вторая примета нужна ради самого важного случая:
+     * этикетка в кадре, а подписи не прочитались вовсе. Такие кадры и надо
+     * сохранять — иначе в записи останется только пол.
+     */
+    private fun labelInView(trace: LabelTrace): Boolean =
+        trace.readLabels.isNotEmpty() || trace.lines.size >= DENSE_LINES
+
     private companion object {
         const val TAG = "LabelScan"
+
+        /**
+         * От скольких строк кадр считается этикеткой. По снятым сессиям: пачки
+         * дают 19–30 строк, полки и ценники — от 1 до 12.
+         */
+        const val DENSE_LINES = 15
     }
 }
 

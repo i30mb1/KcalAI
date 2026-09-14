@@ -29,9 +29,13 @@ import java.util.concurrent.atomic.AtomicInteger
  * и становится тестом, а из mp4 его пришлось бы выковыривать. Собрать ролик,
  * если захочется посмотреть, можно одной строкой ffmpeg — рядом лежит подсказка.
  *
- * Живёт скользящим окном: держим последние [windowMs] миллисекунд и выбрасываем
- * всё, что старше. Интересен конец съёмки — момент, когда разбор либо сошёлся,
- * либо человек сдался, — а не первые секунды наведения на пачку.
+ * Окно — [windowMs] миллисекунд **до последнего кадра с этикеткой** и ещё
+ * [TAIL_MS] после него, а не последние секунды перед закрытием экрана. Разница
+ * решающая. Человек сдаётся, опускает телефон и тянется к крестику — и три
+ * секунды перед закрытием камера смотрит в пол и на полки с ценниками. Записанные
+ * так сессии показывали этикетку в первом кадре и ноги в остальных семи,
+ * а диагностировать по ногам нечего. Пока этикетки не было вовсе, окно
+ * ведёт себя по-старому: последние секунды перед закрытием — лучше, чем ничего.
  */
 internal class LabelRecorder(
     private val root: File,
@@ -40,7 +44,13 @@ internal class LabelRecorder(
 
     private class Shot(val atMs: Long, val jpeg: ByteArray, val note: String)
 
-    private val shots = ArrayDeque<Shot>()
+    /** Последние [windowMs] съёмки — запас, из которого нарезается окно вокруг этикетки. */
+    private val recent = ArrayDeque<Shot>()
+
+    /** Окно вокруг последней этикетки. `null`, пока этикетки в кадре не было. */
+    private var kept: MutableList<Shot>? = null
+
+    private var labelAtMs = 0L
 
     /**
      * Сжатие идёт своим потоком, а не тем, что разбирает кадр.
@@ -63,14 +73,17 @@ internal class LabelRecorder(
      * ограничена двумя. Если сжатие отстаёт, кадр просто теряется: диагностике
      * дырка в записи не страшна, а лишние пятнадцать мегабайт живой памяти
      * посреди съёмки — вполне.
+     *
+     * @param label в кадре была этикетка — см. [LabelAnalyzer]. Такой кадр
+     *        переносит окно: всё, что старше [windowMs] до него, забывается.
      */
-    fun add(bitmap: Bitmap, atMs: Long, note: String) {
+    fun add(bitmap: Bitmap, atMs: Long, note: String, label: Boolean) {
         if (queued.get() >= MAX_QUEUED) return
         queued.incrementAndGet()
         try {
             worker.execute {
                 try {
-                    compress(bitmap, atMs, note)
+                    compress(bitmap, atMs, note, label)
                 } finally {
                     queued.decrementAndGet()
                 }
@@ -82,20 +95,34 @@ internal class LabelRecorder(
     }
 
     @Synchronized
-    private fun compress(bitmap: Bitmap, atMs: Long, note: String) {
+    private fun compress(bitmap: Bitmap, atMs: Long, note: String, label: Boolean) {
         val jpeg = ByteArrayOutputStream(JPEG_HINT_BYTES).use { out ->
             bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
             out.toByteArray()
         }
-        shots.addLast(Shot(atMs, jpeg, note))
-        while (shots.isNotEmpty() && atMs - shots.first().atMs > windowMs) {
-            shots.removeFirst()
+        val shot = Shot(atMs, jpeg, note)
+        recent.addLast(shot)
+        while (recent.isNotEmpty() && atMs - recent.first().atMs > windowMs) {
+            recent.removeFirst()
+        }
+
+        // Этикетка в кадре — окно переезжает сюда: последние секунды перед ней
+        // это подход к пачке, а после неё дописывается только короткий хвост.
+        // Дальше камера смотрит в пол, и копить это незачем.
+        if (label) {
+            labelAtMs = atMs
+            kept = recent.toMutableList()
+        } else if (atMs - labelAtMs <= TAIL_MS) {
+            kept?.add(shot)
         }
     }
 
     /** Забирает накопленное и очищает окно — под замком, съёмка может ещё идти. */
     @Synchronized
-    private fun drain(): List<Shot> = shots.toList().also { shots.clear() }
+    private fun drain(): List<Shot> = (kept ?: recent.toList()).also {
+        recent.clear()
+        kept = null
+    }
 
     /**
      * Пишет окно в отдельный каталог сессии.
@@ -164,6 +191,9 @@ internal class LabelRecorder(
 
         /** Три секунды: столько человек держит камеру на пачке, прежде чем понять, что не выходит. */
         private const val WINDOW_MS = 3_000L
+
+        /** Сколько дописывать после того, как этикетка ушла из кадра: момент, когда человек сдался. */
+        private const val TAIL_MS = 1_000L
 
         private const val JPEG_QUALITY = 80
         private const val JPEG_HINT_BYTES = 256 * 1024
