@@ -152,6 +152,184 @@ namespace ppocrv5 {
             return box;
         }
 
+        // Уточнение боксов по самому кадру.
+        //
+        // Детектор смотрит на кадр, ужатый в 640x640, и в плотном абзаце
+        // склеивает соседние строки в один бокс высотой в полторы-две строки,
+        // а одиночные строки отдаёт с большим запасом по высоте. Распознаватель
+        // получает полоску 48 px, где текст занимает треть, — и читает кашу.
+        //
+        // Кадр же лежит рядом в полном разрешении. По каждому боксу считается
+        // профиль «чернил» по строкам — сумма горизонтальных перепадов яркости:
+        // на строке текста их много, в межстрочном промежутке нет. Полосы
+        // профиля и есть строки: бокс обрезается до них, а если полос
+        // несколько — режется на отдельные боксы. Наклонные боксы не трогаются:
+        // профиль по осям для них не имеет смысла.
+        constexpr float kRefineMaxAngleDeg = 8.0f;
+        constexpr int kRefineMinHeightPx = 12;
+        constexpr float kBandShareOfPeak = 0.4f;
+        // Перепад между полом и пиком меньше этого — в боксе нет строк, есть шум.
+        constexpr float kBandMinContrast = 1.5f;
+        constexpr int kBandMinRows = 6;
+        constexpr float kBandMinShareOfTallest = 0.35f;
+        constexpr int kBandMergeGapRows = 2;
+        constexpr float kBandMarginShare = 0.18f;
+
+        void RefineBoxes(const uint8_t *image, int width, int height, int stride,
+                         const std::vector<RotatedRect> &in, std::vector<RotatedRect> &out,
+                         std::vector<float> &profile, std::vector<float> &smoothed) {
+            out.clear();
+            out.reserve(in.size());
+            for (const auto &box: in) {
+                float angle = std::fmod(box.angle, 180.0f);
+                if (angle > 90.0f) angle -= 180.0f;
+                if (angle < -90.0f) angle += 180.0f;
+                float box_w = box.width;
+                float box_h = box.height;
+                if (std::fabs(std::fabs(angle) - 90.0f) < kRefineMaxAngleDeg) {
+                    std::swap(box_w, box_h);
+                } else if (std::fabs(angle) >= kRefineMaxAngleDeg) {
+                    out.push_back(box);
+                    continue;
+                }
+
+                const int x0 = std::clamp(static_cast<int>(box.center_x - box_w / 2.0f), 0, width - 2);
+                const int x1 = std::clamp(static_cast<int>(box.center_x + box_w / 2.0f), x0 + 1, width - 1);
+                const int y0 = std::clamp(static_cast<int>(box.center_y - box_h / 2.0f), 0, height - 1);
+                const int y1 = std::clamp(static_cast<int>(box.center_y + box_h / 2.0f), y0 + 1, height);
+                const int rows = y1 - y0;
+                if (rows < kRefineMinHeightPx) {
+                    out.push_back(box);
+                    continue;
+                }
+
+                profile.assign(rows, 0.0f);
+                float peak = 0.0f;
+                for (int y = y0; y < y1; ++y) {
+                    const uint8_t *row = image + static_cast<size_t>(y) * stride;
+                    int energy = 0;
+                    for (int x = x0; x < x1; ++x) {
+                        // Зелёный канал RGBA — как яркость.
+                        energy += std::abs(static_cast<int>(row[(x + 1) * 4 + 1]) - row[x * 4 + 1]);
+                    }
+                    const float value = static_cast<float>(energy) / (x1 - x0);
+                    profile[y - y0] = value;
+                    peak = std::max(peak, value);
+                }
+                if (peak <= 0.0f) {
+                    out.push_back(box);
+                    continue;
+                }
+
+                // Сглаживание по трём строкам: шум сенсора и JPEG колет
+                // профиль, и одна колючая строка в межстрочье рвала бы промежуток.
+                smoothed.assign(rows, 0.0f);
+                for (int r = 0; r < rows; ++r) {
+                    const float prev = profile[std::max(r - 1, 0)];
+                    const float next = profile[std::min(r + 1, rows - 1)];
+                    smoothed[r] = (prev + profile[r] + next) / 3.0f;
+                }
+                float floor_value = smoothed[0];
+                float peak_value = smoothed[0];
+                for (float v: smoothed) {
+                    floor_value = std::min(floor_value, v);
+                    peak_value = std::max(peak_value, v);
+                }
+                if (peak_value - floor_value <= kBandMinContrast) {
+                    out.push_back(box);
+                    continue;
+                }
+
+                // Полосы строк: подряд идущие строки профиля выше порога.
+                // Порог — от пола профиля, а не от нуля: у бледного текста
+                // на бежевом фон шумит на треть пика, и от нуля межстрочье
+                // не отличалось бы от строки.
+                const float threshold = floor_value + (peak_value - floor_value) * kBandShareOfPeak;
+                struct Band {
+                    int start;
+                    int end;
+                };
+                std::vector<Band> bands;
+                int run_start = -1;
+                for (int r = 0; r <= rows; ++r) {
+                    const bool ink = r < rows && smoothed[r] >= threshold;
+                    if (ink) {
+                        if (run_start < 0) run_start = r;
+                        continue;
+                    }
+                    if (run_start >= 0) {
+                        if (!bands.empty() && run_start - bands.back().end <= kBandMergeGapRows) {
+                            bands.back().end = r;
+                        } else {
+                            bands.push_back({run_start, r});
+                        }
+                        run_start = -1;
+                    }
+                }
+
+                int tallest = 0;
+                for (const auto &band: bands) tallest = std::max(tallest, band.end - band.start);
+                if (bands.empty() || tallest < kBandMinRows) {
+                    out.push_back(box);
+                    continue;
+                }
+
+                for (const auto &band: bands) {
+                    const int band_rows = band.end - band.start;
+                    // Огрызок соседней строки, задетый краем бокса, — не строка.
+                    if (band_rows < kBandMinRows || band_rows < tallest * kBandMinShareOfTallest) continue;
+                    const float margin = band_rows * kBandMarginShare;
+                    const float top = std::max(static_cast<float>(y0), y0 + band.start - margin);
+                    const float bottom = std::min(static_cast<float>(y1), y0 + band.end + margin);
+                    RotatedRect line;
+                    line.center_x = (x0 + x1) / 2.0f;
+                    line.center_y = (top + bottom) / 2.0f;
+                    line.width = static_cast<float>(x1 - x0);
+                    line.height = bottom - top;
+                    line.angle = 0.0f;
+                    line.confidence = box.confidence;
+                    out.push_back(line);
+                }
+            }
+        }
+
+        // Дубли после уточнения.
+        //
+        // Раздутые боксы соседних строк захватывают друг друга, и после
+        // разрезания одна строка приходит два-три раза: полной полосой из
+        // своего бокса и обрезком из чужого. Распознавать втрое больше
+        // незачем, а обрезок ещё и читается хуже полной строки и спорит с ней
+        // в разборе. Из перекрывающихся остаётся самый высокий — полная полоса.
+        constexpr float kDuplicateOverlapShare = 0.5f;
+
+        void DropDuplicateBoxes(std::vector<RotatedRect> &boxes, std::vector<size_t> &order) {
+            order.resize(boxes.size());
+            std::iota(order.begin(), order.end(), 0);
+            std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+                return boxes[a].height > boxes[b].height;
+            });
+
+            std::vector<RotatedRect> kept;
+            kept.reserve(boxes.size());
+            for (size_t idx: order) {
+                const auto &box = boxes[idx];
+                bool duplicate = false;
+                for (const auto &other: kept) {
+                    const float vertical = std::min(box.center_y + box.height / 2, other.center_y + other.height / 2) -
+                                           std::max(box.center_y - box.height / 2, other.center_y - other.height / 2);
+                    const float horizontal = std::min(box.center_x + box.width / 2, other.center_x + other.width / 2) -
+                                             std::max(box.center_x - box.width / 2, other.center_x - other.width / 2);
+                    if (vertical >= std::min(box.height, other.height) * kDuplicateOverlapShare &&
+                        horizontal >= std::min(box.width, other.width) * kDuplicateOverlapShare) {
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if (!duplicate) kept.push_back(box);
+            }
+            boxes.swap(kept);
+        }
+
         void ScaleBoxes(std::vector<RotatedRect> &boxes, float scale_factor) {
             for (auto &box: boxes) {
                 box.center_x *= scale_factor;
@@ -334,11 +512,15 @@ namespace ppocrv5 {
             return results_buffer_;
         }
 
+        RefineBoxes(processing_image_data, processing_width, processing_height, processing_stride,
+                    boxes, refined_boxes_buffer_, row_profile_buffer_, row_smoothed_buffer_);
+        DropDuplicateBoxes(refined_boxes_buffer_, sorted_indices_buffer_);
+
         filtered_boxes_buffer_.clear();
-        filtered_boxes_buffer_.reserve(boxes.size());
+        filtered_boxes_buffer_.reserve(refined_boxes_buffer_.size());
         const float min_box_area = use_tiny_image_path ? 16.0f : kMinBoxArea;
 
-        for (const auto &box: boxes) {
+        for (const auto &box: refined_boxes_buffer_) {
             RotatedRect scaled_box = box;
             if (processing_to_original_scale != 1.0f) {
                 scaled_box.center_x *= processing_to_original_scale;

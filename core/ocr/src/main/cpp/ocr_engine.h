@@ -77,6 +77,9 @@ namespace ppocrv5 {
         std::unique_ptr<TextRecognizer> recognizer_;
         std::vector<uint8_t> upscale_buffer_;
         std::vector<RotatedRect> filtered_boxes_buffer_;
+        std::vector<RotatedRect> refined_boxes_buffer_;
+        std::vector<float> row_profile_buffer_;
+        std::vector<float> row_smoothed_buffer_;
         std::vector<size_t> sorted_indices_buffer_;
         std::vector<size_t> recognition_order_buffer_;
         std::vector<OcrResult> results_buffer_;

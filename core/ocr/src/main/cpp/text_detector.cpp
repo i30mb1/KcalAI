@@ -53,7 +53,11 @@ namespace ppocrv5 {
     namespace {
 
         constexpr int kDetInputSize = 640;
-        constexpr float kBinaryThreshold = 0.1f;
+        // Порог бинаризации карты вероятностей. У PaddleOCR по умолчанию 0.3;
+        // при 0.1 пятна строк раздувались, и в плотном абзаце соседние строки
+        // сливались в один бокс высотой в полторы-две строки — распознаватель
+        // получал в полоску 48 px две строки разом и отдавал кашу.
+        constexpr float kBinaryThreshold = 0.3f;
         constexpr float kBoxThreshold = 0.3f;
         constexpr float kMinBoxArea = 50.0f;
         constexpr float kUnclipRatio = 1.5f;

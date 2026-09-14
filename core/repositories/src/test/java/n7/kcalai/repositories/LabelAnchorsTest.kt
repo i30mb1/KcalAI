@@ -85,6 +85,45 @@ class LabelAnchorsTest {
         assertEquals(180, reading.draft.carb100)
     }
 
+    /**
+     * Напиток «Ягодный микс»: жиров на этикетке нет вовсе, зато в составе
+     * «глюкозно-фруктозный сироп». «Сироп» отличается от «жиров» двумя
+     * буквами, и нечёткое сравнение принимало его за подпись без значения —
+     * форма вставала на «Ж —», хотя правильный ответ ноль.
+     */
+    @Test
+    fun `слово из состава, похожее на подпись, подписью не считается`() {
+        val lines = listOf(
+            line("сахар, глюкозно-фруктозный сироп", y = 60f),
+            line("Пищевая ценность:", y = 100f),
+            line("углеводы, г/100 мл", y = 140f), line("6,0", y = 140f, x = 300f),
+            line("Энергетическая ценность:", y = 180f),
+            line("ккал/100 мл", y = 220f), line("25,0", y = 220f, x = 300f),
+            line("кДж/100 мл", y = 260f), line("110,0", y = 260f, x = 300f),
+        )
+
+        val reading = LabelParser.parseLines(lines)
+        assertTrue(reading.confident)
+        assertEquals(0, reading.draft.fat100)
+        assertEquals(0, reading.draft.prot100)
+        assertEquals(600, reading.draft.carb100)
+    }
+
+    @Test
+    fun `точная подпись без числа нулём не становится`() {
+        val lines = listOf(
+            line("Белки", y = 100f), line("17,2", y = 100f, x = 300f),
+            // Число у жиров закрыл блик: подпись есть, значения нет.
+            line("Жиры", y = 140f),
+            line("Углеводы", y = 180f), line("1,8", y = 180f, x = 300f),
+            line("121 ккал", y = 220f),
+        )
+
+        val reading = LabelParser.parseLines(lines)
+        assertFalse(reading.confident)
+        assertEquals(null, reading.draft.fat100)
+    }
+
     @Test
     fun `берётся колонка, что ближе к подписи`() {
         // Слева «на 100 г», справа «на порцию 40 г».

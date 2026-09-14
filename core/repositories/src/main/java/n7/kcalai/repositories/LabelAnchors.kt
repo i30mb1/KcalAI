@@ -280,11 +280,19 @@ internal object LabelAnchors {
         for (row in rows) {
             val hits = anchorsIn(row.text)
             for (hit in hits) {
-                seen += hit.anchor
+                // Нечёткая подпись считается увиденной, только когда при ней
+                // нашлось число. Состав этикетки полон слов в двух буквах
+                // от подписи: «сироп» от «жиров», «белый» от «белки», —
+                // и распознаватель теперь читает состав целиком. Считать такое
+                // подписью без значения значило запирать форму на каждом сиропе.
+                // Точная подпись — другое дело: «Жиры» без числа — это
+                // не прочитанное число, и ноль туда ставить нельзя.
+                if (hit.exact) seen += hit.anchor
                 if (hit.anchor in values) continue
                 val found = valueFor(hit, row, rows, taken, column, hits.size == 1) ?: continue
                 // Первое найденное выигрывает: строки идут сверху вниз, а таблица
                 // читается в том же порядке.
+                seen += hit.anchor
                 values[hit.anchor] = found.value
                 taken += found.row to found.at
             }
@@ -364,7 +372,8 @@ internal object LabelAnchors {
     }
 
     /** Найденная подпись и то, где она кончилась: значение стоит правее неё. */
-    private class Hit(val anchor: Anchor, val after: Int)
+    /** @param exact подпись совпала буква в букву, а не по расстоянию Левенштейна */
+    private class Hit(val anchor: Anchor, val after: Int, val exact: Boolean)
 
     /**
      * Все подписи, которые есть в строке, а не первая попавшаяся.
@@ -381,8 +390,8 @@ internal object LabelAnchors {
         val tokens = tokenize(text)
         return Anchor.entries.mapNotNull { anchor ->
             val words = WORDS[anchor].orEmpty()
-            val end = exactEnd(text, words) ?: fuzzyEnd(tokens, words)
-            end?.let { Hit(anchor, it) }
+            exactEnd(text, words)?.let { Hit(anchor, it, exact = true) }
+                ?: fuzzyEnd(tokens, words)?.let { Hit(anchor, it, exact = false) }
         }
     }
 

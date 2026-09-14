@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <cstring>
 #include <fstream>
 #include <sstream>
@@ -60,6 +61,27 @@ namespace ppocrv5 {
         constexpr int kRecInputHeight = 48;
         constexpr int kRecInputWidth = 320;
         constexpr int kBlankIndex = 0;
+
+        // Модель принимает полоску 48x320 фиксированно. Строка длиннее 320/48
+        // высот (~6.7) в неё не помещается и раньше сжималась по горизонтали:
+        // строка КБЖУ из абзаца этикетки («белки - 2,5 г, углеводы - 76,0 г...»)
+        // это ~27 высот, сжатие вчетверо, и CTC отдавал «бе-25-7». Такие строки
+        // рендерятся в полосу настоящей ширины и режутся на куски по пробелам.
+        // Лёгкое сжатие модель переносит: обучена на нём. Полтора раза —
+        // граница, до которой строка идёт в один проход, а кусок при нарезке
+        // может быть шире 320 и ужиматься.
+        constexpr float kMaxSqueeze = 1.5f;
+        constexpr int kChunkMaxPx = static_cast<int>(kRecInputWidth * kMaxSqueeze);
+        // Длиннее полосу не растим: 53 высоты — это уже две газетные строки.
+        constexpr int kMaxStripWidth = kRecInputWidth * 8;
+        // В каком окне перед границей куска искать пробел. Слово в этом шрифте
+        // редко шире полутора высот; два — с запасом.
+        constexpr int kCutSearchPx = kRecInputHeight * 2;
+        // Тихая колонка — тише этой доли медианной энергии строки.
+        constexpr float kQuietShare = 0.15f;
+        // Уже этого промежуток — просвет между буквами, не пробел: при высоте
+        // 48 просветы доходят до четырёх колонок, пробел — от восьми.
+        constexpr int kMinGapPx = 6;
 
         constexpr float kRecMean = 127.5f;
         constexpr float kRecInvStd = 1.0f / 127.5f;
@@ -310,6 +332,9 @@ namespace ppocrv5 {
 
         alignas(64) std::vector<float> input_buffer_;
         alignas(64) std::vector<float> output_buffer_;
+        // Полоса широкой строки в её настоящую ширину — см. RecognizeWide.
+        alignas(64) std::vector<float> strip_buffer_;
+        std::vector<float> column_energy_;
 
         bool input_is_float32_ = true;
         bool output_is_float32_ = true;
@@ -546,8 +571,20 @@ namespace ppocrv5 {
             return true;
         }
 
+        // Ориентированное отношение ширины строки к высоте: длинная сторона к короткой.
+        static float BoxAspect(const RotatedRect &box) {
+            const float long_side = std::max(box.width, box.height);
+            const float short_side = std::max(std::min(box.width, box.height), 1.0f);
+            return long_side / short_side;
+        }
+
+        // Выпрямляет строку в полосу высотой kRecInputHeight и шириной
+        // по пропорции, но не больше max_width; dst — буфер с шагом строки
+        // dst_stride_px пикселей (по три канала). Остаток строк за target_width
+        // обнуляется, чтобы модель не видела мусор прошлого кадра.
         void CropAndRotate(const uint8_t *__restrict__ image_data, int width, int height, int stride,
-                           const RotatedRect &box, int &target_width) {
+                           const RotatedRect &box, float *__restrict__ dst, int dst_stride_px,
+                           int max_width, int &target_width) {
             const float cos_angle = std::cos(box.angle * M_PI / 180.0f);
             const float sin_angle = std::sin(box.angle * M_PI / 180.0f);
             const float half_w = box.width / 2.0f;
@@ -582,7 +619,7 @@ namespace ppocrv5 {
 
             const float aspect_ratio = src_width / std::max(src_height, 1.0f);
             target_width = static_cast<int>(kRecInputHeight * aspect_ratio);
-            target_width = std::clamp(target_width, 1, kRecInputWidth);
+            target_width = std::clamp(target_width, 1, max_width);
 
             const int max_x = width - 2;
             const int max_y = height - 2;
@@ -600,7 +637,7 @@ namespace ppocrv5 {
                     min_corner_x >= 0.0f && max_corner_x < static_cast<float>(max_x) &&
                     min_corner_y >= 0.0f && max_corner_y < static_cast<float>(max_y);
             const bool needs_full_clear = !fully_inside_image;
-            const bool needs_row_tail_clear = target_width < kRecInputWidth;
+            const bool needs_row_tail_clear = target_width < dst_stride_px;
 
             const float x0 = corners[0], y0 = corners[1];
             const float x1 = corners[2], y1 = corners[3];
@@ -614,9 +651,8 @@ namespace ppocrv5 {
             const float a10 = (y1 - y0) * inv_dst_w;
             const float a11 = (y3 - y0) * inv_dst_h;
 
-            float *__restrict__ dst = input_buffer_.data();
             if (needs_full_clear) {
-                const size_t buffer_size = input_buffer_.size();
+                const size_t buffer_size = static_cast<size_t>(kRecInputHeight) * dst_stride_px * 3;
 #if USE_NEON
                 const float32x4_t v_zero = vdupq_n_f32(0.0f);
                 size_t i = 0;
@@ -630,18 +666,18 @@ namespace ppocrv5 {
                     dst[i] = 0.0f;
                 }
 #else
-                std::fill(input_buffer_.begin(), input_buffer_.end(), 0.0f);
+                std::fill(dst, dst + buffer_size, 0.0f);
 #endif
             }
 
             for (int dy = 0; dy < kRecInputHeight; ++dy) {
-                float *__restrict__ dst_row = dst + dy * kRecInputWidth * 3;
+                float *__restrict__ dst_row = dst + static_cast<size_t>(dy) * dst_stride_px * 3;
                 const float base_sx = x0 + a01 * dy;
                 const float base_sy = y0 + a11 * dy;
 
                 if (!needs_full_clear && needs_row_tail_clear) {
                     std::fill(dst_row + target_width * 3,
-                              dst_row + kRecInputWidth * 3,
+                              dst_row + dst_stride_px * 3,
                               0.0f);
                 }
 
@@ -747,25 +783,18 @@ namespace ppocrv5 {
             return result;
         }
 
-        RecognitionResult Recognize(const uint8_t *image_data, int width, int height, int stride,
-                                    const RotatedRect &box, float *recognition_time_ms) {
-            auto start_time = std::chrono::high_resolution_clock::now();
-
-            int target_width = kRecInputWidth;
-            CropAndRotate(image_data, width, height, stride, box, target_width);
-
+        // Прогоняет модель по тому, что лежит в input_buffer_.
+        RecognitionResult RunModel() {
             auto write_result = input_buffers_[0].Write<float>(
                     absl::MakeConstSpan(input_buffer_.data(), input_buffer_.size()));
             if (!write_result) {
                 LOGE(TAG, "Failed to write input buffer");
-                if (recognition_time_ms) *recognition_time_ms = 0.0f;
                 return {};
             }
 
             auto run_result = compiled_model_->Run(input_buffers_, output_buffers_);
             if (!run_result) {
                 LOGE(TAG, "Inference failed: %s", run_result.Error().Message().c_str());
-                if (recognition_time_ms) *recognition_time_ms = 0.0f;
                 return {};
             }
 
@@ -773,12 +802,172 @@ namespace ppocrv5 {
                     absl::MakeSpan(output_buffer_.data(), output_buffer_.size()));
             if (!read_result) {
                 LOGE(TAG, "Failed to read output buffer");
-                if (recognition_time_ms) *recognition_time_ms = 0.0f;
                 return {};
             }
 
             RecognitionResult result;
             result.text = CtcDecode(output_buffer_.data(), &result.confidence);
+            return result;
+        }
+
+        // Где резать перед границей end: в середине самого широкого тихого
+        // промежутка окна [lowest, end). Просвет между буквами тоже тих,
+        // но узок — одна-три колонки; пробел между словами — шесть и больше.
+        // Выбирать самую тихую колонку значило резать посреди «продукта».
+        // Промежутка нет вовсе — режем по самой тихой колонке, как умеем.
+        int FindCut(int lowest, int end, float quiet, bool &at_gap) const {
+            at_gap = false;
+            int best_start = -1;
+            int best_width = 0;
+            int run_start = -1;
+            for (int x = lowest; x <= end; ++x) {
+                const bool is_quiet = x < end && column_energy_[x] <= quiet;
+                if (is_quiet) {
+                    if (run_start < 0) run_start = x;
+                    continue;
+                }
+                if (run_start >= 0) {
+                    const int run_width = x - run_start;
+                    // Равные по ширине — ближе к границе: куски ровнее.
+                    if (run_width >= best_width && run_width >= kMinGapPx) {
+                        best_width = run_width;
+                        best_start = run_start;
+                    }
+                    run_start = -1;
+                }
+            }
+            if (best_start >= 0) {
+                at_gap = true;
+                return best_start + best_width / 2;
+            }
+
+            int best = end;
+            float best_energy = std::numeric_limits<float>::max();
+            for (int x = end - 1; x >= lowest; --x) {
+                if (column_energy_[x] < best_energy) {
+                    best_energy = column_energy_[x];
+                    best = x;
+                }
+            }
+            return best;
+        }
+
+        // Кусок полосы [start, end) в буфер модели. Шире 320 — ужимается
+        // по горизонтали линейной интерполяцией, до полутора раз, см. kMaxSqueeze.
+        void CopyChunk(const float *strip, int strip_width, int start, int end) {
+            const int chunk_width = end - start;
+            const int target_width = std::min(chunk_width, kRecInputWidth);
+            float *dst = input_buffer_.data();
+            for (int dy = 0; dy < kRecInputHeight; ++dy) {
+                float *dst_row = dst + static_cast<size_t>(dy) * kRecInputWidth * 3;
+                const float *src_row = strip + (static_cast<size_t>(dy) * strip_width + start) * 3;
+                if (target_width == chunk_width) {
+                    std::copy(src_row, src_row + chunk_width * 3, dst_row);
+                } else {
+                    const float step = static_cast<float>(chunk_width - 1) / std::max(target_width - 1, 1);
+                    for (int dx = 0; dx < target_width; ++dx) {
+                        const float sx = dx * step;
+                        const int x0 = std::min(static_cast<int>(sx), chunk_width - 2);
+                        const float t = sx - x0;
+                        const float *p0 = src_row + x0 * 3;
+                        const float *p1 = p0 + 3;
+                        float *d = dst_row + dx * 3;
+                        d[0] = p0[0] + (p1[0] - p0[0]) * t;
+                        d[1] = p0[1] + (p1[1] - p0[1]) * t;
+                        d[2] = p0[2] + (p1[2] - p0[2]) * t;
+                    }
+                }
+                std::fill(dst_row + target_width * 3, dst_row + kRecInputWidth * 3, 0.0f);
+            }
+        }
+
+        // Широкая строка: полоса настоящей ширины, нарезанная на куски
+        // по kRecInputWidth в самых «пустых» колонках — то есть по пробелам.
+        //
+        // Пустота колонки меряется суммой вертикальных перепадов яркости:
+        // у буквы они есть при любой полярности текста, у пробела — нет,
+        // а фон, будь он хоть бежевым, хоть чёрным, перепадов не даёт. Резать
+        // в самом тихом месте окна перед границей — значит резать между словами,
+        // а не посреди «углеводы». Куски распознаются порознь и склеиваются
+        // через пробел; уверенность — средняя по кускам.
+        RecognitionResult RecognizeWide(const uint8_t *image_data, int width, int height, int stride,
+                                        const RotatedRect &box, float aspect) {
+            const int strip_width = std::min(static_cast<int>(kRecInputHeight * aspect), kMaxStripWidth);
+            strip_buffer_.assign(static_cast<size_t>(kRecInputHeight) * strip_width * 3, 0.0f);
+
+            int rendered_width = strip_width;
+            CropAndRotate(image_data, width, height, stride, box,
+                          strip_buffer_.data(), strip_width, strip_width, rendered_width);
+
+            column_energy_.assign(rendered_width, 0.0f);
+            const float *strip = strip_buffer_.data();
+            for (int dy = 1; dy < kRecInputHeight; ++dy) {
+                const float *row = strip + static_cast<size_t>(dy) * strip_width * 3;
+                const float *above = row - static_cast<size_t>(strip_width) * 3;
+                for (int dx = 0; dx < rendered_width; ++dx) {
+                    // Зелёный канал — как яркость: считать три канала незачем.
+                    column_energy_[dx] += std::fabs(row[dx * 3 + 1] - above[dx * 3 + 1]);
+                }
+            }
+
+            // «Тихая» колонка — тише, чем доля от медианной по строке. Порог
+            // относительный: у бледного текста на бежевом перепады слабее
+            // в разы, и абсолютное число резало бы его как сплошной пробел.
+            std::vector<float> sorted(column_energy_.begin(), column_energy_.begin() + rendered_width);
+            std::nth_element(sorted.begin(), sorted.begin() + sorted.size() / 2, sorted.end());
+            const float quiet = sorted[sorted.size() / 2] * kQuietShare;
+
+            RecognitionResult total;
+            float confidence_sum = 0.0f;
+            int chunks = 0;
+
+            int start = 0;
+            bool join_with_space = false;
+            while (start < rendered_width) {
+                int end = std::min(start + kChunkMaxPx, rendered_width);
+                bool at_gap = true;
+                if (end < rendered_width) {
+                    // Не раньше половины куска: иначе рваная строка из одних
+                    // пробелов превратится в десяток огрызков.
+                    const int lowest = std::max(start + kChunkMaxPx / 2, end - kCutSearchPx);
+                    end = FindCut(lowest, end, quiet, at_gap);
+                }
+
+                CopyChunk(strip, strip_width, start, end);
+                RecognitionResult part = RunModel();
+                LOGD(TAG, "wide: strip=%d quiet=%.3f chunk=[%d,%d)%s -> '%s' (%.2f)",
+                     rendered_width, quiet, start, end, at_gap ? "" : " no-gap",
+                     part.text.c_str(), part.confidence);
+                if (!part.text.empty()) {
+                    // Резали по пробелу — он и возвращается. Резали по живому —
+                    // склеиваем встык, иначе «проду кта».
+                    if (!total.text.empty() && join_with_space) total.text += ' ';
+                    total.text += part.text;
+                    confidence_sum += part.confidence;
+                    ++chunks;
+                }
+                join_with_space = at_gap;
+                start = end;
+            }
+
+            total.confidence = chunks > 0 ? confidence_sum / chunks : 0.0f;
+            return total;
+        }
+
+        RecognitionResult Recognize(const uint8_t *image_data, int width, int height, int stride,
+                                    const RotatedRect &box, float *recognition_time_ms) {
+            auto start_time = std::chrono::high_resolution_clock::now();
+
+            RecognitionResult result;
+            const float aspect = BoxAspect(box);
+            if (aspect * kRecInputHeight > kChunkMaxPx) {
+                result = RecognizeWide(image_data, width, height, stride, box, aspect);
+            } else {
+                int target_width = kRecInputWidth;
+                CropAndRotate(image_data, width, height, stride, box,
+                              input_buffer_.data(), kRecInputWidth, kRecInputWidth, target_width);
+                result = RunModel();
+            }
 
             auto end_time = std::chrono::high_resolution_clock::now();
             if (recognition_time_ms) {
