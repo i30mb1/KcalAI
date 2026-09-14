@@ -52,7 +52,10 @@ namespace ppocrv5 {
 
     namespace {
 
-        constexpr int kDetInputSize = 640;
+        // Размер входа по умолчанию — если модель не сообщила свой. Настоящий
+        // читается из тензора: модели пересобираются под другой вход
+        // (см. .github/workflows/convert-ocr-det.yml), и код под это править нельзя.
+        constexpr int kDefaultDetInputSize = 640;
         // Порог бинаризации карты вероятностей. У PaddleOCR по умолчанию 0.3;
         // при 0.1 пятна строк раздувались, и в плотном абзаце соседние строки
         // сливались в один бокс высотой в полторы-две строки — распознаватель
@@ -107,6 +110,10 @@ namespace ppocrv5 {
         std::vector<RotatedRect> boxes_buffer_;
         std::vector<RotatedRect> filtered_boxes_buffer_;
 
+        // Вход модели: высота и ширина, из тензора.
+        int input_h_ = kDefaultDetInputSize;
+        int input_w_ = kDefaultDetInputSize;
+
         // Quantization parameters
         bool input_is_int8_ = false;
         bool input_is_uint8_ = false;
@@ -158,7 +165,16 @@ namespace ppocrv5 {
             compiled_model_ = std::move(*model_result);
             LOGD(TAG, "CompiledModel created successfully with C++ API");
 
-            std::vector<int> input_dims = {1, kDetInputSize, kDetInputSize, 3};
+            if (auto declared = compiled_model_->GetInputTensorType(0, 0)) {
+                auto dims = declared->Layout().Dimensions();
+                if (dims.size() == 4 && dims[1] > 0 && dims[2] > 0) {
+                    input_h_ = static_cast<int>(dims[1]);
+                    input_w_ = static_cast<int>(dims[2]);
+                }
+            }
+            LOGD(TAG, "Detector input %dx%d (HxW)", input_h_, input_w_);
+
+            std::vector<int> input_dims = {1, input_h_, input_w_, 3};
             auto resize_result = compiled_model_->ResizeInputTensor(0, absl::MakeConstSpan(input_dims));
             if (!resize_result) {
                 LOGE(TAG, "Failed to resize input tensor: %s",
@@ -195,12 +211,13 @@ namespace ppocrv5 {
             LOGD(TAG, "Created %zu input buffers, %zu output buffers",
                  input_buffers_.size(), output_buffers_.size());
 
-            resized_buffer_.resize(kDetInputSize * kDetInputSize * 4);
-            normalized_buffer_.resize(kDetInputSize * kDetInputSize * 3);
-            binary_map_.resize(kDetInputSize * kDetInputSize);
-            prob_map_.resize(kDetInputSize * kDetInputSize);
-            box_score_sum_integral_.resize((kDetInputSize + 1) * (kDetInputSize + 1));
-            box_score_count_integral_.resize((kDetInputSize + 1) * (kDetInputSize + 1));
+            const size_t pixels = static_cast<size_t>(input_h_) * input_w_;
+            resized_buffer_.resize(pixels * 4);
+            normalized_buffer_.resize(pixels * 3);
+            binary_map_.resize(pixels);
+            prob_map_.resize(pixels);
+            box_score_sum_integral_.resize(static_cast<size_t>(input_h_ + 1) * (input_w_ + 1));
+            box_score_count_integral_.resize(static_cast<size_t>(input_h_ + 1) * (input_w_ + 1));
             boxes_buffer_.reserve(128);
             filtered_boxes_buffer_.reserve(128);
 
@@ -279,13 +296,13 @@ namespace ppocrv5 {
 
             if (input_is_quantized_) {
                 image_utils::LetterboxResize(image_data, width, height, stride,
-                                             resized_buffer_.data(), kDetInputSize, kDetInputSize,
+                                             resized_buffer_.data(), input_w_, input_h_,
                                              &letterbox_info_);
                 PrepareQuantizedInput();
             } else {
                 image_utils::LetterboxResizeNormalizeImageNet(
                         image_data, width, height, stride,
-                        normalized_buffer_.data(), kDetInputSize, kDetInputSize,
+                        normalized_buffer_.data(), input_w_, input_h_,
                         &letterbox_info_);
             }
 
@@ -317,7 +334,7 @@ namespace ppocrv5 {
                 return filtered_boxes_buffer_;
             }
 
-            const int total_pixels = kDetInputSize * kDetInputSize;
+            const int total_pixels = input_h_ * input_w_;
             float *prob_map = prob_map_.data();
 
 #ifndef NDEBUG
@@ -342,7 +359,7 @@ namespace ppocrv5 {
             auto postprocess_start = std::chrono::high_resolution_clock::now();
 #endif
             postprocess::FindContours(binary_map_.data(),
-                                      kDetInputSize, kDetInputSize,
+                                      input_w_, input_h_,
                                       &contour_scratch_);
             const auto &contours = contour_scratch_.contours;
 #ifndef NDEBUG
@@ -434,7 +451,7 @@ namespace ppocrv5 {
 
             if (input_is_int8_) {
                 int8_t *dst = reinterpret_cast<int8_t *>(normalized_buffer_.data());
-                for (int i = 0; i < kDetInputSize * kDetInputSize; ++i) {
+                for (int i = 0; i < input_h_ * input_w_; ++i) {
                     float r = src[i * 4 + 0] / 255.0f;
                     float g = src[i * 4 + 1] / 255.0f;
                     float b = src[i * 4 + 2] / 255.0f;
@@ -453,7 +470,7 @@ namespace ppocrv5 {
                 }
             } else {
                 uint8_t *dst = reinterpret_cast<uint8_t *>(normalized_buffer_.data());
-                for (int i = 0; i < kDetInputSize * kDetInputSize; ++i) {
+                for (int i = 0; i < input_h_ * input_w_; ++i) {
                     float r = src[i * 4 + 0] / 255.0f;
                     float g = src[i * 4 + 1] / 255.0f;
                     float b = src[i * 4 + 2] / 255.0f;
@@ -475,8 +492,8 @@ namespace ppocrv5 {
 
         void PrepareFloatInput() {
             image_utils::NormalizeImageNet(resized_buffer_.data(),
-                                           kDetInputSize, kDetInputSize,
-                                           kDetInputSize * 4,
+                                           input_w_, input_h_,
+                                           input_w_ * 4,
                                            normalized_buffer_.data());
         }
 
@@ -487,7 +504,7 @@ namespace ppocrv5 {
             }
 
             if (input_is_quantized_) {
-                size_t data_size = kDetInputSize * kDetInputSize * 3;
+                size_t data_size = static_cast<size_t>(input_h_) * input_w_ * 3;
                 if (input_is_int8_) {
                     return input_buffers_[0].Write<int8_t>(
                             absl::MakeConstSpan(reinterpret_cast<const int8_t *>(normalized_buffer_.data()),
@@ -509,7 +526,7 @@ namespace ppocrv5 {
                                           "No output buffers available");
             }
 
-            const int total_pixels = kDetInputSize * kDetInputSize;
+            const int total_pixels = input_h_ * input_w_;
             float *prob_map = prob_map_.data();
 
             if (output_is_quantized_) {
@@ -649,13 +666,13 @@ namespace ppocrv5 {
         }
 
         void BuildBoxScoreIntegral(const float *prob_map) {
-            constexpr int kIntegralStride = kDetInputSize + 1;
+            const int kIntegralStride = input_w_ + 1;
 
             std::fill_n(box_score_sum_integral_.data(), kIntegralStride, 0.0f);
             std::fill_n(box_score_count_integral_.data(), kIntegralStride, 0u);
 
-            for (int y = 0; y < kDetInputSize; ++y) {
-                const size_t src_row_offset = static_cast<size_t>(y) * kDetInputSize;
+            for (int y = 0; y < input_h_; ++y) {
+                const size_t src_row_offset = static_cast<size_t>(y) * input_w_;
                 const uint8_t *binary_row = binary_map_.data() + src_row_offset;
                 const float *prob_row = prob_map + src_row_offset;
 
@@ -666,7 +683,7 @@ namespace ppocrv5 {
 
                 float row_sum = 0.0f;
                 uint32_t row_count = 0;
-                for (int x = 0; x < kDetInputSize; ++x) {
+                for (int x = 0; x < input_w_; ++x) {
                     const uint32_t mask = binary_row[x] > 0 ? 1u : 0u;
                     row_sum += mask ? prob_row[x] : 0.0f;
                     row_count += mask;
@@ -680,15 +697,15 @@ namespace ppocrv5 {
 
         float CalculateBoxScore(const postprocess::ContourRange &contour) const {
             int x_start = std::max(0, static_cast<int>(contour.min_x));
-            int x_end = std::min(kDetInputSize - 1, static_cast<int>(contour.max_x));
+            int x_end = std::min(input_w_ - 1, static_cast<int>(contour.max_x));
             int y_start = std::max(0, static_cast<int>(contour.min_y));
-            int y_end = std::min(kDetInputSize - 1, static_cast<int>(contour.max_y));
+            int y_end = std::min(input_h_ - 1, static_cast<int>(contour.max_y));
 
             if (x_start > x_end || y_start > y_end) {
                 return 0.0f;
             }
 
-            constexpr int kIntegralStride = kDetInputSize + 1;
+            const int kIntegralStride = input_w_ + 1;
             const int x0 = x_start;
             const int y0 = y_start;
             const int x1 = x_end + 1;
