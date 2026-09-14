@@ -10,6 +10,7 @@ fun Application.kcalServer(db: Db, dataDir: File) {
     routing {
         route("/v1") {
             productRoutes(db)
+            contributionRoutes(db)
         }
     }
 }
