@@ -62,7 +62,14 @@ sealed interface Overlay {
      * когда числа прочитались, но не сошлись между собой: форма покажет их чипсами.
      */
     data class NewProduct(
-        val gtin: String,
+        /**
+         * Штрих-код, если продукт пришёл со скана.
+         *
+         * `null` — этикетку снимали напрямую, кода нет и не будет. Такой продукт
+         * сохраняется только себе: вкладом он бесполезен, потому что найти его
+         * у других нечем.
+         */
+        val gtin: String?,
         val draft: ProductDraft = ProductDraft.EMPTY,
         val numbers: List<String> = emptyList(),
         /** Строки с этикетки, которые могут быть названием. Подставляются тапом. */
@@ -80,7 +87,18 @@ sealed interface Overlay {
      * Имя в нём особенно ценно: распознаватель латинский и кириллицу не прочитает
      * никогда, так что название — единственное, что может прийти только от человека.
      */
-    data class LabelScan(val gtin: String, val current: ProductDraft) : Overlay
+    data class LabelScan(val gtin: String?, val current: ProductDraft) : Overlay
+
+    /**
+     * Съёмка этикетки вхолостую — чтобы посмотреть, что вообще читается.
+     *
+     * Обычный путь к распознаванию идёт через промах штрих-кода, и проверить
+     * разбор на конкретной пачке значит каждый раз найти товар, которого нет
+     * в базе. Здесь то же распознавание запускается сразу и показывает себя
+     * целиком: строки, маршрут разбора, что принято за ноль. В дневник отсюда
+     * не попадает ничего.
+     */
+    data object LabelDebug : Overlay
 }
 
 /** Всё, что посчитали модели персонализации для этого дня. */
@@ -414,7 +432,7 @@ class DiaryViewModel(
      * в очередь отправки — чтобы следующий человек с той же пачкой форму уже не видел.
      * Валидация цифр осталась в форме: сюда попадает только прошедшее её.
      */
-    fun onSaveNewProduct(gtin: String, name: String, nutriments: Nutriments, servingG: Int?) {
+    fun onSaveNewProduct(gtin: String?, name: String, nutriments: Nutriments, servingG: Int?) {
         overlay.value = Overlay.None
 
         viewModelScope.launch {
@@ -433,8 +451,21 @@ class DiaryViewModel(
     }
 
     /** Человек пошёл снимать этикетку. Набранное едет с ним — см. [Overlay.LabelScan]. */
-    fun onScanLabel(gtin: String, current: ProductDraft) {
+    fun onScanLabel(gtin: String?, current: ProductDraft) {
         overlay.value = Overlay.LabelScan(gtin, current)
+    }
+
+    /**
+     * Съёмка этикетки как самостоятельный способ добавить еду.
+     *
+     * До сих пор к распознаванию вёл только промах штрих-кода, и это неверно
+     * описывало реальность: развесное, домашнее, вскрытая упаковка, товар,
+     * которого нет ни в одной базе, — там кода нет вовсе, а таблица пищевой
+     * ценности есть. Заставлять человека сначала сканировать несуществующий
+     * код, чтобы добраться до камеры, незачем.
+     */
+    fun onOpenLabelScan() {
+        overlay.value = Overlay.LabelScan(gtin = null, current = ProductDraft.EMPTY)
     }
 
     /**
@@ -451,7 +482,7 @@ class DiaryViewModel(
      * сверять подставленное с упаковкой всё равно человеку, и если значение
      * встало не туда, поправить его тапом быстрее, чем набирать заново.
      */
-    fun onLabelRead(gtin: String, current: ProductDraft, reading: LabelReading) {
+    fun onLabelRead(gtin: String?, current: ProductDraft, reading: LabelReading) {
         overlay.value = Overlay.NewProduct(
             gtin = gtin,
             draft = reading.draft.copy(
@@ -463,9 +494,45 @@ class DiaryViewModel(
         )
     }
 
-    /** Съёмку закрыли, ничего не сняв. Форма обязана вернуться такой, какой была. */
-    fun onLabelCancelled(gtin: String, current: ProductDraft) {
-        overlay.value = Overlay.NewProduct(gtin = gtin, draft = current)
+    /**
+     * Съёмку закрыли, ничего не сняв. Форма обязана вернуться такой, какой была.
+     *
+     * Кроме одного случая: человек шёл прямо в камеру с пустого экрана и передумал.
+     * Возвращать его в пустую форму нового продукта значит отвечать на «отмена»
+     * лишним шагом — тогда просто закрываем.
+     */
+    fun onLabelCancelled(gtin: String?, current: ProductDraft) {
+        overlay.value = if (gtin == null && current == ProductDraft.EMPTY) {
+            Overlay.None
+        } else {
+            Overlay.NewProduct(gtin = gtin, draft = current)
+        }
+    }
+
+    // --- Проверка распознавания этикетки ----------------------------------------------
+
+    fun onOpenLabelDebug() {
+        overlay.value = Overlay.LabelDebug
+    }
+
+    /**
+     * Тестовая съёмка закончилась кнопкой «Готово».
+     *
+     * В дневник и в справочник отсюда не уходит ничего — смысл ровно в одном:
+     * сложить разбор в лог целиком, чтобы его можно было разглядывать после,
+     * не держа пачку перед камерой.
+     */
+    fun onLabelDebugRead(reading: LabelReading) {
+        overlay.value = Overlay.None
+
+        val draft = reading.draft
+        Log.i(TAG, "этикетка: ${reading.trace.route.title}, " +
+            "${if (reading.confident) "сошлось" else "не сошлось"}; " +
+            "ккал=${draft.kcal100} Б=${draft.prot100} Ж=${draft.fat100} У=${draft.carb100} (сотые грамма)")
+        Log.i(TAG, "этикетка, строки: ${reading.trace.lines.joinToString(" | ")}")
+        if (reading.trace.zeroedLabels.isNotEmpty()) {
+            Log.i(TAG, "этикетка, принято за ноль: ${reading.trace.zeroedLabels.joinToString(", ")}")
+        }
     }
 
     /**

@@ -2,6 +2,7 @@ package n7.kcalai.repositories
 
 import n7.kcalai.model.TextLine
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -112,7 +113,7 @@ class LabelAnchorsTest {
     }
 
     @Test
-    fun `без подписей работает арифметика`() {
+    fun `без подписей работает арифметика, но за неё расписывается человек`() {
         // Латинский распознаватель: цифры есть, слов нет.
         val lines = listOf(
             line("506", y = 100f), line("121", y = 140f),
@@ -120,8 +121,14 @@ class LabelAnchorsTest {
         )
 
         val reading = LabelParser.parseLines(lines)
-        assertTrue(reading.confident)
+
+        // Форма заполняется — ради этого перебор и нужен.
         assertEquals(121, reading.draft.kcal100)
+        assertEquals(1720, reading.draft.prot100)
+
+        // А вот закрывать съёмку сама арифметика не вправе: сойтись с калориями
+        // может и случайная тройка чисел, и отличить её от прочитанной нельзя.
+        assertFalse("подобранное перебором подтверждает человек", reading.confident)
     }
 
     private fun line(text: String, y: Float, x: Float = 100f, height: Float = 20f) =

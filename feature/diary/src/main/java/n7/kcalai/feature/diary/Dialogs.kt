@@ -231,7 +231,7 @@ fun GramsEditor(
  */
 @Composable
 fun NewProductDialog(
-    gtin: String,
+    gtin: String?,
     draft: ProductDraft,
     numbers: List<String>,
     names: List<String>,
@@ -272,8 +272,15 @@ fun NewProductDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    "Код $gtin не нашёлся. Заполните КБЖУ на 100 г с упаковки — " +
-                        "дальше этот продукт будет находиться сразу.",
+                    // Без кода форма открывается не после промаха, а по своей воле,
+                    // и говорить про «не нашёлся» было бы неправдой.
+                    if (gtin == null) {
+                        "Снимите таблицу пищевой ценности или заполните КБЖУ на 100 г " +
+                            "с упаковки — дальше этот продукт будет находиться сразу."
+                    } else {
+                        "Код $gtin не нашёлся. Заполните КБЖУ на 100 г с упаковки — " +
+                            "дальше этот продукт будет находиться сразу."
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

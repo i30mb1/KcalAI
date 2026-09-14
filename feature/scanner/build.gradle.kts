@@ -37,4 +37,10 @@ dependencies {
     implementation(libs.mlkit.barcode.scanning)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // Распознавание проверяется только на устройстве: движок нативный, и подменить
+    // его нечем — проверять разбор на выдуманных строках значит проверять разбор,
+    // а не распознавание.
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }

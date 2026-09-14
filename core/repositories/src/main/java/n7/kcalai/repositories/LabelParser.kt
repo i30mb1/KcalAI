@@ -27,9 +27,48 @@ data class LabelReading(
      * тут только предложение, а решает человек.
      */
     val names: List<String> = emptyList(),
+    /** Чем разбор руководствовался. Нужен только диагностике — см. [LabelTrace]. */
+    val trace: LabelTrace = LabelTrace.EMPTY,
 ) {
     companion object {
         val EMPTY = LabelReading(ProductDraft.EMPTY, emptyList(), confident = false)
+    }
+}
+
+/**
+ * Что разбор увидел и как принял решение.
+ *
+ * На результат не влияет ничем и существует ради одного: **разбор этикетки
+ * иначе непрозрачен.** Человек видит четыре числа в форме и не знает, взялись
+ * они с подписей или их подобрала арифметика; разработчик, глядя на промах,
+ * не знает, что именно не сработало — распознавание, привязка или перебор.
+ * Тестовый режим съёмки показывает это всё на экране, а [n7.kcalai.model.TextLine]
+ * распознанных строк уходит в лог.
+ */
+data class LabelTrace(
+    /** Строки ровно в том виде, в каком их отдал распознаватель. */
+    val lines: List<String> = emptyList(),
+    val route: Route = Route.NOTHING,
+    /** Подписи, прочитанные вместе со своим числом. */
+    val readLabels: List<String> = emptyList(),
+    /** Подписи, которых на этикетке нет, — их значения приняты за ноль. */
+    val zeroedLabels: List<String> = emptyList(),
+    /** Значения, не прочитанные, а досчитанные по Этуотеру из остальных трёх. */
+    val derivedLabels: List<String> = emptyList(),
+    /** Таблица пищевой ценности опознана: есть калории и хотя бы одна подпись макроса. */
+    val tableFound: Boolean = false,
+) {
+    /** Откуда взялись числа. Порядок — от самого достоверного к самому слабому. */
+    enum class Route(val title: String) {
+        LABELS("по подписям"),
+        LABELS_PARTIAL("по подписям, таблица прочитана не вся"),
+        MIXED("подписи плюс арифметика"),
+        NUMBERS("арифметикой по числам"),
+        NOTHING("ничего не прочитано"),
+    }
+
+    companion object {
+        val EMPTY = LabelTrace()
     }
 }
 
@@ -137,39 +176,46 @@ object LabelParser {
         val anchored = LabelAnchors.read(lines)
         val names = nameCandidates(lines)
         val name = names.firstOrNull()
-        val numeric = parse(lines.map { it.text })
+        val texts = lines.map { it.text }
+        val numeric = parse(texts)
 
-        if (anchored.complete) {
-            return LabelReading(
-                draft = ProductDraft(
-                    name = name,
-                    kcal100 = anchored.kcal100,
-                    prot100 = anchored.prot100,
-                    fat100 = anchored.fat100,
-                    carb100 = anchored.carb100,
-                ),
-                numbers = numeric.numbers,
-                confident = true,
-                names = names,
-            )
-        }
+        fun trace(route: LabelTrace.Route, derived: List<String> = emptyList()) = LabelTrace(
+            lines = texts,
+            route = route,
+            readLabels = anchored.readLabels,
+            zeroedLabels = anchored.zeroedLabels,
+            derivedLabels = derived,
+            tableFound = anchored.tableFound,
+        )
 
-        // Таблица прочитана, но не вся. Арифметику сюда пускать нельзя: она
-        // подберёт недостающее из посторонних чисел — массы нетто, даты, —
-        // и подставит их молча. Подписанное достовернее подобранного, а чего
-        // на этикетке нет, того нет.
+        // Таблица опознана — дальше работаем только с подписанным. Арифметику
+        // по всем числам этикетки сюда пускать нельзя: она подберёт недостающее
+        // из массы нетто и даты и подставит молча.
         if (anchored.tableFound) {
+            val filled = complete(anchored)
             return LabelReading(
                 draft = ProductDraft(
                     name = name,
-                    kcal100 = anchored.kcal100,
-                    prot100 = anchored.prot100,
-                    fat100 = anchored.fat100,
-                    carb100 = anchored.carb100,
+                    kcal100 = filled.kcal100,
+                    prot100 = filled.prot100,
+                    fat100 = filled.fat100,
+                    carb100 = filled.carb100,
                 ),
                 numbers = numeric.numbers,
-                confident = false,
+                // Не сошлось — значит, одно из чисел распознано неверно, а какое,
+                // отсюда не видно. Закрывать съёмку и подставлять это в дневник
+                // нельзя: молча неверные калории хуже, чем честно незаполненная
+                // форма, где числа с этикетки лежат чипсами под рукой.
+                confident = filled.isComplete,
                 names = names,
+                trace = trace(
+                    route = if (filled.isComplete) {
+                        LabelTrace.Route.LABELS
+                    } else {
+                        LabelTrace.Route.LABELS_PARTIAL
+                    },
+                    derived = filled.derived,
+                ),
             )
         }
 
@@ -182,10 +228,27 @@ object LabelParser {
             fat100 = anchored.fat100 ?: numeric.draft.fat100,
             carb100 = anchored.carb100 ?: numeric.draft.carb100,
         )
+        val route = when {
+            anchored.readLabels.isNotEmpty() -> LabelTrace.Route.MIXED
+            merged.kcal100 != null -> LabelTrace.Route.NUMBERS
+            else -> LabelTrace.Route.NOTHING
+        }
         return numeric.copy(
             draft = merged,
-            confident = numeric.confident || merged.isComplete,
+            // Арифметика заполняет форму, но закрывать съёмку сама не вправе,
+            // и это не осторожность, а арифметика же. На этикетке два десятка
+            // чисел; сочетаний из них по три с шестью перестановками — тысячи,
+            // и найти среди них тройку, сходящуюся с калориями в пределах
+            // допуска, можно почти всегда. Такое совпадение — не прочтение,
+            // а подгонка: на майонезе она собирает «белки 1 г, углеводы 0,8 г»
+            // из чисел таблицы на порцию, сходится с точностью до половины
+            // процента и врёт по обоим числам. Отличить подгонку от чтения
+            // изнутри нельзя, поэтому её показывают человеку, а не подставляют
+            // молча. Подписанное — другое дело: там каждое число взято у своей
+            // подписи, и подгонять было нечего.
+            confident = false,
             names = names,
+            trace = trace(route),
         )
     }
 
@@ -237,13 +300,16 @@ object LabelParser {
         val numbers = lines.flatMap { line ->
             NUMBER.findAll(line).map { it.value.replace(',', '.') }
         }
-        if (numbers.isEmpty()) return LabelReading.EMPTY
+        val nothing = LabelTrace(lines = lines, route = LabelTrace.Route.NOTHING)
+        if (numbers.isEmpty()) return LabelReading.EMPTY.copy(trace = nothing)
 
         val values = numbers.mapNotNull { it.toDoubleOrNull() }
         val shown = numbers.map { it.replace('.', ',') }
 
         val candidates = energyCandidates(values)
-        if (candidates.isEmpty()) return LabelReading(ProductDraft.EMPTY, shown, confident = false)
+        if (candidates.isEmpty()) {
+            return LabelReading(ProductDraft.EMPTY, shown, confident = false, trace = nothing)
+        }
 
         // Кандидат на калории не принимается на веру: его должны подтвердить макросы.
         // Это тот же приём, что разводит две колонки, — арбитром везде выступает
@@ -259,6 +325,7 @@ object LabelParser {
                 ),
                 numbers = shown,
                 confident = true,
+                trace = LabelTrace(lines = lines, route = LabelTrace.Route.NUMBERS),
             )
         }
 
@@ -266,6 +333,7 @@ object LabelParser {
             draft = ProductDraft(kcal100 = candidates.first()),
             numbers = shown,
             confident = false,
+            trace = LabelTrace(lines = lines, route = LabelTrace.Route.NUMBERS),
         )
     }
 
@@ -364,6 +432,125 @@ object LabelParser {
         // подозрительным, предлагать человеку незачем.
         return best?.takeIf { bestError <= kcal * NutrimentValidator.BALANCE_TOLERANCE }
     }
+
+    /** Четыре значения после дозаполнения плюс список того, что не прочитано, а вычислено. */
+    private class Filled(
+        val kcal100: Int?,
+        val prot100: Int?,
+        val fat100: Int?,
+        val carb100: Int?,
+        val derived: List<String> = emptyList(),
+    ) {
+        val isComplete: Boolean
+            get() = kcal100 != null && prot100 != null && fat100 != null && carb100 != null
+    }
+
+    /**
+     * Достраивает набор по формуле Этуотера.
+     *
+     * Четыре величины связаны одним уравнением: калории равны четырём на белки,
+     * девяти на жиры и четырём на углеводы. Три известных определяют четвёртое
+     * однозначно — тут нечего подбирать, ответ ровно один. Строка, которую
+     * закрыл блик, перестаёт держать всю съёмку.
+     *
+     * Уравнение работает в обе стороны, и обе нужны, но доверия они требуют
+     * разного.
+     *
+     * **Недостающий макрос** считается, только когда калории подтверждены сами
+     * по себе — килокалории и килоджоули прочитаны оба и сошлись. Считать макрос
+     * от числа, в котором мы не уверены, значит размножить ошибку.
+     *
+     * **Недостающие калории** — наоборот, когда прочитать их не вышло, а все три
+     * макроса взяты у своих подписей. Именно так на кукурузе: ячейка «80/340»
+     * распозналась одним куском как «388», настоящих чисел в кадре нет вовсе,
+     * зато Б, Ж и У прочитаны верно и дают восемьдесят одну — то, что напечатано,
+     * с точностью до округления. Три независимых прочтения против одного
+     * заведомо неверного.
+     *
+     * Принятые за ноль макросы такого права не дают: ноль там не прочитан,
+     * а выведен из отсутствия подписи, и строить на нём ещё одно значение
+     * значит городить догадку на догадке.
+     */
+    private fun complete(anchored: LabelAnchors.Anchored): Filled {
+        val prot = anchored.prot100
+        val fat = anchored.fat100
+        val carb = anchored.carb100
+
+        if (prot != null && fat != null && carb != null) {
+            val fromMacros = NutrimentValidator.atwaterKcal(
+                Nutriments(kcal100 = 0, prot100 = prot, fat100 = fat, carb100 = carb)
+            )
+            // Калории прочитаны дважды, килокалориями и килоджоулями. Побеждает
+            // то прочтение, которое макросы признают; не признан ни один —
+            // значит, оба прочитаны неверно, и считать надо самим.
+            anchored.kcalCandidates.firstOrNull { it.balancesWith(fromMacros) }
+                ?.let { return Filled(it, prot, fat, carb) }
+
+            if (anchored.zeroedLabels.isEmpty()) {
+                val derived = fromMacros.roundToInt()
+                if (derived in KCAL_MIN..NutrimentValidator.KCAL_MAX) {
+                    return Filled(derived, prot, fat, carb, derived = listOf("ккал"))
+                }
+            }
+            return Filled(anchored.kcal100, prot, fat, carb)
+        }
+
+        val kcal = anchored.kcal100
+        val missing = listOf(prot, fat, carb).count { it == null }
+        if (kcal == null || missing != 1 || !anchored.kcalCorroborated) {
+            return Filled(kcal, prot, fat, carb)
+        }
+
+        // Килокалории на сто грамм — в сотых, как и макросы: считать надо
+        // в одних единицах, иначе жир выйдет ровно в сто раз не тот.
+        val residual = kcal * 100 -
+            (prot ?: 0) * PROT_KCAL_PER_G -
+            (fat ?: 0) * FAT_KCAL_PER_G -
+            (carb ?: 0) * CARB_KCAL_PER_G
+
+        val perGram = when {
+            prot == null -> PROT_KCAL_PER_G
+            fat == null -> FAT_KCAL_PER_G
+            else -> CARB_KCAL_PER_G
+        }
+        // Клетчатка и многоатомные спирты дают на настоящих этикетках законный
+        // разбег, и на продукте, где он велик, остаток выйдет отрицательным
+        // или несуразным. Такой ответ не выводится, а отбрасывается.
+        val value = (residual.toDouble() / perGram).roundToInt()
+        if (value < -DERIVE_SLACK_CG || value > MACRO_SUM_MAX + DERIVE_SLACK_CG) {
+            return Filled(kcal, prot, fat, carb)
+        }
+
+        val bounded = value.coerceIn(0, MACRO_SUM_MAX)
+        return when {
+            prot == null -> Filled(kcal, bounded, fat, carb, derived = listOf("Б"))
+            fat == null -> Filled(kcal, prot, bounded, carb, derived = listOf("Ж"))
+            else -> Filled(kcal, prot, fat, bounded, derived = listOf("У"))
+        }
+    }
+
+    private const val PROT_KCAL_PER_G = 4
+    private const val FAT_KCAL_PER_G = 9
+    private const val CARB_KCAL_PER_G = 4
+
+    /** Полграмма запаса: клетчатка и округление на пачке дают остаток чуть мимо нуля. */
+    private const val DERIVE_SLACK_CG = 50
+
+    /**
+     * Сходятся ли эти калории с тем, что дают макросы.
+     *
+     * Допуск — тот же, которым форма помечает подозрительным ручной ввод:
+     * клетчатка и многоатомные спирты дают законный разбег, и придираться
+     * к нему незачем. Совсем малые калории не проверяются вовсе — у зелени
+     * и напитков макросы околонулевые, и относительная погрешность там
+     * не значит ничего.
+     */
+    private fun Int.balancesWith(fromMacros: Double): Boolean =
+        this <= BALANCE_MIN_KCAL ||
+            abs(this - fromMacros) <= this * NutrimentValidator.BALANCE_TOLERANCE
+
+    /** Ниже этого порога сверка энергобаланса бессмысленна. */
+    private const val BALANCE_MIN_KCAL = 20
 
     private fun Macros.toNutriments(kcal: Int) =
         Nutriments(kcal100 = kcal, prot100 = prot100, fat100 = fat100, carb100 = carb100)

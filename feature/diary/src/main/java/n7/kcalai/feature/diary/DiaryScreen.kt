@@ -19,9 +19,11 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.MonitorWeight
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -31,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -76,6 +79,8 @@ fun DiaryRoute(viewModel: DiaryViewModel) {
         onEditEntry = viewModel::onStartEditGrams,
         onOpenGoal = viewModel::onOpenGoal,
         onOpenWeight = viewModel::onOpenWeight,
+        onOpenLabelScan = viewModel::onOpenLabelScan,
+        onOpenLabelDebug = viewModel::onOpenLabelDebug,
     )
 
     when (val overlay = state.overlay) {
@@ -122,6 +127,12 @@ fun DiaryRoute(viewModel: DiaryViewModel) {
             // с набранным именем и введённым кодом.
             onDismiss = { viewModel.onLabelCancelled(overlay.gtin, overlay.current) },
         )
+
+        Overlay.LabelDebug -> LabelScannerDialog(
+            onRead = viewModel::onLabelDebugRead,
+            onDismiss = viewModel::onDismissOverlay,
+            debug = true,
+        )
     }
 }
 
@@ -141,6 +152,8 @@ fun DiaryScreen(
     onEditEntry: (DiaryEntryEntity) -> Unit,
     onOpenGoal: () -> Unit,
     onOpenWeight: () -> Unit,
+    onOpenLabelScan: () -> Unit,
+    onOpenLabelDebug: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -156,6 +169,15 @@ fun DiaryScreen(
                     }
                 },
                 actions = {
+                    // Отладочная точка входа в распознавание этикетки. Стоит здесь,
+                    // а не за промахом штрих-кода, ровно потому, что проверять разбор
+                    // приходится на пачках, которые в базе как раз есть.
+                    IconButton(onClick = onOpenLabelDebug) {
+                        Icon(
+                            Icons.Default.BugReport,
+                            contentDescription = "Проверить распознавание этикетки",
+                        )
+                    }
                     IconButton(onClick = onOpenWeight) {
                         Icon(Icons.Default.MonitorWeight, contentDescription = "Записать вес")
                     }
@@ -213,6 +235,7 @@ fun DiaryScreen(
                 onPick = onPick,
                 onPickScanned = onPickScanned,
                 onOpenScan = onOpenScan,
+                onOpenLabelScan = onOpenLabelScan,
                 onPickCandidate = onPickCandidate,
             )
         }
@@ -423,6 +446,7 @@ private fun InputArea(
     onPick: (ResolvedItem) -> Unit,
     onPickScanned: (ResolvedItem) -> Unit,
     onOpenScan: () -> Unit,
+    onOpenLabelScan: () -> Unit,
     onPickCandidate: (FoodCandidate) -> Unit,
 ) {
     Surface(tonalElevation = 3.dp) {
@@ -456,6 +480,25 @@ private fun InputArea(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                 )
                 HorizontalDivider()
+            }
+
+            // Съёмка этикетки — самостоятельный способ добавить еду, а не запасной
+            // выход из промаха штрих-кода. У развесного, домашнего и вскрытой пачки
+            // кода нет вовсе, а таблица пищевой ценности есть, и вести к ней через
+            // сканирование несуществующего кода незачем.
+            //
+            // Кнопка полноширинная и подписанная, а не иконка рядом со штрих-кодом:
+            // это разные вещи. Штрих-код опознаёт товар целиком, этикетка заводит
+            // новый — и цена ошибки у них разная.
+            OutlinedButton(
+                onClick = onOpenLabelScan,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+            ) {
+                Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("Снять этикетку")
             }
 
             // Кнопки отправки нет намеренно: добавляет только тап по чипсу.
