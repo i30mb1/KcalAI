@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +40,11 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.input.ImeAction
@@ -90,6 +97,35 @@ fun Viewfinder(modifier: Modifier = Modifier, windowHeight: Float = 0.42f) {
 
 /** Затемнение вокруг окна. Одно на обе темы: за ним живая картинка, а не наш фон. */
 private val SCRIM = Color(0xFF1C1914).copy(alpha = 0.44f)
+
+/**
+ * Экран съёмки во весь экран, включая полосы статуса и навигации.
+ *
+ * Диалог по умолчанию отступает от системных полос, и над камерой висит
+ * глухая полоса под часами. Живая картинка должна идти до самого края —
+ * как в любой камере; свои отступы верхняя строка и панель делают сами.
+ * Значки статуса — светлые: под ними всегда затемнённое превью, а не фон темы.
+ */
+@Composable
+fun ScanDialog(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        val view = LocalView.current
+        SideEffect {
+            val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = false
+                isAppearanceLightNavigationBars = false
+            }
+        }
+        content()
+    }
+}
 
 /**
  * Чернила поверх камеры.
@@ -168,7 +204,7 @@ fun HintPill(text: String, modifier: Modifier = Modifier) {
 
 /** Нижняя панель разбора: та же поверхность и тот же радиус, что у шитов. */
 @Composable
-fun ScanPanel(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun ScanPanel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = modifier
             .fillMaxWidth()

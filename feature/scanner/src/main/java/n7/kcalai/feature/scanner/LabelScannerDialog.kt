@@ -14,6 +14,7 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -63,8 +64,6 @@ import androidx.compose.ui.text.input.ImeAction
 import n7.kcalai.model.Nutriments
 import n7.kcalai.ui.KcalChip
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.concurrent.Executors
@@ -78,6 +77,7 @@ import kotlinx.coroutines.cancel
 import n7.kcalai.ocr.LabelOcr
 import n7.kcalai.repositories.LabelReading
 import n7.kcalai.ui.CapsLabel
+import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.ui.Macro
 import n7.kcalai.ui.WideButton
@@ -131,20 +131,23 @@ fun LabelScannerDialog(
     }
     val zoom = rememberSaveable { mutableFloatStateOf(LABEL_ZOOM) }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
+    ScanDialog(onDismiss) {
         Surface(Modifier.fillMaxSize(), color = KcalTheme.colors.bg) {
-            Column(Modifier.fillMaxSize()) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
                 // Высота окна камеры — доля экрана, а не остаток от панели.
                 // Панель растёт и сжимается постоянно: пришли чипсы имён, встали
                 // числа с этикетки, ушла подсказка. Будь камера остатком, каждое
-                // такое изменение меняло бы размер превью, а `PreviewView` под
-                // капотом `SurfaceView`: смена размера — это пересоздание surface
+                // такое изменение меняло бы размер превью, а под вьюфайндером
+                // `SurfaceView`: смена размера — это пересоздание surface
                 // и переконфигурация сессии, то есть заметный рывок картинки
                 // ровно в тот момент, когда человек наводит на пачку.
-                Box(Modifier.fillMaxWidth().fillMaxHeight(CAMERA_SHARE)) {
+                //
+                // Панель лежит поверх камеры, а не под ней, и заходит на неё
+                // ровно на радиус скругления: в вырезах углов тогда видно
+                // затемнённое превью, а не фон диалога. Иначе стык выглядел
+                // полупрозрачным уступом между живой картинкой и панелью.
+                val cameraHeight = maxHeight * CAMERA_SHARE
+                Box(Modifier.fillMaxWidth().height(cameraHeight + KcalShapes.sheet)) {
                     if (granted) {
                         CameraFeed(state, zoom.floatValue, onZoom = { zoom.floatValue = it })
                         Viewfinder(Modifier.fillMaxSize())
@@ -178,6 +181,8 @@ fun LabelScannerDialog(
                             text = hint,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
+                                // Низ этого окна уходит под панель — см. выше.
+                                .padding(bottom = KcalShapes.sheet)
                                 .padding(horizontal = 32.dp, vertical = 20.dp),
                         )
                     }
@@ -185,7 +190,9 @@ fun LabelScannerDialog(
 
                 ProductCard(
                     state = state,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .height(maxHeight - cameraHeight),
                     onSave = {
                         state.onSaved()
                         onSave(state.gtin, state.name.text.trim(), it)
@@ -355,7 +362,10 @@ private fun ProductCard(
     var focused by remember { mutableStateOf<ScanField?>(null) }
 
     ScanPanel(modifier.navigationBarsPadding().imePadding()) {
-        Column(Modifier.verticalScroll(rememberScrollState())) {
+        // Кнопка прижата к низу панели, а не идёт за содержимым: содержимое
+        // короче панели почти всегда, и кнопка посреди пустоты выглядела
+        // забытой. Что не влезло над ней — прокручивается.
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ProgressRing(state.overall)
 
@@ -432,14 +442,14 @@ private fun ProductCard(
                     colors.text3,
                 )
             }
-
-            WideButton(
-                text = "Сохранить",
-                enabled = state.canSave,
-                onClick = { state.nutriments?.let(onSave) },
-                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-            )
         }
+
+        WideButton(
+            text = "Сохранить",
+            enabled = state.canSave,
+            onClick = { state.nutriments?.let(onSave) },
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+        )
     }
 }
 
@@ -589,10 +599,7 @@ fun LabelDebugDialog(onRead: (LabelReading) -> Unit, onDismiss: () -> Unit) {
     }
     val zoom = rememberSaveable { mutableFloatStateOf(LABEL_ZOOM) }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
+    ScanDialog(onDismiss) {
         Surface(Modifier.fillMaxSize(), color = KcalTheme.colors.bg) {
             Box(Modifier.fillMaxSize()) {
                 if (granted) CameraFeed(state, zoom.floatValue, onZoom = { zoom.floatValue = it })
@@ -653,10 +660,11 @@ private const val FRAME_THREAD_PRIORITY = 4
 /**
  * Какую долю экрана занимает камера.
  *
- * Доля, а не остаток: см. комментарий в разметке. Сорок два процента — окно
- * видоискателя целиком плюс воздух вокруг него, дальше начинается панель.
+ * Доля, а не остаток: см. комментарий в разметке. Половина: панели с пятью
+ * строками, чипсами и кнопкой хватает второй половины, а что не влезло —
+ * прокручивается; меньше — и под кнопкой оставалась пустота.
  */
-private const val CAMERA_SHARE = 0.42f
+private const val CAMERA_SHARE = 0.5f
 
 /** EAN-13 — самый длинный из форматов, которые встречаются на еде. */
 private const val MAX_GTIN_DIGITS = 13

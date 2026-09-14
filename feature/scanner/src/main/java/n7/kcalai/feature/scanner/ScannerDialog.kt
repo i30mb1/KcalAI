@@ -47,8 +47,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -93,10 +91,7 @@ fun ScannerDialog(
         if (!granted) permission.launch(Manifest.permission.CAMERA)
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
+    ScanDialog(onDismiss) {
         Surface(Modifier.fillMaxSize(), color = KcalTheme.colors.bg) {
             Box(Modifier.fillMaxSize()) {
                 when {
