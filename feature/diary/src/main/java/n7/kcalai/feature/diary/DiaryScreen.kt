@@ -149,6 +149,18 @@ fun DiaryScreen(
             .filter { it }
             .collect { collapsed = true }
     }
+
+    // Клавиатура сворачивает шапку сразу, не дожидаясь, пока лента сдвинется:
+    // человек сел писать, и треть экрана под сводкой ему сейчас нужна меньше
+    // всего. Раньше шапка уходила только когда набранное вытесняло ленту
+    // за край — то есть от случая к случаю.
+    val ime = WindowInsets.ime
+    val density = LocalDensity.current
+    LaunchedEffect(ime, density) {
+        snapshotFlow { ime.getBottom(density) > 0 }
+            .filter { it }
+            .collect { collapsed = true }
+    }
     val expandOnPull = remember {
         object : NestedScrollConnection {
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
