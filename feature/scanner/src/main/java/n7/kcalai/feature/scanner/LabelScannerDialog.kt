@@ -131,7 +131,7 @@ fun LabelScannerDialog(
         if (!granted) permission.launch(Manifest.permission.CAMERA)
     }
     val zoom = rememberSaveable { mutableFloatStateOf(LABEL_ZOOM) }
-    RecognizedHaptic(state)
+    ScanHaptics(state)
 
     ScanDialog(onDismiss) {
         Surface(Modifier.fillMaxSize(), color = KcalTheme.colors.bg) {
@@ -203,21 +203,32 @@ fun LabelScannerDialog(
 }
 
 /**
- * Лёгкая вибрация, когда таблица прочиталась.
+ * Отклик ладони на то, что происходит на экране.
  *
  * Человек смотрит на пачку, а не на экран: он держит камеру над строчками
- * и ждёт. Момент, когда четыре числа сошлись, экран показывает, но глаза
- * в этот момент не на нём — а ладонь чувствует. Срабатывает на переходе
- * «не сошлось → сошлось», один раз на переход: голосование держит согласие
- * устойчиво, но при переводе камеры на другую пачку оно распадётся и
- * соберётся заново — и это тоже заслуживает отклика.
+ * и ждёт. Экран показывает, как заполняются поля и когда четыре числа
+ * сошлись, но глаза в этот момент не на нём — а ладонь чувствует.
+ *
+ * Два уровня. Едва заметный тик — камера заполнила ещё одно поле; этого
+ * достаточно, чтобы знать «идёт», не глядя. Мягкое подтверждение — таблица
+ * сошлась целиком. Когда четвёрка сходится тем же кадром, что и последнее
+ * поле, тика нет: подтверждение его перекрывает, и два толчка подряд
+ * читались бы как сбой. Считаются только поля, заполненные камерой:
+ * набранное руками ладонь и так знает.
  */
 @Composable
-private fun RecognizedHaptic(state: ScanState) {
+private fun ScanHaptics(state: ScanState) {
     val haptic = LocalHapticFeedback.current
     val confident = state.frame.reading.confident
     LaunchedEffect(confident) {
         if (confident) haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+    }
+
+    val filled = state.cameraFilled
+    var seen by remember { mutableIntStateOf(filled) }
+    LaunchedEffect(filled) {
+        if (filled > seen && !confident) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        seen = filled
     }
 }
 

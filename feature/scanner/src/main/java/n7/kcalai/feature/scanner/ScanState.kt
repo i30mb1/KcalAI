@@ -196,6 +196,10 @@ internal class ScanState(initialGtin: String?) {
 
     val requiredFilled: Int get() = listOf(kcal, prot, fat, carb).count { it.filled }
 
+    /** Сколько полей заполнила камера, а не человек, — для отклика ладони. */
+    val cameraFilled: Int
+        get() = listOf(kcal, prot, fat, carb, name, barcode).count { it.filled && !it.manual }
+
     /** Кольцо считает обязательную четвёрку: без неё сохранять нечего. */
     val overall: Float
         get() = REQUIRED.map(::progress).average().toFloat()
