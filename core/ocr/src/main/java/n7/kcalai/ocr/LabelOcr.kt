@@ -4,10 +4,10 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import n7.kcalai.model.TextLine
 
@@ -34,9 +34,25 @@ class LabelOcr(
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default.limitedParallelism(1),
 ) : AutoCloseable {
 
-    private val mutex = Mutex()
+    /**
+     * Под ним живёт всё обращение к нативной сессии — и счёт кадра, и её
+     * освобождение. Обычный замок, а не корутинный: закрытие приходит с чужого
+     * потока, и оно обязано либо дождаться кадра, либо встать в очередь за ним.
+     */
+    private val nativeLock = Any()
+
+    /** Своя очередь для закрытия: она же очередь кадров — см. [close]. */
+    private val closer = CoroutineScope(dispatcher)
+
     private var engine: OcrEngine? = null
     private var unavailable = false
+
+    /**
+     * Закрытие уже объявлено. Волатильно и проверяется до замка: кадры, успевшие
+     * встать в очередь позже, не должны поднимать движок заново.
+     */
+    @Volatile
+    private var closed = false
 
     /**
      * Снимок -> распознанные строки с геометрией.
@@ -47,21 +63,26 @@ class LabelOcr(
      *         работать по-старому, во втором — сказать человеку, что не вышло.
      */
     suspend fun read(bitmap: Bitmap): List<TextLine>? = withContext(dispatcher) {
-        val active = engineOrNull() ?: return@withContext null
-        try {
-            active.process(bitmap).map { it.toTextLine() }
-        } catch (error: Throwable) {
-            // Сюда попадает и нехватка памяти на большом снимке. Один кадр
-            // не должен уносить экран, а следующий может пройти.
-            Log.e(TAG, "распознавание кадра не удалось", error)
-            emptyList()
+        synchronized(nativeLock) {
+            val active = engineOrNull() ?: return@synchronized null
+            try {
+                active.process(bitmap).map { it.toTextLine() }
+            } catch (error: Throwable) {
+                // Сюда попадает и нехватка памяти на большом снимке. Один кадр
+                // не должен уносить экран, а следующий может пройти.
+                Log.e(TAG, "распознавание кадра не удалось", error)
+                emptyList()
+            }
         }
     }
 
     /** Готов ли движок. Нужен UI, чтобы не обещать человеку того, чего не будет. */
-    suspend fun isAvailable(): Boolean = withContext(dispatcher) { engineOrNull() != null }
+    suspend fun isAvailable(): Boolean = withContext(dispatcher) {
+        synchronized(nativeLock) { engineOrNull() != null }
+    }
 
-    private suspend fun engineOrNull(): OcrEngine? = mutex.withLock {
+    private fun engineOrNull(): OcrEngine? {
+        if (closed) return null
         engine?.let { return it }
         if (unavailable) return null
 
@@ -76,12 +97,33 @@ class LabelOcr(
             return null
         }
         engine = created
-        created
+        return created
     }
 
+    /**
+     * Отпускает нативную сессию — но не здесь и не сейчас.
+     *
+     * Зовут отсюда с главного потока, когда экран съёмки уходит, и в этот миг
+     * на потоке распознавания почти наверняка досчитывается последний кадр:
+     * инференс идёт сотни миллисекунд и отмену корутины не замечает — он
+     * не в Kotlin, а внутри модели. Удалить сессию прямо сейчас значит выдернуть
+     * её из-под работающего вычисления, и приложение падает по SIGSEGV уже
+     * в нативном коде — то самое «закрыл сканер и вылетело».
+     *
+     * Поэтому освобождение встаёт в ту же однопоточную очередь, что и кадры:
+     * оно случится сразу за текущим кадром и заведомо до любого следующего.
+     * Главный поток при этом не ждёт — иначе закрытие экрана замирало бы
+     * на полсекунды. Замок тут на случай, если очередь окажется не одна.
+     */
     override fun close() {
-        engine?.close()
-        engine = null
+        if (closed) return
+        closed = true
+        closer.launch {
+            synchronized(nativeLock) {
+                engine?.close()
+                engine = null
+            }
+        }
     }
 
     private companion object {
