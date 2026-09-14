@@ -6,6 +6,9 @@
 /core/*/build
 /feature/*/build
 /build-logic/build
+/server/build
+/server/.gradle
+/server/data/
 /captures
 .externalNativeBuild
 .cxx
