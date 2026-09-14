@@ -51,7 +51,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -129,6 +131,7 @@ fun LabelScannerDialog(
         if (!granted) permission.launch(Manifest.permission.CAMERA)
     }
     val zoom = rememberSaveable { mutableFloatStateOf(LABEL_ZOOM) }
+    RecognizedHaptic(state)
 
     ScanDialog(onDismiss) {
         Surface(Modifier.fillMaxSize(), color = KcalTheme.colors.bg) {
@@ -196,6 +199,25 @@ fun LabelScannerDialog(
                 }
             }
         }
+    }
+}
+
+/**
+ * Лёгкая вибрация, когда таблица прочиталась.
+ *
+ * Человек смотрит на пачку, а не на экран: он держит камеру над строчками
+ * и ждёт. Момент, когда четыре числа сошлись, экран показывает, но глаза
+ * в этот момент не на нём — а ладонь чувствует. Срабатывает на переходе
+ * «не сошлось → сошлось», один раз на переход: голосование держит согласие
+ * устойчиво, но при переводе камеры на другую пачку оно распадётся и
+ * соберётся заново — и это тоже заслуживает отклика.
+ */
+@Composable
+private fun RecognizedHaptic(state: ScanState) {
+    val haptic = LocalHapticFeedback.current
+    val confident = state.frame.reading.confident
+    LaunchedEffect(confident) {
+        if (confident) haptic.performHapticFeedback(HapticFeedbackType.Confirm)
     }
 }
 
