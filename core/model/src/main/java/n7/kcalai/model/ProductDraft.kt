@@ -24,8 +24,12 @@ data class ProductDraft(
     val carb100: Int? = null,
     val servingG: Int? = null,
 ) {
+    /** Все четыре значения КБЖУ на месте — форму можно отправлять. */
+    val isComplete: Boolean
+        get() = kcal100 != null && prot100 != null && fat100 != null && carb100 != null
+
     companion object {
-        /** Пустой черновик: сегодня форма всегда открывается с ним. */
+        /** Пустой черновик: форма открывается с ним, когда снимать нечего. */
         val EMPTY: ProductDraft = ProductDraft()
     }
 }

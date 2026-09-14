@@ -15,6 +15,8 @@ dependencies {
     // Валидатор контрольной цифры живёт там же, где остальная работа с продуктами:
     // код, не прошедший проверку, не должен покидать сканер.
     api(project(":core:repositories"))
+    // Распознавание текста на этикетке: PP-OCRv5 через LiteRT.
+    api(project(":core:ocr"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -30,8 +32,9 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
+    // Только штрих-код. Текст на этикетке читает :core:ocr — ML Kit не умеет
+    // кириллицу ни в одном из своих скриптов.
     implementation(libs.mlkit.barcode.scanning)
-    implementation(libs.mlkit.text.recognition)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

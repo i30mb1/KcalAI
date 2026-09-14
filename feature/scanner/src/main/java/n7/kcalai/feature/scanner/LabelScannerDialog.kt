@@ -50,6 +50,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import n7.kcalai.ocr.LabelOcr
 import n7.kcalai.repositories.LabelReading
 
 /**
@@ -139,7 +144,10 @@ private fun CameraPane(onRead: (LabelReading) -> Unit) {
 
     DisposableEffect(lifecycleOwner) {
         val executor = Executors.newSingleThreadExecutor()
-        val analyzer = LabelAnalyzer { reading ->
+        val ocr = LabelOcr(context)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+        val analyzer = LabelAnalyzer(ocr, scope) { reading ->
             ContextCompat.getMainExecutor(context).execute {
                 latest = reading
                 // Разбор сошёлся — дальше держать человека перед камерой незачем.
@@ -156,7 +164,9 @@ private fun CameraPane(onRead: (LabelReading) -> Unit) {
         onDispose {
             controller.clearImageAnalysisAnalyzer()
             controller.unbind()
-            analyzer.close()
+            scope.cancel()
+            // Нативную сессию надо отпустить: она держит модели в памяти.
+            ocr.close()
             executor.shutdown()
         }
     }

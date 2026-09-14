@@ -1,0 +1,57 @@
+{
+  "version": 4,
+  "models": [
+    {
+      "name": "ocr_detection",
+      "type": "tflite",
+      "assetPath": "models/ocr_det_fp16.tflite",
+      "targetPath": "ocr_det_fp16.tflite",
+      "sha256": "f02bb7693e98dacd08075ac911dbdfdb0184b5f582cabb0c49ca41c5120fe189",
+      "sizeBytes": 2444316,
+      "required": true,
+      "description": "PP-OCRv5 text detection model (FP16). Script-agnostic, shared by all languages.",
+      "source": "https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det",
+      "inputShape": [
+        1,
+        640,
+        640,
+        3
+      ],
+      "quantization": "FP16"
+    },
+    {
+      "name": "ocr_recognition",
+      "type": "tflite",
+      "assetPath": "models/ocr_rec_fp16.tflite",
+      "targetPath": "ocr_rec_fp16.tflite",
+      "sha256": "2038d7745d4eff84a3fea3b64c4f63d5646c4964945d72c04c315b325a6a76b2",
+      "sizeBytes": 3993120,
+      "required": true,
+      "description": "eslav PP-OCRv5 text recognition model (FP16). East Slavic: Russian, Ukrainian, Belarusian. sha256/sizeBytes are filled in by the Convert OCR Models workflow.",
+      "source": "https://huggingface.co/PaddlePaddle/eslav_PP-OCRv5_mobile_rec",
+      "inputShape": [
+        1,
+        48,
+        320,
+        3
+      ],
+      "outputShape": [
+        1,
+        40,
+        519
+      ],
+      "quantization": "FP16"
+    },
+    {
+      "name": "ocr_dictionary",
+      "type": "dictionary",
+      "assetPath": "models/keys_eslav.txt",
+      "targetPath": "keys_eslav.txt",
+      "sha256": "f4a227901daa0e4557aaf0a8f2747cff5a2072e38c783ebe57d473a8ad7820de",
+      "sizeBytes": 1665,
+      "required": true,
+      "description": "Character dictionary for CTC decoding (518 entries: 517 from ppocrv5_eslav_dict.txt plus the appended space class)",
+      "source": "https://github.com/PaddlePaddle/PaddleOCR/blob/main/ppocr/utils/dict/ppocrv5_eslav_dict.txt"
+    }
+  ]
+}

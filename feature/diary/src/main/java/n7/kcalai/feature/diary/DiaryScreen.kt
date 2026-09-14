@@ -108,6 +108,7 @@ fun DiaryRoute(viewModel: DiaryViewModel) {
             gtin = overlay.gtin,
             draft = overlay.draft,
             numbers = overlay.numbers,
+            names = overlay.names,
             onConfirm = { name, nutriments, servingG ->
                 viewModel.onSaveNewProduct(overlay.gtin, name, nutriments, servingG)
             },

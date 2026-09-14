@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import n7.kcalai.database.DailyGoalEntity
@@ -233,6 +234,7 @@ fun NewProductDialog(
     gtin: String,
     draft: ProductDraft,
     numbers: List<String>,
+    names: List<String>,
     onConfirm: (name: String, nutriments: Nutriments, servingG: Int?) -> Unit,
     onScanLabel: (ProductDraft) -> Unit,
     onDismiss: () -> Unit,
@@ -296,14 +298,6 @@ fun NewProductDialog(
                     Text("Снять этикетку")
                 }
 
-                // Название распознаватель не прочитает: ML Kit не умеет кириллицу.
-                // Говорим об этом прямо, иначе съёмка выглядит наполовину сломанной.
-                Text(
-                    "Цифры снимутся с таблицы пищевой ценности. Название придётся ввести самому.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -312,6 +306,13 @@ fun NewProductDialog(
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 )
+
+                // Название — единственное, что нельзя ни вычислить, ни проверить
+                // арифметикой. Поэтому не настаиваем на догадке, а показываем,
+                // что прочиталось с пачки, и даём выбрать.
+                if (names.isNotEmpty()) {
+                    ScannedNames(names) { name = it }
+                }
 
                 NumberField(kcal, { kcal = it }, "Калории на 100 г", Modifier.focusAs(LabelField.KCAL) { focused = it })
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -378,6 +379,37 @@ enum class LabelField { KCAL, PROT, FAT, CARB, SERVING }
  */
 private fun Modifier.focusAs(field: LabelField, onFocused: (LabelField) -> Unit): Modifier =
     onFocusChanged { state -> if (state.isFocused) onFocused(field) }
+
+/** Строки с пачки, которые могут быть названием. Тап подставляет в поле. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ScannedNames(names: List<String>, onPick: (String) -> Unit) {
+    Column {
+        Text(
+            "Похоже на название",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            names.forEach { candidate ->
+                SuggestionChip(
+                    onClick = { onPick(candidate) },
+                    label = {
+                        Text(
+                            candidate,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
 
 /**
  * Числа, которые распознались, но которые разбор не разложил сам.

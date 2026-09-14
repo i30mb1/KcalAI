@@ -4,6 +4,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import n7.kcalai.model.Nutriments
 import n7.kcalai.model.ProductDraft
+import n7.kcalai.model.TextLine
 
 /**
  * Что удалось прочитать с таблицы пищевой ценности.
@@ -18,6 +19,14 @@ data class LabelReading(
     val draft: ProductDraft,
     val numbers: List<String>,
     val confident: Boolean,
+    /**
+     * Строки, которые могут оказаться названием продукта, от самой вероятной.
+     *
+     * Первая подставляется в поле, остальные форма показывает чипсами. Название —
+     * единственное, что нельзя ни вычислить, ни проверить арифметикой, поэтому
+     * тут только предложение, а решает человек.
+     */
+    val names: List<String> = emptyList(),
 ) {
     companion object {
         val EMPTY = LabelReading(ProductDraft.EMPTY, emptyList(), confident = false)
@@ -111,6 +120,105 @@ object LabelParser {
      * и какой разделитель напечатает типография, предсказать нельзя.
      */
     private val NUMBER = Regex("""\d+(?:[.,]\d+)?""")
+
+    /**
+     * Разбирает строки вместе с их положением на снимке — основной путь.
+     *
+     * Сначала пробуем прочитать подписи: «Белки» и число на одной строке связаны
+     * прямо, без догадок. Это снимает единственную принципиальную слабость
+     * арифметики — она не различает белки и углеводы, у них одинаковый
+     * коэффициент 4 ккал/г.
+     *
+     * Подписей не нашлось (латинский OCR, блик, нестандартная вёрстка) —
+     * работает [parse] по числам, как раньше. Запасной путь обязан остаться
+     * рабочим: моделей кириллицы на устройстве может не быть вовсе.
+     */
+    fun parseLines(lines: List<TextLine>): LabelReading {
+        val anchored = LabelAnchors.read(lines)
+        val names = nameCandidates(lines)
+        val name = names.firstOrNull()
+        val numeric = parse(lines.map { it.text })
+
+        if (anchored.complete) {
+            return LabelReading(
+                draft = ProductDraft(
+                    name = name,
+                    kcal100 = anchored.kcal100,
+                    prot100 = anchored.prot100,
+                    fat100 = anchored.fat100,
+                    carb100 = anchored.carb100,
+                ),
+                numbers = numeric.numbers,
+                confident = true,
+                names = names,
+            )
+        }
+
+        // Таблица прочитана, но не вся. Арифметику сюда пускать нельзя: она
+        // подберёт недостающее из посторонних чисел — массы нетто, даты, —
+        // и подставит их молча. Подписанное достовернее подобранного, а чего
+        // на этикетке нет, того нет.
+        if (anchored.tableFound) {
+            return LabelReading(
+                draft = ProductDraft(
+                    name = name,
+                    kcal100 = anchored.kcal100,
+                    prot100 = anchored.prot100,
+                    fat100 = anchored.fat100,
+                    carb100 = anchored.carb100,
+                ),
+                numbers = numeric.numbers,
+                confident = false,
+                names = names,
+            )
+        }
+
+        // Привязка неполная. Подписанное число всё равно достовернее подобранного
+        // перебором, поэтому берём его там, где оно есть, а остальное — у арифметики.
+        val merged = numeric.draft.copy(
+            name = name,
+            kcal100 = anchored.kcal100 ?: numeric.draft.kcal100,
+            prot100 = anchored.prot100 ?: numeric.draft.prot100,
+            fat100 = anchored.fat100 ?: numeric.draft.fat100,
+            carb100 = anchored.carb100 ?: numeric.draft.carb100,
+        )
+        return numeric.copy(
+            draft = merged,
+            confident = numeric.confident || merged.isComplete,
+            names = names,
+        )
+    }
+
+    /**
+     * Строки, которые могут оказаться названием продукта.
+     *
+     * Отбор грубый и не претендует на большее: цифры, единицы измерения
+     * и всё короткое — не название. Остальное сортируется по высоте букв,
+     * потому что название на упаковке печатают крупнее состава.
+     *
+     * Первая строка подставляется в поле, остальные уходят в чипсы. Угадывать
+     * молча тут нельзя — человек всё равно смотрит на пачку, и дать ему выбор
+     * честнее, чем настаивать на догадке.
+     */
+    fun nameCandidates(lines: List<TextLine>, limit: Int = NAME_LIMIT): List<String> =
+        lines.asSequence()
+            .filter { it.text.trim().length >= NAME_MIN_LENGTH }
+            .filter { line -> line.text.count(Char::isLetter) >= line.text.count(Char::isDigit) }
+            .filterNot { NOT_A_NAME.containsMatchIn(it.text) }
+            .sortedByDescending { it.height }
+            .map { it.text.trim() }
+            .distinct()
+            .take(limit)
+            .toList()
+
+    /** Подписи таблицы и служебные надписи: названием продукта они не бывают. */
+    private val NOT_A_NAME = Regex(
+        """ккал|кдж|kcal|белк|жир|углевод|соль|состав|годн|хранен|изготов|масса|нетто""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    private const val NAME_MIN_LENGTH = 3
+    private const val NAME_LIMIT = 5
 
     /**
      * Разбирает распознанный текст.

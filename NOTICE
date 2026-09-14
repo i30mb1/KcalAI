@@ -1,0 +1,56 @@
+Kcal AI
+=======
+
+Этот продукт включает программное обеспечение сторонних авторов.
+
+
+PPOCRv5-Android
+---------------
+
+Модуль :core:ocr — нативный конвейер распознавания текста (C++ и Kotlin-обёртка) —
+перенесён из проекта PPOCRv5-Android.
+
+    Copyright (C) 2025 Fleey
+    https://github.com/iFleey/PPOCRv5-Android
+    Licensed under the Apache License, Version 2.0
+
+Копия лицензии: http://www.apache.org/licenses/LICENSE-2.0
+
+
+LiteRT
+------
+
+core/ocr/src/main/cpp/litert_cc_sdk/include — заголовки и вспомогательные
+исходники LiteRT C++ API. Лежат в репозитории, а не подтягиваются версией,
+по двум причинам: в публикуемом AAR нет каталога prefab, а исходники
+с публичного тега расходятся с опубликованным бинарником и требуют правок.
+Сами библиотеки приходят обычной зависимостью com.google.ai.edge.litert:litert.
+
+    Copyright 2024 Google LLC
+    https://github.com/google-ai-edge/LiteRT
+    Licensed under the Apache License, Version 2.0
+
+
+Модели PP-OCRv5
+---------------
+
+core/ocr/src/main/assets/models — модели обнаружения и распознавания текста.
+
+    PP-OCRv5_mobile_det: https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det
+    eslav_PP-OCRv5_mobile_rec: https://huggingface.co/PaddlePaddle/eslav_PP-OCRv5_mobile_rec
+    Словарь символов: PaddlePaddle/PaddleOCR, ppocrv5_eslav_dict.txt
+    Licensed under the Apache License, Version 2.0
+
+
+Open Food Facts
+---------------
+
+app/src/main/assets/seed.db — производная база данных, собранная из дампа
+Open Food Facts скриптом tools/builddb.
+
+    https://world.openfoodfacts.org/data
+    Licensed under the Open Database License (ODbL) v1.0
+    https://opendatacommons.org/licenses/odbl/1-0/
+
+Share-alike ODbL распространяется на базу, не на код приложения. Производный
+срез публикуется под ODbL, скрипт сборки — в tools/builddb.
