@@ -115,8 +115,18 @@ internal class LabelRecorder(
         private const val JPEG_HINT_BYTES = 256 * 1024
         private const val KEEP_SESSIONS = 5
 
-        /** Куда складывать. Внешний каталог приложения — его видно с компьютера без root. */
-        fun directory(context: Context): File =
-            File(context.getExternalFilesDir(null) ?: context.filesDir, "label-scans")
+        /**
+         * Куда складывать: внутреннее хранилище приложения.
+         *
+         * На снимках этикеток попадает кухня, руки и всё, что оказалось за пачкой,
+         * — то есть кадры из чужой квартиры. Внешний каталог приложения хоть
+         * и песочница, но лежит на общем разделе: его читает любой файловый
+         * менеджер и видно по USB. Диагностике этого не нужно, а человеку такое
+         * соседство никто не обещал.
+         *
+         * Забрать с отладочной сборки всё равно можно, просто через `run-as`:
+         * `adb exec-out run-as n7.kcalai tar c files/label-scans | tar x`
+         */
+        fun directory(context: Context): File = File(context.filesDir, "label-scans")
     }
 }
