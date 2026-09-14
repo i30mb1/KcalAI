@@ -39,10 +39,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +70,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.SupervisorJob
@@ -101,7 +104,7 @@ import n7.kcalai.ui.colors
  */
 @Composable
 fun LabelScannerDialog(
-    onSave: (gtin: String?, name: String, nutriments: Nutriments, servingG: Int?) -> Unit,
+    onSave: (gtin: String?, name: String, nutriments: Nutriments) -> Unit,
     onDismiss: () -> Unit,
     gtin: String? = null,
 ) {
@@ -126,6 +129,7 @@ fun LabelScannerDialog(
     LaunchedEffect(Unit) {
         if (!granted) permission.launch(Manifest.permission.CAMERA)
     }
+    val zoom = rememberSaveable { mutableFloatStateOf(LABEL_ZOOM) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -142,7 +146,7 @@ fun LabelScannerDialog(
                 // ровно в тот момент, когда человек наводит на пачку.
                 Box(Modifier.fillMaxWidth().fillMaxHeight(CAMERA_SHARE)) {
                     if (granted) {
-                        CameraFeed(state)
+                        CameraFeed(state, zoom.floatValue, onZoom = { zoom.floatValue = it })
                         Viewfinder(Modifier.fillMaxSize())
                     }
 
@@ -155,6 +159,9 @@ fun LabelScannerDialog(
                         },
                         onDismiss = onDismiss,
                         modifier = Modifier.align(Alignment.TopCenter),
+                        action = {
+                            ZoomPill(zoom.floatValue) { zoom.floatValue = nextZoomStop(zoom.floatValue) }
+                        },
                     )
 
                     // Подсказка живёт, пока не прочитан первый кадр. Дальше о том же
@@ -181,7 +188,7 @@ fun LabelScannerDialog(
                     modifier = Modifier.weight(1f),
                     onSave = {
                         state.onSaved()
-                        onSave(state.gtin, state.name.text.trim(), it, state.servingG)
+                        onSave(state.gtin, state.name.text.trim(), it)
                     },
                 )
             }
@@ -189,23 +196,68 @@ fun LabelScannerDialog(
     }
 }
 
-/** Превью и распознавание. Всё, что оно находит, уходит в [state]. */
+/**
+ * Превью и распознавание. Всё, что оно находит, уходит в [state].
+ *
+ * @param zoom приближение; щипок по превью зовёт [onZoom] с новым значением
+ */
 @Composable
-private fun CameraFeed(state: ScanState, modifier: Modifier = Modifier) {
+private fun CameraFeed(
+    state: ScanState,
+    zoom: Float,
+    onZoom: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
-    CameraFrames(modifier, zoom = LABEL_ZOOM) { labelAnalysis(context, state) }
+    CameraFrames(
+        modifier = modifier,
+        zoom = zoom,
+        onPinch = { factor -> onZoom((zoom * factor).coerceIn(ZOOM_MIN, ZOOM_MAX)) },
+    ) { labelAnalysis(context, state) }
 }
 
 /**
- * Двукратное приближение.
+ * Приближение в верхней строке: «2×». Тап переводит на следующую ступень.
+ *
+ * Показывается не ради самого числа, а чтобы приближение было видно как
+ * возможность: щипок по превью никто не ищет, пока не знает, что он есть.
+ */
+@Composable
+private fun ZoomPill(zoom: Float, onClick: () -> Unit) {
+    KcalChip(onClick = onClick, background = KcalTheme.colors.surface.copy(alpha = 0.92f)) {
+        Text(zoom.zoomLabel(), style = KcalTheme.type.time, color = KcalTheme.colors.text)
+    }
+}
+
+/** «2×» для круглого, «2,5×» для щипка. */
+private fun Float.zoomLabel(): String {
+    val tenths = (this * 10).roundToInt()
+    return if (tenths % 10 == 0) "${tenths / 10}×" else "${tenths / 10},${tenths % 10}×"
+}
+
+/** Следующая ступень по тапу: 1× → 2× → 3× → 1×. Щипком можно встать между ними. */
+private fun nextZoomStop(zoom: Float): Float =
+    ZOOM_STOPS.firstOrNull { it > zoom + ZOOM_STOP_SLACK } ?: ZOOM_STOPS.first()
+
+private val ZOOM_STOPS = listOf(1f, 2f, 3f)
+private const val ZOOM_STOP_SLACK = 0.05f
+
+/**
+ * Двукратное приближение с самого начала.
  *
  * Строка таблицы пищевой ценности с расстояния, на котором камера ещё
- * фокусируется, занимает в кадре 13–16 пикселей; детектор ужимает кадр
+ * фокусируется (ближе восьми-десяти сантиметров основная камера не наводится
+ * и размывает), занимает в кадре 13–16 пикселей; детектор ужимает кадр
  * в 640×640 и видит 6–8 — и не находит строку вовсе. Вдвое крупнее —
- * 13–16 в детекторе, читается. Больше не нужно: таблица перестаёт влезать,
- * и человеку приходится водить камерой по строкам.
+ * 13–16 в детекторе, читается. Больше по умолчанию не нужно: таблица
+ * перестаёт влезать, и человеку приходится водить камерой по строкам.
  */
 private const val LABEL_ZOOM = 2f
+
+private const val ZOOM_MIN = 1f
+
+/** Дальше сенсору уже нечего отдавать: кадр из четверти поля — это лупа над шумом. */
+private const val ZOOM_MAX = 4f
 
 /**
  * Разбор этикетки: распознавание текста, согласие кадров, попутный штрих-код
@@ -310,8 +362,8 @@ private fun ProductCard(
                 Column(Modifier.padding(start = 16.dp)) {
                     NameField(state.name) { focused = null }
                     CapsLabel(
-                        "${state.filledFields} из 6 полей · обязательных ${state.requiredFilled} / 4",
-                        modifier = Modifier.padding(top = 6.dp),
+                        "${state.filledFields} из 5 полей · обязательных ${state.requiredFilled} / 4",
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
             }
@@ -321,7 +373,7 @@ private fun ProductCard(
             // и дать ему выбор честнее, чем настаивать на догадке.
             NameChoices(state)
 
-            Spacer(Modifier.size(16.dp))
+            Spacer(Modifier.size(10.dp))
 
             ScanEditRow(
                 label = "калории",
@@ -341,21 +393,8 @@ private fun ProductCard(
             MacroRow("жиры", state.fat, "Ж", Macro.FAT, state) { focused = it }
             MacroRow("углеводы", state.carb, "У", Macro.CARB, state) { focused = it }
 
-            HorizontalDivider(color = colors.line, modifier = Modifier.padding(vertical = 14.dp))
+            HorizontalDivider(color = colors.line, modifier = Modifier.padding(vertical = 8.dp))
 
-            ScanEditRow(
-                label = "порция",
-                value = state.serving.text,
-                placeholder = "—",
-                fraction = if (state.serving.filled) 1f else 0f,
-                color = colors.text3,
-                onValueChange = { state.serving.type(it.filter(Char::isDigit)) },
-                onClear = { state.serving.clear() },
-                onFocus = { if (it) focused = state.serving },
-                optional = true,
-                unit = "г",
-            )
-            Spacer(Modifier.size(10.dp))
             ScanEditRow(
                 label = "штрихкод",
                 value = state.barcode.text,
@@ -398,7 +437,7 @@ private fun ProductCard(
                 text = "Сохранить",
                 enabled = state.canSave,
                 onClick = { state.nutriments?.let(onSave) },
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
             )
         }
     }
@@ -462,7 +501,7 @@ private fun MacroRow(
     state: ScanState,
     onFocus: (ScanField?) -> Unit,
 ) {
-    Spacer(Modifier.size(11.dp))
+    Spacer(Modifier.size(8.dp))
     ScanEditRow(
         label = label,
         value = field.text,
@@ -492,7 +531,7 @@ private fun ScannedNumbers(state: ScanState, focused: ScanField?) {
     val numbers = state.numbers.distinct()
     if (numbers.isEmpty() || focused == null) return
 
-    Column(Modifier.padding(top = 14.dp)) {
+    Column(Modifier.padding(top = 10.dp)) {
         CapsLabel("распознано с этикетки")
         LazyRow(
             modifier = Modifier.padding(top = 8.dp),
@@ -517,7 +556,7 @@ private fun Note(text: String, color: Color) {
         text,
         style = KcalTheme.type.body,
         color = color,
-        modifier = Modifier.padding(top = 12.dp),
+        modifier = Modifier.padding(top = 8.dp),
     )
 }
 
@@ -548,6 +587,7 @@ fun LabelDebugDialog(onRead: (LabelReading) -> Unit, onDismiss: () -> Unit) {
     LaunchedEffect(Unit) {
         if (!granted) permission.launch(Manifest.permission.CAMERA)
     }
+    val zoom = rememberSaveable { mutableFloatStateOf(LABEL_ZOOM) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -555,7 +595,7 @@ fun LabelDebugDialog(onRead: (LabelReading) -> Unit, onDismiss: () -> Unit) {
     ) {
         Surface(Modifier.fillMaxSize(), color = KcalTheme.colors.bg) {
             Box(Modifier.fillMaxSize()) {
-                if (granted) CameraFeed(state)
+                if (granted) CameraFeed(state, zoom.floatValue, onZoom = { zoom.floatValue = it })
 
                 DebugPane(
                     frame = state.frame,
@@ -571,6 +611,9 @@ fun LabelDebugDialog(onRead: (LabelReading) -> Unit, onDismiss: () -> Unit) {
                     meta = "кадр ${state.seen}",
                     onDismiss = onDismiss,
                     modifier = Modifier.align(Alignment.TopCenter),
+                    action = {
+                        ZoomPill(zoom.floatValue) { zoom.floatValue = nextZoomStop(zoom.floatValue) }
+                    },
                 )
 
                 ScanActions(

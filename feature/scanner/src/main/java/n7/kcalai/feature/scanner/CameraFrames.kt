@@ -1,12 +1,14 @@
 package n7.kcalai.feature.scanner
 
 import androidx.camera.compose.CameraXViewfinder
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.core.SurfaceRequest
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.lifecycle.awaitInstance
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -16,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.awaitCancellation
@@ -34,12 +37,14 @@ import kotlinx.coroutines.awaitCancellation
  * не умел, и разворачивать кадр приходилось своим `Canvas` — лишняя копия
  * на пять мегабайт на каждом кадре.
  *
- * @param zoom во сколько раз приблизить картинку. Основная камера не наводится
- *        ближе восьми-десяти сантиметров, а с этого расстояния мелкий шрифт
- *        этикетки в кадре 960×1280 выходит в десяток пикселей — детектору
- *        текста этого мало. Двигать телефон ближе нельзя: размоет. Зато сенсор
- *        отдаёт тот же кадр с половины поля, и текст вдвое крупнее при той же
- *        дистанции, где фокус ещё держится. Обрезается до предела камеры.
+ * Зум здесь — не свойство вьюфайндера, а команда камере: `CameraXViewfinder`
+ * только рисует поверхность, приближение делает `CameraControl`, и жест
+ * щипка вешается на превью самим. Кадр в анализ уходит уже приближенным —
+ * сенсор отдаёт те же 960×1280 с меньшего поля, и текст в них крупнее.
+ *
+ * @param zoom во сколько раз приблизить. Обрезается до предела камеры.
+ * @param onPinch щипок по превью: во сколько раз человек развёл пальцы
+ *        с прошлого события. `null` — превью зум жестом не меняет.
  * @param analysis собрать анализ кадров. Зовётся один раз за сессию: внутри
  *        живут нативные модели и потоки, и пересоздавать их на перерисовке нельзя.
  */
@@ -47,6 +52,7 @@ import kotlinx.coroutines.awaitCancellation
 internal fun CameraFrames(
     modifier: Modifier = Modifier,
     zoom: Float = 1f,
+    onPinch: ((Float) -> Unit)? = null,
     analysis: () -> FrameAnalysis,
 ) {
     val context = LocalContext.current
@@ -56,6 +62,7 @@ internal fun CameraFrames(
     DisposableEffect(frames) { onDispose { frames.close() } }
 
     var request by remember { mutableStateOf<SurfaceRequest?>(null) }
+    var camera by remember { mutableStateOf<Camera?>(null) }
 
     LaunchedEffect(lifecycleOwner, frames) {
         val provider = ProcessCameraProvider.awaitInstance(context)
@@ -63,24 +70,45 @@ internal fun CameraFrames(
             setSurfaceProvider { incoming -> request = incoming }
         }
         try {
-            val camera = provider.bindToLifecycle(
+            camera = provider.bindToLifecycle(
                 lifecycleOwner,
                 CameraSelector.DEFAULT_BACK_CAMERA,
                 preview,
                 frames.useCase,
             )
-            val maxZoom = camera.cameraInfo.zoomState.value?.maxZoomRatio ?: 1f
-            camera.cameraControl.setZoomRatio(zoom.coerceIn(1f, maxZoom))
             // Сессия живёт, пока жив экран. Отвязка — в finally, чтобы камера
             // отпускалась и при обычном закрытии, и при отмене корутины.
             awaitCancellation()
         } finally {
+            camera = null
             provider.unbindAll()
         }
     }
 
+    // Отдельно от привязки: зум меняется щипком посреди съёмки, а камера
+    // при этом не перепривязывается.
+    LaunchedEffect(camera, zoom) {
+        val bound = camera ?: return@LaunchedEffect
+        val range = bound.cameraInfo.zoomState.value
+        val allowed = zoom.coerceIn(range?.minZoomRatio ?: 1f, range?.maxZoomRatio ?: 1f)
+        bound.cameraControl.setZoomRatio(allowed)
+    }
+
     request?.let { surface ->
-        CameraXViewfinder(surfaceRequest = surface, modifier = modifier.fillMaxSize())
+        CameraXViewfinder(
+            surfaceRequest = surface,
+            modifier = modifier
+                .fillMaxSize()
+                .then(
+                    if (onPinch != null) {
+                        Modifier.pointerInput(Unit) {
+                            detectTransformGestures { _, _, factor, _ -> onPinch(factor) }
+                        }
+                    } else {
+                        Modifier
+                    }
+                ),
+        )
     }
 }
 
