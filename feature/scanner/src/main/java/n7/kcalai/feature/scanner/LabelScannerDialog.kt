@@ -54,7 +54,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -361,7 +360,7 @@ private fun ProductCard(
     /** Куда подставит число тап по чипсу. Живёт дольше фокуса — см. [ScannedNumbers]. */
     var focused by remember { mutableStateOf<ScanField?>(null) }
 
-    ScanPanel(modifier.navigationBarsPadding().imePadding()) {
+    ScanPanel(modifier) {
         // Кнопка прижата к низу панели, а не идёт за содержимым: содержимое
         // короче панели почти всегда, и кнопка посреди пустоты выглядела
         // забытой. Что не влезло над ней — прокручивается.

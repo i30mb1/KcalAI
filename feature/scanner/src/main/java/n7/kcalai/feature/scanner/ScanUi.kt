@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -202,7 +204,13 @@ fun HintPill(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** Нижняя панель разбора: та же поверхность и тот же радиус, что у шитов. */
+/**
+ * Нижняя панель разбора: та же поверхность и тот же радиус, что у шитов.
+ *
+ * Отступы под полосу навигации и клавиатуру — внутри фона, а не снаружи:
+ * экран идёт до края, и панель обязана дойти до него сама, иначе под
+ * жестовой полоской остаётся полоса фона другого цвета.
+ */
 @Composable
 fun ScanPanel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
@@ -210,6 +218,8 @@ fun ScanPanel(modifier: Modifier = Modifier, content: @Composable ColumnScope.()
             .fillMaxWidth()
             .clip(RoundedCornerShape(topStart = KcalShapes.sheet, topEnd = KcalShapes.sheet))
             .background(KcalTheme.colors.surface)
+            .navigationBarsPadding()
+            .imePadding()
             .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp),
     ) {
         content()
