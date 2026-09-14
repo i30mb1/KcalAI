@@ -2,6 +2,7 @@ package n7.kcalai
 
 import android.app.Application
 import n7.kcalai.work.ContributionWorker
+import n7.kcalai.work.ScanUploadWorker
 import n7.kcalai.work.SeedUpdateWorker
 
 class KcalApp : Application() {
@@ -18,5 +19,7 @@ class KcalApp : Application() {
         // Справочник: спросить сервер, нет ли свежее. Ставится при каждом старте,
         // работает только при сети и только если есть адрес сервера.
         if (container.serverConfigured) SeedUpdateWorker.enqueue(this)
+        // Сессии съёмки: прошлая отправка могла не удаться.
+        ScanUploadWorker.enqueue(this)
     }
 }

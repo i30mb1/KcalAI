@@ -9,6 +9,7 @@ import n7.kcalai.feature.diary.DiaryRoute
 import n7.kcalai.feature.diary.DiaryViewModel
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.work.ContributionWorker
+import n7.kcalai.work.ScanUploadWorker
 
 class MainActivity : ComponentActivity() {
 
@@ -30,6 +31,7 @@ class MainActivity : ComponentActivity() {
                             // Продукт сохранён локально и уже работает; отправку
                             // берёт на себя WorkManager, когда появится сеть.
                             onContributionQueued = { ContributionWorker.enqueue(applicationContext) },
+                            onScanFinished = { ScanUploadWorker.enqueue(applicationContext) },
                         )
                     )
                 )

@@ -151,6 +151,8 @@ class DiaryViewModel(
      * и тащить его в модуль экрана ради одного вызова незачем.
      */
     private val onContributionQueued: () -> Unit = {},
+    /** Экран съёмки этикетки закрылся — сессия записана, её можно отправлять. */
+    private val onScanFinished: () -> Unit = {},
     private val clock: Clock = Clock.systemDefaultZone(),
 ) : ViewModel() {
 
@@ -601,6 +603,7 @@ class DiaryViewModel(
      */
     fun onSaveNewProduct(gtin: String?, name: String, nutriments: Nutriments, servingG: Int?) {
         overlay.value = Overlay.None
+        onScanFinished()
 
         viewModelScope.launch {
             val candidate = try {
@@ -648,6 +651,7 @@ class DiaryViewModel(
      */
     fun onLabelDebugRead(reading: LabelReading) {
         overlay.value = Overlay.None
+        onScanFinished()
 
         val draft = reading.draft
         Log.i(TAG, "этикетка: ${reading.trace.route.title}, " +
@@ -714,7 +718,9 @@ class DiaryViewModel(
     }
 
     fun onDismissOverlay() {
+        val closing = overlay.value
         overlay.value = Overlay.None
+        if (closing is Overlay.LabelScan || closing == Overlay.LabelDebug) onScanFinished()
     }
 
     fun onSetGoal(kcal: Int, prot: Int, fat: Int, carb: Int) {
@@ -790,10 +796,11 @@ class DiaryViewModel(
         private val personal: PersonalRepository,
         private val food: FoodRepository,
         private val onContributionQueued: () -> Unit = {},
+        private val onScanFinished: () -> Unit = {},
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            DiaryViewModel(diary, resolver, personal, food, onContributionQueued) as T
+            DiaryViewModel(diary, resolver, personal, food, onContributionQueued, onScanFinished) as T
     }
 }
 
