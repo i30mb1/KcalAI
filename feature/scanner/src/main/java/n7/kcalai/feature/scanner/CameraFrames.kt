@@ -17,7 +17,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -95,8 +97,13 @@ internal fun CameraFrames(
     }
 
     request?.let { surface ->
+        // Кадр показывается целиком, по ширине и от верхнего края, а не
+        // обрезанным по центру: то, что видит человек, и то, что уходит
+        // в разбор, — одна и та же картинка. Что ниже кадра, закрывает панель.
         CameraXViewfinder(
             surfaceRequest = surface,
+            alignment = Alignment.TopCenter,
+            contentScale = ContentScale.FillWidth,
             modifier = modifier
                 .fillMaxSize()
                 .then(

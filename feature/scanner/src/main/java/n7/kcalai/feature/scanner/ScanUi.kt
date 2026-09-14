@@ -69,18 +69,23 @@ import n7.kcalai.ui.WideButton
  * Затемнение рисуется одним слоем с вырезанным отверстием, а не четырьмя
  * прямоугольниками вокруг: у скруглённого окна четыре прямоугольника оставляют
  * незатемнённые уголки, и видно это сразу.
+ *
+ * @param zone верхняя доля холста, в которой стоит окно. Холст — весь экран,
+ *        а нижнюю его часть закрывает панель разбора; окно должно стоять выше неё.
+ * @param windowHeight высота окна как доля [zone]
  */
 @Composable
-fun Viewfinder(modifier: Modifier = Modifier, windowHeight: Float = 0.42f) {
+fun Viewfinder(modifier: Modifier = Modifier, zone: Float = 1f, windowHeight: Float = 0.42f) {
 
     Canvas(
         modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     ) {
         val inset = 24.dp.toPx()
-        val height = size.height * windowHeight
-        // Окно стоит выше геометрического центра: снизу его подпирает панель
-        // разбора, и по оптическому центру оно уезжает ей под край.
-        val top = (size.height - height) * 0.42f
+        val zoneHeight = size.height * zone
+        val height = zoneHeight * windowHeight
+        // Окно стоит выше геометрического центра зоны: снизу его подпирает
+        // панель разбора, и по оптическому центру оно уезжает ей под край.
+        val top = (zoneHeight - height) * 0.42f
         val corner = CornerRadius(22.dp.toPx())
         val topLeft = Offset(inset, top)
         val window = Size(size.width - inset * 2, height)
