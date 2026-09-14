@@ -5,6 +5,10 @@ import android.graphics.Bitmap
 import android.util.Log
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Последние секунды съёмки, сложенные на диск для разбора потом.
@@ -39,15 +43,46 @@ internal class LabelRecorder(
     private val shots = ArrayDeque<Shot>()
 
     /**
+     * Сжатие идёт своим потоком, а не тем, что разбирает кадр.
+     *
+     * Двадцать миллисекунд на кадр — вроде мелочь, но они ложатся ровно туда же,
+     * где уже стоит распознавание, и складываются с ним. Диагностика не вправе
+     * замедлять то, что диагностирует: рядом человек держит камеру на пачке.
+     */
+    private val worker = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "label-recorder").apply { priority = Thread.MIN_PRIORITY }
+    }
+
+    /** Сколько несжатых кадров разрешено держать в очереди. */
+    private val queued = AtomicInteger(0)
+
+    /**
      * Кладёт кадр в окно.
      *
-     * Сжатие идёт здесь, на потоке анализа, и это дешевле, чем кажется: кадр
-     * в JPEG — единицы миллисекунд против полутора-двух сотен на распознавание.
-     * Держать же полтора десятка несжатых кадров по пять мегабайт нельзя —
-     * это семьдесят мегабайт живой памяти ради диагностики.
+     * Битмап уезжает в очередь как есть — это пять мегабайт, поэтому очередь
+     * ограничена двумя. Если сжатие отстаёт, кадр просто теряется: диагностике
+     * дырка в записи не страшна, а лишние пятнадцать мегабайт живой памяти
+     * посреди съёмки — вполне.
      */
-    @Synchronized
     fun add(bitmap: Bitmap, atMs: Long, note: String) {
+        if (queued.get() >= MAX_QUEUED) return
+        queued.incrementAndGet()
+        try {
+            worker.execute {
+                try {
+                    compress(bitmap, atMs, note)
+                } finally {
+                    queued.decrementAndGet()
+                }
+            }
+        } catch (rejected: RejectedExecutionException) {
+            // Съёмка уже закрывается. Кадр не нужен.
+            queued.decrementAndGet()
+        }
+    }
+
+    @Synchronized
+    private fun compress(bitmap: Bitmap, atMs: Long, note: String) {
         val jpeg = ByteArrayOutputStream(JPEG_HINT_BYTES).use { out ->
             bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
             out.toByteArray()
@@ -68,6 +103,11 @@ internal class LabelRecorder(
      * Вызывать с фонового потока: тут несколько мегабайт.
      */
     fun save(startedAtMs: Long, outcome: String? = null): File? {
+        // Дождаться хвоста очереди: последние кадры — самые интересные, на них
+        // разбор либо сошёлся, либо человек сдался.
+        worker.shutdown()
+        runCatching { worker.awaitTermination(DRAIN_TIMEOUT_MS, TimeUnit.MILLISECONDS) }
+
         val taken = drain()
         if (taken.isEmpty()) return null
 
@@ -128,6 +168,11 @@ internal class LabelRecorder(
         private const val JPEG_QUALITY = 80
         private const val JPEG_HINT_BYTES = 256 * 1024
         private const val KEEP_SESSIONS = 5
+
+        /** Больше двух несжатых кадров в очереди — уже пятнадцать мегабайт. */
+        private const val MAX_QUEUED = 2
+
+        private const val DRAIN_TIMEOUT_MS = 2_000L
 
         /** Отступ продолжений многострочной заметки о кадре. */
         private const val INDENT = "              "

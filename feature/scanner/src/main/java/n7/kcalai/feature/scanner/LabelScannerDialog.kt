@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.os.Process
 import android.util.Size
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
@@ -69,9 +70,10 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.concurrent.Executors
+import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import n7.kcalai.ocr.LabelOcr
@@ -191,9 +193,17 @@ private fun CameraFeed(state: ScanState) {
     val controller = remember { LifecycleCameraController(context) }
 
     DisposableEffect(lifecycleOwner) {
-        val executor = Executors.newSingleThreadExecutor()
-        val ocr = LabelOcr(context)
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        // Разбор кадра целиком уходит на потоки пониженного приоритета, и это
+        // не микрооптимизация. Распознавание занимает сотни миллисекунд и грузит
+        // все ядра; с обычным приоритетом оно конкурирует за процессор с отрисовкой
+        // превью, и камера начинает дёргаться ровно тогда, когда человек наводит.
+        // Кадром позже разбор ничего не теряет, дёрганое превью — теряет наводку.
+        val executor = Executors.newSingleThreadExecutor(unhurried("label-frame"))
+        val inference = Executors.newSingleThreadExecutor(unhurried("label-ocr"))
+        val dispatcher = inference.asCoroutineDispatcher()
+
+        val ocr = LabelOcr(context, dispatcher)
+        val scope = CoroutineScope(SupervisorJob() + dispatcher)
         val recorder = LabelRecorder(LabelRecorder.directory(context))
         val startedAt = System.currentTimeMillis()
         val main = ContextCompat.getMainExecutor(context)
@@ -245,6 +255,7 @@ private fun CameraFeed(state: ScanState) {
             val outcome = state.outcome(state.saved)
             Thread { recorder.save(startedAt, outcome) }.start()
             executor.shutdown()
+            inference.shutdown()
         }
     }
 
@@ -561,6 +572,24 @@ fun LabelDebugDialog(onRead: (LabelReading) -> Unit, onDismiss: () -> Unit) {
         }
     }
 }
+
+/**
+ * Поток, который уступает дорогу интерфейсу.
+ *
+ * Приоритет ниже обычного, но выше «фонового»: `THREAD_PRIORITY_BACKGROUND`
+ * отправляет поток в background-cgroup, а там система выдаёт ему считанные
+ * проценты процессора — распознавание кадра растянулось бы на секунды.
+ * Нужна ровно уступка отрисовке, а не ссылка в каменоломню.
+ */
+private fun unhurried(name: String) = ThreadFactory { runnable ->
+    Thread({
+        Process.setThreadPriority(FRAME_THREAD_PRIORITY)
+        runnable.run()
+    }, name)
+}
+
+/** Ниже интерфейсного нуля, выше фоновой десятки. */
+private const val FRAME_THREAD_PRIORITY = 4
 
 /** EAN-13 — самый длинный из форматов, которые встречаются на еде. */
 private const val MAX_GTIN_DIGITS = 13

@@ -110,11 +110,15 @@ internal class ScanState(initialGtin: String?) {
         saved = true
     }
 
+    /** Голоса по ключам. Считается один раз на кадр: [progress] зовут по десятку раз на перерисовку. */
+    private var votes by mutableStateOf<Map<String, LabelConsensus.Field>>(emptyMap())
+
     fun onFrame(next: LabelFrame) {
         frame = next
         if (next.available) seen++
 
         val fields = next.fields.toMap()
+        votes = fields
         val draft = next.reading.draft
 
         // В поля уходит только набранное голосами. Показывать последний кадр
@@ -148,7 +152,7 @@ internal class ScanState(initialGtin: String?) {
     fun progress(key: String): Float = when {
         field(key).manual -> 1f
         field(key).filled -> 1f
-        else -> frame.fields.toMap()[key]?.progress ?: 0f
+        else -> votes[key]?.progress ?: 0f
     }
 
     private fun field(key: String): ScanField = when (key) {
