@@ -32,6 +32,8 @@ internal class LabelFrame(
     /** Насколько набрано согласие по каждому из четырёх значений. */
     val fields: List<Pair<String, LabelConsensus.Field>> = emptyList(),
     val frames: Int = 0,
+    /** Что на пачке может быть названием, по убыванию числа подтвердивших кадров. */
+    val names: List<String> = emptyList(),
 )
 
 /**
@@ -55,8 +57,21 @@ internal class LabelAnalyzer(
     private val scope: CoroutineScope,
     /** Куда складывать последние секунды съёмки для разбора потом. */
     private val recorder: LabelRecorder?,
+    /**
+     * Штрих-код, пойманный попутно.
+     *
+     * Камера здесь наведена на таблицу пищевой ценности, а код напечатан
+     * на другой стороне пачки, — так что ловится он редко и только когда человек
+     * пачку повернул. Но стоит это почти ничего: снимок уже развёрнут для
+     * распознавания текста, и разбор кода по нему идёт единицы миллисекунд
+     * на чужом потоке. А выигрыш велик: продукт с кодом находят другие люди,
+     * продукт без кода остаётся только у своего автора.
+     */
+    private val onBarcode: (String) -> Unit = {},
     private val onFrame: (LabelFrame) -> Unit,
 ) : ImageAnalysis.Analyzer {
+
+    private val barcodes = BarcodeReader()
 
     private val busy = AtomicBoolean(false)
     private val reportedUnavailable = AtomicBoolean(false)
@@ -68,6 +83,11 @@ internal class LabelAnalyzer(
      * только тело корутины, которое [busy] держит в одном экземпляре за раз.
      */
     private val consensus = LabelConsensus()
+
+    /** Отпустить нативную модель разбора кода. Зовётся вместе с закрытием OCR. */
+    fun close() {
+        barcodes.close()
+    }
 
     /** Последнее, что попало в лог. Пишем на смену результата, а не на кадр — см. [log]. */
     private var lastLogged: String? = null
@@ -107,6 +127,11 @@ internal class LabelAnalyzer(
                     return@launch
                 }
 
+                // Код ищется до распознавания текста и результата не ждёт:
+                // разбор кадра не должен ни на миллисекунду зависеть от того,
+                // попал ли в кадр штрих-код.
+                barcodes.read(bitmap, onBarcode)
+
                 val verdict = consensus.add(LabelParser.parseLines(lines))
                 val elapsed = SystemClock.elapsedRealtime() - started
                 val size = "${bitmap.width}×${bitmap.height}"
@@ -124,6 +149,7 @@ internal class LabelAnalyzer(
                         size = size,
                         fields = verdict.fields,
                         frames = verdict.frames,
+                        names = verdict.names,
                     )
                 )
             } finally {

@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -35,7 +38,10 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -227,19 +233,33 @@ fun ProgressRing(
 /**
  * Одно поле разбора: подпись, полоска набранной уверенности, значение.
  *
- * Полоска показывает не «идёт загрузка», а согласие кадров: значение попадает
- * в форму, только когда несколько кадров подряд прочитали одно и то же. Видеть
+ * Полоска показывает не «идёт загрузка», а согласие кадров: значение встаёт
+ * в поле, только когда несколько кадров подряд прочитали одно и то же. Видеть
  * надо именно **какое** поле не набралось — это подсказывает действие: подвинуть
  * камеру, убрать блик с той самой строки, поднести ближе.
+ *
+ * Значение при этом всегда можно набрать самому, поверх распознанного. Съёмка —
+ * способ не печатать пять чисел с мобильной клавиатуры, а не обязанность ждать,
+ * пока камера прочитает то, что человек видит на пачке своими глазами.
+ *
+ * @param onClear крестик: снять набранное значение. Распознавание после этого
+ *        не подставит его заново — снятое значение оно больше не предлагает,
+ *        иначе крестик не делал бы ничего.
  */
 @Composable
-fun ScanFieldRow(
+fun ScanEditRow(
     label: String,
-    value: String?,
+    value: String,
+    placeholder: String,
     fraction: Float,
     color: Color,
+    onValueChange: (String) -> Unit,
+    onClear: () -> Unit,
+    onFocus: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     optional: Boolean = false,
+    decimal: Boolean = false,
+    unit: String? = null,
 ) {
     val colors = KcalTheme.colors
     val animated by animateFloatAsState(
@@ -249,17 +269,11 @@ fun ScanFieldRow(
     )
     val done = fraction >= 1f
 
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.width(80.dp)) {
-            CapsLabel(
-                label,
-                color = if (optional) colors.text3 else colors.text2,
-            )
-            // «Необязательное» сказано словом, а не одной лишь бледностью:
-            // бледное читается как «недоступно», и человек ждёт, пока оно заполнится.
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.width(74.dp)) {
+            CapsLabel(label, color = if (optional) colors.text3 else colors.text2)
+            // «Необязательное» сказано словом, а не одной бледностью: бледное
+            // читается как «недоступно», и человек ждёт, пока оно заполнится.
             if (optional) {
                 Text(
                     "необяз.",
@@ -273,27 +287,86 @@ fun ScanFieldRow(
         MiniBar(
             fraction = animated,
             fill = if (done) color else color.copy(alpha = 0.55f),
-            modifier = Modifier.weight(1f).padding(horizontal = 11.dp),
+            modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
             height = if (optional) 4.dp else 6.dp,
         )
 
-        Box(Modifier.width(68.dp), contentAlignment = Alignment.CenterEnd) {
-            if (value != null) {
-                Text(
-                    value,
-                    style = KcalTheme.type.number,
-                    color = if (optional) colors.text2 else colors.text,
-                    maxLines = 1,
+        Row(
+            modifier = Modifier.width(104.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End,
+        ) {
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    textStyle = KcalTheme.type.number.copy(
+                        color = colors.text,
+                        textAlign = TextAlign.End,
+                    ),
+                    cursorBrush = SolidColor(colors.text),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
+                        imeAction = ImeAction.Next,
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { onFocus(it.isFocused) },
                 )
-            } else {
-                // Пока значения нет, справа стоит процент — та же полоска словами.
-                // Прочерк на его месте выглядел бы как «не будет».
+                if (value.isEmpty()) {
+                    // На месте пустого значения стоит процент набранного, а не
+                    // прочерк: прочерк читается как «не будет», а полоска в это
+                    // время как раз ползёт.
+                    Text(
+                        placeholder,
+                        style = KcalTheme.type.time,
+                        color = colors.text3,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+
+            if (unit != null && value.isNotEmpty()) {
                 Text(
-                    if (optional) "ищем" else "${(animated * 100).toInt()}%",
+                    unit,
                     style = KcalTheme.type.time,
                     color = colors.text3,
+                    modifier = Modifier.padding(start = 3.dp),
                 )
             }
+
+            ClearButton(visible = value.isNotEmpty(), onClick = onClear)
+        }
+    }
+}
+
+/**
+ * Крестик, снимающий уже набранное значение.
+ *
+ * Место под него занято всегда, даже когда значения нет: иначе строка дёргается
+ * по ширине ровно в тот момент, когда камера что-то дочитала, — и палец промахивается
+ * мимо соседнего поля.
+ */
+@Composable
+private fun ClearButton(visible: Boolean, onClick: () -> Unit) {
+    val colors = KcalTheme.colors
+
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(CircleShape)
+            .then(if (visible) Modifier.clickable(onClick = onClick) else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (visible) {
+            Icon(
+                Icons.Default.Close,
+                contentDescription = "Стереть значение",
+                tint = colors.text3,
+                modifier = Modifier.size(14.dp),
+            )
         }
     }
 }

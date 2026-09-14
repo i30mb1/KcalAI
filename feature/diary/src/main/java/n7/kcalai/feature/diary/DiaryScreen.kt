@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import n7.kcalai.database.DiaryEntryEntity
+import n7.kcalai.feature.scanner.LabelDebugDialog
 import n7.kcalai.feature.scanner.LabelScannerDialog
 import n7.kcalai.feature.scanner.ScannerDialog
 import n7.kcalai.model.FoodCandidate
@@ -72,32 +73,17 @@ fun DiaryRoute(viewModel: DiaryViewModel) {
             onDismiss = viewModel::onDismissOverlay,
         )
 
-        is Overlay.NewProduct -> NewProductDialog(
-            gtin = overlay.gtin,
-            draft = overlay.draft,
-            numbers = overlay.numbers,
-            names = overlay.names,
-            onConfirm = { name, nutriments, servingG ->
-                viewModel.onSaveNewProduct(overlay.gtin, name, nutriments, servingG)
-            },
-            onScanLabel = { current -> viewModel.onScanLabel(overlay.gtin, current) },
-            onDismiss = viewModel::onDismissOverlay,
-        )
-
         is Overlay.LabelScan -> LabelScannerDialog(
-            onRead = { reading -> viewModel.onLabelRead(overlay.gtin, overlay.current, reading) },
-            // Код с промаха скана: экран его не читает, но показывает — по нему
-            // заведённый продукт найдут другие.
+            onSave = viewModel::onSaveNewProduct,
+            onDismiss = viewModel::onDismissOverlay,
+            // Код с промаха скана: сам экран его тоже ловит, но отсканированный
+            // человеком намеренно сильнее случайно попавшего в кадр.
             gtin = overlay.gtin,
-            // Закрыть съёмку — вернуться в форму, а не потерять её вместе
-            // с набранным именем и введённым кодом.
-            onDismiss = { viewModel.onLabelCancelled(overlay.gtin, overlay.current) },
         )
 
-        Overlay.LabelDebug -> LabelScannerDialog(
+        Overlay.LabelDebug -> LabelDebugDialog(
             onRead = viewModel::onLabelDebugRead,
             onDismiss = viewModel::onDismissOverlay,
-            debug = true,
         )
     }
 }

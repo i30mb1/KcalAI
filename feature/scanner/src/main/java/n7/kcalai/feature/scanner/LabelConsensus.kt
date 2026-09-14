@@ -81,6 +81,14 @@ internal class LabelConsensus(
         val fat: Field,
         val carb: Field,
         val frames: Int,
+        /**
+         * Названия-кандидаты, отсортированные по числу подтвердивших кадров.
+         *
+         * Голосуют и они, хотя числами не являются. Причина та же, что у чисел,
+         * но заметнее: список кандидатов от кадра к кадру перетасовывается
+         * целиком, и чипсы под пальцем прыгали бы, пока человек в них целится.
+         */
+        val names: List<String> = emptyList(),
     ) {
         /** Все четыре значения набраны и сходятся между собой. */
         val settled: Boolean get() = reading.confident
@@ -131,7 +139,26 @@ internal class LabelConsensus(
             fat = fat,
             carb = carb,
             frames = readings.size,
+            names = voteNames(),
         )
+    }
+
+    /**
+     * Названия по убыванию числа кадров, в которых они встретились.
+     *
+     * Равные по голосам идут в том порядке, в каком их отдал разбор, — а он
+     * сортирует по высоте букв, то есть по тому, насколько крупно надпись
+     * напечатана на пачке.
+     */
+    private fun voteNames(): List<String> {
+        val counts = LinkedHashMap<String, Int>()
+        readings.forEach { reading ->
+            reading.names.forEach { name -> counts.merge(name, 1, Int::plus) }
+        }
+        return counts.entries
+            .sortedByDescending { it.value }
+            .map { it.key }
+            .take(NAME_LIMIT)
     }
 
     /**
@@ -228,6 +255,9 @@ internal class LabelConsensus(
 
         /** Полграмма запаса: клетчатка и округление на пачке дают остаток чуть мимо нуля. */
         const val DERIVE_SLACK_CG = 50
+
+        /** Сколько названий показывать. Больше — уже не выбор, а список. */
+        const val NAME_LIMIT = 4
 
         /** Разборы, которым голосование доверяет: каждое число взято у своей подписи. */
         val LABELLED = setOf(LabelTrace.Route.LABELS, LabelTrace.Route.LABELS_PARTIAL)

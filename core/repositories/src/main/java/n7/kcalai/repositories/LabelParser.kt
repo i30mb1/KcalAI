@@ -255,30 +255,82 @@ object LabelParser {
     /**
      * Строки, которые могут оказаться названием продукта.
      *
-     * Отбор грубый и не претендует на большее: цифры, единицы измерения
-     * и всё короткое — не название. Остальное сортируется по высоте букв,
+     * Отбор грубый и не претендует на большее: цифры, единицы измерения, служебные
+     * надписи и всё короткое — не название. Остальное сортируется по высоте букв,
      * потому что название на упаковке печатают крупнее состава.
      *
-     * Первая строка подставляется в поле, остальные уходят в чипсы. Угадывать
-     * молча тут нельзя — человек всё равно смотрит на пачку, и дать ему выбор
-     * честнее, чем настаивать на догадке.
+     * Кандидаты приводятся к виду, который человек согласится увидеть в дневнике:
+     * с пачки они приходят капсом, в кавычках-ёлочках и с хвостами распознавания,
+     * а в ленте потом стоят рядом с «Гречка» и «Кофе с молоком». Строка «ТВОРОГ
+     * 5% "ПРОСТОКВАШИНО"» — это то же название, но записанное так, как его никто
+     * не пишет руками.
+     *
+     * Угадывать молча тут всё равно нельзя: человек смотрит на пачку, и дать ему
+     * выбор честнее, чем настаивать на догадке.
      */
     fun nameCandidates(lines: List<TextLine>, limit: Int = NAME_LIMIT): List<String> =
         lines.asSequence()
-            .filter { it.text.trim().length >= NAME_MIN_LENGTH }
-            .filter { line -> line.text.count(Char::isLetter) >= line.text.count(Char::isDigit) }
             .filterNot { NOT_A_NAME.containsMatchIn(it.text) }
             .sortedByDescending { it.height }
-            .map { it.text.trim() }
+            .mapNotNull { humanizeName(it.text) }
             .distinct()
             .take(limit)
             .toList()
 
+    /**
+     * Распознанная строка в человеческое название — или `null`, если это не оно.
+     *
+     * Порог по доле букв отсекает мусор распознавания: у строки вроде «5%:1|2,3»
+     * букв меньше трети, и названием она не является ни при каком раскладе.
+     */
+    fun humanizeName(raw: String): String? {
+        val cleaned = raw
+            .replace(NAME_NOISE, " ")
+            .replace(SPACES, " ")
+            .trim()
+            .trim('"', '«', '»', '\'', '-', '·', ',', '.', ':', ';')
+            .trim()
+
+        if (cleaned.length < NAME_MIN_LENGTH) return null
+
+        val letters = cleaned.count(Char::isLetter)
+        if (letters < cleaned.length * NAME_MIN_LETTER_SHARE) return null
+        if (letters < cleaned.count(Char::isDigit)) return null
+
+        // Капс с пачки — не выделение, а типографика упаковки. Переносить её
+        // в ленту незачем: там «ТВОРОГ» кричит рядом с «Гречка».
+        val upper = cleaned.count { it.isLetter() && it.isUpperCase() }
+        val normalized = if (upper >= letters * CAPS_SHARE && letters > SHORT_ABBREVIATION) {
+            cleaned.lowercase(RU)
+        } else {
+            cleaned
+        }
+
+        return normalized.replaceFirstChar { it.titlecase(RU) }
+    }
+
     /** Подписи таблицы и служебные надписи: названием продукта они не бывают. */
     private val NOT_A_NAME = Regex(
-        """ккал|кдж|kcal|белк|жир|углевод|соль|состав|годн|хранен|изготов|масса|нетто""",
+        """ккал|кдж|kcal|белк|жир|углевод|соль|состав|годн|хранен|изготов|масса|нетто|"""
+            + """пищев|ценност|энергет|производ|упаков|вскрыт|температур|услови|"""
+            + """гост|ту\s|стандарт|сертифик|парти|www|\.ru|тел\.|штрих""",
         RegexOption.IGNORE_CASE,
     )
+
+    /** Что распознаватель дописывает от себя: одиночные скобки, палки, решётки. */
+    private val NAME_NOISE = Regex("""[|\\/_~^*#<>\[\]{}()]+""")
+    private val SPACES = Regex("""\s+""")
+
+    private val RU = java.util.Locale("ru")
+
+    /** Ниже этой доли букв строка — мусор распознавания, а не слово. */
+    private const val NAME_MIN_LETTER_SHARE = 0.55
+
+    /** С какой доли заглавных строка считается набранной капсом. */
+    private const val CAPS_SHARE = 0.8
+
+    /** «БЗМЖ» и «ГОСТ» капсом и остаются: короткое слово капсом — аббревиатура. */
+    private const val SHORT_ABBREVIATION = 4
 
     private const val NAME_MIN_LENGTH = 3
     private const val NAME_LIMIT = 5

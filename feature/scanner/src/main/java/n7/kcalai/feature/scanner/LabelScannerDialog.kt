@@ -53,6 +53,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.ImeAction
+import n7.kcalai.model.Nutriments
+import n7.kcalai.ui.KcalChip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -74,42 +83,32 @@ import n7.kcalai.ui.WideButton
 import n7.kcalai.ui.colors
 
 /**
- * Съёмка таблицы пищевой ценности.
+ * Карточка продукта, которую заполняет камера.
  *
- * Заполнять форму нового продукта руками — пять значений с мобильной клавиатуры,
- * три из них дробные. Это то место, где люди бросают приложение, и здесь оно
- * заменяется наведением камеры на пачку.
+ * Раньше здесь был сканер, после которого открывалась форма на пять полей: камера
+ * отдавала числа, человек смотрел на них уже на другом экране и там же правил.
+ * Два экрана на одно действие — и оба неполные: на первом ничего нельзя было
+ * поправить, на втором не было видно пачки.
  *
- * Ведёт себя как сканер штрих-кода: распознавание идёт непрерывно, и как только
- * числа сошлись между собой, диалог закрывается сам. Разница одна — у этикетки
- * есть исход «прочиталось, но не сошлось», и на него нужна кнопка «Готово»:
- * она отдаёт то, что видно, и человек назначает числа сам.
+ * Теперь экран один. Камера набирает значения кадр за кадром, любое из них можно
+ * снять крестиком и набрать своё, а пачка всё это время в кадре — сверять есть
+ * с чем. Без камеры экран остаётся той же карточкой, просто пустой: заполнить
+ * её руками можно всегда.
  *
- * @param onRead вызывается ровно один раз — автоматически при уверенном разборе
- *        либо по кнопке.
- * @param debug показывать разбор целиком и не закрываться самому. Разбор этикетки
- *        иначе непрозрачен: в форму приходят четыре числа, и по ним не понять,
- *        взялись они с подписей или их подобрала арифметика. В этом режиме видно
- *        всё — распознанные строки, маршрут разбора, что принято за ноль, — и
- *        закрытия по первому же сошедшемуся кадру нет, иначе смотреть было бы
- *        не на что.
+ * @param gtin код, с промаха которого сюда пришли. Камера ловит и свой — см.
+ *        [LabelAnalyzer], — но пришедший извне сильнее: его человек отсканировал
+ *        намеренно.
+ * @param onSave отдаёт готовый продукт наружу. Экран сам ничего не сохраняет:
+ *        куда класть продукт, решает дневник.
  */
 @Composable
 fun LabelScannerDialog(
-    onRead: (LabelReading) -> Unit,
+    onSave: (gtin: String?, name: String, nutriments: Nutriments, servingG: Int?) -> Unit,
     onDismiss: () -> Unit,
-    /**
-     * Код, с промаха которого пришли сюда.
-     *
-     * Экран его не читает и прочитать не может — камера смотрит на таблицу
-     * пищевой ценности, а код напечатан на другой стороне пачки. Но показать
-     * его надо: код делает заведённый продукт находимым у других людей, и его
-     * наличие или отсутствие человек должен видеть до сохранения, а не после.
-     */
     gtin: String? = null,
-    debug: Boolean = false,
 ) {
     val context = LocalContext.current
+    val state = rememberScanState(gtin)
 
     var granted by remember {
         mutableStateOf(
@@ -135,48 +134,58 @@ fun LabelScannerDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(Modifier.fillMaxSize(), color = KcalTheme.colors.bg) {
-            when {
-                granted -> CameraPane(gtin, onRead, onDismiss, debug)
-                // Без камеры снимать нечего: форма остаётся, человек заполнит руками.
-                answered -> NoCamera(onDismiss)
-                else -> Waiting(onDismiss)
+            Column(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    if (granted) {
+                        CameraFeed(state)
+                        Viewfinder(Modifier.fillMaxSize())
+                    }
+
+                    ScanTopBar(
+                        title = "новый продукт",
+                        meta = if (state.seen > 0) {
+                            "кадр ${state.seen} · ${state.frame.elapsedMs} мс"
+                        } else {
+                            null
+                        },
+                        onDismiss = onDismiss,
+                        modifier = Modifier.align(Alignment.TopCenter),
+                    )
+
+                    // Подсказка живёт, пока не прочитан первый кадр. Дальше о том же
+                    // говорят полоски, и держать её значило бы объяснять очевидное.
+                    val hint = when {
+                        !granted && answered -> "Камеры нет — заполните поля сами"
+                        !granted -> "Запрашиваем доступ к камере"
+                        !state.frame.available -> "Распознавание недоступно — заполните сами"
+                        state.seen == 0 -> "Держите таблицу пищевой ценности в рамке"
+                        else -> null
+                    }
+                    if (hint != null) {
+                        HintPill(
+                            text = hint,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(horizontal = 32.dp, vertical = 20.dp),
+                        )
+                    }
+                }
+
+                ProductCard(
+                    state = state,
+                    onSave = { onSave(state.gtin, state.name.text.trim(), it, state.servingG) },
+                )
             }
         }
     }
 }
 
+/** Превью и распознавание. Всё, что оно находит, уходит в [state]. */
 @Composable
-private fun CameraPane(
-    gtin: String?,
-    onRead: (LabelReading) -> Unit,
-    onDismiss: () -> Unit,
-    debug: Boolean,
-) {
+private fun CameraFeed(state: ScanState) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val controller = remember { LifecycleCameraController(context) }
-
-    /** Кадров в секунду десятки, а отдать результат надо один раз. */
-    val delivered = remember { AtomicBoolean(false) }
-
-    /**
-     * Последнее, что удалось прочитать, — его отдаёт кнопка «Готово».
-     *
-     * Обновляется с потока анализа, поэтому наружу из `DisposableEffect`
-     * выносится через состояние, а не через захваченную переменную.
-     */
-    var frame by remember { mutableStateOf(LabelFrame(LabelReading.EMPTY, 0)) }
-
-    /**
-     * Сколько кадров прошло через распознавание с начала съёмки.
-     *
-     * Не то же, что окно согласия: то держит последние восемь и стоит на восьми.
-     * Здесь нужен именно растущий счётчик — он единственное на экране, что
-     * доказывает, что съёмка идёт, пока ни одно значение ещё не набралось.
-     */
-    var seen by remember { mutableIntStateOf(0) }
-    val deliver by rememberUpdatedState(onRead)
-    val autoClose by rememberUpdatedState(!debug)
 
     DisposableEffect(lifecycleOwner) {
         val executor = Executors.newSingleThreadExecutor()
@@ -184,17 +193,15 @@ private fun CameraPane(
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val recorder = LabelRecorder(LabelRecorder.directory(context))
         val startedAt = System.currentTimeMillis()
+        val main = ContextCompat.getMainExecutor(context)
 
-        val analyzer = LabelAnalyzer(ocr, scope, recorder) { read ->
-            ContextCompat.getMainExecutor(context).execute {
-                frame = read
-                if (read.available) seen++
-                // Разбор сошёлся — дальше держать человека перед камерой незачем.
-                if (autoClose && read.reading.confident && delivered.compareAndSet(false, true)) {
-                    deliver(read.reading)
-                }
-            }
-        }
+        val analyzer = LabelAnalyzer(
+            ocr = ocr,
+            scope = scope,
+            recorder = recorder,
+            onBarcode = { code -> main.execute { state.onBarcode(code) } },
+            onFrame = { read -> main.execute { state.onFrame(read) } },
+        )
 
         controller.setEnabledUseCases(CameraController.IMAGE_ANALYSIS)
         // Разрешение анализа по умолчанию — примерно 640×480, и на таблице пищевой
@@ -222,8 +229,9 @@ private fun CameraPane(
             controller.clearImageAnalysisAnalyzer()
             controller.unbind()
             scope.cancel()
-            // Нативную сессию надо отпустить: она держит модели в памяти.
+            // Нативные сессии надо отпустить: они держат модели в памяти.
             ocr.close()
+            analyzer.close()
             // Запись — уже после остановки анализа и не на этом потоке: там
             // несколько мегабайт, а мы на главном. Свой поток, а не executor
             // анализа: тот сейчас закрывается.
@@ -232,216 +240,322 @@ private fun CameraPane(
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { ctx ->
-                PreviewView(ctx).apply {
-                    this.controller = controller
-                    scaleType = PreviewView.ScaleType.FILL_CENTER
-                }
-            },
-        )
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { ctx ->
+            PreviewView(ctx).apply {
+                this.controller = controller
+                scaleType = PreviewView.ScaleType.FILL_CENTER
+            }
+        },
+    )
+}
 
-        // Камера и панель разбора делят экран, а не лежат друг на друге: панель
-        // высокая, и всплыви она поверх превью — закрыла бы ровно тот угол кадра,
-        // который человек пытается навести.
-        Column(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                // В тестовом режиме окна нет: там весь экран занят разбором,
-                // и обводить нечего.
-                if (!debug) Viewfinder(Modifier.fillMaxSize())
+/**
+ * Карточка продукта: шесть полей, полоски набранного согласия и сохранение.
+ *
+ * Полоска показывает не «идёт загрузка», а согласие кадров: значение встаёт
+ * в поле, только когда несколько кадров подряд прочитали одно и то же. Видеть
+ * надо именно **какое** поле не набралось — это подсказывает действие: подвинуть
+ * камеру, убрать блик с той самой строки, поднести ближе.
+ */
+@Composable
+private fun ProductCard(state: ScanState, onSave: (Nutriments) -> Unit) {
+    val colors = KcalTheme.colors
+    val check = state.check
+
+    /** Куда подставит число тап по чипсу. Живёт дольше фокуса — см. [ScannedNumbers]. */
+    var focused by remember { mutableStateOf<ScanField?>(null) }
+
+    ScanPanel(Modifier.navigationBarsPadding().imePadding()) {
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ProgressRing(state.overall)
+
+                Column(Modifier.padding(start = 16.dp)) {
+                    NameField(state.name) { focused = null }
+                    CapsLabel(
+                        "${state.filledFields} из 6 полей · обязательных ${state.requiredFilled} / 4",
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+            }
+
+            // Названия с пачки: первое подставляется само, остальные ждут тапа.
+            // Угадывать молча тут нельзя — человек всё равно смотрит на пачку,
+            // и дать ему выбор честнее, чем настаивать на догадке.
+            NameChoices(state)
+
+            Spacer(Modifier.size(16.dp))
+
+            ScanEditRow(
+                label = "калории",
+                value = state.kcal.text,
+                placeholder = "${(state.progress("ккал") * 100).toInt()}%",
+                fraction = state.progress("ккал"),
+                // Калории — не макрос, своего цвета у них нет: они складываются
+                // из всех трёх. Поэтому цвет чернил, как у остатка в дневнике.
+                color = colors.text,
+                onValueChange = { state.kcal.type(it.filter(Char::isDigit)) },
+                onClear = { state.kcal.clear() },
+                onFocus = { if (it) focused = state.kcal },
+                // Единицы у калорий не подписаны: подпись слева уже сказала
+                // «калории», а четырёхзначное число и «ккал» рядом не помещаются.
+            )
+            MacroRow("белки", state.prot, "Б", Macro.PROTEIN, state) { focused = it }
+            MacroRow("жиры", state.fat, "Ж", Macro.FAT, state) { focused = it }
+            MacroRow("углеводы", state.carb, "У", Macro.CARB, state) { focused = it }
+
+            HorizontalDivider(color = colors.line, modifier = Modifier.padding(vertical = 14.dp))
+
+            ScanEditRow(
+                label = "порция",
+                value = state.serving.text,
+                placeholder = "—",
+                fraction = if (state.serving.filled) 1f else 0f,
+                color = colors.text3,
+                onValueChange = { state.serving.type(it.filter(Char::isDigit)) },
+                onClear = { state.serving.clear() },
+                onFocus = { if (it) focused = state.serving },
+                optional = true,
+                unit = "г",
+            )
+            Spacer(Modifier.size(10.dp))
+            ScanEditRow(
+                label = "штрихкод",
+                value = state.barcode.text,
+                placeholder = "—",
+                // Код на этом экране ловится редко: камера смотрит на таблицу,
+                // а код напечатан с другой стороны пачки. Полоска поэтому
+                // двоичная — поймали или нет, — и поле можно набрать руками.
+                fraction = if (state.gtin != null) 1f else 0f,
+                color = colors.text3,
+                onValueChange = { state.barcode.type(it.filter(Char::isDigit).take(MAX_GTIN_DIGITS)) },
+                onClear = { state.barcode.clear() },
+                onFocus = { if (it) focused = state.barcode },
+                optional = true,
+            )
+
+            ScannedNumbers(state, focused)
+
+            // Ошибка гасит кнопку, замечание — нет. Расходящиеся цифры бывают
+            // напечатаны на реальной упаковке, и спорить с упаковкой мы не вправе.
+            check?.error?.let { Note(it, colors.error) }
+            check?.warning?.let { Note(it, colors.text2) }
+            if (state.barcode.filled && state.gtin == null) {
+                Note("Код не сходится по контрольной цифре — проверьте цифры", colors.error)
+            }
+
+            // Молчать о том, почему кнопка серая, нельзя: человек решит, что
+            // сломано, и уйдёт — ровно на последнем шаге.
+            if (!state.canSave && check?.error == null) {
+                Note(
+                    when {
+                        state.name.text.isBlank() ->
+                            "Назовите продукт — без названия его потом не найти"
+                        else -> "Нужны калории на 100 г: их с пачки ждут все остальные числа"
+                    },
+                    colors.text3,
+                )
+            }
+
+            WideButton(
+                text = "Сохранить",
+                enabled = state.canSave,
+                onClick = { state.nutriments?.let(onSave) },
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
+            )
+        }
+    }
+}
+
+/** Название — то единственное, что распознаватель угадывает, а человек знает. */
+@Composable
+private fun NameField(field: ScanField, onFocused: () -> Unit) {
+    val colors = KcalTheme.colors
+
+    Box {
+        BasicTextField(
+            value = field.text,
+            onValueChange = field::type,
+            textStyle = KcalTheme.type.title.copy(color = colors.text),
+            cursorBrush = SolidColor(colors.text),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { if (it.isFocused) onFocused() },
+        )
+        if (field.text.isEmpty()) {
+            Text("Название с пачки", style = KcalTheme.type.title, color = colors.text3)
+        }
+    }
+}
+
+/** Варианты названия, набравшие голоса кадров. Тап подставляет в поле. */
+@Composable
+private fun NameChoices(state: ScanState) {
+    val choices = state.nameChoices.filter { it != state.name.text }
+    if (choices.isEmpty()) return
+
+    LazyRow(
+        modifier = Modifier.padding(top = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        items(choices.size) { index ->
+            val choice = choices[index]
+            KcalChip(onClick = { state.name.type(choice) }, background = KcalTheme.colors.chip) {
+                Text(
+                    choice,
+                    style = KcalTheme.type.chip,
+                    color = KcalTheme.colors.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/** Макрос: та же строка, но подписью и полоской своего цвета. */
+@Composable
+private fun MacroRow(
+    label: String,
+    field: ScanField,
+    key: String,
+    macro: Macro,
+    state: ScanState,
+    onFocus: (ScanField?) -> Unit,
+) {
+    Spacer(Modifier.size(11.dp))
+    ScanEditRow(
+        label = label,
+        value = field.text,
+        placeholder = "${(state.progress(key) * 100).toInt()}%",
+        fraction = state.progress(key),
+        color = macro.colors().fill,
+        onValueChange = { field.type(it.filter { c -> c.isDigit() || c == ',' || c == '.' }) },
+        onClear = { field.clear() },
+        onFocus = { if (it) onFocus(field) },
+        decimal = true,
+        unit = "г",
+    )
+}
+
+/**
+ * Числа, которые распознались, но которые разбор не разложил сам.
+ *
+ * Так выглядит честный отказ: приложение не угадывает, куда поставить цифру,
+ * а показывает всё, что увидело, и отдаёт решение человеку. Четыре тапа —
+ * всё равно несопоставимо быстрее, чем набрать «12,4» на мобильной клавиатуре.
+ *
+ * Фокус именно запоминается, а не читается в момент тапа: нажатие на чипс
+ * снимает фокус с поля, и спрашивать о нём было бы уже поздно.
+ */
+@Composable
+private fun ScannedNumbers(state: ScanState, focused: ScanField?) {
+    val numbers = state.numbers.distinct()
+    if (numbers.isEmpty() || focused == null) return
+
+    Column(Modifier.padding(top = 14.dp)) {
+        CapsLabel("распознано с этикетки")
+        LazyRow(
+            modifier = Modifier.padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            items(numbers.size) { index ->
+                val value = numbers[index]
+                KcalChip(
+                    onClick = { focused.type(value) },
+                    background = KcalTheme.colors.chip,
+                ) {
+                    Text(value, style = KcalTheme.type.chip, color = KcalTheme.colors.text)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Note(text: String, color: Color) {
+    Text(
+        text,
+        style = KcalTheme.type.body,
+        color = color,
+        modifier = Modifier.padding(top = 12.dp),
+    )
+}
+
+/**
+ * Съёмка этикетки вхолостую — чтобы посмотреть, что вообще читается.
+ *
+ * Обычный путь к распознаванию идёт через промах штрих-кода, и проверить разбор
+ * на конкретной пачке значит каждый раз найти товар, которого нет в базе. Здесь
+ * то же распознавание запускается сразу и показывает себя целиком: строки,
+ * маршрут разбора, что принято за ноль. В дневник отсюда не попадает ничего.
+ */
+@Composable
+fun LabelDebugDialog(onRead: (LabelReading) -> Unit, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val state = rememberScanState(null)
+    val deliver by rememberUpdatedState(onRead)
+
+    var granted by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val permission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { allowed -> granted = allowed }
+
+    LaunchedEffect(Unit) {
+        if (!granted) permission.launch(Manifest.permission.CAMERA)
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(Modifier.fillMaxSize(), color = KcalTheme.colors.bg) {
+            Box(Modifier.fillMaxSize()) {
+                if (granted) CameraFeed(state)
+
+                DebugPane(
+                    frame = state.frame,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(start = 8.dp, end = 8.dp, top = 56.dp)
+                        .fillMaxHeight(0.8f),
+                )
 
                 ScanTopBar(
-                    title = "сканирование",
-                    meta = if (seen > 0) "кадр $seen · ${frame.elapsedMs} мс" else null,
+                    title = "разбор этикетки",
+                    meta = "кадр ${state.seen}",
                     onDismiss = onDismiss,
                     modifier = Modifier.align(Alignment.TopCenter),
                 )
 
-                if (debug) {
-                    DebugPane(
-                        frame = frame,
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .statusBarsPadding()
-                            .padding(start = 8.dp, end = 8.dp, top = 56.dp)
-                            .fillMaxHeight(0.8f),
-                    )
-                }
-
-                // Подсказка живёт, пока не прочитан первый кадр. Дальше о том же
-                // говорят полоски, и держать её значило бы объяснять очевидное.
-                if (!debug && seen == 0) {
-                    HintPill(
-                        text = if (frame.available) {
-                            "Держите таблицу пищевой ценности в рамке"
-                        } else {
-                            "Распознавание на этом устройстве недоступно"
-                        },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(horizontal = 32.dp, vertical = 20.dp),
-                    )
-                }
-            }
-
-            if (!debug) {
-                ScanResultPanel(
-                    frame = frame,
-                    gtin = gtin,
-                    onDeliver = {
-                        if (delivered.compareAndSet(false, true)) deliver(frame.reading)
-                    },
+                ScanActions(
+                    primary = "В лог",
+                    primaryEnabled = true,
+                    onPrimary = { deliver(state.frame.reading) },
+                    secondary = "Закрыть",
+                    onSecondary = onDismiss,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(16.dp),
                 )
-            } else {
-                // В тестовом режиме панель разбора не нужна: всё то же самое
-                // сказано подробнее и выше по экрану.
-                Box(Modifier.fillMaxWidth().background(KcalTheme.colors.surface)) {
-                    ScanActions(
-                        primary = "Готово",
-                        primaryEnabled = true,
-                        onPrimary = {
-                            if (delivered.compareAndSet(false, true)) deliver(frame.reading)
-                        },
-                        secondary = "Закрыть",
-                        onSecondary = onDismiss,
-                        modifier = Modifier
-                            .navigationBarsPadding()
-                            .padding(16.dp),
-                    )
-                }
             }
         }
     }
 }
 
-/**
- * Что уже нашли и чего ещё ждём.
- *
- * Съёмка идёт секундами: распознавание считает кадр пятую долю секунды, а каждое
- * значение должно повториться в нескольких кадрах подряд, прежде чем ему поверят.
- * Всё это время экран без объяснений выглядит зависшим, и человек либо уводит
- * камеру раньше времени, либо решает, что приложение сломалось.
- *
- * Поэтому показывается не «идёт поиск», а поимённо и полосками: калории набраны,
- * белки набраны, углеводы на сорока шести процентах. Видно и то, что работа идёт,
- * и то, **на чём именно** она стоит, — а это уже действие: подвинуть камеру,
- * убрать блик с той самой строки, поднести ближе.
- *
- * Название и штрих-код стоят за разделителем и подписаны «необяз.»: без них
- * продукт сохраняется, и человек не должен ждать их заполнения.
- */
-@Composable
-private fun ScanResultPanel(
-    frame: LabelFrame,
-    gtin: String?,
-    onDeliver: () -> Unit,
-) {
-    val colors = KcalTheme.colors
-    val draft = frame.reading.draft
-    val fields = frame.fields.toMap()
-    val name = draft.name ?: frame.reading.names.firstOrNull()
-
-    val required = REQUIRED.map { key -> fields[key]?.progress ?: 0f }
-    val requiredDone = REQUIRED.count { key -> fields[key]?.settled == true }
-    val optionalDone = listOfNotNull(name, gtin).size
-    val overall = if (required.isEmpty()) 0f else required.average().toFloat()
-
-    ScanPanel(Modifier.navigationBarsPadding()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ProgressRing(overall)
-
-            Column(Modifier.padding(start = 16.dp)) {
-                Text(
-                    name ?: "Этикетка",
-                    style = KcalTheme.type.title,
-                    color = if (name != null) colors.text else colors.text3,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                CapsLabel(
-                    "${requiredDone + optionalDone} из 6 полей · обязательных $requiredDone / 4",
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-            }
-        }
-
-        Spacer(Modifier.size(18.dp))
-
-        ScanFieldRow(
-            label = "калории",
-            value = draft.kcal100?.takeIf { fields["ккал"]?.settled == true }?.let { "$it ккал" },
-            fraction = fields["ккал"]?.progress ?: 0f,
-            // Калории — не макрос, и своего цвета у них нет: они складываются
-            // из всех трёх. Поэтому цвет чернил, как у остатка в шапке дневника.
-            color = colors.text,
-        )
-        Spacer(Modifier.size(11.dp))
-        MacroRow("белки", draft.prot100, fields["Б"], Macro.PROTEIN)
-        Spacer(Modifier.size(11.dp))
-        MacroRow("жиры", draft.fat100, fields["Ж"], Macro.FAT)
-        Spacer(Modifier.size(11.dp))
-        MacroRow("углеводы", draft.carb100, fields["У"], Macro.CARB)
-
-        HorizontalDivider(
-            color = colors.line,
-            modifier = Modifier.padding(vertical = 14.dp),
-        )
-
-        ScanFieldRow(
-            label = "название",
-            value = name,
-            fraction = if (name != null) 1f else 0f,
-            color = colors.text3,
-            optional = true,
-        )
-        Spacer(Modifier.size(10.dp))
-        ScanFieldRow(
-            label = "штрихкод",
-            value = gtin,
-            fraction = if (gtin != null) 1f else 0f,
-            color = colors.text3,
-            optional = true,
-        )
-
-        // Кнопка одна, и это не упрощение макета. Экран ничего не сохраняет сам:
-        // он отдаёт разобранное в форму продукта, где человек его подтверждает.
-        // «Сохранить» и «ввести вручную» — один и тот же переход, и разводить его
-        // на две кнопки значило бы предложить выбор, которого нет.
-        //
-        // Сошедшийся разбор до кнопки обычно не доживает: экран закрывается сам.
-        // Поэтому по умолчанию на ней написано то, что и происходит на деле, —
-        // дальше заполнять руками, с уже подставленным тем, что успело прочитаться.
-        WideButton(
-            text = if (frame.reading.confident) "Сохранить" else "Заполнить вручную",
-            enabled = true,
-            onClick = onDeliver,
-            modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp),
-        )
-    }
-}
-
-/** Макрос: то же поле, но подписью и полоской своего цвета. */
-@Composable
-private fun MacroRow(
-    label: String,
-    centigrams: Int?,
-    field: LabelConsensus.Field?,
-    macro: Macro,
-) {
-    ScanFieldRow(
-        label = label,
-        // Число показывается только набранное голосами. Последний кадр рисовать
-        // на его месте значило бы мигать цифрами, которым сами не верим.
-        value = centigrams?.takeIf { field?.settled == true }?.let { "${it.grams()} г" },
-        fraction = field?.progress ?: 0f,
-        color = macro.colors().fill,
-    )
-}
-
-/** Ключи полей в [LabelConsensus.Verdict.fields] — обязательная четвёрка. */
-private val REQUIRED = listOf("ккал", "Б", "Ж", "У")
+/** EAN-13 — самый длинный из форматов, которые встречаются на еде. */
+private const val MAX_GTIN_DIGITS = 13
 
 /**
  * Разбор целиком, поверх превью.
@@ -544,48 +658,4 @@ private fun Line(text: String, color: Color) {
         fontFamily = FontFamily.Monospace,
         color = color,
     )
-}
-
-@Composable
-private fun NoCamera(onDismiss: () -> Unit) {
-    Message(
-        title = "Доступ к камере не разрешён",
-        text = "Снять этикетку не получится — заполните КБЖУ вручную.",
-        onDismiss = onDismiss,
-    )
-}
-
-@Composable
-private fun Waiting(onDismiss: () -> Unit) {
-    Message(
-        title = "Запрашиваем доступ к камере",
-        text = "Без камеры этикетку не прочитать.",
-        onDismiss = onDismiss,
-    )
-}
-
-/** Экран без камеры: тот же фон и тот же крестик, чтобы выход был на месте. */
-@Composable
-private fun Message(title: String, text: String, onDismiss: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(KcalTheme.colors.bg)) {
-        ScanTopBar(
-            title = "сканирование",
-            meta = null,
-            onDismiss = onDismiss,
-            modifier = Modifier.align(Alignment.TopCenter),
-        )
-        Column(
-            modifier = Modifier.align(Alignment.Center).padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(title, style = KcalTheme.type.title, color = KcalTheme.colors.text)
-            Spacer(Modifier.size(8.dp))
-            Text(
-                text,
-                style = KcalTheme.type.body,
-                color = KcalTheme.colors.text2,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
 }
