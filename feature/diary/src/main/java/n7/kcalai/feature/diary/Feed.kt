@@ -93,14 +93,34 @@ sealed interface FeedItem {
  * а сам дневник — запись, сделанную сразу после предыдущей, логично считать
  * её продолжением. Час без записей означает, что это уже отдельная еда.
  */
-fun mealForHour(hour: Int, lastEntry: DiaryEntryEntity?, nowMillis: Long): MealType = when (hour) {
-    in 5..10 -> MealType.BREAKFAST
-    in 12..15 -> MealType.LUNCH
-    in 17..21 -> MealType.DINNER
-    else -> lastEntry
-        ?.takeIf { nowMillis - it.createdAt <= CLUSTER_GAP_MS }
-        ?.meal
+fun mealForHour(hour: Int, lastEntry: DiaryEntryEntity?, nowMillis: Long): MealType =
+    MEAL_WINDOWS.entries.firstOrNull { (_, window) -> hour in window }?.key
+        ?: lastEntry
+            ?.takeIf { nowMillis - it.createdAt <= CLUSTER_GAP_MS }
+            ?.meal
         ?: MealType.SNACK
+
+/** Часы, в которые приём пищи — свой. У перекуса своего времени нет. */
+private val MEAL_WINDOWS: Map<MealType, IntRange> = mapOf(
+    MealType.BREAKFAST to 5..10,
+    MealType.LUNCH to 12..15,
+    MealType.DINNER to 17..21,
+)
+
+/**
+ * Где пузырьку стоять в ленте, минуты от начала суток.
+ *
+ * Завтрак, обед и ужин держатся своего окна: запись 13:00, перенесённую человеком
+ * в завтрак, лента показывала после обеда 12:30 — время у неё осталось обеденное,
+ * а смысл уже нет. Время за пределами окна прижимается к его границе, и поздний
+ * ужин остаётся после обеда, а ранний завтрак — перед всем. Перекусы стоят там,
+ * когда были: своего окна у них нет.
+ */
+private fun bubbleOrder(group: List<DiaryEntryEntity>, zone: ZoneId): Int {
+    val first = Instant.ofEpochMilli(group.first().createdAt).atZone(zone)
+    val minuteOfDay = first.hour * 60 + first.minute
+    val window = MEAL_WINDOWS[group.first().meal] ?: return minuteOfDay
+    return minuteOfDay.coerceIn(window.first * 60, window.last * 60 + 59)
 }
 
 /**
@@ -158,7 +178,7 @@ fun groupIntoBubbles(
         byMeal[activeMeal]
     }
 
-    return groups.map { group ->
+    return groups.sortedBy { bubbleOrder(it, zone) }.map { group ->
         FeedItem.Meal(
             key = "meal-${group.first().id}",
             meal = group.first().meal,

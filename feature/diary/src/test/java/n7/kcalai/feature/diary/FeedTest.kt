@@ -98,7 +98,7 @@ class FeedTest {
     }
 
     @Test
-    fun `пузырьки идут в порядке первой записи`() {
+    fun `пузырьки идут по времени суток`() {
         val bubbles = groupIntoBubbles(
             listOf(
                 entry(1, hour = 8, meal = MealType.BREAKFAST),
@@ -111,6 +111,41 @@ class FeedTest {
         )
 
         assertEquals(listOf(MealType.BREAKFAST, MealType.SNACK, MealType.LUNCH), bubbles.map { it.meal })
+    }
+
+    @Test
+    fun `перенесённая в завтрак запись встаёт перед обедом`() {
+        // Человек в 13:00 записал обед, потом поправил: это был завтрак.
+        // Время у записи осталось обеденное, место в ленте — уже нет.
+        val bubbles = groupIntoBubbles(
+            listOf(
+                entry(1, hour = 12, minute = 30, meal = MealType.LUNCH),
+                entry(2, hour = 13, meal = MealType.BREAKFAST),
+            ),
+            zone,
+            nowMillis = at(14),
+        )
+
+        assertEquals(listOf(MealType.BREAKFAST, MealType.LUNCH), bubbles.map { it.meal })
+    }
+
+    @Test
+    fun `поздний ужин и перекус между приёмами остаются на своих местах`() {
+        val bubbles = groupIntoBubbles(
+            listOf(
+                entry(1, hour = 8, meal = MealType.BREAKFAST),
+                entry(2, hour = 11, meal = MealType.SNACK),
+                entry(3, hour = 13, meal = MealType.LUNCH),
+                entry(4, hour = 23, minute = 30, meal = MealType.DINNER),
+            ),
+            zone,
+            nowMillis = at(23, 45),
+        )
+
+        assertEquals(
+            listOf(MealType.BREAKFAST, MealType.SNACK, MealType.LUNCH, MealType.DINNER),
+            bubbles.map { it.meal },
+        )
     }
 
     @Test
