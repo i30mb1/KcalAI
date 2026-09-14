@@ -154,9 +154,8 @@ class DiaryViewModel(
 ) : ViewModel() {
 
     private val input = MutableStateFlow("")
-    private val suggestions = MutableStateFlow<List<ResolvedItem>>(emptyList())
+    private val answer = MutableStateFlow<Answer?>(null)
     private val scanned = MutableStateFlow<ResolvedItem?>(null)
-    private val searching = MutableStateFlow(false)
     private val overlay = MutableStateFlow<Overlay>(Overlay.None)
     private val personalState = MutableStateFlow(PersonalState())
 
@@ -184,7 +183,7 @@ class DiaryViewModel(
     private val week = diary.observeWeek(today)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val typing = combine(input, suggestions, scanned, searching, overlay, ::TypingState)
+    private val typing = combine(input, answer, scanned, overlay, ::TypingState)
 
     /** Вложенный combine: у типизированного [combine] потолок в пять потоков, а их шесть. */
     private val typingAndReplies = combine(typing, sessionReplies) { typed, replies -> typed to replies }
@@ -204,19 +203,37 @@ class DiaryViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiaryUiState())
 
+    /**
+     * Что нашлось на [query].
+     *
+     * Запрос хранится вместе с выдачей намеренно: ответ показывается до тех пор,
+     * пока не придёт следующий, и реплика «не нашлось» обязана называть тот
+     * запрос, на который она отвечает, а не то, что стоит в строке сейчас.
+     */
+    private class Answer(val query: String, val items: List<ResolvedItem>)
+
     private class TypingState(
         val input: String,
-        val suggestions: List<ResolvedItem>,
+        val answer: Answer?,
         val scanned: ResolvedItem?,
-        val searching: Boolean,
         val overlay: Overlay,
     ) {
+        val suggestions: List<ResolvedItem> get() = answer?.items.orEmpty()
+
         /** Вес распознаётся до поиска: «вес 82,4» — это не блюдо. */
         val weightGrams: Int? = parseWeight(input)
 
-        /** Есть что набрать, но ничего не нашлось — это состояние надо показать, а не молчать. */
-        val nothingFound: Boolean
-            get() = input.isNotBlank() && weightGrams == null && !searching && suggestions.isEmpty()
+        /**
+         * Ничего не нашлось — это ответ, и его надо показать, а не молчать.
+         *
+         * Ответ, а не догадка: пока поиск по набранному не завершился, реплики
+         * нет. Раньше она выводилась из пустой выдачи, и на каждую букву успевала
+         * появиться в окно дебаунса, спрятаться на время поиска и появиться снова.
+         */
+        val notFound: Answer?
+            get() = answer?.takeIf {
+                it.items.isEmpty() && input.isNotBlank() && weightGrams == null && scanned == null
+            }
     }
 
     init {
@@ -233,10 +250,9 @@ class DiaryViewModel(
                     // товар уже опознан кодом точнее любого совпадения по названию,
                     // а выдача поверх него была бы шумом.
                     if (text.isBlank() || parseWeight(text) != null || text.continuesScan()) {
-                        emptyList()
+                        null
                     } else {
-                        searching.value = true
-                        try {
+                        val items = try {
                             resolver.suggest(text, context())
                         } catch (cancellation: CancellationException) {
                             throw cancellation
@@ -245,12 +261,11 @@ class DiaryViewModel(
                             // предложений, а не падение посреди набора.
                             Log.e(TAG, "поиск «$text» не удался", error)
                             emptyList()
-                        } finally {
-                            searching.value = false
                         }
+                        Answer(text, items)
                     }
                 }
-                .collect { suggestions.value = it }
+                .collect { answer.value = it }
         }
 
         // Модели пересчитываются от любого изменения дня или цели. Ставить пересчёт
@@ -305,7 +320,7 @@ class DiaryViewModel(
             models.dayPlan?.let { feed += FeedItem.Remaining(it, nextMealTitle(hour)) }
         }
 
-        if (typed.nothingFound) feed += FeedItem.NotFound(typed.input.trim())
+        typed.notFound?.let { feed += FeedItem.NotFound(it.query.trim()) }
 
         return feed
     }
@@ -397,7 +412,7 @@ class DiaryViewModel(
 
     fun onInputChange(text: String) {
         input.value = text
-        if (text.isBlank()) suggestions.value = emptyList()
+        if (text.isBlank()) answer.value = null
 
         // Отсканированное держится, пока в строке стоит его название: человек
         // дописывает к нему вес, а не ищет другое блюдо. Стёр название — значит,
@@ -419,12 +434,12 @@ class DiaryViewModel(
         val candidate = item.candidate ?: return
         if (item.grams <= 0) return
 
-        val shown = suggestions.value
+        val shown = answer.value?.items.orEmpty()
         val pickedIndex = shown.indexOfFirst { it.candidate?.ref == candidate.ref }
         val query = input.value
 
         input.value = ""
-        suggestions.value = emptyList()
+        answer.value = null
 
         viewModelScope.launch {
             val context = context()
@@ -511,7 +526,6 @@ class DiaryViewModel(
         scanned.value = null
 
         viewModelScope.launch {
-            searching.value = true
             val candidate = try {
                 food.byBarcode(gtin)
             } catch (cancellation: CancellationException) {
@@ -521,8 +535,6 @@ class DiaryViewModel(
                 // форму, и различать их перед человеком незачем.
                 Log.e(TAG, "поиск по коду $gtin не удался", error)
                 null
-            } finally {
-                searching.value = false
             }
 
             if (candidate == null) {
@@ -708,7 +720,7 @@ class DiaryViewModel(
     fun onLogWeight() {
         val grams = parseWeight(input.value) ?: return
         input.value = ""
-        suggestions.value = emptyList()
+        answer.value = null
 
         viewModelScope.launch {
             personal.logWeight(today, grams, clock.millis())
