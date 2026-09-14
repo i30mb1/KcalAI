@@ -80,7 +80,6 @@ internal class ScanState(initialGtin: String?) {
     val prot = ScanField()
     val fat = ScanField()
     val carb = ScanField()
-    val serving = ScanField()
 
     /**
      * Код, с промаха которого пришли, считается введённым человеком: он его
@@ -188,12 +187,10 @@ internal class ScanState(initialGtin: String?) {
     /** Код уходит в сохранение только пройдя контрольную цифру. */
     val gtin: String? get() = BarcodeValidator.normalize(barcode.text)
 
-    val servingG: Int? get() = serving.text.toIntOrNull()?.takeIf { it > 0 }
-
     /** Название — единственное, чего нельзя ни вычислить, ни проверить арифметикой. */
     val canSave: Boolean get() = name.text.isNotBlank() && check?.valid == true
 
-    /** Сколько из шести полей заполнено — для кольца и счётчика. */
+    /** Сколько из пяти полей заполнено — для кольца и счётчика. */
     val filledFields: Int
         get() = listOf(kcal, prot, fat, carb, name, barcode).count { it.filled }
 
@@ -218,7 +215,6 @@ internal class ScanState(initialGtin: String?) {
         line("Б", prot)
         line("Ж", fat)
         line("У", carb)
-        line("порция", serving)
         line("код", barcode)
     }
 
@@ -259,11 +255,11 @@ private val ScanStateSaver: Saver<ScanState, Any> = listSaver(
     save = { state ->
         listOf(
             state.name.text, state.kcal.text, state.prot.text,
-            state.fat.text, state.carb.text, state.serving.text, state.barcode.text,
+            state.fat.text, state.carb.text, state.barcode.text,
         )
     },
     restore = { saved ->
-        ScanState(saved.getOrNull(6)?.takeIf { it.isNotEmpty() }).apply {
+        ScanState(saved.getOrNull(5)?.takeIf { it.isNotEmpty() }).apply {
             // Восстановленное считается набранным человеком: после поворота
             // камера начнёт читать заново, и затирать пережившее поворот нельзя.
             name.type(saved[0])
@@ -271,7 +267,6 @@ private val ScanStateSaver: Saver<ScanState, Any> = listSaver(
             prot.type(saved[2])
             fat.type(saved[3])
             carb.type(saved[4])
-            serving.type(saved[5])
         }
     },
 )

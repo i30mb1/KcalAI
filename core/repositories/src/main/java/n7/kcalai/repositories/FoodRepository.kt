@@ -103,7 +103,6 @@ class FoodRepository(
         gtin: String?,
         name: String,
         nutriments: Nutriments,
-        servingG: Int?,
         now: Long,
     ): FoodCandidate {
         // Тот же код мог заводиться раньше: человек пересканировал пачку, чтобы
@@ -118,7 +117,9 @@ class FoodRepository(
             prot100 = nutriments.prot100,
             fat100 = nutriments.fat100,
             carb100 = nutriments.carb100,
-            servingG = servingG,
+            // Порцию с этикетки не спрашивают: на пачке её обычно нет, а поле
+            // впустую удлиняло карточку. У перезаведённого продукта она остаётся.
+            servingG = existing?.servingG,
             // Дата заведения — дата первой встречи с продуктом, а не последней правки.
             createdAt = existing?.createdAt ?: now,
         )
@@ -140,7 +141,7 @@ class FoodRepository(
                     prot100 = nutriments.prot100,
                     fat100 = nutriments.fat100,
                     carb100 = nutriments.carb100,
-                    servingG = servingG,
+                    servingG = entity.servingG,
                     createdAt = now,
                 )
             )
@@ -150,7 +151,7 @@ class FoodRepository(
             ref = FoodRef.User(id),
             displayName = name,
             nutriments = nutriments,
-            servingG = servingG,
+            servingG = entity.servingG,
         )
     }
 

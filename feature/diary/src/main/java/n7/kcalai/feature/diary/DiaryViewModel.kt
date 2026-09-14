@@ -620,14 +620,14 @@ class DiaryViewModel(
      * В дневник продукт сам не падает: он показывается чипсом и ждёт тапа.
      * Экран съёмки знает, что это за товар, но не знает, сколько его съели.
      */
-    fun onSaveNewProduct(gtin: String?, name: String, nutriments: Nutriments, servingG: Int?) {
+    fun onSaveNewProduct(gtin: String?, name: String, nutriments: Nutriments) {
         overlay.value = Overlay.None
         onScanFinished()
         refreshOutbox()
 
         viewModelScope.launch {
             val candidate = try {
-                food.saveOwnProduct(gtin, name, nutriments, servingG, clock.millis())
+                food.saveOwnProduct(gtin, name, nutriments, clock.millis())
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {

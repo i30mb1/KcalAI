@@ -174,7 +174,7 @@ fun ScanPanel(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(topStart = KcalShapes.sheet, topEnd = KcalShapes.sheet))
             .background(KcalTheme.colors.surface)
-            .padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = 10.dp),
+            .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp),
     ) {
         content()
     }
