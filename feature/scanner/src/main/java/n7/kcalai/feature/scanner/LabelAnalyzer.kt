@@ -9,6 +9,7 @@ import androidx.camera.core.ImageProxy
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import n7.kcalai.ocr.LabelOcr
 import n7.kcalai.repositories.LabelParser
@@ -134,9 +135,15 @@ internal class LabelAnalyzer(
                 // на кадр, из которого заведомо ничего не выйдет.
                 val sharpness = bitmap.sharpness()
                 if (sharpness < MIN_SHARPNESS) {
-                    val note = "смазан · резкость ${sharpness.roundToInt()} < $MIN_SHARPNESS · пропущен"
+                    val note = "смазан · резкость ${sharpness.roundToInt()} < ${MIN_SHARPNESS.roundToInt()} · пропущен"
                     recorder?.add(bitmap, started, note, label = false)
                     lastFrame?.let { onFrame(it.copy(elapsedMs = SystemClock.elapsedRealtime() - started)) }
+                    // Пропуск обязан стоить времени. Распознавание держит темп
+                    // в три кадра в секунду, а пропуск отпускал кадр за
+                    // миллисекунды — и шли все тридцать: тридцать JPEG в записи,
+                    // тридцать перерисовок. Пауза возвращает темп распознавания;
+                    // кадры за это время отбрасываются как обычно, см. [busy].
+                    delay(SKIP_PAUSE_MS)
                     return@launch
                 }
 
@@ -241,13 +248,18 @@ internal class LabelAnalyzer(
         /**
          * Ниже этой резкости кадр пропускается — см. [sharpness].
          *
-         * Порог снят с записанных сессий, а не придуман. Квас читался
-         * начисто при 650–750, пирожные при 900–2000; при 335–577 с тех же
-         * пирожных выходили обрывки, при 40–250 с пастилы — только каша
-         * и ни одного верного числа. Двести пятьдесят отсекает заведомо
-         * безнадёжное и оставляет спорное: там ещё читается хотя бы название.
+         * Порог режет только явный смаз, и это принципиально: метрика
+         * зависит от контраста не меньше, чем от фокуса. Чёрный текст
+         * на белом при хорошем свете даёт 650–2000, а коричневый на бежевом
+         * при тусклом — 160–190 в идеальном фокусе, и тот же кадр в движении
+         * — 27–58. Порог в 250 отбраковывал вторую сцену целиком, хотя
+         * «1330 кДж/310 ккал» на ней читалось глазом чётко. Восемьдесят
+         * отделяет движение от фокуса на всех записанных сессиях.
          */
-        const val MIN_SHARPNESS = 250.0
+        const val MIN_SHARPNESS = 80.0
+
+        /** Сколько держать паузу после пропущенного кадра — примерно кадр распознавания. */
+        const val SKIP_PAUSE_MS = 300L
     }
 }
 
