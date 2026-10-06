@@ -11,11 +11,18 @@ import org.junit.Test
 /** Идея 4: отрицательное пространство дневника — что человек забыл записать. */
 class MealGapDetectorTest {
 
-    /** Человек две недели обедает в 13:00 и ужинает в 19:00. Завтрак не ест никогда. */
+    /**
+     * Человек две недели обедает в 13:00 и ужинает в 19:00. Завтрак не ест никогда.
+     *
+     * Привычка заканчивается вчера: сегодня в дневнике пусто — ровно тот случай,
+     * про который детектор и спрашивает. Положить сегодняшний обед в историю и тут
+     * же передать `mealsLoggedToday = emptySet()` значило бы собрать день, которого
+     * не бывает, и проверить поведение, которого не будет.
+     */
     private fun history(): FoodHistory {
         val entries = mutableListOf<DiaryEntryEntity>()
         var id = 1L
-        for (day in TODAY - 13..TODAY) {
+        for (day in TODAY - 14..TODAY - 1) {
             entries += entry(id++, day, 13, MealType.LUNCH, "Суп", SOUP, grams = 350)
             entries += entry(id++, day, 19, MealType.DINNER, "Куриная грудка", CHICKEN, grams = 180)
         }

@@ -130,14 +130,16 @@ class PersonalRepository(
 
         val eatenKcal = todayEntries.sumOf { it.totals().kcal }
         val eatenProtCg = todayEntries.sumOf { it.totals().protCg }
+        val history = history(context.dateEpochDay)
 
         return RemainingDayPlanner.plan(
-            history = history(context.dateEpochDay),
+            history = history,
             remainingKcal = goal.kcal - eatenKcal,
             remainingProtCg = goal.prot * CENTIGRAMS_PER_GRAM - eatenProtCg,
-            eatenToday = todayEntries.mapNotNullTo(mutableSetOf()) { entry ->
-                parseFoodRef(entry.foodRef)?.serialize()
-            },
+            // Съеденное сегодня берётся из истории, а не пересчитывается здесь:
+            // ряд подсказок и добор остатка обязаны понимать «уже сегодня было»
+            // одинаково, иначе одно предложит то, что другое только что скрыло.
+            eatenToday = history.eatenToday,
             context = context,
         )
     }

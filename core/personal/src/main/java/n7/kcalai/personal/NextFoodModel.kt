@@ -41,7 +41,25 @@ object NextFoodModel {
     private const val MIN_HISTORY = 5
 
     /**
+     * Штраф за продукт, уже съеденный сегодня в другом приёме пищи.
+     *
+     * Не запрет: кофе дважды в день — это не ошибка, и предложить его вечером
+     * человеку, который пил его утром, нормально. Но при прочих равных подсказка
+     * про то, чего сегодня ещё не было, полезнее.
+     *
+     * Штраф больше любого отдельного слагаемого намеренно: без него запись продукта
+     * его же и поднимала — свежесть становилась максимальной (`exp(0) = 1`) на самом
+     * тяжёлом весе, а счётчик частоты подрастал. Только что записанное предлагалось
+     * первым, и ряд «обычно в это время» превращался в эхо последнего ввода.
+     */
+    private const val REPEAT_PENALTY = 0.40
+
+    /**
      * Что человек, скорее всего, съест сейчас.
+     *
+     * Съеденное сегодня в этом же приёме пищи не предлагается вовсе: человек только
+     * что это записал и видит в ленте прямо над строкой ввода. Съеденное в другом
+     * приёме опускается штрафом, но из ряда не исчезает.
      *
      * @return до [limit] кандидатов с граммами из личной медианы, лучший первым.
      *         Пустой список означает «данных мало» — показывать надо обычную подсказку.
@@ -58,11 +76,22 @@ object NextFoodModel {
         val maxCount = ln(1.0 + history.maxCount)
 
         return history.items.entries
+            .filterNot { (key, _) -> history.eatenToday(key, context.meal) }
             .map { (key, item) -> item to score(history, key, item, context, previous, maxCount) }
             .sortedByDescending { (_, score) -> score }
             .take(limit)
             .map { (item, _) -> item.toCandidate() }
     }
+
+    /**
+     * Насколько давно продукт ел человек — но сегодняшняя запись свежести не даёт.
+     *
+     * Свежесть отвечает на вопрос «это всё ещё в рационе», и сегодняшняя запись
+     * отвечает на него не лучше вчерашней. Разница между ними только в том, что
+     * сегодняшнюю человек уже сделал, а значит, предлагать её незачем.
+     */
+    private fun recency(history: FoodHistory, item: FoodHistory.Item): Double =
+        exp(-history.daysSinceLast(item).coerceAtLeast(1) / RECENCY_TAU)
 
     private fun score(
         history: FoodHistory,
@@ -72,14 +101,15 @@ object NextFoodModel {
         previous: String,
         maxCount: Double,
     ): Double {
-        val recency = exp(-history.daysSinceLast(item) / RECENCY_TAU)
         val frequency = if (maxCount <= 0.0) 0.0 else ln(1.0 + item.count) / maxCount
+        val repeat = if (history.eatenToday(key)) REPEAT_PENALTY else 0.0
 
-        return W_RECENCY * recency +
+        return W_RECENCY * recency(history, item) +
             W_FREQUENCY * frequency +
             W_MEAL * history.mealShare(item, context.meal) +
             W_HOUR * history.hourAffinity(item, context.hourOfDay) +
-            W_TRANSITION * history.transitionProbability(previous, key)
+            W_TRANSITION * history.transitionProbability(previous, key) -
+            repeat
     }
 
     private const val DEFAULT_LIMIT = 6

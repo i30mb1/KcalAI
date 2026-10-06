@@ -40,9 +40,19 @@ class FoodHistory private constructor(
      * ради тех же сумм означал бы два места, которые могут разойтись.
      */
     val mealKcal: Map<MealType, List<Int>>,
+    /**
+     * Что записано сегодня, разложенное по приёмам пищи. Ключи — те же refKey.
+     *
+     * Живёт здесь, а не считается заново поверх `diary_entry`: история уже прочитана
+     * и уже разложена по дням, а два места, считающие «съеденное сегодня», разойдутся.
+     */
+    val todayByMeal: Map<MealType, Set<String>>,
     val totalEntries: Int,
     private val today: Long,
 ) {
+
+    /** Всё съеденное сегодня, без различия приёмов пищи. */
+    val eatenToday: Set<String> = todayByMeal.values.flatMapTo(HashSet()) { it }
 
     /**
      * Один продукт и всё, что о нём известно из истории.
@@ -73,6 +83,13 @@ class FoodHistory private constructor(
     val maxCount: Int = items.values.maxOfOrNull { it.count } ?: 0
 
     fun item(refKey: String): Item? = items[refKey]
+
+    /** Ел ли человек это сегодня вообще. */
+    fun eatenToday(refKey: String): Boolean = refKey in eatenToday
+
+    /** Ел ли человек это именно в этом приёме пищи сегодня. */
+    fun eatenToday(refKey: String, meal: MealType): Boolean =
+        refKey in todayByMeal[meal].orEmpty()
 
     /** Насколько давно продукт ел человек. Свежесть затухает с характерным временем недели. */
     fun daysSinceLast(item: Item): Long = (today - item.lastDay).coerceAtLeast(0)
@@ -123,6 +140,7 @@ class FoodHistory private constructor(
             val transitions = HashMap<String, MutableMap<String, Int>>()
             val mealFirstHours = HashMap<MealType, MutableList<Int>>()
             val mealKcal = HashMap<MealType, MutableList<Int>>()
+            val todayByMeal = HashMap<MealType, MutableSet<String>>()
 
             var prevKey: String? = null
             var prevDay = Long.MIN_VALUE
@@ -162,6 +180,10 @@ class FoodHistory private constructor(
 
                 accumulators.getOrPut(key) { Accumulator(ref, entry) }.add(entry, hour)
 
+                if (entry.dateEpochDay == today) {
+                    todayByMeal.getOrPut(entry.meal) { HashSet() } += key
+                }
+
                 if (mealsSeenToday.add(entry.meal)) {
                     mealFirstHours.getOrPut(entry.meal) { mutableListOf() } += hour
                     transitions.getOrPut(mealStartKey(entry.meal)) { HashMap() }
@@ -179,6 +201,7 @@ class FoodHistory private constructor(
                 transitions = transitions,
                 mealFirstHours = mealFirstHours,
                 mealKcal = mealKcal,
+                todayByMeal = todayByMeal,
                 totalEntries = entries.size,
                 today = today,
             )
