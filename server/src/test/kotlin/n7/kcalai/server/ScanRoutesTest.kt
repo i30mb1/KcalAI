@@ -77,4 +77,48 @@ class ScanRoutesTest {
         }
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
+
+    /**
+     * Сессия без кадров — оборванная загрузка, а не сессия.
+     *
+     * Если принять её, каталог встанет на место готового, и повторная попытка
+     * телефона уже ничего не допишет: расшифровка останется без снимков навсегда.
+     */
+    @Test
+    fun `одна расшифровка без кадров не принимается`() = app {
+        val response = client.post("/v1/scans") {
+            header("X-Scan-Id", "scan-no-frames")
+            setBody(MultiPartFormDataContent(formData { append("readings", "итог: ок\n") }))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertFalse("каталога остаться не должно", File(dataDir, "scans/scan-no-frames").exists())
+    }
+
+    /** Имя кадра задаёт порядок разбора — чужое имя в сессию не ложится. */
+    @Test
+    fun `кадр с чужим именем не сохраняется`() = app {
+        val response = client.post("/v1/scans") {
+            header("X-Scan-Id", "scan-bad-frame")
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append("readings", "x")
+                        append(
+                            "frame", byteArrayOf(1),
+                            Headers.build {
+                                append(HttpHeaders.ContentType, "image/jpeg")
+                                append(HttpHeaders.ContentDisposition, "filename=\"../evil.jpg\"")
+                            }
+                        )
+                    }
+                )
+            )
+        }
+
+        // Кадров не осталось, значит и сессии нет.
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertFalse(File(dataDir, "evil.jpg").exists())
+        assertFalse(File(dataDir, "scans/scan-bad-frame").exists())
+    }
 }

@@ -65,4 +65,36 @@ class ContributionRoutesTest {
         assertEquals(HttpStatusCode.BadRequest, send("это не json").status)
         assertEquals(HttpStatusCode.BadRequest, send("""{"gtin":"1"}""").status)
     }
+
+    /**
+     * Вклад доезжает целиком, а не одним GTIN.
+     *
+     * В ответе стоит только код, и пока в базу не смотрели, половина полей могла
+     * теряться молча: имя и дата нужны для ручной публикации в `product`,
+     * и без них голос бесполезен.
+     */
+    @Test
+    fun `имя и дата доезжают до базы`() = app {
+        send("[$milk]")
+
+        val stored = db.contributionsFor("4600699500001").single()
+        assertEquals("Молоко 3,2%", stored.name)
+        assertEquals(1757721600000L, stored.createdAt)
+        assertEquals(250, stored.servingG)
+        assertEquals(Nutriments(59, 290, 320, 470), stored.nutriments)
+    }
+
+    /** Вклад без обязательного поля не принимается: пустое имя публиковать нечем. */
+    @Test
+    fun `вклад без имени и без даты не принимается`() = app {
+        val noName =
+            """{"gtin":"4600699500001","kcal100":59,"prot100":290,"fat100":320,"carb100":470,"createdAt":1}"""
+        val blankName =
+            """{"gtin":"4600699500001","name":"  ","kcal100":59,"prot100":290,"fat100":320,"carb100":470,"createdAt":1}"""
+        val noDate =
+            """{"gtin":"4600699500001","name":"Молоко","kcal100":59,"prot100":290,"fat100":320,"carb100":470}"""
+
+        assertEquals("""{"accepted":[]}""", send("[$noName,$blankName,$noDate]").bodyAsText())
+        assertEquals(0, db.contributionsFor("4600699500001").size)
+    }
 }

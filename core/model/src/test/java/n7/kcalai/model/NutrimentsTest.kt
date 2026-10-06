@@ -53,11 +53,13 @@ class NutrimentsTest {
 
     @Test
     fun `большая порция не переполняет Int`() {
+        // Произведение считается в Long: 10000 сг * 1 000 000 г это 10^10,
+        // в Int не влезает, а сам результат — 10^8 сг — влезает с запасом.
         val totals = Nutriments(kcal100 = 900, prot100 = 10000, fat100 = 10000, carb100 = 10000)
-            .forGrams(100_000)
+            .forGrams(1_000_000)
 
-        assertEquals(900_000, totals.kcal)
-        assertEquals(10_000_000, totals.protCg)
+        assertEquals(9_000_000, totals.kcal)
+        assertEquals(100_000_000, totals.protCg)
     }
 
     @Test
@@ -76,12 +78,16 @@ class NutrimentsTest {
 
         assertEquals(198, sum.kcal)
         assertEquals(684, sum.protCg)
+        assertEquals(165, sum.fatCg)
+        assertEquals(3750, sum.carbCg)
     }
 
     @Test
     fun `ноль нейтрален при сложении`() {
         val a = buckwheat.forGrams(100)
 
+        // Обе стороны: ZERO действительно нулевой и слагаемое не теряется.
         assertEquals(a, a + NutrimentTotals.ZERO)
+        assertEquals(a, NutrimentTotals.ZERO + a)
     }
 }

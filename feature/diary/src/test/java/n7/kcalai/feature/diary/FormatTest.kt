@@ -70,4 +70,15 @@ class FormatTest {
         assertEquals("Добрый вечер!", greeting(22))
         assertEquals("Добрый вечер!", greeting(3))
     }
+
+    /** Границы суток названы точно: сдвиг на час читается как сломанные часы. */
+    @Test
+    fun `границы приветствий стоят на своих часах`() {
+        assertEquals("Добрый вечер!", greeting(4))
+        assertEquals("Доброе утро!", greeting(5))
+        assertEquals("Доброе утро!", greeting(11))
+        assertEquals("Добрый день!", greeting(12))
+        assertEquals("Добрый день!", greeting(17))
+        assertEquals("Добрый вечер!", greeting(18))
+    }
 }

@@ -47,6 +47,28 @@ class FeedTest {
         assertEquals(MealType.DINNER, mealForHour(19, lastEntry = null, nowMillis = at(19)))
     }
 
+    /**
+     * Границы окон — не округление, а сами зазоры.
+     *
+     * Окна стоят с зазорами намеренно: в 11:00 человек может доедать завтрак
+     * и может обедать. Съехавшая граница съедает зазор, и правило «решает дневник»
+     * перестаёт работать ровно там, где оно и нужно.
+     */
+    @Test
+    fun `границы окон стоят на своих часах`() {
+        // Завтрак 5–10, обед 12–15, ужин 17–21; между ними зазоры.
+        val cold = entry(1, hour = 0, meal = MealType.SNACK)
+
+        assertEquals(MealType.BREAKFAST, mealForHour(10, cold, nowMillis = at(10)))
+        assertEquals(MealType.SNACK, mealForHour(11, cold, nowMillis = at(11)))
+        assertEquals(MealType.LUNCH, mealForHour(12, cold, nowMillis = at(12)))
+        assertEquals(MealType.LUNCH, mealForHour(15, cold, nowMillis = at(15)))
+        assertEquals(MealType.SNACK, mealForHour(16, cold, nowMillis = at(16)))
+        assertEquals(MealType.DINNER, mealForHour(17, cold, nowMillis = at(17)))
+        assertEquals(MealType.DINNER, mealForHour(21, cold, nowMillis = at(21)))
+        assertEquals(MealType.SNACK, mealForHour(22, cold, nowMillis = at(22)))
+    }
+
     @Test
     fun `в зазоре между окнами продолжается недавняя еда`() {
         // 11:20 — завтрак ещё доедают, если последняя запись была полчаса назад.
@@ -201,6 +223,29 @@ class FeedTest {
         val gap = MealGap(MealType.LUNCH, typicalHour = 13, suggestions = emptyList())
 
         assertEquals(1, gapPosition(bubbles, gap, zone))
+    }
+
+    /**
+     * Вопрос встаёт после ПОСЛЕДНЕГО пузырька, начавшегося раньше типичного часа.
+     *
+     * Утром человек ест дважды — завтрак и перекус, — и пропущенный обед должен
+     * стоять после обоих. Встав после первого, он читался бы как вопрос про то,
+     * что было до перекуса, то есть про уже записанное.
+     */
+    @Test
+    fun `вопрос встаёт после всех пузырьков, что были раньше`() {
+        val bubbles = groupIntoBubbles(
+            listOf(
+                entry(1, hour = 8, meal = MealType.BREAKFAST),
+                entry(2, hour = 11, meal = MealType.SNACK),
+                entry(3, hour = 19, meal = MealType.DINNER),
+            ),
+            zone,
+            nowMillis = at(20),
+        )
+        val gap = MealGap(MealType.LUNCH, typicalHour = 13, suggestions = emptyList())
+
+        assertEquals("после завтрака и перекуса, перед ужином", 2, gapPosition(bubbles, gap, zone))
     }
 
     @Test

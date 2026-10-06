@@ -18,4 +18,12 @@ class NutrimentsTest {
         assertFalse("макрос больше 100 г", Nutriments(400, 10_001, 0, 0).isPlausible())
         assertFalse("сумма больше 100 г", Nutriments(400, 5_000, 3_000, 3_000).isPlausible())
     }
+
+    /** Границы включительны: ровно сто грамм и ровно 900 ккал — ещё возможно. */
+    @Test
+    fun `границы включительны`() {
+        assertTrue(Nutriments(900, 0, 10_000, 0).isPlausible())
+        assertTrue(Nutriments(400, 5_000, 5_000, 0).isPlausible())
+        assertFalse(Nutriments(0, 5_000, 5_001, 0).isPlausible())
+    }
 }

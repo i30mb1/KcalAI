@@ -38,7 +38,28 @@ class NutrimentValidatorTest {
 
     @Test
     fun `макросы вместе не помещаются в сто грамм`() {
-        assertFalse(NutrimentValidator.check(Nutriments(400, 5_000, 3_000, 3_000)).valid)
+        val check = NutrimentValidator.check(Nutriments(400, 5_000, 3_000, 3_000))
+
+        assertFalse(check.valid)
+        assertTrue("сработать должно правило суммы", check.error!!.contains("вместе"))
+    }
+
+    /**
+     * Один макрос больше ста грамм — своё правило, а не частный случай суммы.
+     *
+     * Оно зеркалит построчную проверку `build_seed.py`, где правила суммы нет
+     * вовсе, и говорит человеку, что чинить: не «всё вместе не лезет»,
+     * а «вот в этом поле лишний разряд».
+     */
+    @Test
+    fun `отдельный макрос больше ста грамм — своя ошибка`() {
+        val check = NutrimentValidator.check(Nutriments(400, 10_001, 0, 0))
+
+        assertFalse(check.valid)
+        assertEquals(
+            "Белков, жиров или углеводов не может быть больше 100 г на 100 г",
+            check.error,
+        )
     }
 
     @Test
@@ -48,14 +69,21 @@ class NutrimentValidatorTest {
 
         assertTrue("странное — не невозможное, сохранить можно", check.valid)
         assertNotNull(check.warning)
+        // Замечание называет обе цифры: человек сверяет их с упаковкой сам,
+        // и «проверьте цифры» без самих цифр проверить нечем.
+        assertTrue(check.warning!!.contains("328"))
+        assertTrue(check.warning.contains("33"))
     }
 
     @Test
     fun `расхождение в пределах четверти не считается ошибкой`() {
-        // Клетчатка и округление на этикетке дают именно такие расхождения.
-        val check = NutrimentValidator.check(Nutriments(300, 1_000, 500, 5_000))
+        // Клетчатка и округление на этикетке дают именно такие расхождения:
+        // Б 10 / Ж 5 / У 50 это 285 ккал по Этуотеру против указанных 300 — 5%.
+        assertNull(NutrimentValidator.check(Nutriments(300, 1_000, 500, 5_000)).warning)
 
-        assertNull(check.warning)
+        // А на четверти терпение кончается: те же макросы против 400 ккал
+        // расходятся почти на треть, и это уже не округление.
+        assertNotNull(NutrimentValidator.check(Nutriments(400, 1_000, 500, 5_000)).warning)
     }
 
     @Test

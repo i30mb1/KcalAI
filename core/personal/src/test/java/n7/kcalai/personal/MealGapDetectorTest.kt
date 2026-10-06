@@ -5,7 +5,6 @@ import n7.kcalai.model.MealType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Идея 4: отрицательное пространство дневника — что человек забыл записать. */
@@ -40,6 +39,27 @@ class MealGapDetectorTest {
         )
 
         assertNull("человек может обедать прямо сейчас", gap)
+    }
+
+    /**
+     * Два часа после обычного времени — нижняя граница терпения.
+     *
+     * У того, кто ест по часам, MAD близок к нулю, и без этой границы вопрос
+     * «ты обедал?» прилетал бы в 13:15, когда человек ещё не донёс тарелку.
+     */
+    @Test
+    fun `вопрос не приходит раньше, чем через два часа после обычного`() {
+        fun gapAt(hour: Int) = MealGapDetector.detect(
+            history = history(),
+            mealsLoggedToday = emptySet(),
+            dismissed = emptySet(),
+            nowHour = hour,
+            context = contextAt(hour = hour, meal = MealType.LUNCH),
+        )
+
+        // Обед в 13:00, разброс нулевой: до 15:00 включительно молчим.
+        assertNull("в 15:00 ещё рано", gapAt(15))
+        assertNotNull("в 16:00 пора спросить", gapAt(16))
     }
 
     @Test
@@ -97,11 +117,42 @@ class MealGapDetectorTest {
         )
 
         // Завтрак человек не ест ни разу — напоминание о нём было бы упрёком.
-        assertTrue(gap == null || gap.meal != MealType.BREAKFAST)
+        assertNull(gap)
+    }
+
+    /**
+     * Привычка — это пять раз за две недели, а не один.
+     *
+     * Иначе единственный завтрак в отпуске заводит ежедневный вопрос про завтрак,
+     * и напоминание превращается в упрёк за то, чего человек не делает.
+     */
+    @Test
+    fun `порог привычки — пять употреблений`() {
+        fun gapFor(breakfasts: Int): MealGap? {
+            val entries = mutableListOf<DiaryEntryEntity>()
+            var id = 1L
+            for (day in TODAY - 14..TODAY - 1) {
+                entries += entry(id++, day, 13, MealType.LUNCH, "Суп", SOUP, grams = 350)
+            }
+            for (i in 0 until breakfasts) {
+                entries += entry(id++, TODAY - 14 + i, 8, MealType.BREAKFAST, "Овсянка", OATMEAL, grams = 250)
+            }
+            return MealGapDetector.detect(
+                history = historyOf(entries),
+                mealsLoggedToday = emptySet(),
+                dismissed = setOf(MealType.LUNCH),
+                nowHour = 12,
+                context = contextAt(hour = 12, meal = MealType.LUNCH),
+            )
+        }
+
+        assertNull("четыре завтрака — ещё не привычка", gapFor(4))
+        assertEquals(MealType.BREAKFAST, gapFor(5)?.meal)
     }
 
     private companion object {
         const val SOUP = 20L
         const val CHICKEN = 21L
+        const val OATMEAL = 22L
     }
 }

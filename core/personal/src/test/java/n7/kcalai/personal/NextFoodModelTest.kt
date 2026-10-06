@@ -71,12 +71,36 @@ class NextFoodModelTest {
 
     @Test
     fun `на пустой истории модель молчит, а не выдумывает`() {
+        // Одна запись, и та — не в сегодняшнем приёме: фильтр «съеденное сегодня»
+        // её не убирает, молчит именно порог истории.
         val predictions = NextFoodModel.predict(
-            history = historyOf(listOf(entry(1, TODAY, 8, MealType.BREAKFAST, "Овсянка", OATMEAL))),
+            history = historyOf(listOf(entry(1, TODAY - 1, 8, MealType.BREAKFAST, "Овсянка", OATMEAL))),
             context = contextAt(hour = 8, meal = MealType.BREAKFAST),
         )
 
         assertTrue(predictions.isEmpty())
+    }
+
+    /**
+     * Порог — ровно на пяти записях, а не «где-то около».
+     *
+     * По двум записям модель уверенно предложит эти две, и человек решит,
+     * что приложение сломано. Поэтому до пяти молчим совсем, с пяти — отвечаем.
+     */
+    @Test
+    fun `порог истории — пять записей`() {
+        fun predictAfter(days: Int): List<String> {
+            val entries = (1..days).map { day ->
+                entry(day.toLong(), TODAY - day, 8, MealType.BREAKFAST, "Овсянка", OATMEAL, grams = 250)
+            }
+            return NextFoodModel.predict(
+                history = historyOf(entries),
+                context = contextAt(hour = 8, meal = MealType.BREAKFAST),
+            ).map { it.displayName }
+        }
+
+        assertTrue("по четырём записям предсказывать нечего", predictAfter(4).isEmpty())
+        assertEquals(listOf("Овсянка"), predictAfter(5))
     }
 
     /**
@@ -135,6 +159,61 @@ class NextFoodModelTest {
         val coffee = predictions.indexOfFirst { it.displayName == "Кофе с молоком" }
         assertTrue("кофе должен остаться в ряду", coffee >= 0)
         assertTrue("но не первым — утром он уже был", coffee > 0)
+    }
+
+    /**
+     * Штраф за «уже было сегодня» сильнее любого отдельного слагаемого.
+     *
+     * Курица — ужин, и на ужине она первая. Записанная сегодня в завтрак,
+     * на том же ужине она обязана уступить место, но из ряда не исчезнуть:
+     * съесть её второй раз — нормальный ответ, поэтому штраф, а не запрет.
+     *
+     * Здесь же проверяется, что сегодняшняя запись не добавляет свежести:
+     * без нижней границы в один день `exp(0) = 1` вытаскивало записанное
+     * на первое место вместо того, чтобы опускать.
+     */
+    @Test
+    fun `съеденное сегодня уступает первое место, но остаётся в ряду`() {
+        fun dinnerRow(chickenDay: Long): List<String> {
+            val entries = fortnight() +
+                entry(99, chickenDay, 8, MealType.BREAKFAST, "Куриная грудка", CHICKEN)
+            return NextFoodModel.predict(
+                history = historyOf(entries),
+                context = contextAt(hour = 19, meal = MealType.DINNER),
+            ).map { it.displayName }
+        }
+
+        // Вчерашний завтрак ужину не мешает: курица остаётся первой.
+        assertEquals("Куриная грудка", dinnerRow(TODAY - 1).first())
+
+        // А сегодняшний — опускает её в хвост, не выбрасывая.
+        val today = dinnerRow(TODAY)
+        assertTrue("курица уступает первое место", today.first() != "Куриная грудка")
+        assertTrue("но остаётся доступной", today.contains("Куриная грудка"))
+    }
+
+    /**
+     * Приём пищи весит больше часа.
+     *
+     * Овсянку и кофе человек ест в 8 утра, курицу — в 19:00. Если открыть ввод
+     * в 8 утра и поправить приём на ужин, первой обязана стоять курица: час
+     * говорит «завтрак», приём пищи — «ужин», и решает приём.
+     */
+    @Test
+    fun `приём пищи важнее часа`() {
+        val byMeal = NextFoodModel.predict(
+            history = history(),
+            context = contextAt(hour = 8, meal = MealType.DINNER),
+        )
+        assertEquals("Куриная грудка", byMeal.first().displayName)
+
+        // Тот же час с честным завтраком даёт обратный порядок — значит,
+        // разницу внёс именно приём пищи, а не час.
+        val byBreakfast = NextFoodModel.predict(
+            history = history(),
+            context = contextAt(hour = 8, meal = MealType.BREAKFAST),
+        )
+        assertEquals("Овсянка", byBreakfast.first().displayName)
     }
 
     /** Весь день записан — предлагать нечего, и ряд честнее убрать совсем. */

@@ -29,9 +29,14 @@ class BarcodeValidatorTest {
 
     @Test
     fun `буквы и пустая строка — не код`() {
+1        // Пустая строка и нецифры отсекаются каждая сама по себе: оба условия
+        // проверяются до контрольной суммы, и подменять одно другим нельзя.
         assertNull(BarcodeValidator.normalize(""))
+        assertNull(BarcodeValidator.normalize("   "))
         assertNull(BarcodeValidator.normalize("4600-699-500001"))
         assertNull(BarcodeValidator.normalize("abc"))
+        // Тринадцать знаков верной длины, но с буквой: длина пройдёт, цифры — нет.
+        assertNull(BarcodeValidator.normalize("460069950000a"))
     }
 
     @Test
@@ -57,6 +62,17 @@ class BarcodeValidatorTest {
         assertEquals("0012345000065", BarcodeValidator.normalizeUpcE("01234565"))
     }
 
+    /**
+     * Последняя значащая цифра говорит, сколько нулей выброшено и откуда, —
+     * у каждой своя схема, и спутать их значит вернуть код другого товара.
+     */
+    @Test
+    fun `каждая схема сжатия UPC-E разворачивается по-своему`() {
+        assertEquals("0012200003453", BarcodeValidator.normalizeUpcE("01234523"))
+        assertEquals("0012300000451", BarcodeValidator.normalizeUpcE("01234531"))
+        assertEquals("0012340000053", BarcodeValidator.normalizeUpcE("01234543"))
+    }
+
     @Test
     fun `восемь цифр без указания формата читаются как EAN-8`() {
         // Тот же 01234565 проходит и как EAN-8 — и без подсказки распознавателя
@@ -66,6 +82,20 @@ class BarcodeValidatorTest {
 
     @Test
     fun `UPC-E с чужой системой нумерации не разворачивается`() {
-        assertNull(BarcodeValidator.normalizeUpcE("51234565"))
+        // Схема сжатия определена только для систем 0 и 1. «50000005» по ней
+        // разворачивается в код, который проходит и контрольную сумму, —
+        // то есть выглядит настоящим товаром, которым не является.
+        assertNull(BarcodeValidator.normalizeUpcE("50000005"))
+        // Та же развёртка для системы 0 законна — значит, отсекает именно
+        // первая цифра, а не сумма заодно.
+        assertEquals("0000000000000", BarcodeValidator.normalizeUpcE("00000000"))
+    }
+
+    @Test
+    fun `UPC-E с битой контрольной цифрой не разворачивается`() {
+        // Контрольная цифра у UPC-E своя не бывает — там стоит цифра от UPC-A,
+        // и проверять её надо уже на развёрнутом коде.
+        assertNull(BarcodeValidator.normalizeUpcE("01234564"))
+        assertNull(BarcodeValidator.normalizeUpcE("0123456a"))
     }
 }

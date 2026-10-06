@@ -69,19 +69,62 @@ class RemainingDayPlannerTest {
         // Творог и йогурт стоят одинаковых 300 ккал, но белка 36 г против 33 —
         // калории уже загнаны в допуск фильтром, оптимизировать остаётся белок.
         assertEquals("Творог", plan!!.options.first().items.first().displayName)
+        // И йогурт идёт сразу за ним: разница только в белке, а не в калориях.
+        assertEquals("Йогурт", plan.options[1].items.first().displayName)
     }
 
+    /**
+     * Белок перевешивает небольшой проигрыш по калориям.
+     *
+     * Калории уже загнаны в допуск жёстким фильтром, поэтому «попасть точнее»
+     * почти ничего не значит, а недобор белка значит всё. Здесь творог на три
+     * килокалории мимо остатка, зато белка в нём на шесть грамм больше, —
+     * и выигрывать обязан он, а не точный по калориям йогурт.
+     */
     @Test
-    fun `закрытый день добирать не предлагают`() {
+    fun `белок важнее точного попадания в калории`() {
+        val entries = mutableListOf<DiaryEntryEntity>()
+        var id = 1L
+        for (day in TODAY - 13..TODAY) {
+            // Творог: 200 г по 148,5 ккал/100 г = 297 ккал, белка 36 г.
+            entries += entry(id++, day, 21, MealType.SNACK, "Творог", COTTAGE, grams = 200, kcal100 = 149, prot100 = 1800)
+            // Йогурт: 300 г по 100 ккал/100 г = 300 ккал ровно, белка 30 г.
+            entries += entry(id++, day, 20, MealType.SNACK, "Йогурт", YOGURT, grams = 300, kcal100 = 100, prot100 = 1000)
+        }
+
         val plan = RemainingDayPlanner.plan(
-            history = history(),
-            remainingKcal = 40,
-            remainingProtCg = 0,
+            history = historyOf(entries),
+            remainingKcal = 300,
+            remainingProtCg = 10_000,
             eatenToday = emptySet(),
             context = contextAt(hour = 21, meal = MealType.SNACK),
+        )!!
+
+        val best = plan.options.first()
+        assertEquals("Творог", best.items.first().displayName)
+        assertEquals("он же беднее по калориям", 298, best.totals.kcal)
+    }
+
+    /**
+     * Закрытый день добирать не предлагают.
+     *
+     * Ниже ста килокалорий остаток закрывать нечем: еды такого размера у человека
+     * в истории нет, а предложить «треть яблока» значит придумать порцию,
+     * которой он никогда не ел.
+     */
+    @Test
+    fun `ниже ста килокалорий добирать нечего`() {
+        fun planFor(remaining: Int) = RemainingDayPlanner.plan(
+            history = history(),
+            remainingKcal = remaining,
+            remainingProtCg = 0,
+            eatenToday = emptySet(),
+            context = contextAt(hour = 16, meal = MealType.SNACK),
         )
 
-        assertNull(plan)
+        assertNull("99 ккал — день закрыт", planFor(99))
+        // А сотня уже добирается: яблоко на 100 ккал лежит в истории.
+        assertNotNull("100 ккал закрываются яблоком", planFor(100))
     }
 
     @Test
@@ -110,6 +153,27 @@ class RemainingDayPlannerTest {
             "творог должен остаться доступным вариантом",
             withRepeat.options.any { option -> option.items.any { it.displayName == "Творог" } },
         )
+    }
+
+    /**
+     * Когда съедено всё, что подходит, вариант всё равно предлагается.
+     *
+     * Это и есть разница между штрафом и запретом: при запрете человек, уже
+     * съевший сегодня и творог, и йогурт, увидел бы пустоту вместо ответа —
+     * хотя добавить вторую порцию совершенно нормально.
+     */
+    @Test
+    fun `когда съедено всё подходящее, добор всё равно предлагается`() {
+        val plan = RemainingDayPlanner.plan(
+            history = history(),
+            remainingKcal = 300,
+            remainingProtCg = 4000,
+            eatenToday = setOf(genericKey(COTTAGE), genericKey(YOGURT), genericKey(APPLE), genericKey(NUTS)),
+            context = contextAt(hour = 21, meal = MealType.SNACK),
+        )
+
+        assertNotNull("запрет оставил бы человека без ответа", plan)
+        assertTrue(plan!!.options.isNotEmpty())
     }
 
     private companion object {

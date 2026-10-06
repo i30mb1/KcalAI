@@ -2,6 +2,7 @@ package n7.kcalai.repositories
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -22,6 +23,24 @@ class LabelParserTest {
             listOf("506", "121", "17,2", "5,0", "1,8")
         )
 
+        assertEquals(121, reading.draft.kcal100)
+    }
+
+    /**
+     * Пара сильнее, чем «самое крупное число».
+     *
+     * На этикетке рядом с таблицей стоит масса нетто, и она же обычно крупнее
+     * калорий. Пока калории выбирались по величине, в поле уезжало 450.
+     * Здесь 450 — самое большое правдоподобное число, но в паре с 506 кДж
+     * по константе 4.184 стоит именно 121, и выигрывать обязано оно.
+     */
+    @Test
+    fun `пара килоджоулей сильнее самого крупного числа`() {
+        val reading = LabelParser.parse(
+            listOf("450", "506", "121", "17,2", "5,0", "1,8")
+        )
+
+        assertTrue(reading.confident)
         assertEquals(121, reading.draft.kcal100)
     }
 
@@ -142,6 +161,24 @@ class LabelParserTest {
         assertTrue(reading.numbers.containsAll(listOf("506", "121", "5,0")))
     }
 
+    /**
+     * Трёх чисел хватает, чтобы заполнить форму, — но только если они сходятся.
+     *
+     * Чисел на этикетке три и больше почти всегда, и перебор что-нибудь подберёт
+     * из любых. Поэтому набор, расходящийся с калориями больше, чем на допуск
+     * формы, не предлагается вовсе: подогнанное под калории — не прочитанное.
+     */
+    @Test
+    fun `подобранный набор, не сходящийся с калориями, не предлагается`() {
+        // 121 ккал при Б 1,8 / Ж 1,8 / У 1,8 это 25 ккал по Этуотеру — мимо впятеро.
+        val reading = LabelParser.parse(listOf("506", "121", "1,8", "1,8", "1,8"))
+
+        assertFalse(reading.confident)
+        assertNull("набор мимо Этуотера подставлять нельзя", reading.draft.prot100)
+        // Сами калории прочитаны парой и остаются: они-то подтверждены.
+        assertEquals(121, reading.draft.kcal100)
+    }
+
     @Test
     fun `на этикетке без чисел разбор пуст`() {
         val reading = LabelParser.parse(listOf("Coca-Cola", "zero"))
@@ -178,6 +215,22 @@ class LabelParserTest {
         val reading = LabelParser.parse(
             listOf("12.09.2026", "506", "121", "17,2", "5,0", "1,8")
         )
+
+        assertEquals(121, reading.draft.kcal100)
+        assertTrue(reading.confident)
+    }
+
+    /**
+     * Пара должна сойтись по константе, а не «примерно».
+     *
+     * Отношение 4.184 физическое, и обе величины производитель печатает
+     * округлёнными по отдельности: процент расхождения законен, десять — уже нет.
+     */
+    @Test
+    fun `числа, разошедшиеся с константой, парой не считаются`() {
+        // 560 кДж против 121 ккал — это 10% мимо 4.184. Пары здесь нет,
+        // и 560 не имеет права стать килоджоулями этой строки.
+        val reading = LabelParser.parse(listOf("560", "121", "17,2", "5,0", "1,8"))
 
         assertEquals(121, reading.draft.kcal100)
         assertTrue(reading.confident)

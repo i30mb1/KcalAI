@@ -85,6 +85,39 @@ class LabelConsensusTest {
         assertEquals("представитель кучи — самое частое", 88, verdict.kcal.value)
     }
 
+    /**
+     * Допуск пропорциональный, а не «плюс-минус единица».
+     *
+     * У калорий разброс распознавания — единицы, у макросов — сотни сотых грамма,
+     * и одна абсолютная константа была бы верна ровно для одного из них.
+     * На крупных числах два процента это уже десятки: 2400 и 2440 сотых грамма
+     * жира — одно прочтение, и голосовать они обязаны вместе.
+     */
+    @Test
+    fun `на крупных числах допуск растёт вместе с числом`() {
+        val consensus = LabelConsensus()
+
+        // Жиры 24,00 / 24,40 / 24,00 г — внутри двух процентов от 2400.
+        consensus.add(frame(kcal = 486, prot = 750, fat = 2_400, carb = 6_000))
+        consensus.add(frame(kcal = 486, prot = 750, fat = 2_440, carb = 6_000))
+        val verdict = consensus.add(frame(kcal = 486, prot = 750, fat = 2_400, carb = 6_000))
+
+        assertTrue("три прочтения одного числа дают согласие", verdict.fat.settled)
+        assertEquals(2_400, verdict.fat.value)
+    }
+
+    @Test
+    fun `далёкие прочтения вместе не голосуют`() {
+        val consensus = LabelConsensus()
+
+        // 2400 и 3000 расходятся на четверть — это разные числа, а не разброс.
+        consensus.add(frame(fat = 2_400))
+        consensus.add(frame(fat = 3_000))
+        val verdict = consensus.add(frame(fat = 3_000))
+
+        assertFalse("двух голосов из трёх не хватает", verdict.fat.settled)
+    }
+
     @Test
     fun `два далёких числа поровну — выбирать за человека нечего`() {
         val consensus = LabelConsensus(minVotes = 2)

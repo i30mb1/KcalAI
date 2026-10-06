@@ -36,6 +36,10 @@ class FoodRefTest {
         assertNull(parseFoodRef("generic:"))
         assertNull(parseFoodRef("generic:abc"))
         assertNull(parseFoodRef("photo:1"))
+        // Двоеточие первым символом — источника нет, а не источник с пустым именем.
         assertNull(parseFoodRef(":1"))
+        // Код без цифр — тоже мусор: пустой штрих-код ничего не найдёт,
+        // а запись истории с таким ключом склеилась бы с любой другой пустой.
+        assertNull(parseFoodRef("barcode:"))
     }
 }
