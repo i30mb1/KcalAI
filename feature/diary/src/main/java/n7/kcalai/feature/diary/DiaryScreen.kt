@@ -28,6 +28,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
@@ -170,11 +171,27 @@ fun DiaryScreen(
             .filter { it }
             .collect { collapsed = true }
     }
-    val expandOnPull = remember {
+    /*
+     * Тем же жестом уходит и клавиатура: раскрыть шапку человек тянется, чтобы
+     * посмотреть на остаток и макросы, а не чтобы продолжить печатать. Оставить
+     * клавиатуру значило бы отдать ей половину экрана ровно под тем, на что
+     * человек сейчас смотрит, и заставить убирать её вторым жестом.
+     *
+     * Снимается фокус, а не просто скрывается IME: поле осталось бы активным,
+     * и повторный тап по нему клавиатуру уже не вернул бы — фокус на месте,
+     * событию взяться негде.
+     */
+    val focus = LocalFocusManager.current
+    val expandOnPull = remember(focus) {
         object : NestedScrollConnection {
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 // Не потраченная лентой прокрутка вниз — значит, она уже наверху.
-                if (available.y > 0f) collapsed = false
+                // Условие на `collapsed` держит это одним срабатыванием на жест:
+                // непотраченного хватает на каждый кадр, а фокус снимать нужно раз.
+                if (available.y > 0f && collapsed) {
+                    collapsed = false
+                    focus.clearFocus()
+                }
                 return Offset.Zero
             }
         }
