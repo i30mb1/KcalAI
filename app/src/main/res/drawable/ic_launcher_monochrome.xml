@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Тематическая иконка: та же форма, бары вырезаны из пузырька — у монохрома нет цветов, только альфа. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M39,32H69A10,10 0,0 1,79 42V60A10,10 0,0 1,69 70H39A10,10 0,0 1,29 60V42A10,10 0,0 1,39 32Z M39.5,40H68.5A2.5,2.5 0,0 1,68.5 45H39.5A2.5,2.5 0,0 1,39.5 40Z M39.5,48.5H59.5A2.5,2.5 0,0 1,59.5 53.5H39.5A2.5,2.5 0,0 1,39.5 48.5Z M39.5,57H63.5A2.5,2.5 0,0 1,63.5 62H39.5A2.5,2.5 0,0 1,39.5 57Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,60L46,70L34,79Z" />
+</vector>

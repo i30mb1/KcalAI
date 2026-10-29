@@ -26,12 +26,29 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
 
-        buildConfigField("String", "KCAL_SERVER", "\"${localProperties.getProperty("kcal.server", "")}\"")
+    // Ключ загрузки в Google Play лежит вне репозитория, пути и пароли — в ~/.gradle/gradle.properties.
+    // Без них release собирается неподписанным: сборке это не мешает, мешает только загрузке.
+    val uploadStoreFile = providers.gradleProperty("kcal.upload.storeFile").orNull
+    val uploadSigning = uploadStoreFile?.let {
+        signingConfigs.create("upload") {
+            storeFile = file(it)
+            storePassword = providers.gradleProperty("kcal.upload.storePassword").get()
+            keyAlias = providers.gradleProperty("kcal.upload.keyAlias").get()
+            keyPassword = providers.gradleProperty("kcal.upload.keyPassword").get()
+        }
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "KCAL_SERVER", "\"${localProperties.getProperty("kcal.server", "")}\"")
+        }
+        // Локальный сервер — домашняя сеть разработчика и http без TLS: в сборке для людей
+        // ему не место. Без адреса вклады и сессии съёмки остаются на устройстве.
         release {
+            buildConfigField("String", "KCAL_SERVER", "\"\"")
+            signingConfig = uploadSigning
             optimization {
                 enable = false
             }
