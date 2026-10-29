@@ -10,6 +10,7 @@ import n7.kcalai.model.plus
 import n7.kcalai.personal.DayPlan
 import n7.kcalai.personal.DayOutline
 import n7.kcalai.personal.MealGap
+import n7.kcalai.ui.mascot.Mascot
 
 /**
  * Готовая лента дня.
@@ -98,6 +99,25 @@ sealed interface FeedItem {
     data class Reply(val id: Int, val text: String, val time: String) : FeedItem {
         override val key get() = "reply-$id"
     }
+}
+
+/**
+ * Кто из троих говорит реплику. `null` — реплика не приложения, а человека.
+ *
+ * Голос привязан к смыслу: перебор — про жиры, пропущенный приём — про энергию,
+ * остаток с недобранным белком — про белок. Всё остальное — служебные ответы,
+ * и их ведёт Яйцо: у ленты должен быть один голос по умолчанию, а не жребий.
+ */
+fun speakerOf(item: FeedItem): Mascot? = when (item) {
+    FeedItem.DaySeparator, is FeedItem.Meal -> null
+    is FeedItem.Over -> Mascot.BUTTER
+    is FeedItem.Gap -> Mascot.GRAIN
+    is FeedItem.Remaining -> if (item.plan.remainingProtCg > 0) Mascot.EGG else Mascot.GRAIN
+    is FeedItem.Summary,
+    is FeedItem.NotFound,
+    is FeedItem.WeightLogged,
+    is FeedItem.Reply,
+    is FeedItem.Outbox -> Mascot.EGG
 }
 
 /**
