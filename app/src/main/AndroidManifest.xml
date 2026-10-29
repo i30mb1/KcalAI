@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
         Сеть нужна только при промахе локального поиска: опрос сервера и Open Food
@@ -7,6 +8,15 @@
         Разрешение камеры объявляет :feature:scanner — там оно и живёт.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+        WorkManager объявляет foreground-сервис «на всякий случай», а Google Play
+        за каждое такое разрешение требует декларацию с видео. Отправка вкладов
+        идёт обычной фоновой работой и в передний план не выходит никогда.
+        Понадобится setForeground — убрать эти три строки и заполнить декларацию.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" tools:node="remove" />
 
     <application
         android:name=".KcalApp"
@@ -34,6 +44,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            tools:node="remove" />
     </application>
 
 </manifest>
