@@ -5,7 +5,6 @@ import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -21,25 +20,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
-import n7.kcalai.ui.KcalTheme
 import n7.kcalai.ui.mascot.Mascot
 import n7.kcalai.ui.mascot.MascotFigure
 import n7.kcalai.ui.mascot.MascotPose
-import n7.kcalai.ui.mascot.portalColor
 
 /**
  * Места, куда персонаж может встать: плитка, чипс, реплика, сцена.
@@ -98,71 +91,43 @@ fun MascotStage(feed: List<FeedItem>, chipOwner: Mascot?, anchors: MascotAnchors
 }
 
 /**
- * Один персонаж и его портал.
+ * Один персонаж.
  *
- * Не летит через экран, а проваливается в портал там, где стоит, и выныривает
- * из такого же на новом месте. Перелёт через полэкрана тянул за собой взгляд
- * и спорил с прокруткой; портал — это два коротких движения в двух точках.
+ * Не летит через экран, а исчезает там, где стоял, и появляется на новом месте.
+ * Перелёт через полэкрана тянул за собой взгляд и спорил с прокруткой.
  */
 @Composable
 private fun StagedMascot(mascot: Mascot, target: MascotPlace, anchors: MascotAnchors, origin: Offset) {
     var shown by remember { mutableStateOf(target) }
-    val sink = remember { Animatable(0f) }
-    val portal = remember { Animatable(0f) }
+    // 1 — на месте, 0 — исчез.
+    val presence = remember { Animatable(1f) }
 
     LaunchedEffect(target) {
-        if (target == shown && sink.value == 0f) return@LaunchedEffect
         if (target != shown) {
-            portal.animateTo(1f, tween(PORTAL_MS))
-            sink.animateTo(1f, tween(SINK_MS, easing = FastOutLinearInEasing))
+            presence.animateTo(0f, tween(VANISH_MS, easing = FastOutLinearInEasing))
             shown = target
-            portal.snapTo(0f)
-            portal.animateTo(1f, tween(PORTAL_MS))
         }
-        sink.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow))
-        portal.animateTo(0f, tween(PORTAL_MS))
+        presence.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow))
     }
 
     // Место пропало — свёрнутая шапка без плиток: персонажа просто не видно.
     val rect = anchors.rects[shown.anchorKey(mascot)] ?: return
     val density = LocalDensity.current
-    val ring = mascot.portalColor
-    val hole = KcalTheme.colors.text
 
-    Box(
-        Modifier
+    MascotFigure(
+        mascot = mascot,
+        pose = shown.pose,
+        modifier = Modifier
             .offset { IntOffset((rect.left - origin.x).roundToInt(), (rect.top - origin.y).roundToInt()) }
             .size(with(density) { rect.width.toDp() }, with(density) { rect.height.toDp() })
-    ) {
-        Canvas(Modifier.matchParentSize()) {
-            val open = portal.value
-            if (open <= 0f) return@Canvas
-            val w = size.width * 1.3f * open
-            val h = 12.dp.toPx()
-            val topLeft = Offset(center.x - w / 2, size.height - h / 2)
-            drawOval(hole, topLeft, Size(w, h))
-            drawOval(ring, topLeft, Size(w, h), style = Stroke(width = 3.dp.toPx()))
-        }
-        MascotFigure(
-            mascot = mascot,
-            pose = shown.pose,
-            modifier = Modifier
-                .matchParentSize()
-                // Пока проваливается, низ срезан по линии портала. В покое не режем:
-                // ручки на чипсе свисают ниже рамки.
-                .drawWithContent {
-                    if (sink.value > 0f) {
-                        clipRect(left = -size.width, top = -size.height, right = size.width * 2, bottom = size.height) {
-                            this@drawWithContent.drawContent()
-                        }
-                    } else {
-                        drawContent()
-                    }
-                }
-                .graphicsLayer { translationY = sink.value * size.height * 1.15f },
-        )
-    }
+            .graphicsLayer {
+                val p = presence.value
+                scaleX = p
+                scaleY = p
+                alpha = p.coerceIn(0f, 1f)
+                transformOrigin = TransformOrigin(0.5f, 1f)
+            },
+    )
 }
 
-private const val PORTAL_MS = 130
-private const val SINK_MS = 220
+private const val VANISH_MS = 160

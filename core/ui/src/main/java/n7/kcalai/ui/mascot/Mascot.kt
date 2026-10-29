@@ -60,10 +60,6 @@ val Macro.mascot: Mascot
         Macro.CARB -> Mascot.GRAIN
     }
 
-/** Цвет портала: заливка макроса, а не чужие сине-оранжевые. */
-val Mascot.portalColor: Color
-    get() = art.portal
-
 /** Что делают ручки. Тело одно на все позы — меняются только они. */
 enum class MascotPose {
     /** Дома в плитке: ручки поджаты, рядом цифры. */
@@ -91,8 +87,6 @@ internal interface MascotArt {
     /** Ручки — того же цвета, что тело, с тёмной каймой: иначе на теле их не видно. */
     val skin: Color
     val armOutline: Color
-
-    val portal: Color
 
     fun DrawScope.draw()
 }

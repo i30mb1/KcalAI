@@ -62,14 +62,15 @@ body { font-family: Manrope, sans-serif; color: var(--text); }
 <svg width="0" height="0" style="position: absolute">
 <defs>
 <filter id="paper" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0.6" dy="1.8" stdDeviation="1.1" flood-color="#3B2A12" flood-opacity="0.35"></feDropShadow></filter>
+<clipPath id="egg-body"><path d="M60,4 C78,4 89,38 89,62 C89,83 76,96 60,96 C44,96 31,83 31,62 C31,38 42,4 60,4 Z"></path></clipPath>
 <symbol id="egg" viewBox="0 0 120 100">
 <g transform="rotate(-3 60 60)">
-<path d="M60,26 C80,26 92,52 92,68 C92,84 78,94 60,94 C42,94 28,84 28,68 C28,52 40,26 60,26 Z" fill="#FFF8EE" filter="url(#paper)"></path>
-<path d="M34,46 C38,20 48,8 60,8 C72,8 82,20 86,46 L78,40 L70,48 L60,40 L50,48 L42,40 Z" fill="#E58BA8" filter="url(#paper)"></path>
-<circle cx="40" cy="74" r="5" fill="#F3B5C8"></circle><circle cx="80" cy="74" r="5" fill="#F3B5C8"></circle>
+<path d="M60,4 C78,4 89,38 89,62 C89,83 76,96 60,96 C44,96 31,83 31,62 C31,38 42,4 60,4 Z" fill="#FFF8EE" filter="url(#paper)"></path>
+<path d="M0,0 H120 V36 L102,32 L92,41 L82,32 L71,41 L60,32 L49,41 L38,32 L28,41 L18,32 L0,38 Z" fill="#E58BA8" clip-path="url(#egg-body)"></path>
+<circle cx="42" cy="74" r="5" fill="#F3B5C8"></circle><circle cx="78" cy="74" r="5" fill="#F3B5C8"></circle>
 </g>
-<circle cx="50" cy="64" r="5.5" fill="#2C2618"></circle><circle cx="70" cy="64" r="5.5" fill="#2C2618"></circle>
-<path d="M55,77 C57,80 63,80 65,76" stroke="#2C2618" stroke-width="2" fill="none" stroke-linecap="round"></path>
+<circle cx="50" cy="63" r="5.5" fill="#2C2618"></circle><circle cx="70" cy="63" r="5.5" fill="#2C2618"></circle>
+<path d="M55,78 C57,81 63,81 65,77" stroke="#2C2618" stroke-width="2" fill="none" stroke-linecap="round"></path>
 </symbol>
 <symbol id="butter" viewBox="0 0 120 100">
 <g transform="rotate(2 60 64)">

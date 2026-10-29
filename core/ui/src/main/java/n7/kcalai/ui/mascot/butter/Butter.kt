@@ -21,7 +21,6 @@ internal object ButterArt : MascotArt {
 
     override val skin get() = Front
     override val armOutline = Color(0xFFC8962F)
-    override val portal = Color(0xFFD9962F)
 
     private val Front = Color(0xFFF4CD6A)
     private val Top = Color(0xFFFBE6A8)

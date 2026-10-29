@@ -3,6 +3,7 @@ package n7.kcalai.ui.mascot.egg
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import n7.kcalai.ui.mascot.MascotArt
 import n7.kcalai.ui.mascot.face
@@ -13,7 +14,9 @@ import n7.kcalai.ui.mascot.svgPath
 /**
  * Яйцо — белок. Собранное, немного правильное, носит скорлупу как каску.
  *
- * Узнаётся по скорлупе-шапке с зубцами: без неё это просто белый овал.
+ * Вытянуто вверх, как настоящее яйцо: приплюснутый овал с шапкой читался как
+ * луковица. Скорлупа — верх того же контура, отрезанный трещиной зубцами,
+ * поэтому сидит на яйце точно, а не накладкой поверх.
  */
 internal object EggArt : MascotArt {
 
@@ -21,24 +24,23 @@ internal object EggArt : MascotArt {
 
     override val skin get() = White
     override val armOutline = Color(0xFFD8C8AE)
-    override val portal = Color(0xFFE0648C)
 
     private val White = Color(0xFFFFF8EE)
     private val Shell = Color(0xFFE58BA8)
     private val Blush = Color(0xFFF3B5C8)
 
-    private val body by lazy { svgPath("M60,26 C80,26 92,52 92,68 C92,84 78,94 60,94 C42,94 28,84 28,68 C28,52 40,26 60,26 Z") }
-    private val shell by lazy { svgPath("M34,46 C38,20 48,8 60,8 C72,8 82,20 86,46 L78,40 L70,48 L60,40 L50,48 L42,40 Z") }
-    private val mouth by lazy { svgPath("M55,77 C57,80 63,80 65,76") }
+    private val body by lazy { svgPath("M60,4 C78,4 89,38 89,62 C89,83 76,96 60,96 C44,96 31,83 31,62 C31,38 42,4 60,4 Z") }
+    private val crack by lazy { svgPath("M0,0 H120 V36 L102,32 L92,41 L82,32 L71,41 L60,32 L49,41 L38,32 L28,41 L18,32 L0,38 Z") }
+    private val mouth by lazy { svgPath("M55,78 C57,81 63,81 65,77") }
 
     override fun DrawScope.draw() {
         // Вырезку положили чуть криво — так она выглядит положенной руками.
         rotate(-3f, pivot = Offset(60f, 60f)) {
             paper(body, White)
-            paper(shell, Shell)
-            paperDot(Offset(40f, 74f), 5f, Blush)
-            paperDot(Offset(80f, 74f), 5f, Blush)
+            clipPath(body) { drawPath(crack, Shell) }
+            paperDot(Offset(42f, 74f), 5f, Blush)
+            paperDot(Offset(78f, 74f), 5f, Blush)
         }
-        face(50f, 70f, 64f, mouth)
+        face(50f, 70f, 63f, mouth)
     }
 }
