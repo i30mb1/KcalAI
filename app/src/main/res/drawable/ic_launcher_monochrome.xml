@@ -1,15 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Тематическая иконка: та же форма, бары вырезаны из пузырька — у монохрома нет цветов, только альфа. -->
+<!-- Тематическая иконка: силуэт Яйца и пузырёк с вырезанными барами — у монохрома нет цветов, только альфа. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFF"
-        android:fillType="evenOdd"
-        android:pathData="M39,32H69A10,10 0,0 1,79 42V60A10,10 0,0 1,69 70H39A10,10 0,0 1,29 60V42A10,10 0,0 1,39 32Z M39.5,40H68.5A2.5,2.5 0,0 1,68.5 45H39.5A2.5,2.5 0,0 1,39.5 40Z M39.5,48.5H59.5A2.5,2.5 0,0 1,59.5 53.5H39.5A2.5,2.5 0,0 1,39.5 48.5Z M39.5,57H63.5A2.5,2.5 0,0 1,63.5 62H39.5A2.5,2.5 0,0 1,39.5 57Z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M32,60L46,70L34,79Z" />
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="1.12" android:scaleY="1.12">
+        <group android:translateX="29" android:translateY="22" android:scaleX="0.41667" android:scaleY="0.42">
+            <group android:rotation="-3" android:pivotX="60" android:pivotY="60">
+                <path
+                    android:fillColor="#FFFFFF"
+                    android:pathData="M60,4 C78,4 89,38 89,62 C89,83 76,96 60,96 C44,96 31,83 31,62 C31,38 42,4 60,4 Z" />
+            </group>
+        </group>
+        <path
+            android:fillColor="#FFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M38,56 H70 C76,56 80,60 80,66 V70 C80,75 76,78 70,78 H50 L40,85 L42,78 H38 C32,78 28,75 28,70 V66 C28,60 32,56 38,56 Z M36.8,61.2 H65.2 A1.8,1.8 0 0 1 65.2,64.8 H36.8 A1.8,1.8 0 0 1 36.8,61.2 Z M36.8,66.2 H55.2 A1.8,1.8 0 0 1 55.2,69.8 H36.8 A1.8,1.8 0 0 1 36.8,66.2 Z M36.8,71.2 H60.2 A1.8,1.8 0 0 1 60.2,74.8 H36.8 A1.8,1.8 0 0 1 36.8,71.2 Z" />
+    </group>
 </vector>

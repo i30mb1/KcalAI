@@ -1,26 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Пузырёк диалога с тремя барами дня: белки, жиры, углеводы — цвета макросов
-    из KcalColors. Всё лежит внутри круга 66dp: маска лаунчера не режет хвост.
+    Яйцо выглядывает из-за пузырька диалога с тремя барами дня: белки, жиры,
+    углеводы. Так же, как в приложении персонаж выглядывает из-за чипса.
+    Знак увеличен до края видимой области маски (72 из 108 dp): в безопасных
+    66 dp он смотрелся мелким. Тот же знак — в tools/play/graphics.html.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#F4EFE4"
-        android:pathData="M39,32H69A10,10 0,0 1,79 42V60A10,10 0,0 1,69 70H39A10,10 0,0 1,29 60V42A10,10 0,0 1,39 32Z" />
-    <path
-        android:fillColor="#F4EFE4"
-        android:pathData="M32,60L46,70L34,79Z" />
-    <path
-        android:fillColor="#C2456F"
-        android:pathData="M39.5,40H68.5A2.5,2.5 0,0 1,68.5 45H39.5A2.5,2.5 0,0 1,39.5 40Z" />
-    <path
-        android:fillColor="#C8862B"
-        android:pathData="M39.5,48.5H59.5A2.5,2.5 0,0 1,59.5 53.5H39.5A2.5,2.5 0,0 1,39.5 48.5Z" />
-    <path
-        android:fillColor="#4C8F5A"
-        android:pathData="M39.5,57H63.5A2.5,2.5 0,0 1,63.5 62H39.5A2.5,2.5 0,0 1,39.5 57Z" />
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="1.12" android:scaleY="1.12">
+        <group android:translateX="29" android:translateY="22" android:scaleX="0.41667" android:scaleY="0.42">
+            <group android:rotation="-3" android:pivotX="60" android:pivotY="60">
+                <path
+                    android:fillColor="#FFF8EE"
+                    android:pathData="M60,4 C78,4 89,38 89,62 C89,83 76,96 60,96 C44,96 31,83 31,62 C31,38 42,4 60,4 Z" />
+                <group>
+                    <clip-path android:pathData="M60,4 C78,4 89,38 89,62 C89,83 76,96 60,96 C44,96 31,83 31,62 C31,38 42,4 60,4 Z" />
+                    <path
+                        android:fillColor="#E58BA8"
+                        android:pathData="M0,0 H120 V36 L102,32 L92,41 L82,32 L71,41 L60,32 L49,41 L38,32 L28,41 L18,32 L0,38 Z" />
+                </group>
+                <path
+                    android:fillColor="#F3B5C8"
+                    android:pathData="M37,74 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 Z M73,74 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 Z" />
+            </group>
+            <path
+                android:fillColor="#2C2618"
+                android:pathData="M44.5,63 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0 Z M64.5,63 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0 Z" />
+            <path
+                android:strokeColor="#2C2618"
+                android:strokeWidth="2.5"
+                android:strokeLineCap="round"
+                android:pathData="M55,78 C57,81 63,81 65,77" />
+        </group>
+        <path
+            android:fillColor="#F4EFE4"
+            android:pathData="M38,56 H70 C76,56 80,60 80,66 V70 C80,75 76,78 70,78 H50 L40,85 L42,78 H38 C32,78 28,75 28,70 V66 C28,60 32,56 38,56 Z" />
+        <path
+            android:fillColor="#C2456F"
+            android:pathData="M36.8,61.2 H65.2 A1.8,1.8 0 0 1 65.2,64.8 H36.8 A1.8,1.8 0 0 1 36.8,61.2 Z" />
+        <path
+            android:fillColor="#C8862B"
+            android:pathData="M36.8,66.2 H55.2 A1.8,1.8 0 0 1 55.2,69.8 H36.8 A1.8,1.8 0 0 1 36.8,66.2 Z" />
+        <path
+            android:fillColor="#4C8F5A"
+            android:pathData="M36.8,71.2 H60.2 A1.8,1.8 0 0 1 60.2,74.8 H36.8 A1.8,1.8 0 0 1 36.8,71.2 Z" />
+    </group>
 </vector>

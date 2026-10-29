@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Графика Kcal AI для Google Play</title>
+<!--
+  Иконка 512×512 (#icon) и баннер 1024×500 (#feature).
+  Знак — тот же, что у адаптивной иконки в app/src/main/res/drawable
+  (холст 108 dp): Яйцо выглядывает из-за пузырька. Правите там — правьте здесь.
+  Перерисовать: python tools/play/render_graphics.py
+-->
+<style>
+@font-face { font-family: Manrope; src: url("../../core/ui/src/main/res/font/manrope.ttf"); font-weight: 200 800; }
+html, body { margin: 0; overflow: hidden; background: #2C2618; }
+body { font-family: Manrope, sans-serif; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position: absolute">
+<defs>
+<clipPath id="eggclip"><path d="M60,4 C78,4 89,38 89,62 C89,83 76,96 60,96 C44,96 31,83 31,62 C31,38 42,4 60,4 Z"></path></clipPath>
+<symbol id="egg" viewBox="0 0 120 100" overflow="visible">
+<g transform="rotate(-3 60 60)">
+<path d="M60,4 C78,4 89,38 89,62 C89,83 76,96 60,96 C44,96 31,83 31,62 C31,38 42,4 60,4 Z" fill="#FFF8EE"></path>
+<path d="M0,0 H120 V36 L102,32 L92,41 L82,32 L71,41 L60,32 L49,41 L38,32 L28,41 L18,32 L0,38 Z" fill="#E58BA8" clip-path="url(#eggclip)"></path>
+<circle cx="42" cy="74" r="5" fill="#F3B5C8"></circle><circle cx="78" cy="74" r="5" fill="#F3B5C8"></circle>
+</g>
+<circle cx="50" cy="63" r="5.5" fill="#2C2618"></circle><circle cx="70" cy="63" r="5.5" fill="#2C2618"></circle>
+<path d="M55,78 C57,81 63,81 65,77" stroke="#2C2618" stroke-width="2.5" fill="none" stroke-linecap="round"></path>
+</symbol>
+<!-- Знак на холсте 108: Яйцо, а поверх — пузырёк, за которым прячется его низ. -->
+<symbol id="mark" viewBox="0 0 108 108">
+<svg x="29" y="22" width="50" height="42" viewBox="0 0 120 100" overflow="visible"><use href="#egg"></use></svg>
+<path d="M38,56 H70 C76,56 80,60 80,66 V70 C80,75 76,78 70,78 H50 L40,85 L42,78 H38 C32,78 28,75 28,70 V66 C28,60 32,56 38,56 Z" fill="#F4EFE4"></path>
+<rect x="35" y="61.2" width="32" height="3.6" rx="1.8" fill="#C2456F"></rect>
+<rect x="35" y="66.2" width="22" height="3.6" rx="1.8" fill="#C8862B"></rect>
+<rect x="35" y="71.2" width="27" height="3.6" rx="1.8" fill="#4C8F5A"></rect>
+</symbol>
+</defs>
+</svg>
+<div id="root"></div>
+<script>
+const root = document.getElementById('root');
+if (location.hash === '#feature') {
+  // В Play знак крупнее, чем в лаунчере: маски там нет, безопасная зона не нужна.
+  root.innerHTML = `
+    <div style="width:1024px;height:500px;position:relative;background:#2C2618">
+      <svg width="460" height="460" viewBox="18 14 72 80" style="position:absolute;left:18px;top:20px"><use href="#mark" x="0" y="0" width="108" height="108"></use></svg>
+      <div style="position:absolute;left:470px;top:150px;color:#F4EFE4">
+        <div style="font-size:96px;font-weight:700;letter-spacing:-2px">Kcal AI</div>
+        <div style="font-size:40px;font-weight:500;margin-top:18px">«гречка 200» — и КБЖУ</div>
+        <div style="font-size:40px;font-weight:500;color:#B5AB96">посчитано. Офлайн.</div>
+      </div>
+    </div>`;
+} else {
+  root.innerHTML = `<svg width="512" height="512" viewBox="14 10 80 80" style="display:block;background:#2C2618"><use href="#mark" x="0" y="0" width="108" height="108"></use></svg>`;
+}
+</script>
+</body>
+</html>

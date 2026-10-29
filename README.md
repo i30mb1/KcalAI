@@ -109,7 +109,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat testDebugUnitTest
 ```
 
-Сборка для Google Play — `.\gradlew.bat :app:bundleRelease`. Её подписывает ключ загрузки: путь, алиас и пароли берутся из `~/.gradle/gradle.properties` (`kcal.upload.storeFile`, `kcal.upload.storePassword`, `kcal.upload.keyAlias`, `kcal.upload.keyPassword`). Адрес локального сервера в release не попадает. Тексты и графика страницы лежат в `fastlane/metadata/android/ru-RU`, картинки перерисовывает `python tools/play/render_graphics.py`, политика конфиденциальности — в `docs/privacy-policy.md`.
+Сборка для Google Play — `.\gradlew.bat :app:bundleRelease`. Её подписывает ключ загрузки: путь, алиас и пароли берутся из `~/.gradle/gradle.properties` (`kcal.upload.storeFile`, `kcal.upload.storePassword`, `kcal.upload.keyAlias`, `kcal.upload.keyPassword`). Адрес локального сервера в release не попадает. Тексты и графика страницы лежат в `fastlane/metadata/android/ru-RU`, иконку и баннер перерисовывает `python tools/play/render_graphics.py`, скриншоты — `python tools/play/render_screenshots.py` (оба через headless Edge или Chrome), политика конфиденциальности — в `docs/privacy-policy.md`.
 
 Юнит-тесты покрывают главные правила приложения и не требуют устройства:
 
