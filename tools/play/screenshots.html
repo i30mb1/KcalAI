@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Скриншоты Kcal AI для Google Play</title>
+<!--
+  Скриншоты страницы в Google Play. Номер кадра — в адресе: screenshots.html#3.
+  Холст 360×640 CSS px, рендер с масштабом 3 даёт 1080×1920.
+  Перерисовать все: python tools/play/render_screenshots.py
+
+  Внутри телефона — интерфейс таким, какой он есть в приложении (светлая тема,
+  цвета из KcalColors). Персонажи вне телефона — оформление страницы.
+-->
+<style>
+@font-face { font-family: Manrope; src: url("../../core/ui/src/main/res/font/manrope.ttf"); font-weight: 200 800; }
+@font-face { font-family: Mono; src: url("../../core/ui/src/main/res/font/jetbrains_mono.ttf"); font-weight: 100 800; }
+:root {
+  --bg: #F4EFE4; --surface: #FDFBF5; --chip: #F0E9D9; --line: #E5DCC9;
+  --text: #2C2618; --text2: #6B6250; --text3: #8D8370; --bubble: #2C2618; --onBubble: #F4EFE4;
+  --kraft: #D9C3A0;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 360px; height: 640px; overflow: hidden; background: var(--kraft); }
+body { font-family: Manrope, sans-serif; color: var(--text); }
+.shot { position: relative; width: 360px; height: 640px; overflow: hidden; }
+.cap { position: absolute; left: 24px; right: 24px; top: 34px; }
+.cap h1 { margin: 0; font-size: 31px; line-height: 1.08; font-weight: 800; letter-spacing: -0.6px; }
+.cap p { margin: 10px 0 0; font-size: 16px; line-height: 1.35; color: #4A3D28; font-weight: 500; max-width: 250px; }
+.phone { position: absolute; left: 34px; width: 292px; top: 196px; height: 430px; border-radius: 34px; border: 7px solid #2C2618; background: var(--bg); overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 14px 30px rgba(59,42,18,0.35); }
+.mascot { position: absolute; }
+.mono { font-family: Mono, monospace; }
+.caps { font-family: Mono, monospace; font-size: 8px; letter-spacing: 2px; color: var(--text3); }
+.hdr { padding: 14px 12px 9px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); }
+.row { display: flex; align-items: flex-end; }
+.tiles { display: flex; gap: 5px; }
+.tile { flex: 1; border-radius: 11px; padding: 7px 5px 7px 8px; display: flex; flex-direction: column; gap: 5px; }
+.tile .lab { font-family: Mono, monospace; font-size: 7px; font-weight: 700; letter-spacing: 1px; }
+.tile .num { font-family: Mono, monospace; font-size: 12px; font-weight: 700; }
+.bar { height: 3px; border-radius: 2px; background: rgba(44,38,24,0.1); }
+.bar i { display: block; height: 3px; border-radius: 2px; }
+.feed { flex: 1; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; gap: 7px; overflow: hidden; }
+.in { display: flex; align-items: flex-end; gap: 3px; }
+.in .b { max-width: 228px; padding: 9px 11px; border-radius: 16px 16px 16px 5px; background: var(--surface); font-size: 11.5px; line-height: 1.35; }
+.in .b strong { font-size: 12px; }
+.out { align-self: flex-end; max-width: 232px; padding: 9px 11px; border-radius: 16px 16px 5px 16px; background: var(--bubble); color: var(--onBubble); display: flex; flex-direction: column; gap: 6px; }
+.out .t { font-size: 12px; font-weight: 600; }
+.out .k { font-family: Mono, monospace; font-size: 9px; color: rgba(244,239,228,0.62); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { padding: 4px 8px; border-radius: 999px; font-size: 10px; white-space: nowrap; }
+.out .chip { background: rgba(244,239,228,0.16); }
+.in .chip { background: var(--chip); }
+.dot { display: inline-block; width: 5px; height: 5px; border-radius: 3px; margin-right: 4px; vertical-align: 1px; }
+.mac { font-family: Mono, monospace; font-size: 8.5px; }
+.composer { padding: 0 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.input { height: 38px; border-radius: 19px; background: var(--surface); border: 1px solid var(--line); display: flex; align-items: center; padding: 0 4px 0 13px; gap: 8px; font-size: 12px; color: var(--text3); }
+.cam { width: 30px; height: 30px; border-radius: 15px; background: var(--bubble); display: flex; align-items: center; justify-content: center; }
+.btn { align-self: flex-start; padding: 6px 11px; border-radius: 999px; background: var(--bubble); color: var(--onBubble); font-size: 10.5px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position: absolute">
+<defs>
+<filter id="paper" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0.6" dy="1.8" stdDeviation="1.1" flood-color="#3B2A12" flood-opacity="0.35"></feDropShadow></filter>
+<symbol id="egg" viewBox="0 0 120 100">
+<g transform="rotate(-3 60 60)">
+<path d="M60,26 C80,26 92,52 92,68 C92,84 78,94 60,94 C42,94 28,84 28,68 C28,52 40,26 60,26 Z" fill="#FFF8EE" filter="url(#paper)"></path>
+<path d="M34,46 C38,20 48,8 60,8 C72,8 82,20 86,46 L78,40 L70,48 L60,40 L50,48 L42,40 Z" fill="#E58BA8" filter="url(#paper)"></path>
+<circle cx="40" cy="74" r="5" fill="#F3B5C8"></circle><circle cx="80" cy="74" r="5" fill="#F3B5C8"></circle>
+</g>
+<circle cx="50" cy="64" r="5.5" fill="#2C2618"></circle><circle cx="70" cy="64" r="5.5" fill="#2C2618"></circle>
+<path d="M55,77 C57,80 63,80 65,76" stroke="#2C2618" stroke-width="2" fill="none" stroke-linecap="round"></path>
+</symbol>
+<symbol id="butter" viewBox="0 0 120 100">
+<g transform="rotate(2 60 64)">
+<path d="M22,48 C22,42 26,38 32,38 H88 C94,38 98,42 98,48 V84 C98,88 95,91 91,91 H29 C25,91 22,88 22,84 Z" fill="#F4CD6A" filter="url(#paper)"></path>
+<path d="M24,40 H96 V51 H24 Z" fill="#FBE6A8" filter="url(#paper)"></path>
+<path d="M90,52 C90,62 95,64 95,71 C95,76 88,76 88,71 C88,66 86,62 86,52 Z" fill="#F4CD6A"></path>
+<path d="M44,40 C40,28 50,18 60,20 C70,22 72,32 65,35 C60,37 57,32 61,29" stroke="#E8B25E" stroke-width="6" fill="none" stroke-linecap="round" filter="url(#paper)"></path>
+</g>
+<circle cx="46" cy="66" r="5.5" fill="#2C2618"></circle><circle cx="74" cy="66" r="5.5" fill="#2C2618"></circle>
+<path d="M54,77 C57,81 63,81 66,77" stroke="#2C2618" stroke-width="2" fill="none" stroke-linecap="round"></path>
+</symbol>
+<symbol id="grain" viewBox="0 0 120 100">
+<g transform="rotate(4 60 60)">
+<path d="M60,22 L53,6 M60,22 L60,2 M60,22 L67,6" stroke="#4C8F5A" stroke-width="4" stroke-linecap="round" filter="url(#paper)"></path>
+<path d="M60,20 C80,20 90,46 90,64 C90,84 76,94 60,94 C44,94 30,84 30,64 C30,46 40,20 60,20 Z" fill="#7FBF8C" filter="url(#paper)"></path>
+<path d="M60,28 C57,42 54,52 56,62 C57,72 58,80 60,88" stroke="#3E7A4B" stroke-width="1.8" fill="none" stroke-linecap="round"></path>
+</g>
+<circle cx="48" cy="62" r="5.5" fill="#2C2618"></circle><circle cx="72" cy="62" r="5.5" fill="#2C2618"></circle>
+<path d="M54,75 C57,79 63,79 66,75" stroke="#2C2618" stroke-width="2" fill="none" stroke-linecap="round"></path>
+</symbol>
+</defs>
+</svg>
+
+<div id="root"></div>
+
+<script>
+const m = (id, w, extra = '') => `<svg width="${w}" height="${w * 5 / 6}" ${extra}><use href="#${id}"></use></svg>`;
+const mascot = (id, w, x, y, rot = 0) =>
+  `<div class="mascot" style="left:${x}px;top:${y}px;transform:rotate(${rot}deg)">${m(id, w)}</div>`;
+
+const P = { tile: '#F3DCE2', text: '#8E2F4E', fill: '#C2456F', bub: '#F09BB6' };
+const F = { tile: '#F6E5C6', text: '#7A5008', fill: '#C8862B', bub: '#F0C077' };
+const C = { tile: '#DDEBD8', text: '#2F5E36', fill: '#4C8F5A', bub: '#93CCA0' };
+
+function header(rest, eaten, goal, p, f, c) {
+  const tile = (pal, lab, id, v, g) => `
+    <div class="tile" style="background:${pal.tile}">
+      <div class="row" style="justify-content:space-between">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <span class="lab" style="color:${pal.text}">${lab}</span>
+          <span class="num">${v}<span style="font-weight:500;color:${pal.text}">/${g}</span></span>
+        </div>${m(id, 24)}
+      </div>
+      <div class="bar"><i style="width:${Math.min(100, Math.round(v / g * 100))}%;background:${pal.fill}"></i></div>
+    </div>`;
+  return `
+  <div class="hdr">
+    <div class="row">
+      <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span class="caps">ЧЕТВЕРГ, 29 ОКТ</span><span style="font-size:16px;font-weight:600">Дневник</span></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <div class="row" style="gap:3px"><span class="mono" style="font-size:22px;font-weight:700;line-height:1">${rest}</span><span style="font-size:9px;color:var(--text2);padding-bottom:2px">осталось</span></div>
+        <span class="mono" style="font-size:8px;color:var(--text3);padding-top:3px">${eaten} / ${goal} ›</span>
+      </div>
+    </div>
+    <div class="tiles">${tile(P, 'БЕЛКИ', 'egg', p[0], p[1])}${tile(F, 'ЖИРЫ', 'butter', f[0], f[1])}${tile(C, 'УГЛЕВ.', 'grain', c[0], c[1])}</div>
+  </div>`;
+}
+
+const inB = (id, html) => `<div class="in">${m(id, 26)}<div class="b">${html}</div></div>`;
+const chip = (dot, text) => `<span class="chip"><span class="dot" style="background:${dot}"></span>${text}</span>`;
+function meal(title, kcal, chips, b, f, c, time) {
+  return `<div class="out"><div><span class="t">${title}</span> <span class="k">${kcal} ккал</span></div>
+    <div class="chips">${chips}</div>
+    <div class="mac"><span style="color:${P.bub}">Б ${b}</span>&nbsp; <span style="color:${F.bub}">Ж ${f}</span>&nbsp; <span style="color:${C.bub}">У ${c}</span>&nbsp; <span style="color:rgba(244,239,228,0.62)">${time}</span></div></div>`;
+}
+const composer = (text, chipsHtml = '') => `
+  <div class="composer">${chipsHtml ? `<div class="chips" style="flex-wrap:nowrap;overflow:hidden">${chipsHtml}</div>` : ''}
+    <div class="input"><span style="flex:1;${text ? 'color:var(--text)' : ''}">${text || 'Написать, что съели…'}</span>
+      <div class="cam"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M4,8 H8 L9.5,6 H14.5 L16,8 H20 V18 H4 Z" fill="#F4EFE4"></path><circle cx="12" cy="13" r="3.2" fill="#2C2618"></circle></svg></div>
+    </div></div>`;
+const chipIn = (dot, text, bg = 'var(--surface)') => `<span class="chip" style="background:${bg};font-size:10.5px;padding:6px 10px"><span class="dot" style="background:${dot}"></span>${text}</span>`;
+
+const screens = {
+  1: {
+    bg: '#D9C3A0',
+    cap: ['Пишите, как другу', '«гречка 200» — и белки, жиры, углеводы уже посчитаны'],
+    deco: mascot('egg', 92, 252, 96, 8),
+    phone: header(1240, 860, 2100, [52, 120], [31, 70], [98, 240]) + `
+      <div class="feed">
+        ${inB('egg', '<strong>Доброе утро! Сегодня можно 2100 ккал</strong>')}
+        ${meal('Обед', 860, chip(C.bub, 'гречка · 200 г') + chip(P.bub, 'котлета · 100 г') + chip(C.bub, 'салат · 150 г'), 52, 31, 98, '13:15')}
+        ${inB('egg', 'На ужин остаётся 1240 ккал и 68 г белка. Из вашего обычного подходит:<div class="chips" style="margin-top:6px">' + chip(P.fill, 'куриная грудка 150 г') + chip(P.fill, 'творог 5% 200 г') + '</div>')}
+      </div>` + composer(''),
+  },
+  2: {
+    bg: '#F4EFE4',
+    cap: ['Варианты — пока печатаете', 'Один тап, и запись в дневнике. Кнопки «отправить» нет'],
+    deco: mascot('grain', 86, 262, 100, -6),
+    phone: header(1660, 440, 2100, [40, 120], [24, 70], [24, 240]) + `
+      <div class="feed">
+        ${meal('Обед', 440, chip(C.bub, 'гречка · 200 г') + chip(P.bub, 'котлета · 100 г'), 40, 24, 24, '13:15')}
+        ${inB('grain', 'Перекус? Пишите в той же строке: «банан», «2 яйца», «полстакана молока»')}
+      </div>` + composer('творог 5', chipIn(P.fill, 'творог 5% · 200 г') + chipIn(P.fill, 'творог 5% · 150 г') + chipIn(F.fill, 'сырок · 45 г')),
+  },
+  3: {
+    bg: '#D9C3A0',
+    cap: ['Штрих-код и этикетка', 'Нет в базе? Наведите камеру на таблицу на пачке'],
+    deco: mascot('butter', 88, 258, 104, 6),
+    phone: `
+      <div style="flex:1;background:#1C1914;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+        <div style="width:200px;height:128px;border:2.5px solid #F4EFE4;border-radius:16px;display:flex;align-items:center;justify-content:center;background:rgba(244,239,228,0.06)">
+          <svg width="150" height="70" viewBox="0 0 150 70">${[...Array(32)].map((_, i) => `<rect x="${i * 4.6}" y="0" width="${[1, 2, 1, 3, 1, 2][i % 6] * 1.2}" height="56" fill="#F4EFE4"></rect>`).join('')}<text x="75" y="68" text-anchor="middle" font-family="Mono" font-size="9" fill="#F4EFE4">4 607001 771234</text></svg>
+        </div>
+        <span style="font-size:12px;color:#B5AB96">наведите на штрих-код</span>
+        <div style="position:absolute;left:10px;right:10px;bottom:12px;background:var(--surface);border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:6px">
+          <span style="font-size:13px;font-weight:700">Творог 5%, 350 г</span>
+          <span class="mono" style="font-size:9.5px;color:var(--text2)">121 ккал · <span style="color:${P.text}">Б 17</span> · <span style="color:${F.text}">Ж 5</span> · <span style="color:${C.text}">У 3</span> на 100 г</span>
+          <span style="font-size:10.5px;color:var(--text3)">Встанет в строку — допишите вес</span>
+        </div>
+      </div>`,
+  },
+  4: {
+    bg: '#F4EFE4',
+    cap: ['Белок, жиры, углеводы', 'У каждого свой помощник — и свой голос в ленте'],
+    // Трое стоят на верхней кромке телефона: подзаголовок над ними остаётся свободным.
+    deco: mascot('egg', 54, 186, 150, -6) + mascot('butter', 54, 236, 152, 4) + mascot('grain', 50, 286, 148, 8),
+    phone: header(380, 1720, 2100, [96, 120], [58, 70], [212, 240]) + `
+      <div style="padding:8px 12px 2px;display:flex;gap:5px;align-items:flex-end;height:56px;border-bottom:1px solid var(--line)">
+        ${[38, 30, 44, 34, 40, 28, 36].map((h, i) => `<div style="flex:1;height:${h}px;border-radius:3px 3px 0 0;background:${i === 6 ? 'var(--bubble)' : 'var(--line)'}"></div>`).join('')}
+      </div>
+      <div class="feed">
+        ${meal('Ужин', 620, chip(P.bub, 'лосось · 150 г') + chip(C.bub, 'рис · 150 г'), 36, 21, 56, '19:30')}
+        ${inB('egg', 'Белок 96 из 120. Ещё немного — и я в форме')}
+        ${inB('butter', 'Жиры 58 из 70, всё спокойно')}
+      </div>` + composer(''),
+  },
+  5: {
+    bg: '#D9C3A0',
+    cap: ['Помнит ваши привычки', 'Спросит про обед и подскажет, чем закрыть день'],
+    deco: mascot('grain', 86, 262, 100, 6),
+    phone: header(1680, 420, 2100, [12, 120], [7, 70], [74, 240]) + `
+      <div class="feed">
+        ${meal('Завтрак', 420, chip(C.bub, 'овсянка · 60 г') + chip(C.bub, 'банан · 120 г'), 12, 7, 74, '08:40')}
+        ${inB('grain', '<strong>Обед пропустили?</strong><div style="margin-top:4px">Обычно вы обедаете около 13:00, а сегодня обеда в дневнике нет. Если ели — добавьте одним тапом.</div><div class="chips" style="margin-top:6px">' + chip(C.fill, 'гречка · 200 г') + chip(P.fill, 'котлета · 100 г') + chip(C.fill, 'суп · 300 г') + '</div>')}
+      </div>` + composer(''),
+  },
+  6: {
+    bg: '#F4EFE4',
+    cap: ['Офлайн и без регистрации', 'Дневник хранится только на телефоне. Без рекламы'],
+    deco: mascot('butter', 80, 262, 104, -5),
+    phone: `
+      <div class="hdr">
+        <div class="row">
+          <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span class="caps">ЧЕТВЕРГ, 29 ОКТ</span><span style="font-size:16px;font-weight:600">Дневник</span></div>
+          <div class="row" style="gap:3px"><span class="mono" style="font-size:22px;font-weight:700;line-height:1">0</span><span style="font-size:9px;color:var(--text2);padding-bottom:2px">съедено</span></div>
+        </div>
+        <div class="tiles">
+          <div class="tile" style="background:${P.tile}"><div class="row" style="justify-content:space-between"><div style="display:flex;flex-direction:column;gap:4px"><span class="lab" style="color:${P.text}">БЕЛКИ</span><span class="num">0</span></div>${m('egg', 24)}</div></div>
+          <div class="tile" style="background:${F.tile}"><div class="row" style="justify-content:space-between"><div style="display:flex;flex-direction:column;gap:4px"><span class="lab" style="color:${F.text}">ЖИРЫ</span><span class="num">0</span></div>${m('butter', 24)}</div></div>
+          <div class="tile" style="background:${C.tile}"><div class="row" style="justify-content:space-between"><div style="display:flex;flex-direction:column;gap:4px"><span class="lab" style="color:${C.text}">УГЛЕВ.</span><span class="num">0</span></div>${m('grain', 24)}</div></div>
+        </div>
+      </div>
+      <div class="feed" style="justify-content:flex-start;padding-top:14px">
+        ${inB('egg', '<strong>Привет! Я Яйцо, слежу за белком</strong><div style="display:flex;flex-direction:column;gap:4px;margin-top:7px"><span style="display:flex;align-items:center;gap:5px;color:var(--text2)">' + m('butter', 22) + 'Масло — жиры</span><span style="display:flex;align-items:center;gap:5px;color:var(--text2)">' + m('grain', 22) + 'Зёрнышко — углеводы</span></div><div style="margin-top:7px">Напишите, что съели, — например, «гречка 200». Цифры посчитаем сами.</div><div class="btn" style="margin-top:8px">Задать цель</div>')}
+      </div>` + composer(''),
+  },
+};
+
+const s = screens[location.hash.slice(1)] || screens[1];
+document.body.style.background = s.bg;
+document.getElementById('root').innerHTML = `
+  <div class="shot" style="background:${s.bg}">
+    <div class="cap"><h1>${s.cap[0]}</h1><p>${s.cap[1]}</p></div>
+    ${s.deco}
+    <div class="phone">${s.phone}</div>
+  </div>`;
+</script>
+</body>
+</html>
