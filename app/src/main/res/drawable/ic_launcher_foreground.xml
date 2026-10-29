@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Яйцо выглядывает из-за пузырька диалога с тремя барами дня: белки, жиры,
-    углеводы. Так же, как в приложении персонаж выглядывает из-за чипса.
+    Все трое выглядывают из-за пузырька диалога с барами дня: Масло слева,
+    Зёрнышко справа, Яйцо крупнее и впереди. Так же, как в приложении персонаж
+    выглядывает из-за чипса.
     Знак увеличен до края видимой области маски (72 из 108 dp): в безопасных
     66 dp он смотрелся мелким. Тот же знак — в tools/play/graphics.html.
 -->
@@ -11,7 +12,25 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group android:pivotX="54" android:pivotY="54" android:scaleX="1.12" android:scaleY="1.12">
-        <group android:translateX="29" android:translateY="22" android:scaleX="0.41667" android:scaleY="0.42">
+        <!-- Масло -->
+        <group android:translateX="17" android:translateY="38" android:scaleX="0.28333" android:scaleY="0.28">
+            <group android:rotation="2" android:pivotX="60" android:pivotY="64">
+                <path android:fillColor="#F4CD6A" android:pathData="M22,48 C22,42 26,38 32,38 H88 C94,38 98,42 98,48 V84 C98,88 95,91 91,91 H29 C25,91 22,88 22,84 Z" />
+                <path android:fillColor="#FBE6A8" android:pathData="M24,40 H96 V51 H24 Z" />
+                <path android:strokeColor="#E8B25E" android:strokeWidth="7" android:strokeLineCap="round" android:pathData="M44,40 C40,28 50,18 60,20 C70,22 72,32 65,35 C60,37 57,32 61,29" />
+            </group>
+            <path android:fillColor="#2C2618" android:pathData="M40,66 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0 Z M68,66 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0 Z" />
+        </group>
+        <!-- Зёрнышко -->
+        <group android:translateX="57" android:translateY="36" android:scaleX="0.28333" android:scaleY="0.28">
+            <group android:rotation="4" android:pivotX="60" android:pivotY="60">
+                <path android:strokeColor="#4C8F5A" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M60,22 L53,6 M60,22 L60,2 M60,22 L67,6" />
+                <path android:fillColor="#7FBF8C" android:pathData="M60,20 C80,20 90,46 90,64 C90,84 76,94 60,94 C44,94 30,84 30,64 C30,46 40,20 60,20 Z" />
+            </group>
+            <path android:fillColor="#2C2618" android:pathData="M42,62 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0 Z M66,62 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0 Z" />
+        </group>
+        <!-- Яйцо -->
+        <group android:translateX="31" android:translateY="24" android:scaleX="0.38333" android:scaleY="0.38">
             <group android:rotation="-3" android:pivotX="60" android:pivotY="60">
                 <path
                     android:fillColor="#FFF8EE"

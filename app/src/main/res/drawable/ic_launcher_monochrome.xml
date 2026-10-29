@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Тематическая иконка: силуэт Яйца и пузырёк с вырезанными барами — у монохрома нет цветов, только альфа. -->
+<!-- Тематическая иконка: силуэты троих и пузырёк с вырезанными барами — у монохрома нет цветов, только альфа. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group android:pivotX="54" android:pivotY="54" android:scaleX="1.12" android:scaleY="1.12">
-        <group android:translateX="29" android:translateY="22" android:scaleX="0.41667" android:scaleY="0.42">
+        <group android:translateX="17" android:translateY="38" android:scaleX="0.28333" android:scaleY="0.28">
+            <path android:fillColor="#FFFFFF" android:pathData="M22,48 C22,42 26,38 32,38 H88 C94,38 98,42 98,48 V84 C98,88 95,91 91,91 H29 C25,91 22,88 22,84 Z" />
+        </group>
+        <group android:translateX="57" android:translateY="36" android:scaleX="0.28333" android:scaleY="0.28">
+            <path android:fillColor="#FFFFFF" android:pathData="M60,20 C80,20 90,46 90,64 C90,84 76,94 60,94 C44,94 30,84 30,64 C30,46 40,20 60,20 Z" />
+        </group>
+        <group android:translateX="31" android:translateY="24" android:scaleX="0.38333" android:scaleY="0.38">
             <group android:rotation="-3" android:pivotX="60" android:pivotY="60">
                 <path
                     android:fillColor="#FFFFFF"

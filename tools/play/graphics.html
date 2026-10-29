@@ -6,7 +6,7 @@
 <!--
   Иконка 512×512 (#icon) и баннер 1024×500 (#feature).
   Знак — тот же, что у адаптивной иконки в app/src/main/res/drawable
-  (холст 108 dp): Яйцо выглядывает из-за пузырька. Правите там — правьте здесь.
+  (холст 108 dp): все трое выглядывают из-за пузырька. Правите там — правьте здесь.
   Перерисовать: python tools/play/render_graphics.py
 -->
 <style>
@@ -28,9 +28,26 @@ body { font-family: Manrope, sans-serif; }
 <circle cx="50" cy="63" r="5.5" fill="#2C2618"></circle><circle cx="70" cy="63" r="5.5" fill="#2C2618"></circle>
 <path d="M55,78 C57,81 63,81 65,77" stroke="#2C2618" stroke-width="2.5" fill="none" stroke-linecap="round"></path>
 </symbol>
-<!-- Знак на холсте 108: Яйцо, а поверх — пузырёк, за которым прячется его низ. -->
+<!-- Знак на холсте 108: трое, а поверх — пузырёк, за которым прячется их низ. -->
+<symbol id="butter" viewBox="0 0 120 100" overflow="visible">
+<g transform="rotate(2 60 64)">
+<path d="M22,48 C22,42 26,38 32,38 H88 C94,38 98,42 98,48 V84 C98,88 95,91 91,91 H29 C25,91 22,88 22,84 Z" fill="#F4CD6A"></path>
+<path d="M24,40 H96 V51 H24 Z" fill="#FBE6A8"></path>
+<path d="M44,40 C40,28 50,18 60,20 C70,22 72,32 65,35 C60,37 57,32 61,29" stroke="#E8B25E" stroke-width="7" fill="none" stroke-linecap="round"></path>
+</g>
+<circle cx="46" cy="66" r="6" fill="#2C2618"></circle><circle cx="74" cy="66" r="6" fill="#2C2618"></circle>
+</symbol>
+<symbol id="grain" viewBox="0 0 120 100" overflow="visible">
+<g transform="rotate(4 60 60)">
+<path d="M60,22 L53,6 M60,22 L60,2 M60,22 L67,6" stroke="#4C8F5A" stroke-width="5" stroke-linecap="round"></path>
+<path d="M60,20 C80,20 90,46 90,64 C90,84 76,94 60,94 C44,94 30,84 30,64 C30,46 40,20 60,20 Z" fill="#7FBF8C"></path>
+</g>
+<circle cx="48" cy="62" r="6" fill="#2C2618"></circle><circle cx="72" cy="62" r="6" fill="#2C2618"></circle>
+</symbol>
 <symbol id="mark" viewBox="0 0 108 108">
-<svg x="29" y="22" width="50" height="42" viewBox="0 0 120 100" overflow="visible"><use href="#egg"></use></svg>
+<svg x="17" y="38" width="34" height="28" viewBox="0 0 120 100" overflow="visible"><use href="#butter"></use></svg>
+<svg x="57" y="36" width="34" height="28" viewBox="0 0 120 100" overflow="visible"><use href="#grain"></use></svg>
+<svg x="31" y="24" width="46" height="38" viewBox="0 0 120 100" overflow="visible"><use href="#egg"></use></svg>
 <path d="M38,56 H70 C76,56 80,60 80,66 V70 C80,75 76,78 70,78 H50 L40,85 L42,78 H38 C32,78 28,75 28,70 V66 C28,60 32,56 38,56 Z" fill="#F4EFE4"></path>
 <rect x="35" y="61.2" width="32" height="3.6" rx="1.8" fill="#C2456F"></rect>
 <rect x="35" y="66.2" width="22" height="3.6" rx="1.8" fill="#C8862B"></rect>
@@ -45,7 +62,7 @@ if (location.hash === '#feature') {
   // В Play знак крупнее, чем в лаунчере: маски там нет, безопасная зона не нужна.
   root.innerHTML = `
     <div style="width:1024px;height:500px;position:relative;background:#2C2618">
-      <svg width="460" height="460" viewBox="18 14 72 80" style="position:absolute;left:18px;top:20px"><use href="#mark" x="0" y="0" width="108" height="108"></use></svg>
+      <svg width="460" height="460" viewBox="12 16 84 80" style="position:absolute;left:18px;top:20px"><use href="#mark" x="0" y="0" width="108" height="108"></use></svg>
       <div style="position:absolute;left:470px;top:150px;color:#F4EFE4">
         <div style="font-size:96px;font-weight:700;letter-spacing:-2px">Kcal AI</div>
         <div style="font-size:40px;font-weight:500;margin-top:18px">«гречка 200» — и КБЖУ</div>
@@ -53,7 +70,7 @@ if (location.hash === '#feature') {
       </div>
     </div>`;
 } else {
-  root.innerHTML = `<svg width="512" height="512" viewBox="14 10 80 80" style="display:block;background:#2C2618"><use href="#mark" x="0" y="0" width="108" height="108"></use></svg>`;
+  root.innerHTML = `<svg width="512" height="512" viewBox="12 14 84 84" style="display:block;background:#2C2618"><use href="#mark" x="0" y="0" width="108" height="108"></use></svg>`;
 }
 </script>
 </body>
