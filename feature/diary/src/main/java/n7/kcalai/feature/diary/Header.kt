@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,6 +39,8 @@ import n7.kcalai.ui.colors
 import n7.kcalai.ui.tileLabel
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
+import n7.kcalai.ui.mascot.MascotAvatar
+import n7.kcalai.ui.mascot.mascot
 
 /**
  * Шапка: дата, остаток, три макроса и неделя.
@@ -188,7 +191,7 @@ private fun MacroTile(
             .clip(RoundedCornerShape(KcalShapes.tile))
             .background(palette.tile)
             .clickable { onOpenGoal(field) }
-            .padding(horizontal = 11.dp, vertical = 10.dp)
+            .padding(start = 11.dp, end = 8.dp, top = 10.dp, bottom = 10.dp)
             .semantics {
                 contentDescription = buildString {
                     append(macro.tileLabel.lowercase())
@@ -199,19 +202,26 @@ private fun MacroTile(
             },
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(macro.tileLabel, style = type.capsTile, color = palette.text)
-
         Row(verticalAlignment = Alignment.Bottom) {
-            Text("$eaten", style = type.number, color = KcalTheme.colors.text)
-            // Без цели знаменателя нет вовсе: «96/0» читалось бы как перебор,
-            // а «96» — как то, что и есть, съеденные граммы.
-            if (target != null) {
-                Text(
-                    "/$target",
-                    style = type.number.copy(fontWeight = FontWeight.W500),
-                    color = palette.text,
-                )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(macro.tileLabel, style = type.capsTile, color = palette.text)
+
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("$eaten", style = type.number, color = KcalTheme.colors.text)
+                    // Без цели знаменателя нет вовсе: «96/0» читалось бы как перебор,
+                    // а «96» — как то, что и есть, съеденные граммы.
+                    if (target != null) {
+                        Text(
+                            "/$target",
+                            style = type.number.copy(fontWeight = FontWeight.W500),
+                            color = palette.text,
+                        )
+                    }
+                }
             }
+            // Тот же персонаж, что говорит об этом макросе в ленте: по плитке
+            // человек и узнаёт, кто есть кто. Неподвижный — рядом цифры.
+            MascotAvatar(macro.mascot, Modifier.size(width = 38.dp, height = 32.dp), lively = false)
         }
 
         if (target != null) {

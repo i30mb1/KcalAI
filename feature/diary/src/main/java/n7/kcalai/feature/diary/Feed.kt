@@ -10,6 +10,7 @@ import n7.kcalai.model.plus
 import n7.kcalai.personal.DayPlan
 import n7.kcalai.personal.DayOutline
 import n7.kcalai.personal.MealGap
+import n7.kcalai.repositories.DaySummary
 import n7.kcalai.ui.mascot.Mascot
 
 /**
@@ -45,11 +46,18 @@ sealed interface FeedItem {
         val active: Boolean,
     ) : FeedItem
 
-    /** Сводка дня: приветствие, неделя и раскладка типичного дня. Пока записей нет. */
+    /**
+     * Сводка дня: приветствие, неделя и раскладка типичного дня. Пока записей нет.
+     *
+     * @param intro за неделю ни одной записи — персонажи представляются
+     * @param needsGoal цели нет — в реплике кнопка, которая её задаёт
+     */
     data class Summary(
         val greeting: String,
         val weekLine: String?,
         val outline: DayOutline?,
+        val intro: Boolean = false,
+        val needsGoal: Boolean = false,
     ) : FeedItem {
         override val key get() = "summary"
     }
@@ -99,6 +107,49 @@ sealed interface FeedItem {
     data class Reply(val id: Int, val text: String, val time: String) : FeedItem {
         override val key get() = "reply-$id"
     }
+}
+
+/**
+ * Сводка пустого дня.
+ *
+ * Первая фраза есть всегда, остальные — только если история их подтверждает.
+ * Пустая сводка честнее выдуманной: «обычно вы завтракаете в 8:00» на второй
+ * день использования это ложь, которую человек сразу заметит.
+ *
+ * Знакомство — только для того, у кого за неделю нет ни одной записи: каждое утро
+ * представляться заново навязчиво, а новичок без него остаётся с пустым экраном
+ * и непонятными картинками у реплик. Вернувшийся после недели перерыва услышит
+ * знакомство ещё раз, и это не беда: он мог и забыть, кто здесь кто.
+ *
+ * @param goalKcal цель на сегодня, `null` — её нет
+ */
+fun daySummary(goalKcal: Int?, week: List<DaySummary>, outline: DayOutline?, hour: Int): FeedItem.Summary {
+    val intro = week.all { it.kcal == 0 }
+    val head = when {
+        intro -> "Привет! Я Яйцо, слежу за белком"
+        goalKcal != null -> "${greeting(hour)} Сегодня можно $goalKcal ккал"
+        else -> "${greeting(hour)} Цель на сегодня не задана"
+    }
+
+    // Сегодня входит в счёт: цель на него ещё не нарушена, и это правда.
+    // Неделя здесь — именно последние семь дней, а не шесть прошедших.
+    val withGoal = week.filter { it.goalKcal != null }
+    val weekLine = if (withGoal.isEmpty()) {
+        null
+    } else {
+        val hit = withGoal.count { it.kcal <= (it.goalKcal ?: 0) }
+        // Знаменатель — дни, когда цель вообще была: поставленная позавчера
+        // цель не может быть «выполнена 2 дня из 7».
+        "За неделю вы уложились в цель $hit ${daysWord(hit)} из ${withGoal.size}"
+    }
+
+    return FeedItem.Summary(
+        greeting = head,
+        weekLine = weekLine,
+        outline = outline,
+        intro = intro,
+        needsGoal = goalKcal == null,
+    )
 }
 
 /**

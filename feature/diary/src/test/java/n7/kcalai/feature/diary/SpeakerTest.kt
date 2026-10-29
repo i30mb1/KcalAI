@@ -6,7 +6,9 @@ import n7.kcalai.model.EntrySource
 import n7.kcalai.model.MealType
 import n7.kcalai.personal.DayPlan
 import n7.kcalai.personal.MealGap
+import n7.kcalai.ui.Macro
 import n7.kcalai.ui.mascot.Mascot
+import n7.kcalai.ui.mascot.mascot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -64,5 +66,13 @@ class SpeakerTest {
         assertEquals(Mascot.EGG, speakerOf(FeedItem.WeightLogged(id = 1, grams = 82_400, time = "08:00")))
         assertEquals(Mascot.EGG, speakerOf(FeedItem.Reply(id = 1, text = "Отправлено", time = "08:00")))
         assertEquals(Mascot.EGG, speakerOf(FeedItem.Outbox(OutboxCount(scans = 1, products = 0), sending = false)))
+    }
+
+    /** В плитке сидит тот же, кто говорит про этот макрос в ленте. Иначе их не узнать. */
+    @Test
+    fun `в плитке макроса сидит его персонаж`() {
+        assertEquals(Mascot.EGG, Macro.PROTEIN.mascot)
+        assertEquals(Mascot.BUTTER, Macro.FAT.mascot)
+        assertEquals(Mascot.GRAIN, Macro.CARB.mascot)
     }
 }

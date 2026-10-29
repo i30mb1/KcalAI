@@ -48,6 +48,13 @@ fun WeekChart(days: List<DaySummary>, modifier: Modifier = Modifier) {
     val todayEpochDay = days.last().dateEpochDay
     val todayGoal = days.last().goalKcal
 
+    // Пустой недели нет смысла рисовать: семь серых черточек занимают
+    // полтора сантиметра шапки и ничего не говорят. Остаётся строка дней.
+    if (!hasWeekData(days)) {
+        WeekdayRow(days, todayEpochDay, modifier)
+        return
+    }
+
     // Масштаб включает цели, иначе линия ушла бы за верхний край в любой день,
     // когда человек до цели не добрал, — то есть ровно тогда, когда она нужнее.
     val peak = maxOf(
@@ -100,19 +107,29 @@ fun WeekChart(days: List<DaySummary>, modifier: Modifier = Modifier) {
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            days.forEach { day ->
-                Text(
-                    formatWeekdayShort(LocalDate.ofEpochDay(day.dateEpochDay)),
-                    style = KcalTheme.type.time,
-                    color = if (day.dateEpochDay == todayEpochDay) colors.text2 else colors.text3,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+        WeekdayRow(days, todayEpochDay, Modifier.padding(top = 5.dp))
+    }
+}
+
+/** Есть ли что рисовать: хоть один день с едой или с целью. */
+fun hasWeekData(days: List<DaySummary>): Boolean = days.any { it.kcal > 0 || it.goalKcal != null }
+
+/** «пн вт ср…» под столбиками. Сегодняшний день светлее остальных. */
+@Composable
+private fun WeekdayRow(days: List<DaySummary>, todayEpochDay: Long, modifier: Modifier = Modifier) {
+    val colors = KcalTheme.colors
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        days.forEach { day ->
+            Text(
+                formatWeekdayShort(LocalDate.ofEpochDay(day.dateEpochDay)),
+                style = KcalTheme.type.time,
+                color = if (day.dateEpochDay == todayEpochDay) colors.text2 else colors.text3,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }

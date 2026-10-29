@@ -26,6 +26,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
 import kotlinx.coroutines.launch
+import n7.kcalai.ui.Macro
 import n7.kcalai.ui.mascot.butter.ButterArt
 import n7.kcalai.ui.mascot.egg.EggArt
 import n7.kcalai.ui.mascot.grain.GrainArt
@@ -51,6 +52,14 @@ enum class Mascot(internal val art: MascotArt) {
     GRAIN(GrainArt),
 }
 
+/** Кто отвечает за макрос: в плитке шапки сидит тот же, кто говорит о нём в ленте. */
+val Macro.mascot: Mascot
+    get() = when (this) {
+        Macro.PROTEIN -> Mascot.EGG
+        Macro.FAT -> Mascot.BUTTER
+        Macro.CARB -> Mascot.GRAIN
+    }
+
 /**
  * Рисунок одного персонажа на холсте [VIEW_W]×[VIEW_H] — тех же координатах,
  * что у макетов, чтобы контуры переносились из них один в один.
@@ -71,9 +80,21 @@ internal const val VIEW_H = 100f
  *
  * Желейный: при появлении трясётся, от тапа — ещё раз, в покое еле заметно дышит.
  * Размер задаёт [modifier]; пропорцию держать 6:5, как у холста.
+ *
+ * [lively] = `false` — неподвижный, для шапки: там рядом цифры, и шевелящаяся
+ * картинка отвлекала бы от них. Трясётся тот, кто говорит, — то есть в ленте.
  */
 @Composable
-fun MascotAvatar(mascot: Mascot, modifier: Modifier = Modifier) {
+fun MascotAvatar(mascot: Mascot, modifier: Modifier = Modifier, lively: Boolean = true) {
+    if (!lively) {
+        Canvas(modifier) {
+            scale(size.width / VIEW_W, size.height / VIEW_H, pivot = Offset.Zero) {
+                with(mascot.art) { draw() }
+            }
+        }
+        return
+    }
+
     // Тряска — затухающая синусоида по прогрессу 0→1. В покое прогресс 1: поворот ноль.
     val shake = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()

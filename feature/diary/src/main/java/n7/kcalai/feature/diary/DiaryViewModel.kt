@@ -334,7 +334,7 @@ class DiaryViewModel(
         val feed = mutableListOf<FeedItem>(FeedItem.DaySeparator)
 
         if (dayTotals.entries.isEmpty()) {
-            feed += summary(goal, week, models.dayOutline, hour)
+            feed += daySummary(goal?.kcal?.takeIf { it > 0 }, week, models.dayOutline, hour)
         }
 
         val bubbles = groupIntoBubbles(dayTotals.entries, zone, now)
@@ -358,45 +358,6 @@ class DiaryViewModel(
         typed.notFound?.let { feed += FeedItem.NotFound(it.query.trim()) }
 
         return feed
-    }
-
-    /**
-     * Сводка дня.
-     *
-     * Первая фраза есть всегда, остальные — только если история их подтверждает.
-     * Пустая сводка честнее выдуманной: «обычно вы завтракаете в 8:00» на второй
-     * день использования это ложь, которую человек сразу заметит.
-     */
-    private fun summary(
-        goal: DailyGoalEntity?,
-        week: List<DaySummary>,
-        outline: DayOutline?,
-        hour: Int,
-    ): FeedItem.Summary {
-        val target = goal?.kcal?.takeIf { it > 0 }
-        val head = if (target != null) {
-            "${greeting(hour)} Сегодня можно $target ккал"
-        } else {
-            "Сегодня без цели — задайте её тапом по остатку"
-        }
-
-        // Сегодня входит в счёт: цель на него ещё не нарушена, и это правда.
-        // Неделя здесь — именно последние семь дней, а не шесть прошедших.
-        val withGoal = week.filter { it.goalKcal != null }
-        val weekLine = if (withGoal.isEmpty()) {
-            null
-        } else {
-            val hit = withGoal.count { it.kcal <= (it.goalKcal ?: 0) }
-            // Знаменатель — дни, когда цель вообще была: поставленная позавчера
-            // цель не может быть «выполнена 2 дня из 7».
-            "За неделю вы уложились в цель $hit ${daysWord(hit)} из ${withGoal.size}"
-        }
-
-        return FeedItem.Summary(
-            greeting = head,
-            weekLine = weekLine,
-            outline = outline,
-        )
     }
 
     /**

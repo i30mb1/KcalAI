@@ -51,9 +51,12 @@ import n7.kcalai.ui.KcalTheme
 /** Доля ширины, которую пузырёк не переступает: лента должна читаться как диалог. */
 private const val BUBBLE_WIDTH = 0.88f
 
-/** Персонаж у реплики. 30 dp — меньше лицо уже не читается, больше спорит с текстом. */
-private val AVATAR_WIDTH = 30.dp
-private val AVATAR_HEIGHT = 25.dp
+/**
+ * Персонаж у реплики. На 30 dp он терялся рядом с пузырьком в полэкрана;
+ * больше 36 — спорит с текстом.
+ */
+private val AVATAR_WIDTH = 36.dp
+private val AVATAR_HEIGHT = 30.dp
 
 /**
  * Исходящий пузырёк: приём пищи.
@@ -183,7 +186,7 @@ fun IncomingBubble(
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
         if (speaker != null) {
             MascotAvatar(speaker, Modifier.size(width = AVATAR_WIDTH, height = AVATAR_HEIGHT))
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(4.dp))
         }
         Column(
             modifier = Modifier
@@ -259,14 +262,46 @@ private fun BubbleTitle(text: String) {
  * полезнее всего услышать, сколько ему можно и как обычно выглядит его день.
  */
 @Composable
-fun SummaryBubble(item: FeedItem.Summary) {
+fun SummaryBubble(item: FeedItem.Summary, onSetGoal: () -> Unit) {
+    val colors = KcalTheme.colors
+
     IncomingBubble(speakerOf(item)) {
         BubbleTitle(item.greeting)
+        if (item.intro) {
+            // Яйцо говорит само, двух других оно представляет: без этого
+            // картинки у реплик для новичка — просто картинки.
+            // Столбиком: в ряд «Зёрнышко — углеводы» переносится уже на 420 dp.
+            Column(
+                modifier = Modifier.padding(top = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                IntroMate(Mascot.BUTTER, "Масло — жиры")
+                IntroMate(Mascot.GRAIN, "Зёрнышко — углеводы")
+            }
+            BubbleText(
+                "Напишите, что съели, — например, «гречка 200». Цифры посчитаем сами.",
+                Modifier.padding(top = 10.dp),
+            )
+        }
         item.weekLine?.let { BubbleText(it, Modifier.padding(top = 7.dp)) }
         item.outline?.let { outline ->
             BubbleText(outlineSentence(outline), Modifier.padding(top = 7.dp))
             DayOutlineBar(outline, Modifier.padding(top = 10.dp))
         }
+        if (item.needsGoal) {
+            KcalChip(onClick = onSetGoal, background = colors.bubble, modifier = Modifier.padding(top = 10.dp)) {
+                Text("Задать цель", style = KcalTheme.type.chip, color = colors.onBubble)
+            }
+        }
+    }
+}
+
+/** Персонаж, которого представляют, и за что он отвечает. */
+@Composable
+private fun IntroMate(mascot: Mascot, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        MascotAvatar(mascot, Modifier.size(width = 30.dp, height = 25.dp), lively = false)
+        Text(text, style = KcalTheme.type.label, color = KcalTheme.colors.text2)
     }
 }
 

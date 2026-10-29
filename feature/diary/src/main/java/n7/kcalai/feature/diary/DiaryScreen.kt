@@ -215,6 +215,7 @@ fun DiaryScreen(
             onDismissGap = onDismissGap,
             onSendOutbox = onSendOutbox,
             onPickPlan = onPickPlan,
+            onOpenGoal = onOpenGoal,
             modifier = Modifier.weight(1f).nestedScroll(expandOnPull),
         )
 
@@ -249,6 +250,7 @@ private fun Feed(
     onDismissGap: (MealType) -> Unit,
     onSendOutbox: () -> Unit,
     onPickPlan: (PlanOption) -> Unit,
+    onOpenGoal: (GoalField) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     /*
@@ -366,7 +368,7 @@ private fun Feed(
 
                     is FeedItem.Meal -> MealBubble(item, onEditEntry)
 
-                    is FeedItem.Summary -> SummaryBubble(item)
+                    is FeedItem.Summary -> SummaryBubble(item, onSetGoal = { onOpenGoal(GoalField.KCAL) })
 
                     is FeedItem.Gap -> GapBubble(
                         item = item,
