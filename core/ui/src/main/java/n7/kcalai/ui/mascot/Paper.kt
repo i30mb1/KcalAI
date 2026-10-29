@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.PathParser
 
@@ -43,6 +44,39 @@ internal fun DrawScope.paperDot(center: Offset, radius: Float, color: Color) {
     drawCircle(PaperShadow, radius, center + ShadowOffset)
     drawCircle(color, radius, center)
 }
+
+/**
+ * Ручки позы — за телом, поэтому рисуются первыми.
+ *
+ * Геометрия общая для троих: плечи у всех на одной высоте холста.
+ * Свой у каждого только цвет.
+ */
+internal fun DrawScope.arms(pose: MascotPose, skin: Color, outline: Color, waveDegrees: Float) {
+    when (pose) {
+        MascotPose.HOME -> Unit
+        MascotPose.HUG -> arm(hugArms, skin, outline)
+        MascotPose.LEAN -> {
+            arm(leanReach, skin, outline)
+            arm(leanRest, skin, outline)
+        }
+        MascotPose.WAVE -> {
+            rotate(waveDegrees, pivot = WaveShoulder) { arm(waveUp, skin, outline) }
+            arm(waveRest, skin, outline)
+        }
+    }
+}
+
+private fun DrawScope.arm(path: Path, skin: Color, outline: Color) {
+    drawPath(path, outline, style = Stroke(width = 13f, cap = StrokeCap.Round))
+    drawPath(path, skin, style = Stroke(width = 8f, cap = StrokeCap.Round))
+}
+
+private val WaveShoulder = Offset(30f, 62f)
+private val hugArms by lazy { svgPath("M30,66 C22,78 24,96 30,112 M90,66 C98,78 96,96 90,112") }
+private val leanReach by lazy { svgPath("M88,66 C102,60 114,62 128,70") }
+private val leanRest by lazy { svgPath("M32,70 C24,76 22,84 26,90") }
+private val waveUp by lazy { svgPath("M30,62 C20,52 14,40 12,28") }
+private val waveRest by lazy { svgPath("M90,70 C98,76 100,84 96,90") }
 
 /** Глаза и рот ручкой — поверх бумаги и без наклона: лицо смотрит прямо. */
 internal fun DrawScope.face(leftX: Float, rightX: Float, eyeY: Float, mouth: Path) {

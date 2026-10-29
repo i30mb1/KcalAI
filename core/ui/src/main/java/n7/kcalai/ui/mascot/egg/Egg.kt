@@ -19,6 +19,10 @@ internal object EggArt : MascotArt {
 
     override val breathMs = 1300
 
+    override val skin get() = White
+    override val armOutline = Color(0xFFD8C8AE)
+    override val portal = Color(0xFFE0648C)
+
     private val White = Color(0xFFFFF8EE)
     private val Shell = Color(0xFFE58BA8)
     private val Blush = Color(0xFFF3B5C8)

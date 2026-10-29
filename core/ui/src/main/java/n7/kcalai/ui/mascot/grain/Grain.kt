@@ -22,6 +22,10 @@ internal object GrainArt : MascotArt {
     // Самое суетливое из троих — и дышит чаще всех.
     override val breathMs = 1150
 
+    override val skin get() = Body
+    override val armOutline = Color(0xFF4C8F5A)
+    override val portal = Color(0xFF5FA56E)
+
     private val Body = Color(0xFF7FBF8C)
     private val Tuft = Color(0xFF4C8F5A)
     private val Crease = Color(0xFF3E7A4B)

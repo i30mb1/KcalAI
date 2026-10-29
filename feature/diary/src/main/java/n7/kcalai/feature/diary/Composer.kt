@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyItemScope
@@ -281,11 +282,11 @@ private fun HintChips(
                     key = { index -> "$index:${row.items[index].candidate?.ref ?: row.items[index].sourceText}" },
                 ) { index ->
                     val resolved = row.items[index]
-                    Chip { ResolvedChip(resolved) { onPick(resolved) } }
+                    Chip(first = index == 0) { ResolvedChip(resolved) { onPick(resolved) } }
                 }
 
                 is ComposerRow.Scanned -> item(key = "scanned:${row.item.candidate?.ref}") {
-                    Chip { ResolvedChip(row.item) { onPickScanned(row.item) } }
+                    Chip(first = true) { ResolvedChip(row.item) { onPickScanned(row.item) } }
                 }
 
                 is ComposerRow.Predictions -> items(
@@ -293,7 +294,7 @@ private fun HintChips(
                     key = { index -> "$index:${row.items[index].ref}" },
                 ) { index ->
                     val candidate = row.items[index]
-                    Chip { PredictionChip(candidate) { onPickCandidate(candidate) } }
+                    Chip(first = index == 0) { PredictionChip(candidate) { onPickCandidate(candidate) } }
                 }
 
                 ComposerRow.None -> Unit
@@ -302,11 +303,25 @@ private fun HintChips(
     }
 }
 
-/** Чипс вырастает из своего левого нижнего угла — оттуда, где стоит курсор. */
+/**
+ * Чипс вырастает из своего левого нижнего угла — оттуда, где стоит курсор.
+ *
+ * На первом [first] сидит персонаж его макроса: место над правым краем,
+ * чтобы свешенные ручки ложились на чипс, а не закрывали название.
+ */
 @Composable
-private fun LazyItemScope.Chip(content: @Composable () -> Unit) {
+private fun LazyItemScope.Chip(first: Boolean = false, content: @Composable () -> Unit) {
     Box(Modifier.animateItem(fadeOutSpec = null).popIn(origin = TransformOrigin(0f, 1f))) {
         content()
+        if (first) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = (-4).dp, y = (-30).dp)
+                    .size(width = 48.dp, height = 40.dp)
+                    .mascotAnchor(CHIP_ANCHOR)
+            )
+        }
     }
 }
 

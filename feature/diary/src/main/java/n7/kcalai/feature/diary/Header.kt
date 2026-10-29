@@ -7,6 +7,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.expandVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,7 +40,6 @@ import n7.kcalai.ui.colors
 import n7.kcalai.ui.tileLabel
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
-import n7.kcalai.ui.mascot.MascotAvatar
 import n7.kcalai.ui.mascot.mascot
 
 /**
@@ -219,9 +219,10 @@ private fun MacroTile(
                     }
                 }
             }
-            // Тот же персонаж, что говорит об этом макросе в ленте: по плитке
-            // человек и узнаёт, кто есть кто. Неподвижный — рядом цифры.
-            MascotAvatar(macro.mascot, Modifier.size(width = 38.dp, height = 32.dp), lively = false)
+            // Дом персонажа, который говорит об этом макросе в ленте: по плитке
+            // человек и узнаёт, кто есть кто. Сам персонаж — слоем сверху,
+            // и пока он в ленте, домик пустует.
+            Box(Modifier.size(width = 38.dp, height = 32.dp).mascotAnchor(homeAnchor(macro.mascot)))
         }
 
         if (target != null) {

@@ -42,7 +42,6 @@ import n7.kcalai.ui.KcalChip
 import n7.kcalai.ui.Macro
 import n7.kcalai.ui.MacroDot
 import n7.kcalai.ui.mascot.Mascot
-import n7.kcalai.ui.mascot.MascotAvatar
 import n7.kcalai.ui.colors
 import n7.kcalai.ui.letter
 import n7.kcalai.ui.KcalShapes
@@ -52,11 +51,15 @@ import n7.kcalai.ui.KcalTheme
 private const val BUBBLE_WIDTH = 0.88f
 
 /**
- * Персонаж у реплики. На 30 dp он терялся рядом с пузырьком в полэкрана;
- * больше 36 — спорит с текстом.
+ * Место персонажа у реплики. Крупнее, чем был аватар у каждой реплики:
+ * теперь он один на всю ленту и может себе это позволить.
  */
-private val AVATAR_WIDTH = 36.dp
-private val AVATAR_HEIGHT = 30.dp
+private val AVATAR_WIDTH = 44.dp
+private val AVATAR_HEIGHT = 37.dp
+
+/** Персонаж на сцене пустого дня. */
+private val STAGE_WIDTH = 92.dp
+private val STAGE_HEIGHT = 77.dp
 
 /**
  * Исходящий пузырёк: приём пищи.
@@ -174,7 +177,7 @@ private fun MacroValue(macro: Macro, centigrams: Int, onBubble: Boolean) {
  */
 @Composable
 fun IncomingBubble(
-    speaker: Mascot?,
+    speaking: FeedItem,
     modifier: Modifier = Modifier,
     time: String? = null,
     onDismiss: (() -> Unit)? = null,
@@ -182,10 +185,12 @@ fun IncomingBubble(
 ) {
     val colors = KcalTheme.colors
 
-    // Персонаж у нижнего края, как аватар в мессенджере: там, где хвостик пузырька.
+    // Место персонажа у нижнего края, как аватар в мессенджере: там, где хвостик
+    // пузырька. Сам он рисуется слоем сверху и встаёт только к последней своей
+    // реплике — у остальных место пустует.
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-        if (speaker != null) {
-            MascotAvatar(speaker, Modifier.size(width = AVATAR_WIDTH, height = AVATAR_HEIGHT))
+        if (speakerOf(speaking) != null) {
+            Box(Modifier.size(width = AVATAR_WIDTH, height = AVATAR_HEIGHT).mascotAnchor(speaking.key))
             Spacer(Modifier.width(4.dp))
         }
         Column(
@@ -263,21 +268,32 @@ private fun BubbleTitle(text: String) {
  */
 @Composable
 fun SummaryBubble(item: FeedItem.Summary, onSetGoal: () -> Unit) {
+    Column {
+        SummaryText(item, onSetGoal)
+        // Пустой первый день: места полно, и все трое выходят знакомиться крупно.
+        if (item.intro) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 28.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                Mascot.entries.forEach { mascot ->
+                    Box(Modifier.size(width = STAGE_WIDTH, height = STAGE_HEIGHT).mascotAnchor(stageAnchor(mascot)))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryText(item: FeedItem.Summary, onSetGoal: () -> Unit) {
     val colors = KcalTheme.colors
 
-    IncomingBubble(speakerOf(item)) {
+    IncomingBubble(item) {
         BubbleTitle(item.greeting)
         if (item.intro) {
             // Яйцо говорит само, двух других оно представляет: без этого
-            // картинки у реплик для новичка — просто картинки.
-            // Столбиком: в ряд «Зёрнышко — углеводы» переносится уже на 420 dp.
-            Column(
-                modifier = Modifier.padding(top = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                IntroMate(Mascot.BUTTER, "Масло — жиры")
-                IntroMate(Mascot.GRAIN, "Зёрнышко — углеводы")
-            }
+            // персонажи для новичка — просто картинки.
+            BubbleText("Масло следит за жирами, Зёрнышко — за углеводами.", Modifier.padding(top = 7.dp))
             BubbleText(
                 "Напишите, что съели, — например, «гречка 200». Цифры посчитаем сами.",
                 Modifier.padding(top = 10.dp),
@@ -293,15 +309,6 @@ fun SummaryBubble(item: FeedItem.Summary, onSetGoal: () -> Unit) {
                 Text("Задать цель", style = KcalTheme.type.chip, color = colors.onBubble)
             }
         }
-    }
-}
-
-/** Персонаж, которого представляют, и за что он отвечает. */
-@Composable
-private fun IntroMate(mascot: Mascot, text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        MascotAvatar(mascot, Modifier.size(width = 30.dp, height = 25.dp), lively = false)
-        Text(text, style = KcalTheme.type.label, color = KcalTheme.colors.text2)
     }
 }
 
@@ -362,7 +369,7 @@ fun GapBubble(
 ) {
     val gap: MealGap = item.gap
 
-    IncomingBubble(speakerOf(item), onDismiss = onDismiss) {
+    IncomingBubble(item, onDismiss = onDismiss) {
         BubbleTitle("${mealName(gap.meal)} пропустили?")
         BubbleText(
             "Обычно вы ${mealVerb(gap.meal)} около ${formatHour(gap.typicalHour)}, " +
@@ -394,7 +401,7 @@ fun GapBubble(
 fun RemainingBubble(item: FeedItem.Remaining, onPick: (PlanOption) -> Unit) {
     val plan = item.plan
 
-    IncomingBubble(speakerOf(item)) {
+    IncomingBubble(item) {
         BubbleText(
             buildString {
                 append(item.mealTitle.replaceFirstChar(Char::uppercase))
@@ -424,7 +431,7 @@ fun RemainingBubble(item: FeedItem.Remaining, onPick: (PlanOption) -> Unit) {
 /** Съедено больше цели. Констатация и обещание, а не оценка поступка. */
 @Composable
 fun OverBubble(item: FeedItem.Over) {
-    IncomingBubble(speakerOf(item)) {
+    IncomingBubble(item) {
         BubbleText(
             "Цель на сегодня закрыта с перебором в ${item.overKcal} ккал. " +
                 "Ничего страшного — завтра это учтётся в раскладке дня."
@@ -441,7 +448,7 @@ fun OverBubble(item: FeedItem.Over) {
  */
 @Composable
 fun NotFoundBubble(item: FeedItem.NotFound) {
-    IncomingBubble(speakerOf(item)) {
+    IncomingBubble(item) {
         BubbleText(
             "«${item.query}» не нашлась. Попробуйте назвать блюдо иначе, " +
                 "отсканируйте штрих-код или сфотографируйте этикетку — добавим в базу."
@@ -452,7 +459,7 @@ fun NotFoundBubble(item: FeedItem.NotFound) {
 /** Вес записан. Подтверждение действия, у которого больше нет своего экрана. */
 @Composable
 fun WeightBubble(item: FeedItem.WeightLogged) {
-    IncomingBubble(speakerOf(item), time = item.time) {
+    IncomingBubble(item, time = item.time) {
         BubbleText("Записал ${formatKg(item.grams)}")
     }
 }
@@ -460,7 +467,7 @@ fun WeightBubble(item: FeedItem.WeightLogged) {
 /** Ответ на действие — «Отправлено: 2 сессии». */
 @Composable
 fun ReplyBubble(item: FeedItem.Reply) {
-    IncomingBubble(speakerOf(item), time = item.time) {
+    IncomingBubble(item, time = item.time) {
         BubbleText(item.text)
     }
 }
@@ -475,7 +482,7 @@ fun ReplyBubble(item: FeedItem.Reply) {
 fun OutboxBubble(item: FeedItem.Outbox, onSend: () -> Unit) {
     val colors = KcalTheme.colors
 
-    IncomingBubble(speakerOf(item)) {
+    IncomingBubble(item) {
         BubbleText("Не отправлено на сервер: ${describeOutbox(item.count.scans, item.count.products)}")
         KcalChip(
             onClick = if (item.sending) null else onSend,

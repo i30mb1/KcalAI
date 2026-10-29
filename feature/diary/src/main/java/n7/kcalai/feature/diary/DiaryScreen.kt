@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -197,6 +198,11 @@ fun DiaryScreen(
         }
     }
 
+    // Персонажи — один слой поверх всего экрана: плитки, реплики и чипс только
+    // сообщают, где у них место, а кто где стоит, решает [mascotPlaces].
+    val anchors = remember { MascotAnchors() }
+    Box(Modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalMascotAnchors provides anchors) {
     Column(Modifier.fillMaxSize().background(KcalTheme.colors.bg)) {
         Header(
             date = state.date,
@@ -231,6 +237,9 @@ fun DiaryScreen(
             onOpenLabelScan = onOpenLabelScan,
             onOpenLabelDebug = onOpenLabelDebug,
         )
+    }
+    }
+        MascotStage(feed = state.feed, chipOwner = chipOwner(state.composer), anchors = anchors)
     }
 }
 
