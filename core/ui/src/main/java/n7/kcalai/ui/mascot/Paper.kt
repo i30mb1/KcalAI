@@ -53,8 +53,7 @@ internal fun DrawScope.paperDot(center: Offset, radius: Float, color: Color) {
  */
 internal fun DrawScope.arms(pose: MascotPose, skin: Color, outline: Color, waveDegrees: Float) {
     when (pose) {
-        MascotPose.HOME -> Unit
-        MascotPose.HUG -> arm(hugArms, skin, outline)
+        MascotPose.HOME, MascotPose.PEEK -> Unit
         MascotPose.LEAN -> {
             arm(leanReach, skin, outline)
             arm(leanRest, skin, outline)
@@ -72,7 +71,6 @@ private fun DrawScope.arm(path: Path, skin: Color, outline: Color) {
 }
 
 private val WaveShoulder = Offset(30f, 62f)
-private val hugArms by lazy { svgPath("M30,66 C22,78 24,96 30,112 M90,66 C98,78 96,96 90,112") }
 private val leanReach by lazy { svgPath("M88,66 C102,60 114,62 128,70") }
 private val leanRest by lazy { svgPath("M32,70 C24,76 22,84 26,90") }
 private val waveUp by lazy { svgPath("M30,62 C20,52 14,40 12,28") }

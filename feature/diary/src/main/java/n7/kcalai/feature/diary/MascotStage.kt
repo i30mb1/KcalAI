@@ -22,9 +22,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -51,11 +53,17 @@ fun homeAnchor(mascot: Mascot) = "home:$mascot"
 fun stageAnchor(mascot: Mascot) = "stage:$mascot"
 const val CHIP_ANCHOR = "chip"
 
-/** Это место для персонажа. Размер места — размер персонажа на нём. */
+/**
+ * Это место для персонажа. Размер места — размер персонажа на нём.
+ *
+ * Прямоугольник берётся целиком, а не `boundsInRoot()`: тот обрезан по родителю,
+ * а место над чипсом нарочно выходит за ряд подсказок, который режет всё лишнее, —
+ * персонажу доставался сплющенный огрызок. Рисуется он всё равно поверх экрана.
+ */
 fun Modifier.mascotAnchor(key: String): Modifier = composed {
     val anchors = LocalMascotAnchors.current ?: return@composed this
     DisposableEffect(anchors, key) { onDispose { anchors.rects.remove(key) } }
-    onGloballyPositioned { anchors.rects[key] = it.boundsInRoot() }
+    onGloballyPositioned { anchors.rects[key] = Rect(it.positionInRoot(), it.size.toSize()) }
 }
 
 private fun MascotPlace.anchorKey(mascot: Mascot): String = when (this) {
@@ -68,7 +76,7 @@ private fun MascotPlace.anchorKey(mascot: Mascot): String = when (this) {
 private val MascotPlace.pose: MascotPose
     get() = when (this) {
         MascotPlace.Home -> MascotPose.HOME
-        MascotPlace.Chip -> MascotPose.HUG
+        MascotPlace.Chip -> MascotPose.PEEK
         is MascotPlace.Reply -> MascotPose.LEAN
         MascotPlace.Stage -> MascotPose.WAVE
     }
@@ -113,6 +121,8 @@ private fun StagedMascot(mascot: Mascot, target: MascotPlace, anchors: MascotAnc
     // Место пропало — свёрнутая шапка без плиток: персонажа просто не видно.
     val rect = anchors.rects[shown.anchorKey(mascot)] ?: return
     val density = LocalDensity.current
+    // На чипсе выглядывает из-за кромки: низ места — это край чипса, ниже не рисуем.
+    val peek = shown == MascotPlace.Chip
 
     MascotFigure(
         mascot = mascot,
@@ -120,14 +130,26 @@ private fun StagedMascot(mascot: Mascot, target: MascotPlace, anchors: MascotAnc
         modifier = Modifier
             .offset { IntOffset((rect.left - origin.x).roundToInt(), (rect.top - origin.y).roundToInt()) }
             .size(with(density) { rect.width.toDp() }, with(density) { rect.height.toDp() })
+            .drawWithContent {
+                if (peek) {
+                    clipRect(left = -size.width, top = -size.height, right = size.width * 2, bottom = size.height) {
+                        this@drawWithContent.drawContent()
+                    }
+                } else {
+                    drawContent()
+                }
+            }
             .graphicsLayer {
                 val p = presence.value
                 scaleX = p
                 scaleY = p
                 alpha = p.coerceIn(0f, 1f)
                 transformOrigin = TransformOrigin(0.5f, 1f)
+                // Опущен за кромку так, что остаются макушка и глаза.
+                if (peek) translationY = size.height * PEEK_DEPTH
             },
     )
 }
 
 private const val VANISH_MS = 160
+private const val PEEK_DEPTH = 0.22f
