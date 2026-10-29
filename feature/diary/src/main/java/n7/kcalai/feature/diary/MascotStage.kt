@@ -152,4 +152,5 @@ private fun StagedMascot(mascot: Mascot, target: MascotPlace, anchors: MascotAnc
 }
 
 private const val VANISH_MS = 160
-private const val PEEK_DEPTH = 0.22f
+/** Опущен так, что над кромкой глаза, а рот уже за ней: половинка рта смотрится обрывком. */
+private const val PEEK_DEPTH = 0.27f

@@ -306,9 +306,9 @@ private fun HintChips(
 /**
  * Чипс вырастает из своего левого нижнего угла — оттуда, где стоит курсор.
  *
- * Из-за первого [first] выглядывает персонаж его макроса: место стоит
- * над правым краем, а низ места — это кромка чипса, ниже персонаж не рисуется,
- * и ни название, ни калории он не закрывает.
+ * Из-за первого [first] выглядывает персонаж его макроса. Низ места — ровно
+ * верхняя кромка чипса: срез по ней и выглядит как «из-за». Стоит на прямом
+ * участке, а не на скруглении — там прямой срез с загибом края не сходится.
  */
 @Composable
 private fun LazyItemScope.Chip(first: Boolean = false, content: @Composable () -> Unit) {
@@ -318,7 +318,7 @@ private fun LazyItemScope.Chip(first: Boolean = false, content: @Composable () -
             Box(
                 Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = (-8).dp, y = (-38).dp)
+                    .offset(x = (-28).dp, y = (-40).dp)
                     .size(width = 48.dp, height = 40.dp)
                     .mascotAnchor(CHIP_ANCHOR)
             )
