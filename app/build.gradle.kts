@@ -49,8 +49,11 @@ android {
         release {
             buildConfigField("String", "KCAL_SERVER", "\"\"")
             signingConfig = uploadSigning
+            // R8 в полном режиме: минификация, обфускация, оптимизация кода и удаление
+            // неиспользуемых ресурсов — в DSL AGP 9.3 всё это включает один флаг.
+            // Что вызывается по имени (JNI распознавания), держат правила в src/main/keepRules.
             optimization {
-                enable = false
+                enable = true
             }
         }
     }

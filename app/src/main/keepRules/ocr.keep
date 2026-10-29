@@ -1,0 +1,13 @@
+# Распознавание этикеток (:core:ocr) — нативный код на C++.
+#
+# ppocrv5_jni.cpp находит класс результата по имени и вызывает конструктор
+# по сигнатуре (Ljava/lang/String;FFFFFF)V. Переименуй R8 класс или выкинь
+# конструктор как «неиспользуемый» — распознавание молча вернёт null.
+-keep class n7.kcalai.ocr.OcrResult {
+    <init>(java.lang.String, float, float, float, float, float, float);
+}
+
+# Имена native-методов — это имена JNI-функций в .so: Java_n7_kcalai_ocr_OcrEngine_….
+-keepclasseswithmembernames class n7.kcalai.ocr.** {
+    native <methods>;
+}
