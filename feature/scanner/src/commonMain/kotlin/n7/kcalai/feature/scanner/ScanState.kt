@@ -172,8 +172,9 @@ internal class ScanState(initialGtin: String?) {
 
     val nutriments: Nutriments?
         get() = kcal.text.toIntOrNull()?.let {
-            // Незаполненный макрос — это ноль, а не отказ сохранять: у растительного
-            // масла белков действительно нет, и печатать «0» человека заставлять незачем.
+            // Пустой макрос здесь — ноль, но только ради проверки на лету:
+            // «950 ккал» или «120 г белка» должны краснеть сразу, не дожидаясь
+            // остальных чисел. Сохранить с пустыми не даёт [canSave].
             Nutriments(
                 kcal100 = it,
                 prot100 = prot.text.toCentigrams() ?: 0,
@@ -184,11 +185,42 @@ internal class ScanState(initialGtin: String?) {
 
     val check get() = nutriments?.let(NutrimentValidator::check)
 
+    /**
+     * Числа с этикетки, которых ещё нет: камера их не прочла, человек не вписал.
+     *
+     * Пустое поле — не ноль. Раньше продукт сохранялся с одними калориями, а
+     * недочитанные белки, жиры и углеводы молча становились нулями и потом врали
+     * в дневнике. Ноль, вписанный руками, — ответ: у масла белков и правда нет.
+     */
+    val missing: List<String>
+        get() = buildList {
+            if (kcal.text.toIntOrNull() == null) add("калории")
+            if (prot.text.toCentigrams() == null) add("белки")
+            if (fat.text.toCentigrams() == null) add("жиры")
+            if (carb.text.toCentigrams() == null) add("углеводы")
+        }
+
+    /**
+     * Замечание сверки по Этуотеру — когда есть что сверять.
+     *
+     * Пока числа вписаны не все, «выходит 0 ккал, а указано 121» — не замечание,
+     * а упрёк человеку, который ещё не дописал.
+     */
+    val warning: String? get() = check?.warning?.takeIf { missing.isEmpty() }
+
+    /** Почему сохранить пока нельзя — словами, а не серой кнопкой. */
+    val saveHint: String?
+        get() = when {
+            name.text.isBlank() -> "Назовите продукт — без названия его потом не найти"
+            missing.isNotEmpty() -> missingHint(missing)
+            else -> null
+        }
+
     /** Код уходит в сохранение только пройдя контрольную цифру. */
     val gtin: String? get() = BarcodeValidator.normalize(barcode.text)
 
-    /** Название — единственное, чего нельзя ни вычислить, ни проверить арифметикой. */
-    val canSave: Boolean get() = name.text.isNotBlank() && check?.valid == true
+    /** Название нельзя ни вычислить, ни проверить, числа — только прочесть или вписать. */
+    val canSave: Boolean get() = name.text.isNotBlank() && missing.isEmpty() && check?.valid == true
 
     /**
      * Сколько из пяти полей заполнено: название и четыре числа с этикетки.
@@ -199,8 +231,6 @@ internal class ScanState(initialGtin: String?) {
      */
     val filledFields: Int
         get() = listOf(kcal, prot, fat, carb, name).count { it.filled }
-
-    val requiredFilled: Int get() = listOf(kcal, prot, fat, carb).count { it.filled }
 
     /** Код, с которым карточка открылась: он был до неё и потерей не считается. */
     private val initialBarcode = initialGtin.orEmpty()
@@ -292,6 +322,26 @@ private val ScanStateSaver: Saver<ScanState, Any> = listSaver(
             carb.type(saved[4])
         }
     },
+)
+
+/**
+ * «Не хватает белков и углеводов…» — что дописать и как.
+ *
+ * Ноль назван прямо: у сахара строк «Белки» и «Жиры» на пачке нет вовсе,
+ * и человек иначе ищет, что вписать в поле, которого на этикетке нет.
+ */
+private fun missingHint(missing: List<String>): String {
+    val what = missing.map { GENITIVE.getValue(it) }
+    val list = if (what.size == 1) what.single() else what.dropLast(1).joinToString(", ") + " и " + what.last()
+    val rows = if (missing.size == 1) "эту строку" else "эти строки"
+    return "Не хватает $list. Наведите камеру на $rows или впишите с пачки — если строки на пачке нет, впишите 0."
+}
+
+private val GENITIVE = mapOf(
+    "калории" to "калорий",
+    "белки" to "белков",
+    "жиры" to "жиров",
+    "углеводы" to "углеводов",
 )
 
 /** Сотые грамма в то, что человек ожидает увидеть в поле: «12,4», но «5», а не «5,0». */

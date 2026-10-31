@@ -53,6 +53,76 @@ class ScanStateTest {
         assertTrue(ScanState(null).apply { barcode.type(GTIN) }.hasDraft)
     }
 
+    // --- Недостающие числа вписывает человек ------------------------------------------
+
+    /**
+     * Пустое поле — не ноль. Раньше продукт сохранялся с одними калориями,
+     * а недочитанные белки, жиры и углеводы молча становились нулями — и потом
+     * годами врали в дневнике. Чего камера не прочла, человек вписывает сам.
+     */
+    @Test
+    fun `без белков, жиров и углеводов продукт не сохраняется`() {
+        val state = ScanState(null).apply {
+            name.type("Творог 5%")
+            kcal.type("121")
+        }
+
+        assertFalse(state.canSave)
+        assertEquals(listOf("белки", "жиры", "углеводы"), state.missing)
+    }
+
+    /** Ноль, вписанный руками, — это ответ: у масла белков действительно нет. */
+    @Test
+    fun `вписанный руками ноль — заполненное поле`() {
+        val state = ScanState(null).apply {
+            name.type("Масло подсолнечное")
+            kcal.type("899")
+            prot.type("0")
+            fat.type("99,9")
+            carb.type("0")
+        }
+
+        assertTrue(state.missing.isEmpty())
+        assertTrue(state.canSave)
+    }
+
+    @Test
+    fun `подсказка называет именно то, чего не хватает`() {
+        val state = ScanState(null).apply {
+            name.type("Творог 5%")
+            kcal.type("121")
+            fat.type("5")
+        }
+
+        assertEquals(
+            "Не хватает белков и углеводов. Наведите камеру на эти строки или впишите с пачки — " +
+                "если строки на пачке нет, впишите 0.",
+            state.saveHint,
+        )
+    }
+
+    @Test
+    fun `без названия подсказка просит сначала назвать продукт`() {
+        assertEquals("Назовите продукт — без названия его потом не найти", filled().apply { name.type("") }.saveHint)
+    }
+
+    /**
+     * Сверка по Этуотеру — когда есть что сверять. Пока белки, жиры и углеводы
+     * не вписаны, «выходит 0 ккал, а указано 121» — не замечание, а упрёк
+     * человеку, который ещё не дописал.
+     */
+    @Test
+    fun `сверка калорий с макросами молчит, пока числа не вписаны все`() {
+        val partial = ScanState(null).apply {
+            name.type("Творог 5%")
+            kcal.type("121")
+        }
+        assertEquals(null, partial.warning)
+
+        val mismatched = filled().apply { kcal.type("400") }
+        assertTrue(mismatched.warning?.contains("Проверьте цифры") == true)
+    }
+
     private companion object {
         const val GTIN = "4607001771234"
     }

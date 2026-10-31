@@ -420,7 +420,8 @@ private fun ProductCard(
                 Column(Modifier.padding(start = 16.dp)) {
                     NameField(state.name) { focused = null }
                     CapsLabel(
-                        "${state.filledFields} из 5 полей · обязательных ${state.requiredFilled} / 4",
+                        // Все пять обязательны: название и четыре числа с пачки.
+                        "${state.filledFields} из 5 полей",
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
@@ -476,22 +477,15 @@ private fun ProductCard(
             // Ошибка гасит кнопку, замечание — нет. Расходящиеся цифры бывают
             // напечатаны на реальной упаковке, и спорить с упаковкой мы не вправе.
             check?.error?.let { Note(it, colors.error) }
-            check?.warning?.let { Note(it, colors.text2) }
+            state.warning?.let { Note(it, colors.text2) }
             if (state.barcode.filled && state.gtin == null) {
                 Note("Код не сходится по контрольной цифре — проверьте цифры", colors.error)
             }
 
             // Молчать о том, почему кнопка серая, нельзя: человек решит, что
             // сломано, и уйдёт — ровно на последнем шаге.
-            if (!state.canSave && check?.error == null) {
-                Note(
-                    when {
-                        state.name.text.isBlank() ->
-                            "Назовите продукт — без названия его потом не найти"
-                        else -> "Нужны калории на 100 г: их с пачки ждут все остальные числа"
-                    },
-                    colors.text3,
-                )
+            if (check?.error == null) {
+                state.saveHint?.let { Note(it, colors.text3) }
             }
         }
 
