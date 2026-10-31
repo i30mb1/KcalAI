@@ -150,6 +150,15 @@ class PersonalRepository(
         bodyMetricDao.upsert(BodyMetricEntity(dateEpochDay, weightGrams, now))
     }
 
+    /**
+     * Последний записанный вес — за год, не старше.
+     *
+     * Отправная точка помощи с целью: человек, писавший «вес 82,4», не должен
+     * набирать его второй раз. Вес двухлетней давности уже не про него.
+     */
+    suspend fun latestWeight(today: Long): Int? =
+        bodyMetricDao.since(today - LATEST_WEIGHT_DAYS + 1).maxByOrNull { it.dateEpochDay }?.weightGrams
+
     suspend fun tdee(today: Long): TdeeEstimate? {
         val weighIns = bodyMetricDao.since(today - TdeeEstimator.WINDOW_DAYS + 1)
             .associate { it.dateEpochDay to it.weightGrams }
@@ -252,6 +261,7 @@ class PersonalRepository(
         /** Глубина истории. Дальше привычки человека уже не те. */
         const val HISTORY_DAYS = 90
         const val CENTIGRAMS_PER_GRAM = 100
+        const val LATEST_WEIGHT_DAYS = 365
     }
 }
 

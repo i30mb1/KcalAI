@@ -55,6 +55,16 @@ class DiaryViewModelTest {
         assertTrue(vm.state.value.feed.any { it is FeedItem.WeightLogged })
     }
 
+    /** Помощь с целью начинается с веса, который человек уже писал: «вес 82,4». */
+    @Test
+    fun `шит цели знает последний записанный вес`() = runTest(dispatcher) {
+        harness.bodyMetricDao.weights[harness.today - 3] = 82_400
+        harness.bodyMetricDao.weights[harness.today - 9] = 83_100
+        val vm = screen()
+
+        assertEquals(82_400, vm.state.value.lastWeightGrams)
+    }
+
     // --- Холодный старт ------------------------------------------------------------------
 
     /**

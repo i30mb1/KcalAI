@@ -128,6 +128,8 @@ data class PersonalState(
     val tdee: TdeeEstimate? = null,
     /** Раскладка типичного дня — для сводки в начале дня. */
     val dayOutline: DayOutline? = null,
+    /** Последний записанный вес, граммы: с него начинается помощь с целью. */
+    val lastWeightGrams: Int? = null,
 )
 
 data class DiaryUiState(
@@ -151,6 +153,8 @@ data class DiaryUiState(
     val pastMeal: MealType? = null,
     /** Нужен шиту цели: расход по факту подставляется в калории одним тапом. */
     val tdee: TdeeEstimate? = null,
+    /** Нужен шиту цели: помощь с целью начинается с уже записанного веса. */
+    val lastWeightGrams: Int? = null,
     val overlay: Overlay = Overlay.None,
     /**
      * База ответила: день, цель и неделя прочитаны.
@@ -307,6 +311,7 @@ class DiaryViewModel(
             goal = loaded.goal,
             todayGoal = loaded.todayGoal,
             tdee = models.tdee,
+            lastWeightGrams = models.lastWeightGrams,
             overlay = typed.overlay,
             pastMeal = pastMeal,
             loaded = true,
@@ -537,6 +542,7 @@ class DiaryViewModel(
                 // Расход нужен шиту цели, а цель всегда правится с сегодня.
                 tdee = personal.tdee(today),
                 dayOutline = if (forToday) personal.dayOutline(context) else null,
+                lastWeightGrams = personal.latestWeight(today),
             )
         } catch (cancellation: CancellationException) {
             throw cancellation

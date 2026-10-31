@@ -105,6 +105,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         is Overlay.Goal -> GoalSheet(
             goal = state.todayGoal,
             tdee = state.tdee,
+            lastWeightGrams = state.lastWeightGrams,
             date = state.today,
             focus = overlay.field,
             onConfirm = viewModel::onSetGoal,

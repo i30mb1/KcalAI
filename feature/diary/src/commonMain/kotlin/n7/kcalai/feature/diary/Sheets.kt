@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -41,6 +43,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -78,6 +83,7 @@ import n7.kcalai.ui.KcalTheme
 fun GoalSheet(
     goal: DailyGoalEntity?,
     tdee: TdeeEstimate?,
+    lastWeightGrams: Int?,
     date: LocalDate,
     focus: GoalField,
     onConfirm: (kcal: Int, prot: Int, fat: Int, carb: Int) -> Unit,
@@ -88,6 +94,11 @@ fun GoalSheet(
     var fat by remember { mutableStateOf(goal?.fat?.toString().orEmpty()) }
     var carb by remember { mutableStateOf(goal?.carb?.toString().orEmpty()) }
 
+    // Новичку клавиатура сразу ни к чему: своих цифр он может не знать, и
+    // поле с курсором наготове закрывало бы второй путь — «посчитаем».
+    // Тап по конкретной плитке — другое дело: человек показал, что править.
+    val autofocus = goal != null || focus != GoalField.KCAL
+
     Sheet(onDismiss) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Цель на день", style = KcalTheme.type.title, color = KcalTheme.colors.text)
@@ -95,23 +106,36 @@ fun GoalSheet(
             CapsLabel("с ${formatDayMonthShort(date)}", Modifier.weight(1f))
         }
 
+        GoalHelperCard(
+            lastWeightGrams = lastWeightGrams,
+            // Новичок видит помощь раскрытой: без цели ему почти наверняка нужна она.
+            initiallyOpen = goal == null && focus == GoalField.KCAL,
+            onSuggest = { suggestion ->
+                kcal = suggestion.kcal.toString()
+                prot = suggestion.prot.toString()
+                fat = suggestion.fat.toString()
+                carb = suggestion.carb.toString()
+            },
+            modifier = Modifier.padding(top = 14.dp),
+        )
+
         // Поля проходятся с клавиатуры подряд — калории, белки, жиры, углеводы:
         // «далее» вместо «готово», чтобы не тянуться пальцем к каждой плитке.
         KcalField(
             value = kcal,
             onValueChange = { kcal = it },
-            focused = focus == GoalField.KCAL,
-            modifier = Modifier.padding(top = 14.dp),
+            focused = autofocus && focus == GoalField.KCAL,
+            modifier = Modifier.padding(top = 12.dp),
         )
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
-            MacroField(Macro.PROTEIN, prot, { prot = it }, focus == GoalField.PROT, Modifier.weight(1f))
-            MacroField(Macro.FAT, fat, { fat = it }, focus == GoalField.FAT, Modifier.weight(1f))
+            MacroField(Macro.PROTEIN, prot, { prot = it }, autofocus && focus == GoalField.PROT, Modifier.weight(1f))
+            MacroField(Macro.FAT, fat, { fat = it }, autofocus && focus == GoalField.FAT, Modifier.weight(1f))
             MacroField(
-                Macro.CARB, carb, { carb = it }, focus == GoalField.CARB, Modifier.weight(1f),
+                Macro.CARB, carb, { carb = it }, autofocus && focus == GoalField.CARB, Modifier.weight(1f),
                 imeAction = ImeAction.Done,
             )
         }
@@ -157,6 +181,188 @@ fun GoalSheet(
         )
     }
 }
+
+/**
+ * «Не знаете своих цифр? Посчитаем по росту, весу и возрасту».
+ *
+ * Второй путь к цели рядом с первым — вписать самому. Считает по формуле
+ * Миффлина — Сан Жеора и подставляет числа в поля шита: человек их видит,
+ * правит и сохраняет сам. Формула ошибается на ±20%, и это сказано прямо:
+ * через две недели взвешиваний карточка ниже предложит расход по факту.
+ *
+ * Рост и возраст не хранятся: подсказка нужна раз, на старте, а заводить ради
+ * неё профиль значило бы менять схему базы.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GoalHelperCard(
+    lastWeightGrams: Int?,
+    initiallyOpen: Boolean,
+    onSuggest: (GoalSuggestion) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = KcalTheme.colors
+    val type = KcalTheme.type
+    val focusManager = LocalFocusManager.current
+
+    var open by remember { mutableStateOf(initiallyOpen) }
+    var applied by remember { mutableStateOf(false) }
+    var sex by remember { mutableStateOf<Sex?>(null) }
+    var age by remember { mutableStateOf("") }
+    var height by remember { mutableStateOf("") }
+    // Вес, уже записанный строкой «вес 82,4», второй раз не набирают.
+    var weight by remember { mutableStateOf(lastWeightGrams?.let { formatKg(it).removeSuffix(" кг") }.orEmpty()) }
+    var activity by remember { mutableStateOf(Activity.LIGHT) }
+    var aim by remember { mutableStateOf(Aim.KEEP) }
+
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(KcalShapes.tile))
+            .background(colors.surface),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    open = !open
+                    focusManager.clearFocus()
+                }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Не знаете своих цифр?", style = type.bubbleTitle, color = colors.text)
+                Text(
+                    if (applied && !open) {
+                        "Подставили по формуле — поправьте, если нужно"
+                    } else {
+                        "Посчитаем по росту, весу и возрасту"
+                    },
+                    style = type.body,
+                    color = colors.text2,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            Icon(
+                if (open) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = if (open) "Свернуть" else "Раскрыть",
+                tint = colors.text3,
+            )
+        }
+
+        if (open) {
+            Column(
+                modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Choices(Sex.entries, sex, Sex::title) { sex = it }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    HelperField("возраст", age, { age = it }, "лет", Modifier.weight(1f))
+                    HelperField("рост", height, { height = it }, "см", Modifier.weight(1f))
+                    HelperField("вес", weight, { weight = it }, "кг", Modifier.weight(1f), decimal = true)
+                }
+
+                CapsLabel("движение")
+                Choices(Activity.entries, activity, Activity::title) { activity = it }
+
+                CapsLabel("цель")
+                Choices(Aim.entries, aim, Aim::title) { aim = it }
+
+                val body = bodyOrNull(sex, age, height, weight, activity, aim)
+                WideButton(
+                    text = "Посчитать",
+                    enabled = body != null,
+                    onClick = {
+                        body?.let { onSuggest(suggestGoal(it)) }
+                        applied = true
+                        open = false
+                        focusManager.clearFocus()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Это оценка по формуле Миффлина — Сан Жеора, она ошибается на ±20%. " +
+                        "Через две недели взвешиваний здесь появится ваш расход по факту.",
+                    style = type.time,
+                    color = colors.text3,
+                )
+            }
+        }
+    }
+}
+
+/** Выбор одного из нескольких — чипсами, выбранный тёмный. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun <T> Choices(options: List<T>, selected: T?, title: (T) -> String, onPick: (T) -> Unit) {
+    val colors = KcalTheme.colors
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        options.forEach { option ->
+            val chosen = option == selected
+            KcalChip(
+                onClick = { onPick(option) },
+                background = if (chosen) colors.bubble else colors.chip,
+                modifier = Modifier.semantics { this.selected = chosen },
+            ) {
+                Text(title(option), style = KcalTheme.type.chip, color = if (chosen) colors.onBubble else colors.text)
+            }
+        }
+    }
+}
+
+/** Поле помощи с целью: подпись сверху, число и единица. */
+@Composable
+private fun HelperField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    unit: String,
+    modifier: Modifier = Modifier,
+    decimal: Boolean = false,
+) {
+    val colors = KcalTheme.colors
+
+    Column(
+        modifier
+            .clip(RoundedCornerShape(KcalShapes.tile))
+            .background(colors.chip)
+            .padding(horizontal = 11.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        CapsLabel(label)
+        Row(verticalAlignment = Alignment.Bottom) {
+            Box(Modifier.weight(1f)) {
+                BasicTextField(
+                    value = value,
+                    onValueChange = { text ->
+                        onValueChange(
+                            text.filter { it.isDigit() || (decimal && (it == ',' || it == '.')) }.take(HELPER_DIGITS)
+                        )
+                    },
+                    textStyle = KcalTheme.type.number.copy(color = colors.text),
+                    cursorBrush = SolidColor(colors.text),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
+                        imeAction = ImeAction.Next,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (value.isEmpty()) {
+                    Text("—", style = KcalTheme.type.number, color = colors.text3)
+                }
+            }
+            Text(" $unit", style = KcalTheme.type.macro, color = colors.text3)
+        }
+    }
+}
+
+private const val HELPER_DIGITS = 5
 
 /** Калории цели — крупным числом: это та величина, ради которой шит открывают. */
 @Composable
