@@ -119,12 +119,14 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 | Поиск по своим продуктам (регистр, порядок слов, падежи) | `MatchesQueryTest` |
 | Разбор этикетки: подписи, колонка «на 100 г», арифметика | `LabelParserTest`, `LabelAnchorsTest` |
 | Согласие кадров при съёмке этикетки | `LabelConsensusTest` |
+| Карточка нового продукта: счётчик полей, вопрос перед закрытием | `ScanStateTest` |
 | Штрих-код: контрольная цифра, UPC → EAN-13 | `BarcodeValidatorTest` |
 | Проверка КБЖУ, введённого руками | `NutrimentValidatorTest` |
 | Неделя и версионирование цели, итоги дня | `DiaryRepositoryTest` |
 | Приём по часу, пузырьки, место вопроса о пропуске | `FeedTest` |
 | Ввод веса из строки, форматирование | `WeightInputTest`, `FormatTest` |
-| Экранная модель: отмена удаления, ✓ на клавиатуре, реплика «не нашлось» | `DiaryViewModelTest` |
+| Экранная модель: холодный старт, отмена удаления, ✓ на клавиатуре, реплика «не нашлось» | `DiaryViewModelTest` |
+| Шапка после клавиатуры, подпись над товаром в строке ввода | `HeaderTest`, `ComposerTest` |
 | Шесть моделей персонализации | `NextFoodModelTest`, `CandidateRankerTest`, `PortionMemoryTest`, `MealGapDetectorTest`, `RemainingDayPlannerTest`, `TdeeEstimatorTest` |
 | Пересчёт КБЖУ, ссылки на продукт | `NutrimentsTest`, `FoodRefTest` |
 | Подхват докачанного справочника | `SeedInstallerTest` |
