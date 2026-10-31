@@ -27,3 +27,6 @@ local.properties
 /tools/builddb/.venv/
 /tools/builddb/cache/
 /tools/builddb/out/
+
+# Служебные данные Kotlin Gradle Plugin (сессии и ошибки демона).
+.kotlin/
