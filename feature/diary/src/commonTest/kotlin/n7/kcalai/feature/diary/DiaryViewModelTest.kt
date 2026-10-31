@@ -65,6 +65,37 @@ class DiaryViewModelTest {
         assertEquals(82_400, vm.state.value.lastWeightGrams)
     }
 
+    // --- Очередь отправки --------------------------------------------------------------
+
+    /**
+     * «Не отправлено на сервер… Отправить» — предложение, которое обязано
+     * сработать. Пока сервер не отвечает, кнопка кончилась бы «сервер не ответил»,
+     * и пузырёк был бы только шумом в ленте.
+     */
+    @Test
+    fun `пузырёк про отправку молчит, пока сервер не отвечает`() = runTest(dispatcher) {
+        val outbox = FakeOutbox(OutboxCount(scans = 2, products = 1), serverUp = false)
+        val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
+        vm.onResume()
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.feed.none { it is FeedItem.Outbox })
+    }
+
+    @Test
+    fun `пузырёк про отправку появляется, когда сервер отвечает`() = runTest(dispatcher) {
+        val outbox = FakeOutbox(OutboxCount(scans = 2, products = 1), serverUp = false)
+        val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
+        advanceUntilIdle()
+
+        // Сервер поднялся, пока экран был в фоне: возвращение на экран это замечает.
+        outbox.serverUp = true
+        vm.onResume()
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.feed.any { it is FeedItem.Outbox })
+    }
+
     // --- Холодный старт ------------------------------------------------------------------
 
     /**

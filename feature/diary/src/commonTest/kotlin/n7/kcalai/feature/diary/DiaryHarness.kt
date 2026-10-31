@@ -60,7 +60,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
 
     val today: Long get() = clock.now().toLocalDateTime(zone).date.toEpochDays()
 
-    fun viewModel(dispatcher: CoroutineDispatcher): DiaryViewModel {
+    fun viewModel(dispatcher: CoroutineDispatcher, outbox: DiaryOutbox? = null): DiaryViewModel {
         val personal = PersonalRepository(diaryDao, FakePersonalDao(), bodyMetricDao, goalDao, zone)
         val food = FoodRepository(
             foodDb = FoodDbSource { error("справочник в этих тестах не открывается") },
@@ -75,6 +75,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
             resolver = TextFoodResolver(food, personal),
             personal = personal,
             food = food,
+            outbox = outbox,
             clock = clock,
             zone = zone,
         )
@@ -121,6 +122,13 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
     private companion object {
         const val DAY_MS = 24 * 60 * 60 * 1000L
     }
+}
+
+/** Очередь отправки, у которой сервер то отвечает, то нет. */
+internal class FakeOutbox(var count: OutboxCount, var serverUp: Boolean) : DiaryOutbox {
+    override suspend fun pending(): OutboxCount = count
+    override suspend fun reachable(): Boolean = serverUp
+    override suspend fun send(): OutboxResult = OutboxResult.Sent(count.scans, count.products)
 }
 
 internal class MutableClock(var instant: Instant) : Clock {

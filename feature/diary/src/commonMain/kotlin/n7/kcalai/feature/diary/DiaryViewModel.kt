@@ -7,6 +7,7 @@ import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -318,10 +319,15 @@ class DiaryViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiaryUiState())
 
-    /** Экран снова на виду. Если за это время наступил новый день — переключаемся на него. */
+    /**
+     * Экран снова на виду. Если за это время наступил новый день — переключаемся
+     * на него. И заново спрашиваем сервер: пока экран лежал в фоне, человек мог
+     * прийти домой, в сеть с сервером, — или уйти из неё.
+     */
     fun onResume() {
         val now = clock.todayIn(zone)
         if (now != date.value) date.value = now
+        refreshOutbox()
     }
 
     /**
@@ -428,8 +434,6 @@ class DiaryViewModel(
                 }
                 .collect { answer.value = it }
         }
-
-        refreshOutbox()
 
         // Модели пересчитываются от любого изменения дня или цели. Ставить пересчёт
         // в каждый обработчик по отдельности означало бы рано или поздно забыть один
@@ -930,22 +934,34 @@ class DiaryViewModel(
      *
      * Сессия съёмки пишется на диск в отдельном потоке уже после закрытия экрана,
      * поэтому счёт берётся с паузой — иначе пузырёк не увидел бы только что снятое.
+     *
+     * Пузырёк стоит, только когда слать есть что и сервер отвечает. Служебное
+     * сообщение в ленте уместно, лишь когда по нему можно что-то сделать: с молчащим
+     * сервером «Отправить» кончалось бы «сервер не ответил», а отправку при появлении
+     * сети воркеры и так делают сами.
      */
     private fun refreshOutbox() {
         val source = outbox ?: return
-        viewModelScope.launch {
+        outboxRefresh?.cancel()
+        outboxRefresh = viewModelScope.launch {
             delay(OUTBOX_SETTLE_MS)
-            val count = try {
-                source.pending()
+            val shown = try {
+                val count = source.pending()
+                count.takeUnless { it.isEmpty || !source.reachable() }
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {
                 Log.e(TAG, "очередь отправки не посчиталась", error)
-                return@launch
+                null
             }
-            outboxItem.value = if (count.isEmpty) null else FeedItem.Outbox(count, sending = false)
+            // Идущую отправку не перебиваем: её итог придёт ответом в ленте.
+            if (outboxItem.value?.sending == true) return@launch
+            outboxItem.value = shown?.let { FeedItem.Outbox(it, sending = false) }
         }
     }
+
+    /** Последний пересчёт очереди: новый отменяет прошлый, ждущий ответа сервера. */
+    private var outboxRefresh: Job? = null
 
     /** Тап по «Отправить»: та же отправка, что у воркеров, только с ответом в ленте. */
     fun onSendOutbox() {

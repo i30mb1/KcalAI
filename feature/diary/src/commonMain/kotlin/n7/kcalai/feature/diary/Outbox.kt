@@ -23,5 +23,14 @@ sealed interface OutboxResult {
  */
 interface DiaryOutbox {
     suspend fun pending(): OutboxCount
+
+    /**
+     * Отвечает ли сервер прямо сейчас.
+     *
+     * Пузырёк с кнопкой «Отправить» — предложение, которое обязано сработать:
+     * пока сервер не отвечает, он только шумит в ленте.
+     */
+    suspend fun reachable(): Boolean
+
     suspend fun send(): OutboxResult
 }

@@ -22,6 +22,8 @@ class Outbox(
         products = container.database.contributionDao().pendingCount(),
     )
 
+    override suspend fun reachable(): Boolean = container.serverProbe.reachable()
+
     override suspend fun send(): OutboxResult {
         val scans = ScanUploadWorker.uploadPending(context, container)
         val products = ContributionWorker.uploadPending(container)

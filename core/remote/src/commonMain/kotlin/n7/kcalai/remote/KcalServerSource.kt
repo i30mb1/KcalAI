@@ -27,7 +27,7 @@ import n7.kcalai.repositories.RemoteProductSource
 class KcalServerSource(
     private val baseUrl: String?,
     private val userAgent: String,
-) : RemoteProductSource, ContributionUploader, SeedSource, ScanUploader {
+) : RemoteProductSource, ContributionUploader, SeedSource, ScanUploader, ServerProbe {
 
     private val root: String? get() = baseUrl?.trim()?.trimEnd('/')?.takeIf { it.isNotEmpty() }
 
@@ -74,6 +74,15 @@ class KcalServerSource(
     override suspend fun downloadSeed(manifest: SeedManifest, to: String): Boolean =
         Http.download(manifest.url, userAgent, to)
 
+    /**
+     * Любой HTTP-ответ — сервер на месте, даже 404: справочник на него могли
+     * ещё не положить. Нет ответа — сети нет или сервер выключен.
+     */
+    override suspend fun reachable(): Boolean {
+        val base = root ?: return false
+        return Http.get("$base/v1/seed/manifest.json", userAgent) != null
+    }
+
     override suspend fun uploadScan(id: String, readings: String, frames: List<ScanFrame>): Boolean {
         val base = root ?: return false
         val response = Http.postMultipart(
@@ -113,6 +122,11 @@ interface SeedSource {
 }
 
 class ScanFrame(val name: String, val bytes: ByteArray)
+
+/** Отвечает ли свой сервер — чтобы не предлагать отправку, которая не сработает. */
+fun interface ServerProbe {
+    suspend fun reachable(): Boolean
+}
 
 /** Сессия съёмки этикетки уезжает на сервер целиком. `true` — принято (в том числе повторно). */
 fun interface ScanUploader {
