@@ -50,6 +50,8 @@ junitVersion = "1.1.5"
 # а без него инструментальный запуск падает на ClassNotFoundException.
 testRunner = "1.5.2"
 espressoCore = "3.5.1"
+# Пара к раннеру 1.5.x: водит собранное приложение снаружи, как человек пальцем.
+uiautomator = "2.3.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -107,9 +109,12 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "testRunner" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+# Отдельный модуль тестов против собранного приложения — :smoke.
+android-test = { id = "com.android.test", version.ref = "agp" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 # Выгрузка схемы базы в schemas/: по ней строятся и проверяются миграции.
 room = { id = "androidx.room", version.ref = "room" }

@@ -1,0 +1,14 @@
+# Сканер штрих-кода (ML Kit) — и в сканере кода, и попутно в съёмке этикетки.
+#
+# ML Kit собирает себя рефлексией: регистраторы компонентов перечислены по именам
+# в meta-data манифеста (com.google.firebase.components:…), создаются через
+# Class.forName и связываются через интерфейсы. R8 в полном режиме этих обращений
+# не видит: он переименовал методы регистраторов и слил внутренние классы, и
+# release падал с NullPointerException в MLTaskExecutor при первом же открытии
+# камеры — и сканера кода, и карточки нового продукта. Debug-сборка, собранная
+# без R8, работала, поэтому падение не было видно при разработке. Ловит его
+# ScannersOpenTest в :smoke — он открывает оба сканера в минифицированной сборке.
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_** { *; }
+-keep class com.google.firebase.components.** { *; }
+-keep class * implements com.google.firebase.components.ComponentRegistrar { <init>(); *; }

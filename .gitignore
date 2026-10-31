@@ -5,6 +5,7 @@
 /app/build
 /core/*/build
 /feature/*/build
+/smoke/build
 /build-logic/build
 /server/build
 /server/.gradle

@@ -102,6 +102,7 @@ cd server; .\gradlew.bat run          # http://0.0.0.0:8080, данные в ser
 | `:core:ui` | Тема, типографика, анимации; персонажи ленты — Яйцо, Масло, Зёрнышко — по папке на каждого в `mascot/` |
 | `:feature:diary` | Главный экран: лента, композер, шиты цели и правки |
 | `:feature:scanner` | Камера: штрих-код, съёмка этикетки, консенсус по кадрам |
+| `:smoke` | Сборка для людей на устройстве: минифицированный release, сканеры открываются |
 
 Справочная база собирается скриптом в `tools/builddb/` и кладётся в `app/src/main/assets/seed.db`. Контракт сервера — `docs/server-contract.md`. Дизайн и планы — в `specs/`.
 
@@ -115,7 +116,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat testDebugUnitTest
 ```
 
-Сборка для Google Play — `.\gradlew.bat :app:bundleRelease`. Её подписывает ключ загрузки: путь, алиас и пароли берутся из `~/.gradle/gradle.properties` (`kcal.upload.storeFile`, `kcal.upload.storePassword`, `kcal.upload.keyAlias`, `kcal.upload.keyPassword`). Адрес локального сервера в release не попадает. Тексты и графика страницы лежат в `fastlane/metadata/android/ru-RU`, иконку и баннер перерисовывает `python tools/play/render_graphics.py`, скриншоты — `python tools/play/render_screenshots.py` (оба через headless Edge или Chrome), политика конфиденциальности — в `docs/privacy-policy.md`.
+Сборка для Google Play — `.\gradlew.bat :app:bundleRelease`. Её подписывает ключ загрузки: путь, алиас и пароли берутся из `~/.gradle/gradle.properties` (`kcal.upload.storeFile`, `kcal.upload.storePassword`, `kcal.upload.keyAlias`, `kcal.upload.keyPassword`). Адрес локального сервера в release не попадает. Перед загрузкой — прогон `:smoke` (ниже): что R8 сломал в release, в debug не видно. Тексты и графика страницы лежат в `fastlane/metadata/android/ru-RU`, иконку и баннер перерисовывает `python tools/play/render_graphics.py`, скриншоты — `python tools/play/render_screenshots.py` (оба через headless Edge или Chrome), политика конфиденциальности — в `docs/privacy-policy.md`.
 
 Юнит-тесты покрывают главные правила приложения и не требуют устройства:
 
@@ -143,3 +144,5 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 Без юнит-тестов остался `FoodRepository.search` (порядок источников) — ему нужен SQLite на JVM. `DiaryViewModelTest` собирает экранную модель на настоящих репозиториях поверх хранилища в памяти (`DiaryHarness`), справочник в нём не открывается. Инструментальный `LabelReadingTest` в `:feature:scanner` гоняет распознавание на реальных снимках этикеток и требует устройство.
 
 Схема каждой версии базы лежит в `core/database/schemas/` и попадает в git (`SchemaExportTest` проверяет, что схема текущей версии выгружена). Схему меняют только миграциями: поднять `KCAL_DB_VERSION`, добавить `AutoMigration` в `@Database` или написать `Migration`, собрать `:core:database` и закоммитить новую схему. Стирается база только при понижении версии — через Google Play его не бывает. Инструментальный `UpgradeTest` в `:core:database` проверяет, что база прошлой версии без миграции не открывается молча пустой: `ANDROID_SERIAL=<эмулятор> gradlew :core:database:connectedAndroidDeviceTest`.
+
+Сборку для людей проверяет модуль `:smoke`. R8 переименовывает и вырезает то, что библиотеки вызывают по имени (ML Kit собирает себя рефлексией), и ломается это только в минифицированной сборке. `:smoke` ставит release, подписанный отладочным ключом, под id `n7.kcalai.minified` — рядом с настоящим приложением, которое прогон не трогает, — и через UiAutomator открывает оба сканера (`ScannersOpenTest`). Нужна камера, у эмулятора она есть: `ANDROID_SERIAL=<эмулятор> gradlew :smoke:connectedMinifiedAndroidTest`.

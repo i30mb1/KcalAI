@@ -56,6 +56,18 @@ android {
                 enable = true
             }
         }
+        // Release, каким его получат люди, — для проверки на устройстве (:smoke).
+        // R8 ломает то, что библиотеки вызывают по имени, и видно это только в
+        // минифицированной сборке. Подписана отладочным ключом и ставится под своим
+        // id рядом с настоящим приложением: после прогона тест удаляет установленное,
+        // и дневник в n7.kcalai не задет.
+        create("minified") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".minified"
+            signingConfig = signingConfigs.getByName("debug")
+            // :core:ocr — обычная Android-библиотека, у неё только debug и release.
+            matchingFallbacks += "release"
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
