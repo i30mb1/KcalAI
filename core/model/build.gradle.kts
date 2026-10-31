@@ -1,7 +1,9 @@
 plugins {
-    id("n7.kcalai.android-library")
+    id("n7.kcalai.kmp-library")
 }
 
-android {
-    namespace = "n7.kcalai.model"
+kotlin {
+    android {
+        namespace = "n7.kcalai.model"
+    }
 }

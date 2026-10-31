@@ -1,8 +1,8 @@
 package n7.kcalai.model
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertThrows
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.Test
 
 class NutrimentsTest {
 
@@ -64,7 +64,7 @@ class NutrimentsTest {
 
     @Test
     fun `отрицательная масса отвергается`() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             buckwheat.forGrams(-1)
         }
     }
