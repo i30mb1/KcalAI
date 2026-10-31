@@ -1,8 +1,8 @@
 package n7.kcalai.fooddb
 
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 /**
  * Поиск по своим продуктам.

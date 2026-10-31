@@ -3,9 +3,10 @@ agp = "9.3.2"
 # Версия Kotlin, встроенного в AGP 9.3.2. Объявлена только ради compose-компилятора:
 # сам org.jetbrains.kotlin.android применять нельзя — он сломает сборку.
 kotlin = "2.2.10"
-# Обязана быть парной встроенному в AGP 9.3.2 Kotlin 2.2.10: сам AGP пиннит
-# symbol-processing-gradle-plugin:2.2.10-2.0.2. Любая другая версия не соберётся.
-ksp = "2.2.10-2.0.2"
+# AGP 9.3.2 тянет 2.2.10-2.0.2, но та падает на KMP-цели android
+# (ClassCastException KotlinMultiplatformAndroidCompilationImpl). С 2.3 версия KSP
+# не привязана к версии Kotlin, и явная 2.3.x перекрывает транзитивную.
+ksp = "2.3.10"
 room = "2.8.5"
 sqlite = "2.7.1"
 # 1.11.0 требует kotlin-stdlib 2.2.20 — новее встроенного в AGP компилятора 2.2.10.

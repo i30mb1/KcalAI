@@ -9,6 +9,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import n7.kcalai.database.KcalDatabase
+import n7.kcalai.database.buildKcalDatabase
 import n7.kcalai.fooddb.FoodDb
 import n7.kcalai.fooddb.FoodDbFactory
 import n7.kcalai.fooddb.SeedInstaller
@@ -56,7 +57,7 @@ class AppContainer(context: Context) {
         }
     }
 
-    val database: KcalDatabase by lazy { KcalDatabase.build(appContext) }
+    val database: KcalDatabase by lazy { buildKcalDatabase(appContext) }
 
     /**
      * Свой сервер. Пока пуст — источник просто пропускается, и цепочка идёт в OFF.
