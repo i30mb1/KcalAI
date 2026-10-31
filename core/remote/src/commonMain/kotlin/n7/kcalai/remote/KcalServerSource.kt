@@ -1,16 +1,16 @@
 package n7.kcalai.remote
 
-import android.util.Log
-import java.io.File
-import java.net.HttpURLConnection
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import n7.kcalai.database.ContributionEntity
+import n7.kcalai.model.Log
 import n7.kcalai.model.Nutriments
 import n7.kcalai.model.ProductOrigin
 import n7.kcalai.repositories.NutrimentValidator
 import n7.kcalai.repositories.RemoteProduct
 import n7.kcalai.repositories.RemoteProductSource
-import org.json.JSONArray
-import org.json.JSONObject
 
 /**
  * Собранное из вкладов пользователей — то, чего в Open Food Facts нет.
@@ -37,42 +37,8 @@ class KcalServerSource(
         val response = Http.get("$base/v1/products/$gtin", userAgent) ?: return null
         // 404 — штатный ответ «такого у нас нет», и отличать его от сбоя незачем:
         // дальше в обоих случаях идёт OFF.
-        if (response.code == HttpURLConnection.HTTP_NOT_FOUND || !response.isSuccess) return null
-
-        return try {
-            parse(gtin, JSONObject(response.body))
-        } catch (error: org.json.JSONException) {
-            Log.w(TAG, "ответ сервера по $gtin не разобрался", error)
-            null
-        }
-    }
-
-    /**
-     * Сервер отдаёт значения уже в наших единицах — калории целыми, макросы в сотых
-     * грамма. Проверка всё равно выполняется: свой сервер это не гарантия
-     * от собственной ошибки, а цена проверки — четыре сравнения.
-     */
-    private fun parse(gtin: String, json: JSONObject): RemoteProduct? {
-        val name = json.firstNonBlank("name") ?: return null
-        val nutriments = Nutriments(
-            kcal100 = json.optInt("kcal100", -1),
-            prot100 = json.optInt("prot100", 0),
-            fat100 = json.optInt("fat100", 0),
-            carb100 = json.optInt("carb100", 0),
-        )
-        if (!NutrimentValidator.check(nutriments).valid) {
-            Log.w(TAG, "$gtin отброшен: сервер прислал КБЖУ вне допустимого")
-            return null
-        }
-
-        return RemoteProduct(
-            gtin = gtin,
-            name = name,
-            brand = json.firstNonBlank("brand"),
-            nutriments = nutriments,
-            servingG = json.optInt("servingG", 0).takeIf { it > 0 },
-            origin = ProductOrigin.SERVER,
-        )
+        if (!response.isSuccess) return null
+        return parseServerProduct(gtin, response.body)
     }
 
     /**
@@ -86,9 +52,7 @@ class KcalServerSource(
         val base = root ?: return emptySet()
         if (items.isEmpty()) return emptySet()
 
-        val payload = JSONArray().apply {
-            items.forEach { put(it.toJson()) }
-        }.toString()
+        val payload = contributionsJson(items)
 
         val response = Http.postJson("$base/v1/contributions", userAgent, payload) ?: return emptySet()
         if (!response.isSuccess) {
@@ -96,17 +60,7 @@ class KcalServerSource(
             return emptySet()
         }
 
-        return try {
-            val accepted = JSONObject(response.body).optJSONArray("accepted") ?: return emptySet()
-            buildSet {
-                for (index in 0 until accepted.length()) add(accepted.getString(index))
-            }
-        } catch (error: org.json.JSONException) {
-            // Отправка прошла, а подтверждение не разобралось. Считаем, что не ушло:
-            // повторить дешевле, чем потерять вклад.
-            Log.w(TAG, "подтверждение отправки не разобралось", error)
-            emptySet()
-        }
+        return parseAccepted(response.body)
     }
 
     override suspend fun seedManifest(): SeedManifest? {
@@ -114,22 +68,10 @@ class KcalServerSource(
         val response = Http.get("$base/v1/seed/manifest.json", userAgent) ?: return null
         if (!response.isSuccess) return null
 
-        return try {
-            val json = JSONObject(response.body)
-            val url = json.getString("url").let { if (it.startsWith("http")) it else base + it }
-            SeedManifest(
-                version = json.optInt("version", 0),
-                sha256 = json.getString("sha256"),
-                size = json.optLong("size", 0),
-                url = url,
-            )
-        } catch (error: org.json.JSONException) {
-            Log.w(TAG, "манифест справочника не разобрался", error)
-            null
-        }
+        return parseManifest(base, response.body)
     }
 
-    override suspend fun downloadSeed(manifest: SeedManifest, to: File): Boolean =
+    override suspend fun downloadSeed(manifest: SeedManifest, to: String): Boolean =
         Http.download(manifest.url, userAgent, to)
 
     override suspend fun uploadScan(id: String, readings: String, frames: List<ScanFrame>): Boolean {
@@ -143,21 +85,6 @@ class KcalServerSource(
         ) ?: return false
         if (!response.isSuccess) Log.i(TAG, "сессия $id не принята: HTTP ${response.code}")
         return response.isSuccess
-    }
-
-    private fun ContributionEntity.toJson(): JSONObject = JSONObject().apply {
-        put("gtin", gtin)
-        put("name", name)
-        put("kcal100", kcal100)
-        put("prot100", prot100)
-        put("fat100", fat100)
-        put("carb100", carb100)
-        servingG?.let { put("servingG", it) }
-        put("createdAt", createdAt)
-    }
-
-    private companion object {
-        const val TAG = "KcalServerSource"
     }
 }
 
@@ -181,7 +108,8 @@ data class SeedManifest(val version: Int, val sha256: String, val size: Long, va
 /** Свежий справочник с сервера. `null`/`false` — сервера нет или он молчит; это штатно. */
 interface SeedSource {
     suspend fun seedManifest(): SeedManifest?
-    suspend fun downloadSeed(manifest: SeedManifest, to: File): Boolean
+    /** @param to путь к файлу, куда лечь закачке; при неудаче файла там нет. */
+    suspend fun downloadSeed(manifest: SeedManifest, to: String): Boolean
 }
 
 class ScanFrame(val name: String, val bytes: ByteArray)
@@ -190,3 +118,81 @@ class ScanFrame(val name: String, val bytes: ByteArray)
 fun interface ScanUploader {
     suspend fun uploadScan(id: String, readings: String, frames: List<ScanFrame>): Boolean
 }
+
+private const val TAG = "KcalServerSource"
+
+/**
+ * Сервер отдаёт значения уже в наших единицах — калории целыми, макросы в сотых
+ * грамма. Проверка всё равно выполняется: свой сервер это не гарантия
+ * от собственной ошибки, а цена проверки — четыре сравнения.
+ */
+internal fun parseServerProduct(gtin: String, body: String): RemoteProduct? {
+    val json = parseJsonObject(body) ?: run {
+        Log.w(TAG, "ответ сервера по $gtin не разобрался")
+        return null
+    }
+    val name = json.firstNonBlank("name") ?: return null
+    val nutriments = Nutriments(
+        kcal100 = json.int("kcal100", -1),
+        prot100 = json.int("prot100", 0),
+        fat100 = json.int("fat100", 0),
+        carb100 = json.int("carb100", 0),
+    )
+    if (!NutrimentValidator.check(nutriments).valid) {
+        Log.w(TAG, "$gtin отброшен: сервер прислал КБЖУ вне допустимого")
+        return null
+    }
+
+    return RemoteProduct(
+        gtin = gtin,
+        name = name,
+        brand = json.firstNonBlank("brand"),
+        nutriments = nutriments,
+        servingG = json.int("servingG", 0).takeIf { it > 0 },
+        origin = ProductOrigin.SERVER,
+    )
+}
+
+/** GTIN'ы, которые сервер подтвердил. */
+internal fun parseAccepted(body: String): Set<String> {
+    val accepted = parseJsonObject(body)?.array("accepted") ?: run {
+        // Отправка прошла, а подтверждение не разобралось. Считаем, что не ушло:
+        // повторить дешевле, чем потерять вклад.
+        Log.w(TAG, "подтверждение отправки не разобралось")
+        return emptySet()
+    }
+    return accepted.mapNotNullTo(mutableSetOf()) { (it as? JsonPrimitive)?.content }
+}
+
+internal fun parseManifest(base: String, body: String): SeedManifest? {
+    val json = parseJsonObject(body)
+    val url = json?.string("url")
+    val sha256 = json?.string("sha256")
+    if (url == null || sha256 == null) {
+        Log.w(TAG, "манифест справочника не разобрался")
+        return null
+    }
+    return SeedManifest(
+        version = json.int("version", 0),
+        sha256 = sha256,
+        size = json.long("size") ?: 0,
+        url = if (url.startsWith("http")) url else base + url,
+    )
+}
+
+/** Тело `POST /v1/contributions` в единицах контракта. */
+internal fun contributionsJson(items: List<ContributionEntity>): String =
+    JsonArray(
+        items.map { item ->
+            buildJsonObject {
+                put("gtin", item.gtin)
+                put("name", item.name)
+                put("kcal100", item.kcal100)
+                put("prot100", item.prot100)
+                put("fat100", item.fat100)
+                put("carb100", item.carb100)
+                item.servingG?.let { put("servingG", it) }
+                put("createdAt", item.createdAt)
+            }
+        },
+    ).toString()

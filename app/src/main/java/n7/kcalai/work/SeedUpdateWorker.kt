@@ -40,7 +40,7 @@ class SeedUpdateWorker(
         }
 
         val tmp = File(dir, "seed.db.download")
-        if (!container.seedSource.downloadSeed(manifest, tmp)) {
+        if (!container.seedSource.downloadSeed(manifest, tmp.absolutePath)) {
             tmp.delete()
             return Result.success()
         }
