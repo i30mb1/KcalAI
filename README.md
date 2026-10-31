@@ -141,3 +141,5 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 | Сервер: маршруты, хранилище, GTIN | `server/src/test` (`cd server; .\gradlew.bat test`) |
 
 Без юнит-тестов остался `FoodRepository.search` (порядок источников) — ему нужен SQLite на JVM. `DiaryViewModelTest` собирает экранную модель на настоящих репозиториях поверх хранилища в памяти (`DiaryHarness`), справочник в нём не открывается. Инструментальный `LabelReadingTest` в `:feature:scanner` гоняет распознавание на реальных снимках этикеток и требует устройство.
+
+Схема каждой версии базы лежит в `core/database/schemas/` и попадает в git (`SchemaExportTest` проверяет, что схема текущей версии выгружена). Схему меняют только миграциями: поднять `KCAL_DB_VERSION`, добавить `AutoMigration` в `@Database` или написать `Migration`, собрать `:core:database` и закоммитить новую схему. Стирается база только при понижении версии — через Google Play его не бывает. Инструментальный `UpgradeTest` в `:core:database` проверяет, что база прошлой версии без миграции не открывается молча пустой: `ANDROID_SERIAL=<эмулятор> gradlew :core:database:connectedAndroidDeviceTest`.

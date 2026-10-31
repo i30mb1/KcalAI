@@ -111,5 +111,7 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+# Выгрузка схемы базы в schemas/: по ней строятся и проверяются миграции.
+room = { id = "androidx.room", version.ref = "room" }
 # Начиная с Kotlin 2.0 AGP требует его явно при buildFeatures.compose = true.
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

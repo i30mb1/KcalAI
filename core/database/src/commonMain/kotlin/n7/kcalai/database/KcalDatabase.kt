@@ -22,8 +22,8 @@ import kotlinx.coroutines.IO
         RankerStateEntity::class,
         MealGapDismissEntity::class,
     ],
-    version = 4,
-    exportSchema = false,
+    version = KCAL_DB_VERSION,
+    exportSchema = true,
 )
 @ConstructedBy(KcalDatabaseConstructor::class)
 abstract class KcalDatabase : RoomDatabase() {
@@ -36,6 +36,9 @@ abstract class KcalDatabase : RoomDatabase() {
     abstract fun personalDao(): PersonalDao
 }
 
+/** Версия схемы базы. Константой — её читают тесты обновления и выгрузки схемы. */
+const val KCAL_DB_VERSION = 4
+
 /** Реализацию для каждой платформы генерирует Room. */
 @Suppress("KotlinNoActualForExpect")
 expect object KcalDatabaseConstructor : RoomDatabaseConstructor<KcalDatabase> {
@@ -47,11 +50,24 @@ expect object KcalDatabaseConstructor : RoomDatabaseConstructor<KcalDatabase> {
  *
  * Тот же bundled-драйвер, что и у справочника: системный SQLite на части
  * устройств собран без FTS5, и полагаться на него нельзя.
+ *
+ * Обновление базы — только миграциями. Приложение в Google Play, и в базе
+ * дневник людей: «пересоздать при смене версии» стирало бы его у каждого,
+ * кто обновился, молча и навсегда. Забытая миграция теперь падает громко,
+ * ещё у разработчика. Как менять схему:
+ *
+ * 1. поднять [KCAL_DB_VERSION];
+ * 2. добавить в `@Database` `autoMigrations = [AutoMigration(from = N, to = N + 1)]`
+ *    или, если Room сам не справится (переименование, перенос данных),
+ *    написать `Migration` и передать её в `addMigrations`;
+ * 3. собрать модуль — схема новой версии появится в `schemas/` — и закоммитить её.
+ *
+ * Стирается база только при понижении версии: через Google Play его не бывает,
+ * а разработчику, поставившему старую сборку поверх новой, лучше чистая база,
+ * чем падение на старте.
  */
 internal fun RoomDatabase.Builder<KcalDatabase>.configured(): KcalDatabase =
     setDriver(BundledSQLiteDriver())
         .setQueryCoroutineContext(Dispatchers.IO)
-        // Приложение не выпущено: пересоздать базу дешевле, чем писать
-        // миграции для схемы, которая ещё меняется каждый день.
-        .fallbackToDestructiveMigration(dropAllTables = true)
+        .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
         .build()
