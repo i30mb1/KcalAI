@@ -3,11 +3,11 @@ package n7.kcalai.feature.scanner
 import n7.kcalai.model.ProductDraft
 import n7.kcalai.repositories.LabelReading
 import n7.kcalai.repositories.LabelTrace
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 /**
  * Согласие кадров при съёмке этикетки.
@@ -67,8 +67,8 @@ class LabelConsensusTest {
         consensus.add(frame(fat = null))
         val verdict = consensus.add(frame())
 
-        assertTrue("калории набрали три голоса своим чередом", verdict.kcal.settled)
-        assertFalse("жиры — нет: прочитаны по-разному", verdict.fat.settled)
+        assertTrue(verdict.kcal.settled, "калории набрали три голоса своим чередом")
+        assertFalse(verdict.fat.settled, "жиры — нет: прочитаны по-разному")
         assertFalse(verdict.settled)
     }
 
@@ -82,7 +82,7 @@ class LabelConsensusTest {
         val verdict = consensus.add(frame(kcal = 88))
 
         assertTrue(verdict.kcal.settled)
-        assertEquals("представитель кучи — самое частое", 88, verdict.kcal.value)
+        assertEquals(88, verdict.kcal.value, "представитель кучи — самое частое")
     }
 
     /**
@@ -102,7 +102,7 @@ class LabelConsensusTest {
         consensus.add(frame(kcal = 486, prot = 750, fat = 2_440, carb = 6_000))
         val verdict = consensus.add(frame(kcal = 486, prot = 750, fat = 2_400, carb = 6_000))
 
-        assertTrue("три прочтения одного числа дают согласие", verdict.fat.settled)
+        assertTrue(verdict.fat.settled, "три прочтения одного числа дают согласие")
         assertEquals(2_400, verdict.fat.value)
     }
 
@@ -115,7 +115,7 @@ class LabelConsensusTest {
         consensus.add(frame(fat = 3_000))
         val verdict = consensus.add(frame(fat = 3_000))
 
-        assertFalse("двух голосов из трёх не хватает", verdict.fat.settled)
+        assertFalse(verdict.fat.settled, "двух голосов из трёх не хватает")
     }
 
     @Test
@@ -151,7 +151,7 @@ class LabelConsensusTest {
         val verdict = consensus.add(frame(prot = 6_000))
 
         assertTrue(verdict.prot.settled)
-        assertFalse("сошлись все четыре поля, но между собой они не сходятся", verdict.settled)
+        assertFalse(verdict.settled, "сошлись все четыре поля, но между собой они не сходятся")
     }
 
     @Test
@@ -172,11 +172,11 @@ class LabelConsensusTest {
         val consensus = LabelConsensus()
 
         val first = consensus.add(frame(names = listOf("Тврг", "Творог")))
-        assertNull("по одному кадру название — догадка", first.name)
+        assertNull(first.name, "по одному кадру название — догадка")
         assertEquals(listOf("Тврг", "Творог"), first.names)
 
         val second = consensus.add(frame(names = listOf("Творог", "Тваpог")))
         assertEquals("Творог", second.name)
-        assertEquals("догадки, не пережившие смену кадра, из чипсов уходят", listOf("Творог"), second.names)
+        assertEquals(listOf("Творог"), second.names, "догадки, не пережившие смену кадра, из чипсов уходят")
     }
 }

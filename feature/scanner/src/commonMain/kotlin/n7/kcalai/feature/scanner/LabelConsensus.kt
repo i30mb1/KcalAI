@@ -196,7 +196,7 @@ internal class LabelConsensus(
     private fun countNames(): Map<String, Int> {
         val counts = LinkedHashMap<String, Int>()
         readings.forEach { reading ->
-            reading.names.forEach { name -> counts.merge(name, 1, Int::plus) }
+            reading.names.forEach { name -> counts[name] = (counts[name] ?: 0) + 1 }
         }
         return counts
     }

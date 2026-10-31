@@ -104,10 +104,10 @@ import n7.kcalai.ui.colors
  *        куда класть продукт, решает дневник.
  */
 @Composable
-fun LabelScannerDialog(
+actual fun LabelScannerDialog(
     onSave: (gtin: String?, name: String, nutriments: Nutriments) -> Unit,
     onDismiss: () -> Unit,
-    gtin: String? = null,
+    gtin: String?,
 ) {
     val context = LocalContext.current
     val state = rememberScanState(gtin)
@@ -608,7 +608,7 @@ private fun Note(text: String, color: Color) {
  * маршрут разбора, что принято за ноль. В дневник отсюда не попадает ничего.
  */
 @Composable
-fun LabelDebugDialog(onRead: (LabelReading) -> Unit, onDismiss: () -> Unit) {
+actual fun LabelDebugDialog(onRead: (LabelReading) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val state = rememberScanState(null)
     val deliver by rememberUpdatedState(onRead)

@@ -14,7 +14,11 @@ kotlin {
     iosSimulatorArm64()
 
     android {
-        compileSdk = 36
+        compileSdk {
+            version = release(36) {
+                minorApiLevel = 1
+            }
+        }
         minSdk = 26
         withHostTest {
             // Общий код пишет в журнал, а в заглушках android.jar Log.i бросает.

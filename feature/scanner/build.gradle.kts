@@ -1,49 +1,54 @@
 plugins {
-    id("n7.kcalai.android-library")
-    alias(libs.plugins.compose.compiler)
+    id("n7.kcalai.kmp-compose")
 }
 
-android {
-    namespace = "n7.kcalai.feature.scanner"
+kotlin {
+    android {
+        namespace = "n7.kcalai.feature.scanner"
+        // Без этого в тестовый APK не попадают assets — фотографии этикеток.
+        androidResources { enable = true }
 
-    buildFeatures {
-        compose = true
+        // Распознавание проверяется только на устройстве: движок нативный, и подменить
+        // его нечем — проверять разбор на выдуманных строках значит проверять разбор,
+        // а не распознавание.
+        withDeviceTest {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
     }
-}
 
-dependencies {
-    // Валидатор контрольной цифры живёт там же, где остальная работа с продуктами:
-    // код, не прошедший проверку, не должен покидать сканер.
-    api(project(":core:repositories"))
-    // Распознавание текста на этикетке: PP-OCRv5 через LiteRT.
-    api(project(":core:ocr"))
-    // Палитра и типографика: сканер — такой же экран приложения, а не системный
-    // оверлей, и выглядеть должен так же.
-    api(project(":core:ui"))
+    sourceSets {
+        commonMain.dependencies {
+            // Валидатор контрольной цифры живёт там же, где остальная работа с продуктами:
+            // код, не прошедший проверку, не должен покидать сканер.
+            api(project(":core:repositories"))
+            // Палитра и типографика: сканер — такой же экран приложения, а не системный
+            // оверлей, и выглядеть должен так же.
+            api(project(":core:ui"))
 
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.material.icons.extended)
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.kotlinx.coroutines.android)
+            implementation(libs.cmp.material3)
+            implementation(libs.cmp.material.icons.extended)
+            implementation(libs.cmp.lifecycle.runtime.compose)
+        }
+        androidMain.dependencies {
+            // Распознавание текста на этикетке: PP-OCRv5 через LiteRT.
+            implementation(project(":core:ocr"))
 
-    implementation(libs.androidx.camera.core)
-    implementation(libs.androidx.camera.camera2)
-    implementation(libs.androidx.camera.lifecycle)
-    implementation(libs.androidx.camera.compose)
-    // Только штрих-код. Текст на этикетке читает :core:ocr — ML Kit не умеет
-    // кириллицу ни в одном из своих скриптов.
-    implementation(libs.mlkit.barcode.scanning)
+            implementation(libs.androidx.activity.compose)
+            implementation(libs.androidx.core.ktx)
+            implementation(libs.kotlinx.coroutines.android)
 
-    debugImplementation(libs.androidx.compose.ui.tooling)
-
-    // Распознавание проверяется только на устройстве: движок нативный, и подменить
-    // его нечем — проверять разбор на выдуманных строках значит проверять разбор,
-    // а не распознавание.
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.test.runner)
+            implementation(libs.androidx.camera.core)
+            implementation(libs.androidx.camera.camera2)
+            implementation(libs.androidx.camera.lifecycle)
+            implementation(libs.androidx.camera.compose)
+            // Только штрих-код. Текст на этикетке читает :core:ocr — ML Kit не умеет
+            // кириллицу ни в одном из своих скриптов.
+            implementation(libs.mlkit.barcode.scanning)
+        }
+        getByName("androidDeviceTest").dependencies {
+            implementation(project(":core:ocr"))
+            implementation(libs.androidx.junit)
+            implementation(libs.androidx.test.runner)
+        }
+    }
 }

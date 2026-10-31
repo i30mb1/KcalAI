@@ -64,7 +64,7 @@ import n7.kcalai.ui.WideButton
  * @param onScanned вызывается ровно один раз с уже нормализованным до EAN-13 кодом.
  */
 @Composable
-fun ScannerDialog(
+actual fun ScannerDialog(
     onScanned: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
