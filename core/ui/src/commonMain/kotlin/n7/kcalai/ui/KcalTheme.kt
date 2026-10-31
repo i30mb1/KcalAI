@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
@@ -41,7 +42,9 @@ fun KcalTheme(
     content: @Composable () -> Unit,
 ) {
     val colors = if (darkTheme) DarkKcalColors else LightKcalColors
-    val type = KcalTypography()
+    val text = manrope()
+    val mono = jetBrainsMono()
+    val type = remember(text, mono) { KcalTypography(text, mono) }
 
     CompositionLocalProvider(
         LocalKcalColors provides colors,

@@ -62,6 +62,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
+    packaging {
+        resources {
+            // Compose Resources из KMP-библиотек приезжают дважды: в assets, откуда
+            // их и читают на Android, и Java-ресурсами. Вторая копия — лишние сотни КБ.
+            excludes += "composeResources/**"
+        }
+    }
+
     androidResources {
         // seed.db копируется из assets потоком; несжатый ассет отдаёт честную длину,
         // по которой SeedInstaller решает, нужно ли переустанавливать копию.

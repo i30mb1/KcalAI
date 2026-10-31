@@ -1,9 +1,9 @@
 package n7.kcalai.ui
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontVariation
@@ -11,6 +11,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import n7.kcalai.ui.resources.Res
+import n7.kcalai.ui.resources.jetbrains_mono
+import n7.kcalai.ui.resources.manrope
+import org.jetbrains.compose.resources.Font
+import org.jetbrains.compose.resources.FontResource
 
 /**
  * Один вариативный файл на все веса.
@@ -20,19 +25,21 @@ import androidx.compose.ui.unit.sp
  * пути не предусмотрено: ниже 26 приложение не запускается вовсе.
  */
 @OptIn(ExperimentalTextApi::class)
-private fun variable(resId: Int, weight: Int) = Font(
-    resId = resId,
+@Composable
+private fun variable(font: FontResource, weight: Int) = Font(
+    resource = font,
     weight = FontWeight(weight),
     style = FontStyle.Normal,
     variationSettings = FontVariation.Settings(FontVariation.weight(weight)),
 )
 
 /** Текст: заголовки, названия, подписи фразами. */
-val Manrope = FontFamily(
-    variable(R.font.manrope, 400),
-    variable(R.font.manrope, 500),
-    variable(R.font.manrope, 600),
-    variable(R.font.manrope, 700),
+@Composable
+internal fun manrope() = FontFamily(
+    variable(Res.font.manrope, 400),
+    variable(Res.font.manrope, 500),
+    variable(Res.font.manrope, 600),
+    variable(Res.font.manrope, 700),
 )
 
 /**
@@ -43,9 +50,10 @@ val Manrope = FontFamily(
  * на месте. Плюс капс-подписи моноширинным читаются как технический ярлык,
  * а не как ещё один заголовок, спорящий за внимание.
  */
-val JetBrainsMono = FontFamily(
-    variable(R.font.jetbrains_mono, 500),
-    variable(R.font.jetbrains_mono, 700),
+@Composable
+internal fun jetBrainsMono() = FontFamily(
+    variable(Res.font.jetbrains_mono, 500),
+    variable(Res.font.jetbrains_mono, 700),
 )
 
 /**
@@ -55,11 +63,16 @@ val JetBrainsMono = FontFamily(
  * (11–34sp), и любое «тут на полпункта крупнее» вне этого файла её разваливает.
  */
 @Immutable
-class KcalTypography {
+class KcalTypography(
+    /** Текст — Manrope. Семейства приходят снаружи: шрифт из ресурсов грузится только в композиции. */
+    text: FontFamily = FontFamily.Default,
+    /** Числа и капс — JetBrains Mono. */
+    mono: FontFamily = FontFamily.Monospace,
+) {
 
     /** Подпись капсом: дата в шапке, «сегодня», «новое добавится сюда». */
     val caps = TextStyle(
-        fontFamily = JetBrainsMono,
+        fontFamily = mono,
         fontWeight = FontWeight.W500,
         fontSize = 11.sp,
         lineHeight = 12.sp,
@@ -68,7 +81,7 @@ class KcalTypography {
 
     /** Метка плитки макроса: «БЕЛКИ». Плотнее и жирнее — она короткая и мелкая. */
     val capsTile = TextStyle(
-        fontFamily = JetBrainsMono,
+        fontFamily = mono,
         fontWeight = FontWeight.W700,
         fontSize = 10.sp,
         lineHeight = 11.sp,
@@ -77,7 +90,7 @@ class KcalTypography {
 
     /** «Дневник». */
     val title = TextStyle(
-        fontFamily = Manrope,
+        fontFamily = text,
         fontWeight = FontWeight.W600,
         fontSize = 17.sp,
         lineHeight = 20.sp,
@@ -85,7 +98,7 @@ class KcalTypography {
 
     /** Название приёма в пузырьке, заголовок реплики приложения, заголовок шита. */
     val bubbleTitle = TextStyle(
-        fontFamily = Manrope,
+        fontFamily = text,
         fontWeight = FontWeight.W600,
         fontSize = 14.sp,
         lineHeight = 19.sp,
@@ -93,7 +106,7 @@ class KcalTypography {
 
     /** Фраза в реплике приложения. */
     val body = TextStyle(
-        fontFamily = Manrope,
+        fontFamily = text,
         fontWeight = FontWeight.W400,
         fontSize = 13.5.sp,
         lineHeight = 19.sp,
@@ -101,7 +114,7 @@ class KcalTypography {
 
     /** Чипс продукта и чипс подсказки. */
     val chip = TextStyle(
-        fontFamily = Manrope,
+        fontFamily = text,
         fontWeight = FontWeight.W500,
         fontSize = 12.5.sp,
         lineHeight = 14.sp,
@@ -109,7 +122,7 @@ class KcalTypography {
 
     /** Подпись рядом с числом: «осталось», «перебор». */
     val label = TextStyle(
-        fontFamily = Manrope,
+        fontFamily = text,
         fontWeight = FontWeight.W500,
         fontSize = 11.sp,
         lineHeight = 13.sp,
@@ -117,7 +130,7 @@ class KcalTypography {
 
     /** Строка ввода и кнопки. */
     val input = TextStyle(
-        fontFamily = Manrope,
+        fontFamily = text,
         fontWeight = FontWeight.W500,
         fontSize = 14.sp,
         lineHeight = 18.sp,
@@ -125,7 +138,7 @@ class KcalTypography {
 
     /** Остаток до цели — единственное крупное число на экране. */
     val hero = TextStyle(
-        fontFamily = JetBrainsMono,
+        fontFamily = mono,
         fontWeight = FontWeight.W700,
         fontSize = 30.sp,
         lineHeight = 32.sp,
@@ -134,7 +147,7 @@ class KcalTypography {
 
     /** Число, которое правят прямо сейчас: вес в шите записи, калории в шите цели. */
     val heroInput = TextStyle(
-        fontFamily = JetBrainsMono,
+        fontFamily = mono,
         fontWeight = FontWeight.W700,
         fontSize = 34.sp,
         lineHeight = 38.sp,
@@ -143,7 +156,7 @@ class KcalTypography {
 
     /** Значение на плитке макроса: «101/140». */
     val number = TextStyle(
-        fontFamily = JetBrainsMono,
+        fontFamily = mono,
         fontWeight = FontWeight.W700,
         fontSize = 15.sp,
         lineHeight = 17.sp,
@@ -151,7 +164,7 @@ class KcalTypography {
 
     /** Калории приёма в заголовке пузырька, ккал на чипсе. */
     val numberSmall = TextStyle(
-        fontFamily = JetBrainsMono,
+        fontFamily = mono,
         fontWeight = FontWeight.W700,
         fontSize = 11.sp,
         lineHeight = 13.sp,
@@ -159,7 +172,7 @@ class KcalTypography {
 
     /** Строка макросов пузырька: «Б 65 Ж 40 У 52». */
     val macro = TextStyle(
-        fontFamily = JetBrainsMono,
+        fontFamily = mono,
         fontWeight = FontWeight.W500,
         fontSize = 10.5.sp,
         lineHeight = 12.sp,
@@ -167,7 +180,7 @@ class KcalTypography {
 
     /** Время в углу пузырька. */
     val time = TextStyle(
-        fontFamily = JetBrainsMono,
+        fontFamily = mono,
         fontWeight = FontWeight.W500,
         fontSize = 10.sp,
         lineHeight = 11.sp,
