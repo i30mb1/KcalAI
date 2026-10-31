@@ -13,7 +13,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -138,6 +140,13 @@ data class DiaryUiState(
     /** Нужен шиту цели: расход по факту подставляется в калории одним тапом. */
     val tdee: TdeeEstimate? = null,
     val overlay: Overlay = Overlay.None,
+    /**
+     * База ответила: день, цель и неделя прочитаны.
+     *
+     * До этого экран не рисует ничего — ни нулей в шапке, ни сводки «цель
+     * не задана»: это не пустой день, а ещё не прочитанный.
+     */
+    val loaded: Boolean = false,
 )
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
@@ -207,14 +216,27 @@ class DiaryViewModel(
     private val date = MutableStateFlow(clock.todayIn(zone))
     private val today: Long get() = date.value.toEpochDays()
 
-    private val day = date.flatMapLatest { diary.observeDay(it.toEpochDays()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DayTotals.EMPTY)
+    /**
+     * День, цель и неделя — одним потоком и без выдуманного начального значения.
+     *
+     * `null` — база ещё не ответила. Раньше у каждого потока было своё начальное
+     * «пусто», и на холодном старте экран полсекунды показывал пустой день без
+     * цели, а потом настоящие записи выпрыгивали с анимацией, будто их только
+     * что добавили. Порознь потоки к тому же приходили в любом порядке: неделя
+     * со столбиком за сегодня — и «0 съедено» в шапке над ней.
+     */
+    private val data = date.flatMapLatest { today ->
+        val epochDay = today.toEpochDays()
+        combine(
+            diary.observeDay(epochDay),
+            diary.observeGoal(epochDay),
+            diary.observeWeek(epochDay),
+            ::DayData,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val goal = date.flatMapLatest { diary.observeGoal(it.toEpochDays()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    private val week = date.flatMapLatest { diary.observeWeek(it.toEpochDays()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** Записи сегодняшнего дня — для правил, которым нужен день прямо сейчас. */
+    private val todayEntries: List<DiaryEntryEntity> get() = data.value?.day?.entries.orEmpty()
 
     private val typing = combine(input, answer, scanned, overlay, ::TypingState)
 
@@ -223,19 +245,22 @@ class DiaryViewModel(
         Session(typed, replies, today, pending)
     }
 
-    val state = combine(typingAndReplies, day, goal, personalState, week) {
-        session, dayTotals, dailyGoal, models, days ->
+    val state = combine(typingAndReplies, data, personalState) { session, loaded, models ->
         val (typed, replies, today, pending) = session
+        if (loaded == null) {
+            return@combine DiaryUiState(input = typed.input, date = today, overlay = typed.overlay)
+        }
         DiaryUiState(
             input = typed.input,
-            feed = buildFeed(dayTotals, dailyGoal, days, models, typed, replies, pending),
+            feed = buildFeed(loaded.day, loaded.goal, loaded.week, models, typed, replies, pending),
             composer = composerRow(typed, models),
-            totals = dayTotals.totals,
-            week = days,
+            totals = loaded.day.totals,
+            week = loaded.week,
             date = today,
-            goal = dailyGoal,
+            goal = loaded.goal,
             tdee = models.tdee,
             overlay = typed.overlay,
+            loaded = true,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiaryUiState())
 
@@ -253,6 +278,9 @@ class DiaryViewModel(
      * запрос, на который она отвечает, а не то, что стоит в строке сейчас.
      */
     private class Answer(val query: String, val items: List<ResolvedItem>)
+
+    /** День так, как его отдала база. */
+    private class DayData(val day: DayTotals, val goal: DailyGoalEntity?, val week: List<DaySummary>)
 
     /** То, что живёт только в этой сессии экрана: набор, реплики, дата, очередь. */
     private data class Session(
@@ -327,7 +355,9 @@ class DiaryViewModel(
         // в каждый обработчик по отдельности означало бы рано или поздно забыть один
         // из них и показывать вчерашние предсказания.
         viewModelScope.launch {
-            combine(day, goal) { dayTotals, dailyGoal -> dayTotals to dailyGoal }
+            data.filterNotNull()
+                .map { it.day to it.goal }
+                .distinctUntilChanged()
                 .collect { (dayTotals, _) -> recompute(dayTotals.entries) }
         }
     }
@@ -717,7 +747,7 @@ class DiaryViewModel(
      */
     fun onDeleteEntry(entry: DiaryEntryEntity) {
         overlay.value = Overlay.None
-        val snapshot = day.value.entries.find { it.id == entry.id } ?: entry
+        val snapshot = todayEntries.find { it.id == entry.id } ?: entry
 
         viewModelScope.launch {
             diary.delete(snapshot.id)
@@ -881,14 +911,14 @@ class DiaryViewModel(
                 grams = grams,
                 time = formatTime(nowMillis(), zone),
             )
-            recompute(day.value.entries)
+            recompute(todayEntries)
         }
     }
 
     fun onDismissMealGap(meal: MealType) {
         viewModelScope.launch {
             personal.dismissMealGap(today, meal)
-            recompute(day.value.entries)
+            recompute(todayEntries)
         }
     }
 
@@ -908,7 +938,7 @@ class DiaryViewModel(
      */
     private fun mealForNow(): MealType = mealForHour(
         hour = hourNow(),
-        lastEntry = day.value.entries.lastOrNull(),
+        lastEntry = todayEntries.lastOrNull(),
         nowMillis = nowMillis(),
     )
 

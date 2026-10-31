@@ -19,11 +19,7 @@ import n7.kcalai.model.serialize
 data class DayTotals(
     val entries: List<DiaryEntryEntity>,
     val totals: NutrimentTotals,
-) {
-    companion object {
-        val EMPTY = DayTotals(emptyList(), NutrimentTotals.ZERO)
-    }
-}
+)
 
 /**
  * Калории одного дня — точка графика за неделю.

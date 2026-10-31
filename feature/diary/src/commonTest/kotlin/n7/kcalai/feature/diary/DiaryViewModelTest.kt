@@ -13,6 +13,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -52,6 +53,31 @@ class DiaryViewModelTest {
         assertEquals(82_400, harness.bodyMetricDao.weights[harness.today])
         assertEquals("", vm.state.value.input)
         assertTrue(vm.state.value.feed.any { it is FeedItem.WeightLogged })
+    }
+
+    // --- Холодный старт ------------------------------------------------------------------
+
+    /**
+     * Пока база не ответила, дня ещё нет — и рисовать вместо него пустой день
+     * нельзя. Раньше на каждом холодном старте полсекунды висело «0 съедено»
+     * и «Цель на сегодня не задана», а потом настоящие записи выпрыгивали
+     * с анимацией, будто их только что добавили.
+     */
+    @Test
+    fun `пока день не прочитан из базы, лента не выдумывает пустой день`() = runTest(dispatcher) {
+        harness.addEntry("Гречка отварная", grams = 200, meal = n7.kcalai.model.MealType.LUNCH)
+        harness.diaryDao.holdDay()
+        val vm = screen()
+
+        assertFalse(vm.state.value.loaded)
+        assertTrue(vm.state.value.feed.isEmpty())
+
+        harness.diaryDao.releaseDay()
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.loaded)
+        assertTrue(vm.state.value.feed.any { it is FeedItem.Meal })
+        assertTrue(vm.state.value.feed.none { it is FeedItem.Summary })
     }
 
     // --- Отмена удаления ------------------------------------------------------------------

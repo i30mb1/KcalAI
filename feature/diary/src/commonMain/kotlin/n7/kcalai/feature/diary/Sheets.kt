@@ -95,6 +95,8 @@ fun GoalSheet(
             CapsLabel("с ${formatDayMonthShort(date)}", Modifier.weight(1f))
         }
 
+        // Поля проходятся с клавиатуры подряд — калории, белки, жиры, углеводы:
+        // «далее» вместо «готово», чтобы не тянуться пальцем к каждой плитке.
         KcalField(
             value = kcal,
             onValueChange = { kcal = it },
@@ -108,7 +110,10 @@ fun GoalSheet(
         ) {
             MacroField(Macro.PROTEIN, prot, { prot = it }, focus == GoalField.PROT, Modifier.weight(1f))
             MacroField(Macro.FAT, fat, { fat = it }, focus == GoalField.FAT, Modifier.weight(1f))
-            MacroField(Macro.CARB, carb, { carb = it }, focus == GoalField.CARB, Modifier.weight(1f))
+            MacroField(
+                Macro.CARB, carb, { carb = it }, focus == GoalField.CARB, Modifier.weight(1f),
+                imeAction = ImeAction.Done,
+            )
         }
 
         MacroSplit(
@@ -146,7 +151,9 @@ fun GoalSheet(
                     carb.toIntOrNull() ?: 0,
                 )
             },
-            modifier = Modifier.padding(top = 16.dp),
+            // Во всю ширину, как в шите правки: узкая кнопка у левого края
+            // выглядела недоделанной и терялась под текстом.
+            modifier = Modifier.padding(top = 16.dp).fillMaxWidth(),
         )
     }
 }
@@ -175,6 +182,7 @@ private fun KcalField(
             style = KcalTheme.type.heroInput,
             focused = focused,
             placeholder = "0",
+            imeAction = ImeAction.Next,
             modifier = Modifier.weight(1f),
         )
         Text(
@@ -194,6 +202,7 @@ private fun MacroField(
     onValueChange: (String) -> Unit,
     focused: Boolean,
     modifier: Modifier = Modifier,
+    imeAction: ImeAction = ImeAction.Next,
 ) {
     val palette = macro.colors()
 
@@ -212,6 +221,7 @@ private fun MacroField(
                 style = KcalTheme.type.number,
                 focused = focused,
                 placeholder = "0",
+                imeAction = imeAction,
                 modifier = Modifier.weight(1f),
             )
             Text(" г", style = KcalTheme.type.macro, color = palette.text)
@@ -530,6 +540,7 @@ private fun NumberInput(
     focused: Boolean,
     placeholder: String,
     modifier: Modifier = Modifier,
+    imeAction: ImeAction = ImeAction.Done,
 ) {
     val colors = KcalTheme.colors
     val requester = remember { FocusRequester() }
@@ -549,7 +560,7 @@ private fun NumberInput(
             singleLine = true,
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Number,
-                imeAction = ImeAction.Done,
+                imeAction = imeAction,
             ),
             modifier = Modifier.fillMaxWidth().focusRequester(requester),
         )

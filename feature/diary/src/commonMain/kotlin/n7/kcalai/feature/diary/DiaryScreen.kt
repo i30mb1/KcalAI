@@ -16,18 +16,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
@@ -46,8 +49,14 @@ import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.ui.popIn
 
+/**
+ * @param labelDebug долгое нажатие на камеру открывает отладку разбора этикетки.
+ *        Только в отладочной сборке: человеку из магазина приложений экран
+ *        с моноширинными строками разбора и кнопкой «В лог» ни к чему, а долгое
+ *        нажатие на кнопку — обычный способ узнать, что она делает.
+ */
 @Composable
-fun DiaryRoute(viewModel: DiaryViewModel) {
+fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     // Экран мог пролежать в фоне через полночь — дата пересматривается на каждом возврате.
@@ -73,7 +82,7 @@ fun DiaryRoute(viewModel: DiaryViewModel) {
         onOpenGoal = viewModel::onOpenGoal,
         onOpenScan = viewModel::onOpenScan,
         onOpenLabelScan = viewModel::onOpenLabelScan,
-        onOpenLabelDebug = viewModel::onOpenLabelDebug,
+        onOpenLabelDebug = if (labelDebug) viewModel::onOpenLabelDebug else null,
     )
 
     when (val overlay = state.overlay) {
@@ -141,8 +150,16 @@ fun DiaryScreen(
     onOpenGoal: (GoalField) -> Unit,
     onOpenScan: () -> Unit,
     onOpenLabelScan: () -> Unit,
-    onOpenLabelDebug: () -> Unit,
+    onOpenLabelDebug: (() -> Unit)?,
 ) {
+    // База ещё не ответила. Шапка с нулями и сводка «цель не задана» были бы
+    // неправдой, а через долю секунды их сменили бы настоящие цифры — и записи
+    // дня выпрыгнули бы с анимацией, положенной только новым.
+    if (!state.loaded) {
+        Box(Modifier.fillMaxSize().background(KcalTheme.colors.bg))
+        return
+    }
+
     val listState = rememberLazyListState()
 
     /*
@@ -165,16 +182,36 @@ fun DiaryScreen(
             .collect { collapsed = true }
     }
 
+    // Высота шапки в обоих видах: раскрываясь, она отнимает у ленты разницу.
+    // Пока идёт анимация, высота промежуточная, крайние значения — два вида.
+    var openHeight by remember { mutableIntStateOf(0) }
+    var closedHeight by remember { mutableIntStateOf(0) }
+
     // Клавиатура сворачивает шапку сразу, не дожидаясь, пока лента сдвинется:
     // человек сел писать, и треть экрана под сводкой ему сейчас нужна меньше
     // всего. Раньше шапка уходила только когда набранное вытесняло ленту
     // за край — то есть от случая к случаю.
+    //
+    // Ушла клавиатура — шапка возвращается, если лента и под ней помещается
+    // целиком. Раньше она оставалась свёрнутой до жеста «потянуть вниз»,
+    // о котором никто не знает: утром, с одной репликой в ленте, человек
+    // видел пустой экран без плиток и недели. Петли, от которой предостерегает
+    // комментарий выше, тут нет: раскрытие — разовый ответ на уход клавиатуры,
+    // и только когда места хватает с запасом.
     val ime = WindowInsets.ime
     val density = LocalDensity.current
     LaunchedEffect(ime, density) {
         snapshotFlow { ime.getBottom(density) > 0 }
-            .filter { it }
-            .collect { collapsed = true }
+            .collect { shown ->
+                if (shown) {
+                    collapsed = true
+                } else if (collapsed) {
+                    // Кадр, чтобы лента приняла высоту без клавиатуры.
+                    withFrameNanos { }
+                    val growth = (openHeight - closedHeight).coerceAtLeast(0)
+                    if (headerFits(listState.spareHeight(), growth)) collapsed = false
+                }
+            }
     }
     /*
      * Тем же жестом уходит и клавиатура: раскрыть шапку человек тянется, чтобы
@@ -215,6 +252,13 @@ fun DiaryScreen(
             week = state.week,
             collapsed = collapsed,
             onOpenGoal = onOpenGoal,
+            modifier = Modifier.onSizeChanged { size ->
+                if (collapsed) {
+                    closedHeight = if (closedHeight == 0) size.height else minOf(closedHeight, size.height)
+                } else {
+                    openHeight = maxOf(openHeight, size.height)
+                }
+            },
         )
 
         Feed(
@@ -247,6 +291,23 @@ fun DiaryScreen(
     }
         MascotStage(feed = state.feed, chipOwner = chipOwner(state.composer), anchors = anchors)
     }
+}
+
+/**
+ * Раскрыть ли шапку, когда ушла клавиатура.
+ *
+ * @param spare свободное место под последней репликой, когда лента вся
+ *        на экране; `null` — лента не помещается и со свёрнутой шапкой
+ * @param growth на сколько шапка вырастет, раскрывшись
+ */
+internal fun headerFits(spare: Int?, growth: Int): Boolean = spare != null && spare >= growth
+
+/** Свободное место под последней репликой, если лента вся на экране; иначе `null`. */
+private fun LazyListState.spareHeight(): Int? {
+    if (canScrollBackward || canScrollForward) return null
+    val info = layoutInfo
+    val last = info.visibleItemsInfo.lastOrNull() ?: return info.viewportEndOffset - info.viewportStartOffset
+    return info.viewportEndOffset - info.afterContentPadding - (last.offset + last.size)
 }
 
 /**

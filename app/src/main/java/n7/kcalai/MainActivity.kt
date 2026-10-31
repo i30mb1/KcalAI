@@ -26,6 +26,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             KcalTheme {
                 DiaryRoute(
+                    // Отладка разбора этикетки — инструмент разработчика.
+                    labelDebug = BuildConfig.DEBUG,
                     viewModel = viewModel {
                         DiaryViewModel(
                             diary = container.diaryRepository,

@@ -56,6 +56,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.ui.CapsLabel
@@ -90,7 +91,7 @@ fun Composer(
     onSubmit: () -> Boolean,
     onOpenScan: () -> Unit,
     onOpenLabelScan: () -> Unit,
-    onOpenLabelDebug: () -> Unit,
+    onOpenLabelDebug: (() -> Unit)?,
 ) {
     val colors = KcalTheme.colors
     val requester = remember { FocusRequester() }
@@ -190,6 +191,7 @@ fun Composer(
 
             // Долгое нажатие уводит в отладочную съёмку: кнопок в шапке экран
             // больше не носит, а проверять разбор этикетки по-прежнему нужно.
+            // В сборке для людей жеста нет — см. DiaryRoute.
             Box(
                 modifier = Modifier
                     .size(44.dp)
@@ -248,6 +250,18 @@ private fun HintRow(
     }
 }
 
+/**
+ * Подпись над товаром, который стоит в строке ввода.
+ *
+ * Сюда приходят двумя путями: скан опознал код — или человек только что завёл
+ * продукт с этикетки. Второй по коду не находили, его сохранили, и у развесного
+ * кода нет вовсе — «найдено по коду» над ним путало.
+ */
+internal fun scannedCaption(item: ResolvedItem): String {
+    val head = if (item.source == EntrySource.BARCODE) "найдено по коду" else "продукт сохранён"
+    return if (item.gramsGuessed) "$head · допишите вес" else head
+}
+
 /** Пружина по высоте для expand/shrink: у них свой тип, но характер тот же. */
 private fun SpringSpec<Float>.forInt(): SpringSpec<IntSize> =
     spring(dampingRatio = dampingRatio, stiffness = stiffness, visibilityThreshold = IntSize(1, 1))
@@ -263,21 +277,28 @@ private fun HintChips(
     val caption = when (row) {
         is ComposerRow.Weight -> "похоже на вес"
         is ComposerRow.Results -> "нашлось"
-        is ComposerRow.Scanned ->
-            if (row.item.gramsGuessed) "найдено по коду · допишите вес" else "найдено по коду"
+        is ComposerRow.Scanned -> scannedCaption(row.item)
         is ComposerRow.Predictions -> "обычно в это время"
         ComposerRow.None -> ""
     }
 
     Column {
-        CapsLabel(caption, Modifier.padding(start = 16.dp, bottom = 8.dp))
+        // Подпись стоит правее персонажа, выглядывающего из-за первого чипса:
+        // раньше он стоял у конца чипса и над коротким чипсом закрывал её
+        // буквы — «найдено по [Масло]ду». Теперь он у начала чипса, а подпись
+        // начинается за ним и читается как его реплика.
+        val withMascot = chipOwner(row) != null
+        CapsLabel(
+            caption,
+            Modifier.padding(start = if (withMascot) CAPTION_AFTER_MASCOT else ROW_PADDING, bottom = 8.dp),
+        )
 
         // Ключ — позиция плюс продукт: чипс подпрыгивает, когда на его месте
         // появилось что-то другое, и стоит на месте, пока выдача та же. Один
         // продукт может стоять в ряду дважды («молоко и молоко»), поэтому
         // ключ без позиции падал бы на дубликате.
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
+            contentPadding = PaddingValues(horizontal = ROW_PADDING),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
             modifier = Modifier.padding(bottom = 10.dp),
         ) {
@@ -317,7 +338,9 @@ private fun HintChips(
  *
  * Из-за первого [first] выглядывает персонаж его макроса. Низ места — ровно
  * верхняя кромка чипса: срез по ней и выглядит как «из-за». Стоит на прямом
- * участке, а не на скруглении — там прямой срез с загибом края не сходится.
+ * участке у начала чипса, а не на скруглении — там прямой срез с загибом края
+ * не сходится. У начала, а не у конца: подпись ряда стоит за ним, и короткий
+ * чипс больше не загоняет персонажа на её буквы.
  */
 @Composable
 private fun LazyItemScope.Chip(first: Boolean = false, content: @Composable () -> Unit) {
@@ -326,14 +349,25 @@ private fun LazyItemScope.Chip(first: Boolean = false, content: @Composable () -
         if (first) {
             Box(
                 Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = (-28).dp, y = (-40).dp)
-                    .size(width = 48.dp, height = 40.dp)
+                    .align(Alignment.TopStart)
+                    .offset(x = MASCOT_INSET, y = -MASCOT_HEIGHT)
+                    .size(width = MASCOT_WIDTH, height = MASCOT_HEIGHT)
                     .mascotAnchor(CHIP_ANCHOR)
             )
         }
     }
 }
+
+/** Отступ ряда подсказок от края экрана. */
+private val ROW_PADDING = 16.dp
+
+/** Персонаж на чипсе: отступ от его левого края — за скругление в 13 dp — и размер. */
+private val MASCOT_INSET = 14.dp
+private val MASCOT_WIDTH = 48.dp
+private val MASCOT_HEIGHT = 40.dp
+
+/** Подпись ряда начинается за персонажем. */
+private val CAPTION_AFTER_MASCOT = ROW_PADDING + MASCOT_INSET + MASCOT_WIDTH + 4.dp
 
 /**
  * Единственная точка ввода веса тела.

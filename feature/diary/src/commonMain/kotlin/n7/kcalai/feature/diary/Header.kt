@@ -61,10 +61,11 @@ fun Header(
     week: List<DaySummary>,
     collapsed: Boolean,
     onOpenGoal: (GoalField) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = KcalTheme.colors
 
-    Column(Modifier.fillMaxWidth().background(colors.bg).statusBarsPadding()) {
+    Column(modifier.fillMaxWidth().background(colors.bg).statusBarsPadding()) {
         AnimatedVisibility(
             visible = !collapsed,
             enter = expandVertically() + fadeIn(),
@@ -118,7 +119,16 @@ private fun RemainingRow(
             Text("Дневник", style = type.title, color = colors.text)
         }
 
-        Column(horizontalAlignment = Alignment.End) {
+        // Нажимается весь блок, а не только мелкая строка под числом: в неё
+        // попадали с третьего раза, а крупное число, на которое человек
+        // смотрит, не отвечало вовсе.
+        Column(
+            horizontalAlignment = Alignment.End,
+            modifier = Modifier
+                .clip(RoundedCornerShape(KcalShapes.tile))
+                .clickable { onOpenGoal(GoalField.KCAL) }
+                .padding(start = 8.dp, top = 2.dp, bottom = 2.dp, end = 2.dp),
+        ) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
                     text = (remaining?.let { abs(it) } ?: totals.kcal).toString(),
@@ -143,10 +153,7 @@ private fun RemainingRow(
                 text = if (target == null) "задать цель ›" else "${totals.kcal} / $target ›",
                 style = type.macro,
                 color = colors.text3,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .clickable { onOpenGoal(GoalField.KCAL) }
-                    .padding(top = 4.dp, bottom = 2.dp, start = 4.dp, end = 2.dp),
+                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
             )
         }
     }

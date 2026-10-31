@@ -5,6 +5,8 @@ import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -105,6 +107,17 @@ internal class FakeDiaryDao : DiaryDao {
     private val entries = MutableStateFlow<List<DiaryEntryEntity>>(emptyList())
     private var nextId = 1L
 
+    /** База ещё не ответила на запрос дня — как на холодном старте, пока она открывается. */
+    private val dayGate = MutableStateFlow(true)
+
+    fun holdDay() {
+        dayGate.value = false
+    }
+
+    fun releaseDay() {
+        dayGate.value = true
+    }
+
     fun day(dateEpochDay: Long): List<DiaryEntryEntity> =
         entries.value.filter { it.dateEpochDay == dateEpochDay }.sortedWith(ORDER)
 
@@ -116,7 +129,9 @@ internal class FakeDiaryDao : DiaryDao {
     }
 
     override fun observeDay(dateEpochDay: Long): Flow<List<DiaryEntryEntity>> =
-        entries.map { all -> all.filter { it.dateEpochDay == dateEpochDay }.sortedWith(ORDER) }
+        combine(dayGate, entries) { open, all -> open to all }
+            .filter { (open, _) -> open }
+            .map { (_, all) -> all.filter { it.dateEpochDay == dateEpochDay }.sortedWith(ORDER) }
 
     override suspend fun delete(id: Long) {
         entries.value = entries.value.filter { it.id != id }
