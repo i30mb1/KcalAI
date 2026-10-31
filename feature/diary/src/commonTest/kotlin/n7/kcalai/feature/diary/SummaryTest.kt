@@ -53,11 +53,39 @@ class SummaryTest {
             DaySummary(0, kcal = 1500, goalKcal = null),
             DaySummary(1, kcal = 1900, goalKcal = 2000),
             DaySummary(2, kcal = 2300, goalKcal = 2000),
+            // Сегодня: сводка видна, только пока записей нет.
+            DaySummary(3, kcal = 0, goalKcal = 2000),
         )
         val summary = daySummary(goalKcal = 2000, week = days, outline = null, hour = 9)
 
         assertEquals("За неделю вы уложились в цель 1 день из 2", summary.weekLine)
         assertNull(daySummary(goalKcal = null, week = week(0, 0), outline = null, hour = 9).weekLine)
+    }
+
+    /**
+     * Сводка стоит в ленте, только пока сегодня пусто, — значит, сегодня всегда
+     * «ноль из цели». Засчитать его значило бы хвалить новичка, который только
+     * что поставил цель и ещё ничего не съел: «уложились 1 день из 1».
+     */
+    @Test
+    fun `сегодняшний пустой день в счёт недели не идёт`() {
+        val summary = daySummary(goalKcal = 2100, week = week(0, 0, 0, 0, 0, 0, 0, goal = 2100), outline = null, hour = 9)
+
+        assertNull(summary.weekLine)
+    }
+
+    /** «Не записал» — не «уложился»: ноль в день без записей — пробел в дневнике, а не успех. */
+    @Test
+    fun `дни без записей уложившимися не считаются`() {
+        val days = listOf(
+            DaySummary(0, kcal = 1900, goalKcal = 2000),
+            DaySummary(1, kcal = 0, goalKcal = 2000),
+            DaySummary(2, kcal = 2300, goalKcal = 2000),
+            DaySummary(3, kcal = 0, goalKcal = 2000),
+        )
+        val summary = daySummary(goalKcal = 2000, week = days, outline = null, hour = 9)
+
+        assertEquals("За неделю вы уложились в цель 1 день из 2", summary.weekLine)
     }
 
     @Test

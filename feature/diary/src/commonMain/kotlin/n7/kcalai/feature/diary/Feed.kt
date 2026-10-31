@@ -131,16 +131,19 @@ fun daySummary(goalKcal: Int?, week: List<DaySummary>, outline: DayOutline?, hou
         else -> "${greeting(hour)} Цель на сегодня не задана"
     }
 
-    // Сегодня входит в счёт: цель на него ещё не нарушена, и это правда.
-    // Неделя здесь — именно последние семь дней, а не шесть прошедших.
-    val withGoal = week.filter { it.goalKcal != null }
-    val weekLine = if (withGoal.isEmpty()) {
+    // Считаются только прошедшие дни, в которых что-то записано. Сегодня в счёт
+    // не идёт: сводка видна, лишь пока он пуст, и «ноль из цели» засчитывался бы
+    // всегда — новичок, только что поставивший цель, слышал «уложились 1 день из 1».
+    // Пустой день — тоже не успех: «не записал» и «уложился» — разные вещи,
+    // и неделя без единой записи иначе выходила бы «7 дней из 7».
+    val judged = week.dropLast(1).filter { it.goalKcal != null && it.kcal > 0 }
+    val weekLine = if (judged.isEmpty()) {
         null
     } else {
-        val hit = withGoal.count { it.kcal <= (it.goalKcal ?: 0) }
+        val hit = judged.count { it.kcal <= (it.goalKcal ?: 0) }
         // Знаменатель — дни, когда цель вообще была: поставленная позавчера
         // цель не может быть «выполнена 2 дня из 7».
-        "За неделю вы уложились в цель $hit ${daysWord(hit)} из ${withGoal.size}"
+        "За неделю вы уложились в цель $hit ${daysWord(hit)} из ${judged.size}"
     }
 
     return FeedItem.Summary(
