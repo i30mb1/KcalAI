@@ -26,8 +26,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -113,6 +115,10 @@ private val ON_CAMERA = Color(0xFFF4EFE4)
  *
  * Счётчик кадров — не отладка. Съёмка идёт секундами, и без него неподвижный
  * экран неотличим от зависшего.
+ *
+ * @param onCamera под строкой живое превью. Без камеры — ручной ввод кода,
+ *        отказ в доступе — под ней фон темы, и светлые «чернила камеры»
+ *        на светлом фоне не видны: крестик «закрыть» просто пропадал.
  */
 @Composable
 fun ScanTopBar(
@@ -120,8 +126,11 @@ fun ScanTopBar(
     meta: String?,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    onCamera: Boolean = true,
     action: (@Composable () -> Unit)? = null,
 ) {
+    val ink = if (onCamera) ON_CAMERA else KcalTheme.colors.text
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -139,24 +148,55 @@ fun ScanTopBar(
             Icon(
                 Icons.Default.Close,
                 contentDescription = "Закрыть съёмку",
-                tint = ON_CAMERA,
+                tint = ink,
                 modifier = Modifier.size(20.dp),
             )
         }
 
-        CapsLabel(title, color = ON_CAMERA.copy(alpha = 0.8f))
+        CapsLabel(title, color = ink.copy(alpha = 0.8f))
         Spacer(Modifier.weight(1f))
 
         if (meta != null) {
             Text(
                 meta,
                 style = KcalTheme.type.time,
-                color = ON_CAMERA.copy(alpha = 0.7f),
+                color = ink.copy(alpha = 0.7f),
                 modifier = Modifier.padding(end = 8.dp),
             )
         }
         action?.invoke()
     }
+}
+
+/**
+ * Вопрос перед тем, как закрыть заполненную карточку.
+ *
+ * Закрыть — одно касание «назад» или крестик, а заполнить — минута с пачкой
+ * в руке. Без вопроса жест «назад», которым прятали клавиатуру, уносил
+ * карточку целиком, когда клавиатура уже была спрятана.
+ */
+@Composable
+fun DiscardDraftDialog(onDiscard: () -> Unit, onKeep: () -> Unit) {
+    val colors = KcalTheme.colors
+
+    AlertDialog(
+        onDismissRequest = onKeep,
+        title = { Text("Закрыть без сохранения?", style = KcalTheme.type.title) },
+        text = { Text("Всё, что набрано на карточке, пропадёт.", style = KcalTheme.type.body) },
+        confirmButton = {
+            TextButton(onClick = onDiscard) {
+                Text("Закрыть", style = KcalTheme.type.input, color = colors.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onKeep) {
+                Text("Остаться", style = KcalTheme.type.input, color = colors.text)
+            }
+        },
+        containerColor = colors.bg,
+        titleContentColor = colors.text,
+        textContentColor = colors.text2,
+    )
 }
 
 /** Подсказка поверх камеры. Пилюля, а не текст по фону: за ней живая картинка. */

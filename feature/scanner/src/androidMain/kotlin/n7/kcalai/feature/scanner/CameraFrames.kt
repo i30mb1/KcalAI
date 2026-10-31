@@ -47,6 +47,7 @@ import kotlinx.coroutines.awaitCancellation
  * @param zoom во сколько раз приблизить. Обрезается до предела камеры.
  * @param onPinch щипок по превью: во сколько раз человек развёл пальцы
  *        с прошлого события. `null` — превью зум жестом не меняет.
+ * @param alignment и [contentScale] — как превью ложится на экран
  * @param analysis собрать анализ кадров. Зовётся один раз за сессию: внутри
  *        живут нативные модели и потоки, и пересоздавать их на перерисовке нельзя.
  */
@@ -55,6 +56,8 @@ internal fun CameraFrames(
     modifier: Modifier = Modifier,
     zoom: Float = 1f,
     onPinch: ((Float) -> Unit)? = null,
+    alignment: Alignment = Alignment.TopCenter,
+    contentScale: ContentScale = ContentScale.FillWidth,
     analysis: () -> FrameAnalysis,
 ) {
     val context = LocalContext.current
@@ -97,13 +100,14 @@ internal fun CameraFrames(
     }
 
     request?.let { surface ->
-        // Кадр показывается целиком, по ширине и от верхнего края, а не
-        // обрезанным по центру: то, что видит человек, и то, что уходит
-        // в разбор, — одна и та же картинка. Что ниже кадра, закрывает панель.
+        // По умолчанию кадр показывается целиком, по ширине и от верхнего края,
+        // а не обрезанным по центру: то, что видит человек, и то, что уходит
+        // в разбор этикетки, — одна и та же картинка. Что ниже кадра, закрывает
+        // панель полей. Экрану без панели нужна обрезка — см. параметры.
         CameraXViewfinder(
             surfaceRequest = surface,
-            alignment = Alignment.TopCenter,
-            contentScale = ContentScale.FillWidth,
+            alignment = alignment,
+            contentScale = contentScale,
             modifier = modifier
                 .fillMaxSize()
                 .then(

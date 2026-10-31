@@ -133,7 +133,15 @@ actual fun LabelScannerDialog(
     val zoom = rememberSaveable { mutableFloatStateOf(LABEL_ZOOM) }
     ScanHaptics(state)
 
-    ScanDialog(onDismiss) {
+    // Заполненную карточку крестик и «назад» не закрывают молча: камера минуту
+    // набирала голоса, человек дописывал, и всё это уходило одним касанием —
+    // тем же «назад», которым только что прятали клавиатуру.
+    var confirmClose by remember { mutableStateOf(false) }
+    val requestClose: () -> Unit = {
+        if (state.hasDraft) confirmClose = true else onDismiss()
+    }
+
+    ScanDialog(requestClose, onCamera = granted) {
         Surface(Modifier.fillMaxSize(), color = KcalTheme.colors.bg) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val panelMax = maxHeight * PANEL_MAX_SHARE
@@ -159,8 +167,9 @@ actual fun LabelScannerDialog(
                     } else {
                         null
                     },
-                    onDismiss = onDismiss,
+                    onDismiss = requestClose,
                     modifier = Modifier.align(Alignment.TopCenter),
+                    onCamera = granted,
                     action = {
                         ZoomPill(zoom.floatValue) { zoom.floatValue = nextZoomStop(zoom.floatValue) }
                     },
@@ -198,6 +207,16 @@ actual fun LabelScannerDialog(
                     )
                 }
             }
+        }
+
+        if (confirmClose) {
+            DiscardDraftDialog(
+                onDiscard = {
+                    confirmClose = false
+                    onDismiss()
+                },
+                onKeep = { confirmClose = false },
+            )
         }
     }
 }

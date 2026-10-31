@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -42,7 +44,10 @@ import androidx.compose.ui.Alignment
 import androidx.camera.core.ImageAnalysis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -91,11 +96,13 @@ actual fun ScannerDialog(
         if (!granted) permission.launch(Manifest.permission.CAMERA)
     }
 
-    ScanDialog(onDismiss) {
+    val onCamera = granted && !manual
+
+    ScanDialog(onDismiss, onCamera = onCamera) {
         Surface(Modifier.fillMaxSize(), color = KcalTheme.colors.bg) {
             Box(Modifier.fillMaxSize()) {
                 when {
-                    granted && !manual -> CameraPane(onScanned)
+                    onCamera -> CameraPane(onScanned)
                     answered -> ManualEntry(
                         hint = if (granted) {
                             "Введите цифры под штрих-кодом"
@@ -112,7 +119,8 @@ actual fun ScannerDialog(
                     meta = null,
                     onDismiss = onDismiss,
                     modifier = Modifier.align(Alignment.TopCenter),
-                    action = if (granted && !manual) {
+                    onCamera = onCamera,
+                    action = if (onCamera) {
                         {
                             // Ручной ввод рядом с крестиком, а не вместо камеры:
                             // смазанный код на мятой пачке не читается никогда,
@@ -146,7 +154,13 @@ private fun CameraPane(onScanned: (String) -> Unit) {
     val deliver by rememberUpdatedState(onScanned)
 
     Box(Modifier.fillMaxSize()) {
-        CameraFrames { barcodeAnalysis(context) { code -> deliver(code) } }
+        // Превью на весь экран, обрезанное по краям, а не кадр целиком сверху,
+        // как у этикетки: там низ закрывает панель полей, а здесь панели нет,
+        // и под кадром оставалась пустая серая полоса в полэкрана. Штрих-коду
+        // обрезка не мешает — ML Kit смотрит весь кадр, а не видимую часть.
+        CameraFrames(alignment = Alignment.Center, contentScale = ContentScale.Crop) {
+            barcodeAnalysis(context) { code -> deliver(code) }
+        }
 
         // Рамка не участвует в распознавании — ML Kit смотрит весь кадр.
         // Она нужна человеку: без неё непонятно, куда наводить. Окно ниже
@@ -217,9 +231,16 @@ private fun ManualEntry(hint: String, onSubmit: (String) -> Unit) {
     var value by remember { mutableStateOf("") }
     val normalized = BarcodeValidator.normalize(value)
 
+    // Человек сюда пришёл печатать цифры — клавиатура встаёт сама, без тапа по полю.
+    val requester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { requester.requestFocus() }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // Центр — над клавиатурой, а не над всем экраном: иначе на невысоком
+            // экране она накрывает кнопку «Найти».
+            .imePadding()
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -234,9 +255,11 @@ private fun ManualEntry(hint: String, onSubmit: (String) -> Unit) {
             singleLine = true,
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Number,
-                imeAction = ImeAction.Done,
+                imeAction = ImeAction.Search,
             ),
-            modifier = Modifier.fillMaxWidth(),
+            // ✓ на клавиатуре — то же «Найти», когда код сходится.
+            keyboardActions = KeyboardActions(onSearch = { normalized?.let(onSubmit) }),
+            modifier = Modifier.fillMaxWidth().focusRequester(requester),
         )
 
         Text(

@@ -202,6 +202,19 @@ internal class ScanState(initialGtin: String?) {
 
     val requiredFilled: Int get() = listOf(kcal, prot, fat, carb).count { it.filled }
 
+    /** Код, с которым карточка открылась: он был до неё и потерей не считается. */
+    private val initialBarcode = initialGtin.orEmpty()
+
+    /**
+     * Есть ли что терять, если закрыть карточку.
+     *
+     * Закрыть — одно касание «назад», а заполнить — минута с пачкой в руке:
+     * камера набирала голоса кадр за кадром, человек дописывал то, что она
+     * не прочла. Пока всё это есть, закрытие сначала спрашивает.
+     */
+    val hasDraft: Boolean
+        get() = filledFields > 0 || (barcode.filled && barcode.text != initialBarcode)
+
     /** Сколько полей заполнила камера, а не человек, — для отклика ладони. */
     val cameraFilled: Int
         get() = listOf(kcal, prot, fat, carb, name, barcode).count { it.filled && !it.manual }
