@@ -125,7 +125,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 | Поиск по своим продуктам (регистр, порядок слов, падежи) | `MatchesQueryTest` |
 | Разбор этикетки: подписи, колонка «на 100 г», арифметика | `LabelParserTest`, `LabelAnchorsTest` |
 | Согласие кадров при съёмке этикетки | `LabelConsensusTest` |
-| Карточка нового продукта: счётчик полей, вопрос перед закрытием | `ScanStateTest` |
+| Карточка нового продукта: счётчик полей, вопрос перед закрытием, подсказка над камерой | `ScanStateTest` |
 | Штрих-код: контрольная цифра, UPC → EAN-13 | `BarcodeValidatorTest` |
 | Проверка КБЖУ, введённого руками | `NutrimentValidatorTest` |
 | Неделя и версионирование цели, итоги дня | `DiaryRepositoryTest` |

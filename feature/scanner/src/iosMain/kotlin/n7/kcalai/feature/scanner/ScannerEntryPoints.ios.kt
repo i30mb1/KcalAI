@@ -17,6 +17,7 @@ actual fun LabelScannerDialog(
     onSave: (gtin: String?, name: String, nutriments: Nutriments) -> Unit,
     onDismiss: () -> Unit,
     gtin: String?,
+    frameStats: Boolean,
 ) {
     LaunchedEffect(Unit) { onDismiss() }
 }

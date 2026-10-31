@@ -2,6 +2,7 @@ package n7.kcalai.feature.scanner
 
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.Test
 
@@ -123,7 +124,35 @@ class ScanStateTest {
         assertTrue(mismatched.warning?.contains("Проверьте цифры") == true)
     }
 
+    // --- Подсказка над камерой ------------------------------------------------------------
+
+    /**
+     * «Кадр 48 · 542 мс» над камерой — телеметрия для разработчика: человеку она
+     * ничего не говорит. Что съёмка идёт, ему говорит подсказка — она стоит, пока
+     * камера не прочла первое поле, а не гаснет после первого же кадра.
+     */
+    @Test
+    fun `подсказка держится, пока камера ничего не прочла`() {
+        assertEquals(TABLE_HINT, scanHint(camera = true, answered = true, ocr = true, seen = 40, cameraFilled = 0, stats = false))
+        assertNull(scanHint(camera = true, answered = true, ocr = true, seen = 40, cameraFilled = 1, stats = false))
+    }
+
+    /** У разработчика на этом месте счётчик кадров — подсказка ему уже ни к чему. */
+    @Test
+    fun `со счётчиком кадров подсказка гаснет после первого кадра`() {
+        assertEquals(TABLE_HINT, scanHint(camera = true, answered = true, ocr = true, seen = 0, cameraFilled = 0, stats = true))
+        assertNull(scanHint(camera = true, answered = true, ocr = true, seen = 1, cameraFilled = 0, stats = true))
+    }
+
+    @Test
+    fun `без камеры и без распознавания подсказка говорит, что заполнять самим`() {
+        assertEquals("Камеры нет — заполните поля сами", scanHint(camera = false, answered = true, ocr = true, seen = 0, cameraFilled = 0, stats = false))
+        assertEquals("Запрашиваем доступ к камере", scanHint(camera = false, answered = false, ocr = true, seen = 0, cameraFilled = 0, stats = false))
+        assertEquals("Распознавание недоступно — заполните сами", scanHint(camera = true, answered = true, ocr = false, seen = 0, cameraFilled = 0, stats = false))
+    }
+
     private companion object {
         const val GTIN = "4607001771234"
+        const val TABLE_HINT = "Держите таблицу пищевой ценности в рамке"
     }
 }

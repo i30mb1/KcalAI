@@ -108,6 +108,7 @@ actual fun LabelScannerDialog(
     onSave: (gtin: String?, name: String, nutriments: Nutriments) -> Unit,
     onDismiss: () -> Unit,
     gtin: String?,
+    frameStats: Boolean,
 ) {
     val context = LocalContext.current
     val state = rememberScanState(gtin)
@@ -162,7 +163,7 @@ actual fun LabelScannerDialog(
 
                 ScanTopBar(
                     title = "новый продукт",
-                    meta = if (state.seen > 0) {
+                    meta = if (frameStats && state.seen > 0) {
                         "кадр ${state.seen} · ${state.frame.elapsedMs} мс"
                     } else {
                         null
@@ -179,15 +180,14 @@ actual fun LabelScannerDialog(
                     modifier = Modifier.align(Alignment.BottomCenter),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    // Подсказка живёт, пока не прочитан первый кадр. Дальше о том же
-                    // говорят полоски, и держать её значило бы объяснять очевидное.
-                    val hint = when {
-                        !granted && answered -> "Камеры нет — заполните поля сами"
-                        !granted -> "Запрашиваем доступ к камере"
-                        !state.frame.available -> "Распознавание недоступно — заполните сами"
-                        state.seen == 0 -> "Держите таблицу пищевой ценности в рамке"
-                        else -> null
-                    }
+                    val hint = scanHint(
+                        camera = granted,
+                        answered = answered,
+                        ocr = state.frame.available,
+                        seen = state.seen,
+                        cameraFilled = state.cameraFilled,
+                        stats = frameStats,
+                    )
                     if (hint != null) {
                         HintPill(
                             text = hint,

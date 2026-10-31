@@ -16,12 +16,18 @@ expect fun ScannerDialog(
     onDismiss: () -> Unit,
 )
 
-/** Этикетка с камеры: название и КБЖУ на 100 г. */
+/**
+ * Этикетка с камеры: название и КБЖУ на 100 г.
+ *
+ * @param frameStats над камерой — счётчик кадров и время разбора. Для
+ *        разработчика: человеку из магазина приложений он ничего не говорит.
+ */
 @Composable
 expect fun LabelScannerDialog(
     onSave: (gtin: String?, name: String, nutriments: Nutriments) -> Unit,
     onDismiss: () -> Unit,
     gtin: String? = null,
+    frameStats: Boolean = false,
 )
 
 /** Отладка разбора этикетки: показывает, что и почему распознано. */
