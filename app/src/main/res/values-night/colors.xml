@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- KcalColors.bg тёмной темы. -->
+    <color name="kcal_bg">#FF1C1914</color>
+</resources>

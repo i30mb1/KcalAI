@@ -1,10 +1,12 @@
 <resources>
     <!--
       XML-тема нужна только на время старта, до того как Compose нарисует первый кадр.
-      Цвета и типографика живут в n7.kcalai.ui.KcalTheme, а не здесь.
+      Цвета и типографика живут в n7.kcalai.ui.KcalTheme, а не здесь. Фон окна — уже
+      фон ленты: его же берёт и системная заставка Android 12+.
     -->
     <style name="Theme.KcalAI" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/kcal_bg</item>
     </style>
 </resources>
