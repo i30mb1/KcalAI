@@ -3,16 +3,15 @@ package n7.kcalai.ui.mascot
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -97,9 +96,15 @@ internal const val VIEW_H = 100f
 /**
  * Персонаж в позе [pose].
  *
- * Желейный: от тапа трясётся, в покое еле заметно дышит, в [MascotPose.WAVE] машет.
+ * Желейный: от тапа трясётся, вздыхает, в [MascotPose.WAVE] машет.
  * Ручки выходят за холст — у [MascotPose.LEAN] тянутся к пузырьку, — поэтому
  * обрезать рисунок по рамке нельзя. Размер задаёт [modifier]; пропорция 6:5.
+ *
+ * Дышит и машет он несколько раз — встав в новую позу или от тапа, — а потом
+ * замирает. Бесконечная анимация держала экран в перерисовке на частоте
+ * дисплея всё время, пока открыт дневник: девяносто кадров в секунду над
+ * неподвижной лентой — батарея, а экран не мог сбросить частоту. Заодно она
+ * не давала инструментам доступности и тестам интерфейса дождаться покоя.
  */
 @Composable
 fun MascotFigure(mascot: Mascot, pose: MascotPose, modifier: Modifier = Modifier) {
@@ -107,24 +112,21 @@ fun MascotFigure(mascot: Mascot, pose: MascotPose, modifier: Modifier = Modifier
     val shake = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
 
-    val motion = rememberInfiniteTransition(label = "mascot")
-    val breath by motion.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(mascot.art.breathMs, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "breath",
-    )
-    val wave by motion.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(WAVE_MS, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "wave",
-    )
+    // Ноль — покой: выдох и опущенная к плечу рука.
+    val breath = remember { Animatable(0f) }
+    val wave = remember { Animatable(0f) }
+    var stirred by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(pose, stirred) {
+        launch { breath.swing(BREATHS, mascot.art.breathMs) }
+        if (pose == MascotPose.WAVE) launch { wave.swing(WAVES, WAVE_MS) }
+    }
 
     Canvas(
         modifier
             .pointerInput(Unit) {
                 detectTapGestures {
+                    stirred++
                     scope.launch {
                         shake.snapTo(0f)
                         shake.animateTo(1f, tween(SHAKE_MS, easing = LinearEasing))
@@ -136,7 +138,7 @@ fun MascotFigure(mascot: Mascot, pose: MascotPose, modifier: Modifier = Modifier
                 val angle = sin(p * PI * SHAKE_SWINGS).toFloat() * SHAKE_DEGREES * (1f - p)
                 rotationZ = angle
                 // Желе приседает, пока качается, и чуть дышит в покое.
-                val squash = abs(angle) / 120f + breath * 0.035f
+                val squash = abs(angle) / 120f + breath.value * 0.035f
                 scaleY = 1f - squash
                 scaleX = 1f + squash * 0.8f
                 transformOrigin = TransformOrigin(0.5f, 0.95f)
@@ -144,11 +146,25 @@ fun MascotFigure(mascot: Mascot, pose: MascotPose, modifier: Modifier = Modifier
     ) {
         scale(size.width / VIEW_W, size.height / VIEW_H, pivot = Offset.Zero) {
             val art = mascot.art
-            arms(pose, art.skin, art.armOutline, waveDegrees = -WAVE_DEGREES * wave)
+            arms(pose, art.skin, art.armOutline, waveDegrees = -WAVE_DEGREES * wave.value)
             with(art) { draw() }
         }
     }
 }
+
+/** Туда и обратно [times] раз — и в покой. */
+private suspend fun Animatable<Float, *>.swing(times: Int, halfMs: Int) {
+    repeat(times) {
+        animateTo(1f, tween(halfMs, easing = FastOutSlowInEasing))
+        animateTo(0f, tween(halfMs, easing = FastOutSlowInEasing))
+    }
+}
+
+/** Вздохов после новой позы или тапа: достаточно, чтобы заметить, что он живой. */
+private const val BREATHS = 3
+
+/** Взмахов на знакомстве. */
+private const val WAVES = 4
 
 private const val SHAKE_MS = 620
 private const val SHAKE_SWINGS = 5
