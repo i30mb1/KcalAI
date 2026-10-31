@@ -29,7 +29,10 @@ import n7.kcalai.database.SuggestionEventEntity
 import n7.kcalai.database.UserFoodDao
 import n7.kcalai.database.UserFoodEntity
 import n7.kcalai.model.EntrySource
+import n7.kcalai.model.FoodCandidate
+import n7.kcalai.model.FoodRef
 import n7.kcalai.model.MealType
+import n7.kcalai.model.Nutriments
 import n7.kcalai.personal.PersonalRepository
 import n7.kcalai.repositories.DiaryRepository
 import n7.kcalai.repositories.FoodDbSource
@@ -77,23 +80,46 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
         )
     }
 
-    /** Запись, сделанная раньше, чем открылся экран. */
-    suspend fun addEntry(name: String, grams: Int, meal: MealType, minutesAgo: Int = 30): DiaryEntryEntity {
+    /**
+     * Запись, сделанная раньше, чем открылся экран.
+     *
+     * @param daysAgo в какой день она лежит; время — тот же час, что сейчас, но в тот день
+     */
+    suspend fun addEntry(
+        name: String,
+        grams: Int,
+        meal: MealType,
+        minutesAgo: Int = 30,
+        daysAgo: Int = 0,
+        kcal100: Int = 110,
+    ): DiaryEntryEntity {
         val entry = DiaryEntryEntity(
-            dateEpochDay = today,
+            dateEpochDay = today - daysAgo,
             meal = meal,
             displayName = name,
             grams = grams,
-            kcal100 = 110,
+            kcal100 = kcal100,
             prot100 = 420,
             fat100 = 110,
             carb100 = 2_130,
             source = EntrySource.TEXT,
             foodRef = "generic:7",
-            createdAt = clock.now().toEpochMilliseconds() - minutesAgo * 60_000L,
+            createdAt = clock.now().toEpochMilliseconds() - minutesAgo * 60_000L - daysAgo * DAY_MS,
         )
         val id = diaryDao.insert(entry)
         return entry.copy(id = id)
+    }
+
+    /** Продукт, который предложила бы модель: с порцией, чтобы его можно было записать тапом. */
+    val kefir = FoodCandidate(
+        ref = FoodRef.Generic(42),
+        displayName = "Кефир 1%",
+        nutriments = Nutriments(kcal100 = 40, prot100 = 300, fat100 = 100, carb100 = 400),
+        servingG = 250,
+    )
+
+    private companion object {
+        const val DAY_MS = 24 * 60 * 60 * 1000L
     }
 }
 

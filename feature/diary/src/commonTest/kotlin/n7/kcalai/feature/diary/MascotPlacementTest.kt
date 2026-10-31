@@ -35,7 +35,7 @@ class MascotPlacementTest {
 
     @Test
     fun `в первый день все трое выходят на сцену`() {
-        val places = mascotPlaces(listOf(FeedItem.DaySeparator, intro), shownKeys = setOf(intro.key), chipOwner = null)
+        val places = mascotPlaces(listOf(FeedItem.DaySeparator("сегодня"), intro), shownKeys = setOf(intro.key), chipOwner = null)
 
         Mascot.entries.forEach { assertEquals(MascotPlace.Stage, places[it]) }
     }

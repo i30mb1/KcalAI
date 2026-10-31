@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.CompositionLocalProvider
@@ -24,7 +25,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -55,6 +58,7 @@ import n7.kcalai.ui.popIn
  *        с моноширинными строками разбора и кнопкой «В лог» ни к чему, а долгое
  *        нажатие на кнопку — обычный способ узнать, что она делает.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -65,8 +69,16 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         onPauseOrDispose { }
     }
 
+    // Из прошлого дня «назад» ведёт к сегодня, а не прочь из приложения:
+    // открыть вчера и выйти одним жестом — не то, чего человек ждёт.
+    BackHandler(enabled = state.pastMeal != null) {
+        viewModel.onSelectDay(state.today.toEpochDays())
+    }
+
     DiaryScreen(
         state = state,
+        onSelectDay = viewModel::onSelectDay,
+        onPickMeal = viewModel::onPickMeal,
         onInputChange = viewModel::onInputChange,
         onPick = { item -> viewModel.onPick(item) },
         onPickScanned = viewModel::onPickScanned,
@@ -88,10 +100,12 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
     when (val overlay = state.overlay) {
         Overlay.None -> Unit
 
+        // Цель правится всегда с сегодня, даже если открыт прошлый день:
+        // переписать задним числом прошлую цель нельзя по замыслу.
         is Overlay.Goal -> GoalSheet(
-            goal = state.goal,
+            goal = state.todayGoal,
             tdee = state.tdee,
-            date = state.date,
+            date = state.today,
             focus = overlay.field,
             onConfirm = viewModel::onSetGoal,
             onDismiss = viewModel::onDismissOverlay,
@@ -135,6 +149,8 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
 @Composable
 fun DiaryScreen(
     state: DiaryUiState,
+    onSelectDay: (Long) -> Unit,
+    onPickMeal: (MealType) -> Unit,
     onInputChange: (String) -> Unit,
     onPick: (ResolvedItem) -> Unit,
     onPickScanned: (ResolvedItem) -> Unit,
@@ -160,7 +176,9 @@ fun DiaryScreen(
         return
     }
 
-    val listState = rememberLazyListState()
+    // У каждого дня своя переписка — и своя прокрутка: вчерашняя лента
+    // открывается у своего конца, а не там, где остановилась сегодняшняя.
+    val listState = key(state.date) { rememberLazyListState() }
 
     /*
      * Шапка сжимается ровно тогда, когда лента сдвинулась с начала: любой порог
@@ -247,6 +265,8 @@ fun DiaryScreen(
     Column(Modifier.fillMaxSize().background(KcalTheme.colors.bg)) {
         Header(
             date = state.date,
+            today = state.today,
+            onSelectDay = onSelectDay,
             totals = state.totals,
             goal = state.goal,
             week = state.week,
@@ -261,6 +281,9 @@ fun DiaryScreen(
             },
         )
 
+        // Новый день — новая лента целиком: его записи не «приходят» в переписку,
+        // они в ней были, и выпрыгивать с анимацией им незачем.
+        key(state.date) {
         Feed(
             feed = state.feed,
             listState = listState,
@@ -273,10 +296,13 @@ fun DiaryScreen(
             onOpenGoal = onOpenGoal,
             modifier = Modifier.weight(1f).nestedScroll(expandOnPull),
         )
+        }
 
         Composer(
             input = state.input,
             row = state.composer,
+            pastMeal = state.pastMeal,
+            onPickMeal = onPickMeal,
             onInputChange = onInputChange,
             onPick = onPick,
             onPickScanned = onPickScanned,
@@ -431,7 +457,7 @@ private fun Feed(
             // Реплика вырастает из своего «хвоста»: исходящая — справа снизу,
             // ответ — слева снизу, как в любом мессенджере.
             val origin = when (item) {
-                FeedItem.DaySeparator -> TransformOrigin.Center
+                is FeedItem.DaySeparator -> TransformOrigin.Center
                 is FeedItem.Meal -> TransformOrigin(1f, 1f)
                 else -> TransformOrigin(0f, 1f)
             }
@@ -441,7 +467,9 @@ private fun Feed(
                     .popIn(origin = origin, lift = 12.dp, enabled = fresh)
             ) {
                 when (item) {
-                    FeedItem.DaySeparator -> DaySeparator()
+                    is FeedItem.DaySeparator -> DaySeparator(item.label)
+
+                    is FeedItem.EmptyDay -> EmptyDayBubble(item)
 
                     is FeedItem.Meal -> MealBubble(item, onEditEntry)
 

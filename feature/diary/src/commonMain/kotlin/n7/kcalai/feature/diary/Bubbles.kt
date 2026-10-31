@@ -428,13 +428,35 @@ fun RemainingBubble(item: FeedItem.Remaining, onPick: (PlanOption) -> Unit) {
     }
 }
 
-/** Съедено больше цели. Констатация и обещание, а не оценка поступка. */
+/**
+ * Съедено больше цели. Констатация и обещание, а не оценка поступка.
+ *
+ * Про прошедший день — только итог: «завтра это учтётся» о вчерашнем дне
+ * звучит странно, завтра уже наступило.
+ */
 @Composable
 fun OverBubble(item: FeedItem.Over) {
     IncomingBubble(item) {
         BubbleText(
-            "Цель на сегодня закрыта с перебором в ${item.overKcal} ккал. " +
-                "Ничего страшного — завтра это учтётся в раскладке дня."
+            if (item.past) {
+                "В этот день цель закрыта с перебором в ${item.overKcal} ккал."
+            } else {
+                "Цель на сегодня закрыта с перебором в ${item.overKcal} ккал. " +
+                    "Ничего страшного — завтра это учтётся в раскладке дня."
+            }
+        )
+    }
+}
+
+/** Прошлый день без записей: что можно сделать прямо здесь. */
+@Composable
+fun EmptyDayBubble(item: FeedItem.EmptyDay) {
+    IncomingBubble(item) {
+        BubbleTitle(item.title)
+        BubbleText(
+            "Записей за этот день нет. Напишите, что ели, — запишу сюда. " +
+                "Приём выберите над строкой ввода.",
+            Modifier.padding(top = 7.dp),
         )
     }
 }
@@ -554,10 +576,10 @@ private fun OptionChip(option: PlanOption, onClick: () -> Unit) {
     }
 }
 
-/** Разделитель дня. Один на всю ленту: прошлых дней в ней пока нет. */
+/** Чья это переписка: «сегодня», «вчера», «четверг, 29 окт». Один на ленту. */
 @Composable
-fun DaySeparator() {
+fun DaySeparator(label: String) {
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        CapsLabel("сегодня", color = KcalTheme.colors.text2)
+        CapsLabel(label, color = KcalTheme.colors.text2)
     }
 }

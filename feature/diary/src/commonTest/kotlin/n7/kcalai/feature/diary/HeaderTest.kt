@@ -1,5 +1,6 @@
 package n7.kcalai.feature.diary
 
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.Test
@@ -29,5 +30,29 @@ class HeaderTest {
     @Test
     fun `лента, которая не помещается и так, шапку не раскрывает`() {
         assertFalse(headerFits(spare = null, growth = 600))
+    }
+
+    // --- Крупное число шапки ----------------------------------------------------------
+
+    @Test
+    fun `сегодня крупно — сколько ещё можно`() {
+        assertEquals(Headline(519, "осталось", "1581 / 2100 ›", over = false), headline(1581, 2100, past = false))
+        assertEquals(Headline(310, "перебор", "2410 / 2100 ›", over = true), headline(2410, 2100, past = false))
+    }
+
+    /**
+     * Про прошедший день «осталось 519» — неправда: оставаться больше нечему.
+     * Крупно стоит съеденное, а под ним — как это вышло относительно цели.
+     */
+    @Test
+    fun `в прошлом дне крупно — сколько съедено`() {
+        assertEquals(Headline(1581, "съедено", "из 2100 ›", over = false), headline(1581, 2100, past = true))
+        assertEquals(Headline(2410, "съедено", "перебор 310 ›", over = true), headline(2410, 2100, past = true))
+    }
+
+    @Test
+    fun `без цели — съеденное и приглашение её задать`() {
+        assertEquals(Headline(900, "съедено", "задать цель ›", over = false), headline(900, null, past = false))
+        assertEquals(Headline(900, "съедено", "задать цель ›", over = false), headline(900, null, past = true))
     }
 }

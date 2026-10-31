@@ -10,6 +10,8 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,6 +61,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
+import n7.kcalai.model.MealType
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.ui.CapsLabel
 import n7.kcalai.ui.ChipNumbers
@@ -83,6 +87,8 @@ import n7.kcalai.ui.KcalTheme
 fun Composer(
     input: String,
     row: ComposerRow,
+    pastMeal: MealType?,
+    onPickMeal: (MealType) -> Unit,
     onInputChange: (String) -> Unit,
     onPick: (ResolvedItem) -> Unit,
     onPickScanned: (ResolvedItem) -> Unit,
@@ -117,6 +123,10 @@ fun Composer(
             .padding(top = 10.dp, bottom = 10.dp)
     ) {
         HintRow(row, onPick, onPickScanned, onPickCandidate, onLogWeight)
+
+        if (pastMeal != null) {
+            MealPicker(pastMeal, onPickMeal)
+        }
 
         Row(
             modifier = Modifier
@@ -251,6 +261,39 @@ private fun HintRow(
 }
 
 /**
+ * В какой приём писать прошлый день.
+ *
+ * У прошлого дня нет «сейчас», по которому приём угадывается сам, — его
+ * выбирает человек. Выбранный подписан и в ленте: «новое добавится сюда»
+ * стоит под его пузырьком.
+ */
+@Composable
+private fun MealPicker(selected: MealType, onPick: (MealType) -> Unit) {
+    val colors = KcalTheme.colors
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(start = ROW_PADDING, end = ROW_PADDING, bottom = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CapsLabel("записать в")
+        MealType.entries.forEach { meal ->
+            val chosen = meal == selected
+            KcalChip(
+                onClick = { onPick(meal) },
+                background = if (chosen) colors.bubble else colors.surface,
+                modifier = Modifier.semantics { this.selected = chosen },
+            ) {
+                Text(mealName(meal), style = KcalTheme.type.chip, color = if (chosen) colors.onBubble else colors.text)
+            }
+        }
+    }
+}
+
+/**
  * Подпись над товаром, который стоит в строке ввода.
  *
  * Сюда приходят двумя путями: скан опознал код — или человек только что завёл
@@ -278,7 +321,7 @@ private fun HintChips(
         is ComposerRow.Weight -> "похоже на вес"
         is ComposerRow.Results -> "нашлось"
         is ComposerRow.Scanned -> scannedCaption(row.item)
-        is ComposerRow.Predictions -> "обычно в это время"
+        is ComposerRow.Predictions -> row.meal?.let { "обычно ${mealNameTarget(it)}" } ?: "обычно в это время"
         ComposerRow.None -> ""
     }
 

@@ -22,6 +22,7 @@ kotlin {
             implementation(libs.cmp.material.icons.extended)
             implementation(libs.cmp.lifecycle.viewmodel.compose)
             implementation(libs.cmp.lifecycle.runtime.compose)
+            implementation(libs.cmp.ui.backhandler)
         }
         commonTest.dependencies {
             // Экранная модель живёт на viewModelScope, то есть на главном диспетчере:

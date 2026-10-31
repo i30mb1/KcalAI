@@ -68,6 +68,8 @@ cmp-ui = { group = "org.jetbrains.compose.ui", name = "ui", version.ref = "cmp" 
 cmp-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "cmpMaterial3" }
 cmp-material-icons-extended = { group = "org.jetbrains.compose.material", name = "material-icons-extended", version.ref = "cmpIcons" }
 cmp-resources = { group = "org.jetbrains.compose.components", name = "components-resources", version.ref = "cmp" }
+# Системное «назад» в общем коде: из прошлого дня возвращает к сегодня.
+cmp-ui-backhandler = { group = "org.jetbrains.compose.ui", name = "ui-backhandler", version.ref = "cmp" }
 cmp-lifecycle-viewmodel-compose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "cmpLifecycle" }
 cmp-lifecycle-runtime-compose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "cmpLifecycle" }
 ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }

@@ -34,6 +34,7 @@ import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.repositories.DaySummary
 import n7.kcalai.ui.CapsLabel
+import n7.kcalai.ui.KcalChip
 import n7.kcalai.ui.Macro
 import n7.kcalai.ui.MiniBar
 import n7.kcalai.ui.colors
@@ -56,6 +57,8 @@ import n7.kcalai.ui.mascot.mascot
 @Composable
 fun Header(
     date: LocalDate,
+    today: LocalDate,
+    onSelectDay: (Long) -> Unit,
     totals: NutrimentTotals,
     goal: DailyGoalEntity?,
     week: List<DaySummary>,
@@ -64,6 +67,8 @@ fun Header(
     modifier: Modifier = Modifier,
 ) {
     val colors = KcalTheme.colors
+    val past = date < today
+    val toToday = { onSelectDay(today.toEpochDays()) }
 
     Column(modifier.fillMaxWidth().background(colors.bg).statusBarsPadding()) {
         AnimatedVisibility(
@@ -75,9 +80,10 @@ fun Header(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                RemainingRow(date, totals, goal, onOpenGoal)
+                RemainingRow(date, past, totals, goal, onOpenGoal, toToday)
                 MacroTiles(totals, goal, onOpenGoal)
-                WeekChart(week)
+                // Один день — одна переписка: тап по столбику открывает его ленту.
+                WeekChart(week, selected = date.toEpochDays(), onSelectDay = onSelectDay)
             }
         }
 
@@ -86,7 +92,7 @@ fun Header(
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut(),
         ) {
-            CompactRow(date, totals, goal)
+            CompactRow(date, past, totals, goal, toToday)
         }
 
         HorizontalDivider(color = colors.line)
@@ -103,20 +109,28 @@ fun Header(
 @Composable
 private fun RemainingRow(
     date: LocalDate,
+    past: Boolean,
     totals: NutrimentTotals,
     goal: DailyGoalEntity?,
     onOpenGoal: (GoalField) -> Unit,
+    onToToday: () -> Unit,
 ) {
     val colors = KcalTheme.colors
     val type = KcalTheme.type
-    val target = goal?.kcal?.takeIf { it > 0 }
-    val remaining = target?.let { it - totals.kcal }
-    val over = remaining != null && remaining < 0
+    val head = headline(totals.kcal, goal?.kcal?.takeIf { it > 0 }, past)
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             CapsLabel(formatDateCaps(date))
-            Text("Дневник", style = type.title, color = colors.text)
+            if (past) {
+                // Вместо заголовка — дорога назад: из вчерашней переписки
+                // человек вернётся к сегодняшней, не ища для этого столбик.
+                KcalChip(onClick = onToToday, background = colors.bubble) {
+                    Text("← Сегодня", style = KcalTheme.type.chip, color = colors.onBubble)
+                }
+            } else {
+                Text("Дневник", style = type.title, color = colors.text)
+            }
         }
 
         // Нажимается весь блок, а не только мелкая строка под числом: в неё
@@ -131,26 +145,22 @@ private fun RemainingRow(
         ) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    text = (remaining?.let { abs(it) } ?: totals.kcal).toString(),
+                    text = head.number.toString(),
                     style = type.hero,
                     // Перебор выделяется цветом, но остаётся числом, а не упрёком:
                     // подпись рядом уже сказала, что произошло.
-                    color = if (over) colors.error else colors.text,
+                    color = if (head.over) colors.error else colors.text,
                 )
                 Text(
-                    text = when {
-                        remaining == null -> "съедено"
-                        over -> "перебор"
-                        else -> "осталось"
-                    },
+                    text = head.label,
                     style = type.label,
-                    color = if (over) colors.error else colors.text2,
+                    color = if (head.over) colors.error else colors.text2,
                     modifier = Modifier.padding(start = 5.dp, bottom = 3.dp),
                 )
             }
 
             Text(
-                text = if (target == null) "задать цель ›" else "${totals.kcal} / $target ›",
+                text = head.line,
                 style = type.macro,
                 color = colors.text3,
                 modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
@@ -240,12 +250,16 @@ private fun MacroTile(
 
 /** Сжатая шапка: дата и остаток. Всё остальное при прокрутке уступает место ленте. */
 @Composable
-private fun CompactRow(date: LocalDate, totals: NutrimentTotals, goal: DailyGoalEntity?) {
+private fun CompactRow(
+    date: LocalDate,
+    past: Boolean,
+    totals: NutrimentTotals,
+    goal: DailyGoalEntity?,
+    onToToday: () -> Unit,
+) {
     val colors = KcalTheme.colors
     val type = KcalTheme.type
-    val target = goal?.kcal?.takeIf { it > 0 }
-    val remaining = target?.let { it - totals.kcal }
-    val over = remaining != null && remaining < 0
+    val head = headline(totals.kcal, goal?.kcal?.takeIf { it > 0 }, past)
 
     Row(
         modifier = Modifier
@@ -253,21 +267,61 @@ private fun CompactRow(date: LocalDate, totals: NutrimentTotals, goal: DailyGoal
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CapsLabel(formatDateCaps(date), Modifier.weight(1f))
+        CapsLabel(formatDateCaps(date))
+        // В свёрнутой шапке недели нет — а дорога назад к сегодня нужна и здесь.
+        if (past) {
+            Text(
+                "← сегодня",
+                style = type.label,
+                color = colors.text2,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .clip(RoundedCornerShape(KcalShapes.chip))
+                    .clickable(onClick = onToToday)
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+        }
+        Spacer(Modifier.weight(1f))
         Text(
-            text = (remaining?.let { abs(it) } ?: totals.kcal).toString(),
+            text = head.number.toString(),
             style = type.number,
-            color = if (over) colors.error else colors.text,
+            color = if (head.over) colors.error else colors.text,
         )
         Spacer(Modifier.width(4.dp))
         Text(
-            text = when {
-                remaining == null -> "съедено"
-                over -> "перебор"
-                else -> "осталось"
-            },
+            text = head.label,
             style = type.label,
-            color = if (over) colors.error else colors.text2,
+            color = if (head.over) colors.error else colors.text2,
+        )
+    }
+}
+
+/** Что крупно в шапке: число, подпись к нему и строка под ним. */
+data class Headline(val number: Int, val label: String, val line: String, val over: Boolean)
+
+/**
+ * Крупное число шапки.
+ *
+ * Сегодня — сколько ещё можно: трекер открывают с этим вопросом. Про прошедший
+ * день «осталось» — неправда, оставаться больше нечему: крупно стоит съеденное,
+ * а под ним — как это вышло относительно цели того дня.
+ */
+fun headline(eatenKcal: Int, targetKcal: Int?, past: Boolean): Headline {
+    if (targetKcal == null) return Headline(eatenKcal, "съедено", "задать цель ›", over = false)
+    val over = eatenKcal > targetKcal
+    return if (past) {
+        Headline(
+            number = eatenKcal,
+            label = "съедено",
+            line = if (over) "перебор ${eatenKcal - targetKcal} ›" else "из $targetKcal ›",
+            over = over,
+        )
+    } else {
+        Headline(
+            number = abs(targetKcal - eatenKcal),
+            label = if (over) "перебор" else "осталось",
+            line = "$eatenKcal / $targetKcal ›",
+            over = over,
         )
     }
 }

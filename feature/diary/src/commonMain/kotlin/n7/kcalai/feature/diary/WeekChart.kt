@@ -2,6 +2,7 @@ package n7.kcalai.feature.diary
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -41,17 +43,49 @@ import n7.kcalai.ui.KcalTheme
  * менялась, — это ложь про прошлые дни.
  */
 @Composable
-fun WeekChart(days: List<DaySummary>, modifier: Modifier = Modifier) {
+fun WeekChart(
+    days: List<DaySummary>,
+    modifier: Modifier = Modifier,
+    selected: Long = days.lastOrNull()?.dateEpochDay ?: 0,
+    onSelectDay: ((Long) -> Unit)? = null,
+) {
     if (days.isEmpty()) return
 
+    // Поверх графика — семь мест под палец, по одному на день: тап открывает
+    // переписку этого дня. Столбик бывает в две точки высотой, и целиться
+    // в него самого было бы издевательством.
+    Box(modifier.fillMaxWidth()) {
+        WeekPlot(days, selected)
+        if (onSelectDay != null) {
+            Row(Modifier.matchParentSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                days.forEach { day ->
+                    val date = LocalDate.fromEpochDays(day.dateEpochDay)
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onSelectDay(day.dateEpochDay) }
+                            .semantics {
+                                contentDescription = "${formatDateCaps(date)}, ${day.kcal} ккал"
+                                this.selected = day.dateEpochDay == selected
+                            }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeekPlot(days: List<DaySummary>, selected: Long, modifier: Modifier = Modifier) {
     val colors = KcalTheme.colors
-    val todayEpochDay = days.last().dateEpochDay
     val todayGoal = days.last().goalKcal
 
     // Пустой недели нет смысла рисовать: семь серых черточек занимают
     // полтора сантиметра шапки и ничего не говорят. Остаётся строка дней.
     if (!hasWeekData(days)) {
-        WeekdayRow(days, todayEpochDay, modifier)
+        WeekdayRow(days, selected, modifier)
         return
     }
 
@@ -82,7 +116,7 @@ fun WeekChart(days: List<DaySummary>, modifier: Modifier = Modifier) {
                     Bar(
                         kcal = day.kcal,
                         scale = scale,
-                        isToday = day.dateEpochDay == todayEpochDay,
+                        isSelected = day.dateEpochDay == selected,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -107,16 +141,16 @@ fun WeekChart(days: List<DaySummary>, modifier: Modifier = Modifier) {
             }
         }
 
-        WeekdayRow(days, todayEpochDay, Modifier.padding(top = 5.dp))
+        WeekdayRow(days, selected, Modifier.padding(top = 5.dp))
     }
 }
 
 /** Есть ли что рисовать: хоть один день с едой или с целью. */
 fun hasWeekData(days: List<DaySummary>): Boolean = days.any { it.kcal > 0 || it.goalKcal != null }
 
-/** «пн вт ср…» под столбиками. Сегодняшний день светлее остальных. */
+/** «пн вт ср…» под столбиками. Открытый день темнее остальных. */
 @Composable
-private fun WeekdayRow(days: List<DaySummary>, todayEpochDay: Long, modifier: Modifier = Modifier) {
+private fun WeekdayRow(days: List<DaySummary>, selected: Long, modifier: Modifier = Modifier) {
     val colors = KcalTheme.colors
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -126,7 +160,7 @@ private fun WeekdayRow(days: List<DaySummary>, todayEpochDay: Long, modifier: Mo
             Text(
                 formatWeekdayShort(LocalDate.fromEpochDays(day.dateEpochDay)),
                 style = KcalTheme.type.time,
-                color = if (day.dateEpochDay == todayEpochDay) colors.text2 else colors.text3,
+                color = if (day.dateEpochDay == selected) colors.text else colors.text3,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f),
             )
@@ -142,7 +176,7 @@ private fun WeekdayRow(days: List<DaySummary>, todayEpochDay: Long, modifier: Mo
  * а столбик обязан стоять ровно там, где велит число.
  */
 @Composable
-private fun Bar(kcal: Int, scale: Int, isToday: Boolean, modifier: Modifier = Modifier) {
+private fun Bar(kcal: Int, scale: Int, isSelected: Boolean, modifier: Modifier = Modifier) {
     val colors = KcalTheme.colors
     val fraction = if (scale > 0) (kcal.toFloat() / scale).coerceIn(0f, 1f) else 0f
 
@@ -154,7 +188,7 @@ private fun Bar(kcal: Int, scale: Int, isToday: Boolean, modifier: Modifier = Mo
                 // должны выглядеть по-разному.
                 .height((PLOT_HEIGHT * fraction).coerceAtLeast(MIN_BAR_HEIGHT))
                 .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                .background(if (isToday) colors.bubble else colors.line)
+                .background(if (isSelected) colors.bubble else colors.line)
         )
     }
 }

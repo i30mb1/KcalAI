@@ -24,7 +24,7 @@ class SpeakerTest {
 
     @Test
     fun `свои пузырьки и разделитель без персонажа`() {
-        assertNull(speakerOf(FeedItem.DaySeparator))
+        assertNull(speakerOf(FeedItem.DaySeparator("сегодня")))
         val meal = groupIntoBubbles(
             listOf(
                 DiaryEntryEntity(

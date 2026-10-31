@@ -1,6 +1,10 @@
 package n7.kcalai.feature.diary
 
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.totals
@@ -26,8 +30,13 @@ sealed interface FeedItem {
     /** Ключ для `LazyColumn`: от него зависит, что переиспользуется, а что анимируется. */
     val key: String
 
-    /** «сегодня» по центру. Единственный разделитель: прошлых дней в ленте пока нет. */
-    data object DaySeparator : FeedItem {
+    /**
+     * «сегодня», «вчера», «четверг, 29 окт» по центру — чья это переписка.
+     *
+     * Один на ленту: один день — одна переписка, и прошлые дни открываются
+     * каждый своей лентой, а не подклеиваются сверху.
+     */
+    data class DaySeparator(val label: String) : FeedItem {
         override val key get() = "separator"
     }
 
@@ -72,9 +81,23 @@ sealed interface FeedItem {
         override val key get() = "remaining"
     }
 
-    /** Съедено больше цели. Стоит в конце ленты вместо остатка. */
-    data class Over(val overKcal: Int) : FeedItem {
+    /**
+     * Съедено больше цели. Стоит в конце ленты вместо остатка.
+     *
+     * @param past день прошёл: это итог, и обещать «завтра это учтётся» поздно
+     */
+    data class Over(val overKcal: Int, val past: Boolean = false) : FeedItem {
         override val key get() = "over"
+    }
+
+    /**
+     * Прошлый день без записей: не утренняя сводка, а приглашение дописать.
+     *
+     * «Доброе утро! Сегодня можно 2100 ккал» над вчерашним днём было бы неправдой,
+     * а пустая лента — непонятной: сломано или правда ничего.
+     */
+    data class EmptyDay(val title: String) : FeedItem {
+        override val key get() = "empty-day"
     }
 
     /** Набранное не находится. Ответ репликой, а не строкой в композере. */
@@ -177,11 +200,12 @@ fun daySummary(goalKcal: Int?, week: List<DaySummary>, outline: DayOutline?, hou
  * и их ведёт Яйцо: у ленты должен быть один голос по умолчанию, а не жребий.
  */
 fun speakerOf(item: FeedItem): Mascot? = when (item) {
-    FeedItem.DaySeparator, is FeedItem.Meal -> null
+    is FeedItem.DaySeparator, is FeedItem.Meal -> null
     is FeedItem.Over -> Mascot.BUTTER
     is FeedItem.Gap -> Mascot.GRAIN
     is FeedItem.Remaining -> if (item.plan.remainingProtCg > 0) Mascot.EGG else Mascot.GRAIN
     is FeedItem.Summary,
+    is FeedItem.EmptyDay,
     is FeedItem.NotFound,
     is FeedItem.WeightLogged,
     is FeedItem.Reply,
@@ -253,6 +277,7 @@ fun groupIntoBubbles(
     entries: List<DiaryEntryEntity>,
     zone: TimeZone,
     nowMillis: Long,
+    activeMeal: MealType? = null,
 ): List<FeedItem.Meal> {
     if (entries.isEmpty()) return emptyList()
 
@@ -286,12 +311,13 @@ fun groupIntoBubbles(
     // Куда попадёт следующая запись: приём по правилу времени, а для перекуса —
     // последний кластер, и только пока он не остыл. Иначе подписи нет вовсе:
     // запись создаст новый пузырёк, и указывать на существующий было бы ложью.
-    val hour = localAt(nowMillis, zone).hour
-    val activeMeal = mealForHour(hour, sorted.lastOrNull(), nowMillis)
-    val activeGroup = if (activeMeal == MealType.SNACK) {
-        lastSnack?.takeIf { nowMillis - it.last().createdAt <= CLUSTER_GAP_MS }
-    } else {
-        byMeal[activeMeal]
+    // В прошлом дне приём выбирает человек, и перекус дописывается к последнему:
+    // «остывать» там нечему, время у него — время того дня, см. [pastEntryTime].
+    val target = activeMeal ?: mealForHour(localAt(nowMillis, zone).hour, sorted.lastOrNull(), nowMillis)
+    val activeGroup = when {
+        target != MealType.SNACK -> byMeal[target]
+        activeMeal != null -> lastSnack
+        else -> lastSnack?.takeIf { nowMillis - it.last().createdAt <= CLUSTER_GAP_MS }
     }
 
     return groups.sortedBy { bubbleOrder(it, zone) }.map { group ->
@@ -320,6 +346,43 @@ fun gapPosition(bubbles: List<FeedItem.Meal>, gap: MealGap, zone: TimeZone): Int
 
 /** Разрыв, после которого еда считается отдельной. Он же — срок годности активного пузырька. */
 const val CLUSTER_GAP_MS = 60 * 60 * 1000L
+
+/**
+ * В какой приём писать прошлый день, пока человек не выбрал сам.
+ *
+ * В прошлый день возвращаются чаще всего за забытым приёмом — поэтому первый
+ * основной, которого в том дне нет. Все три на месте — значит, дописывают
+ * перекус.
+ */
+fun defaultPastMeal(entries: List<DiaryEntryEntity>): MealType {
+    val logged = entries.mapTo(HashSet()) { it.meal }
+    return MAIN_MEALS.firstOrNull { it !in logged } ?: MealType.SNACK
+}
+
+private val MAIN_MEALS = listOf(MealType.BREAKFAST, MealType.LUNCH, MealType.DINNER)
+
+/** Час приёма прошлого дня, когда его времени взять неоткуда: середина окна. */
+val PAST_MEAL_HOURS: Map<MealType, Int> = mapOf(
+    MealType.BREAKFAST to 8,
+    MealType.LUNCH to 13,
+    MealType.DINNER to 19,
+    MealType.SNACK to 16,
+)
+
+/**
+ * Время записи, дописанной в прошлый день.
+ *
+ * Не «сейчас»: ужин, дописанный утром, получил бы девять утра, встал бы в ленте
+ * не на своё место и научил бы модели привычек, что ужинают в девять. Поэтому —
+ * минута после последней записи того же приёма, чтобы встать следом, а если
+ * приёма в том дне ещё нет — его обычный час.
+ */
+fun pastEntryTime(day: LocalDate, meal: MealType, entries: List<DiaryEntryEntity>, zone: TimeZone): Long {
+    entries.filter { it.meal == meal }.maxOfOrNull { it.createdAt }?.let { return it + MINUTE_MS }
+    return LocalDateTime(day, LocalTime(PAST_MEAL_HOURS.getValue(meal), 0)).toInstant(zone).toEpochMilliseconds()
+}
+
+private const val MINUTE_MS = 60_000L
 
 private fun localAt(millis: Long, zone: TimeZone) =
     kotlin.time.Instant.fromEpochMilliseconds(millis).toLocalDateTime(zone)

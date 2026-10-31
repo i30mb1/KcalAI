@@ -102,8 +102,12 @@ sealed interface ComposerRow {
     /** Набранное похоже на вес. Поиск не запускался вовсе. */
     data class Weight(val grams: Int) : ComposerRow
 
-    /** Идея 1: что человек, скорее всего, съест сейчас. Поле пустое. */
-    data class Predictions(val items: List<FoodCandidate>) : ComposerRow
+    /**
+     * Идея 1: что человек, скорее всего, съест сейчас. Поле пустое.
+     *
+     * @param meal приём прошлого дня, для которого подобрано; `null` — сегодня, «сейчас»
+     */
+    data class Predictions(val items: List<FoodCandidate>, val meal: MealType? = null) : ComposerRow
 
     /** Выдача поиска по набранному. */
     data class Results(val items: List<ResolvedItem>) : ComposerRow
@@ -135,8 +139,16 @@ data class DiaryUiState(
     val totals: NutrimentTotals = NutrimentTotals.ZERO,
     /** Калории по дням за неделю, последний элемент — сегодня. Всегда семь элементов. */
     val week: List<DaySummary> = emptyList(),
+    /** Открытый день: его переписка в ленте, его итоги в шапке. */
     val date: LocalDate = Clock.System.todayIn(TimeZone.currentSystemDefault()),
+    /** Сегодня по календарю. Открытый день бывает прошлым, сегодня — нет. */
+    val today: LocalDate = date,
+    /** Цель открытого дня — та, что действовала тогда. */
     val goal: DailyGoalEntity? = null,
+    /** Цель на сегодня — её правит шит: новая цель всегда действует с сегодня. */
+    val todayGoal: DailyGoalEntity? = null,
+    /** В какой приём пишется прошлый день. `null` — открыт сегодняшний. */
+    val pastMeal: MealType? = null,
     /** Нужен шиту цели: расход по факту подставляется в калории одним тапом. */
     val tdee: TdeeEstimate? = null,
     val overlay: Overlay = Overlay.None,
@@ -189,7 +201,7 @@ class DiaryViewModel(
      * и возвращать его при каждом открытии экрана значило бы копить в ленте
      * отчёты о прошлых разговорах.
      */
-    private val sessionReplies = MutableStateFlow<List<FeedItem>>(emptyList())
+    private val sessionReplies = MutableStateFlow<List<DayReply>>(emptyList())
 
     /**
      * Номер следующей реплики сессии — сквозной, а не размер списка.
@@ -217,6 +229,21 @@ class DiaryViewModel(
     private val today: Long get() = date.value.toEpochDays()
 
     /**
+     * Открытый день — одна переписка. `null` — сегодня: так открытый сегодняшний
+     * день сам переходит на новый, когда наступает полночь.
+     */
+    private val picked = MutableStateFlow<LocalDate?>(null)
+
+    /** Приём, в который пишется прошлый день. `null` — первый незаписанный, см. [defaultPastMeal]. */
+    private val pickedMeal = MutableStateFlow<MealType?>(null)
+
+    private val shownDate: LocalDate get() = picked.value ?: date.value
+    private val shownDay: Long get() = shownDate.toEpochDays()
+
+    /** Открыт прошлый день: пишем в него задним числом, о «сейчас» не спрашиваем. */
+    private val isPast: Boolean get() = shownDay < today
+
+    /**
      * День, цель и неделя — одним потоком и без выдуманного начального значения.
      *
      * `null` — база ещё не ответила. Раньше у каждого потока было своё начальное
@@ -225,41 +252,63 @@ class DiaryViewModel(
      * что добавили. Порознь потоки к тому же приходили в любом порядке: неделя
      * со столбиком за сегодня — и «0 съедено» в шапке над ней.
      */
-    private val data = date.flatMapLatest { today ->
-        val epochDay = today.toEpochDays()
-        combine(
-            diary.observeDay(epochDay),
-            diary.observeGoal(epochDay),
-            diary.observeWeek(epochDay),
-            ::DayData,
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    private val data = combine(date, picked) { now, chosen -> now to (chosen ?: now) }
+        .distinctUntilChanged()
+        .flatMapLatest { (now, day) ->
+            combine(
+                diary.observeDay(day.toEpochDays()),
+                diary.observeGoal(day.toEpochDays()),
+                // Неделя — всегда последние семь дней до сегодня: по ней и выбирают день.
+                diary.observeWeek(now.toEpochDays()),
+                diary.observeGoal(now.toEpochDays()),
+            ) { dayTotals, goal, week, todayGoal -> DayData(day, now, dayTotals, goal, week, todayGoal) }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** Записи сегодняшнего дня — для правил, которым нужен день прямо сейчас. */
-    private val todayEntries: List<DiaryEntryEntity> get() = data.value?.day?.entries.orEmpty()
+    /**
+     * Записи открытого дня — для правил, которым нужен день прямо сейчас.
+     *
+     * Пока база не ответила на только что открытый день, в [data] ещё лежит
+     * прошлый, и его записи сюда не годятся.
+     */
+    private val shownEntries: List<DiaryEntryEntity>
+        get() = data.value?.takeIf { it.date == shownDate }?.day?.entries.orEmpty()
 
     private val typing = combine(input, answer, scanned, overlay, ::TypingState)
 
     /** Вложенный combine: у типизированного [combine] потолок в пять потоков, а их больше. */
-    private val typingAndReplies = combine(typing, sessionReplies, date, outboxItem) { typed, replies, today, pending ->
-        Session(typed, replies, today, pending)
+    private val typingAndReplies = combine(typing, sessionReplies, outboxItem, pickedMeal) { typed, replies, pending, meal ->
+        Session(typed, replies, pending, meal)
     }
 
     val state = combine(typingAndReplies, data, personalState) { session, loaded, models ->
-        val (typed, replies, today, pending) = session
+        val (typed, replies, pending, meal) = session
         if (loaded == null) {
-            return@combine DiaryUiState(input = typed.input, date = today, overlay = typed.overlay)
+            return@combine DiaryUiState(input = typed.input, overlay = typed.overlay)
         }
+        val day = loaded.date.toEpochDays()
+        val pastMeal = if (loaded.date < loaded.today) meal ?: defaultPastMeal(loaded.day.entries) else null
         DiaryUiState(
             input = typed.input,
-            feed = buildFeed(loaded.day, loaded.goal, loaded.week, models, typed, replies, pending),
-            composer = composerRow(typed, models),
+            feed = buildFeed(
+                loaded = loaded,
+                models = models,
+                typed = typed,
+                replies = replies.filter { it.day == day }.map { it.item },
+                // Очередь отправки — разговор о сегодняшнем, во вчерашней переписке ей не место.
+                pending = pending.takeIf { pastMeal == null },
+                pastMeal = pastMeal,
+            ),
+            composer = composerRow(typed, models, pastMeal),
             totals = loaded.day.totals,
             week = loaded.week,
-            date = today,
+            date = loaded.date,
+            today = loaded.today,
             goal = loaded.goal,
+            todayGoal = loaded.todayGoal,
             tdee = models.tdee,
             overlay = typed.overlay,
+            pastMeal = pastMeal,
             loaded = true,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiaryUiState())
@@ -271,6 +320,22 @@ class DiaryViewModel(
     }
 
     /**
+     * Открыть переписку дня — тапом по столбику недели.
+     *
+     * Сегодняшний день открывается как `null`, а не датой: тогда он сам
+     * перейдёт на завтра в полночь, а не застрянет вчерашним.
+     */
+    fun onSelectDay(epochDay: Long) {
+        picked.value = LocalDate.fromEpochDays(epochDay).takeIf { epochDay < today }
+        pickedMeal.value = null
+    }
+
+    /** В какой приём писать прошлый день: чипсы над строкой ввода. */
+    fun onPickMeal(meal: MealType) {
+        pickedMeal.value = meal
+    }
+
+    /**
      * Что нашлось на [query].
      *
      * Запрос хранится вместе с выдачей намеренно: ответ показывается до тех пор,
@@ -279,15 +344,25 @@ class DiaryViewModel(
      */
     private class Answer(val query: String, val items: List<ResolvedItem>)
 
-    /** День так, как его отдала база. */
-    private class DayData(val day: DayTotals, val goal: DailyGoalEntity?, val week: List<DaySummary>)
+    /** Открытый день так, как его отдала база, — и сегодняшнее, нужное шапке и шиту цели. */
+    private class DayData(
+        val date: LocalDate,
+        val today: LocalDate,
+        val day: DayTotals,
+        val goal: DailyGoalEntity?,
+        val week: List<DaySummary>,
+        val todayGoal: DailyGoalEntity?,
+    )
 
-    /** То, что живёт только в этой сессии экрана: набор, реплики, дата, очередь. */
+    /** Реплика сессии и день, в переписке которого она стоит. */
+    private data class DayReply(val day: Long, val item: FeedItem)
+
+    /** То, что живёт только в этой сессии экрана: набор, реплики, очередь, приём прошлого дня. */
     private data class Session(
         val typed: TypingState,
-        val replies: List<FeedItem>,
-        val today: LocalDate,
+        val replies: List<DayReply>,
         val outbox: FeedItem.Outbox?,
+        val meal: MealType?,
     )
 
     private class TypingState(
@@ -355,10 +430,12 @@ class DiaryViewModel(
         // в каждый обработчик по отдельности означало бы рано или поздно забыть один
         // из них и показывать вчерашние предсказания.
         viewModelScope.launch {
-            data.filterNotNull()
-                .map { it.day to it.goal }
-                .distinctUntilChanged()
-                .collect { (dayTotals, _) -> recompute(dayTotals.entries) }
+            combine(
+                data.filterNotNull().map { Triple(it.date, it.day, it.goal) }.distinctUntilChanged(),
+                // Подсказки прошлого дня — для выбранного приёма: «обычно на ужин».
+                pickedMeal,
+            ) { (_, dayTotals, _), _ -> dayTotals }
+                .collect { dayTotals -> recompute(dayTotals.entries) }
         }
     }
 
@@ -370,27 +447,38 @@ class DiaryViewModel(
      * Порядок реплик — порядок разговора: сначала то, что записал человек, потом
      * то, что на это отвечает приложение. Поэтому остаток и перебор стоят в конце,
      * а сводка дня — в начале и только пока записей нет.
+     *
+     * Прошлый день — та же переписка, но без вопросов «про сейчас»: пропущенный
+     * обед, остаток и утренняя сводка про вчера звучат поздно и неправдой.
+     *
+     * @param pastMeal приём, в который пишется прошлый день; `null` — открыт сегодняшний
      */
     private fun buildFeed(
-        dayTotals: DayTotals,
-        goal: DailyGoalEntity?,
-        week: List<DaySummary>,
+        loaded: DayData,
         models: PersonalState,
         typed: TypingState,
         replies: List<FeedItem>,
         pending: FeedItem.Outbox?,
+        pastMeal: MealType?,
     ): List<FeedItem> {
         val now = nowMillis()
         val hour = hourNow()
-        val feed = mutableListOf<FeedItem>(FeedItem.DaySeparator)
+        val isToday = pastMeal == null
+        val dayTotals = loaded.day
+        val goal = loaded.goal
+        val feed = mutableListOf<FeedItem>(FeedItem.DaySeparator(dayLabel(loaded.date, loaded.today)))
 
         if (dayTotals.entries.isEmpty()) {
-            feed += daySummary(goal?.kcal?.takeIf { it > 0 }, week, models.dayOutline, hour)
+            feed += if (isToday) {
+                daySummary(goal?.kcal?.takeIf { it > 0 }, loaded.week, models.dayOutline, hour)
+            } else {
+                FeedItem.EmptyDay(formatDayFull(loaded.date))
+            }
         }
 
-        val bubbles = groupIntoBubbles(dayTotals.entries, zone, now)
+        val bubbles = groupIntoBubbles(dayTotals.entries, zone, now, activeMeal = pastMeal)
         val body = bubbles.toMutableList<FeedItem>()
-        models.mealGap?.let { gap ->
+        models.mealGap?.takeIf { isToday }?.let { gap ->
             body.add(gapPosition(bubbles, gap, zone), FeedItem.Gap(gap))
         }
         feed += body
@@ -401,8 +489,8 @@ class DiaryViewModel(
         // на один и тот же вопрос, и показывать оба значило бы спорить с собой.
         val target = goal?.kcal?.takeIf { it > 0 }
         if (target != null && dayTotals.totals.kcal > target) {
-            feed += FeedItem.Over(dayTotals.totals.kcal - target)
-        } else {
+            feed += FeedItem.Over(dayTotals.totals.kcal - target, past = !isToday)
+        } else if (isToday) {
             models.dayPlan?.let { feed += FeedItem.Remaining(it, nextMealTitle(hour)) }
         }
 
@@ -418,14 +506,14 @@ class DiaryViewModel(
      * уже однозначен; скан важнее предсказаний, потому что человек только что
      * навёл камеру.
      */
-    private fun composerRow(typed: TypingState, models: PersonalState): ComposerRow = when {
+    private fun composerRow(typed: TypingState, models: PersonalState, pastMeal: MealType?): ComposerRow = when {
         // Скан идёт первым: пока в строке стоит опознанный товар, всё остальное
         // в этом ряду было бы предложением заменить точное совпадение догадкой.
         typed.scanned != null -> ComposerRow.Scanned(typed.scanned.withTypedGrams(typed.input))
         typed.weightGrams != null -> ComposerRow.Weight(typed.weightGrams)
         typed.suggestions.isNotEmpty() -> ComposerRow.Results(typed.suggestions)
         typed.input.isBlank() && models.predictions.isNotEmpty() ->
-            ComposerRow.Predictions(models.predictions)
+            ComposerRow.Predictions(models.predictions, meal = pastMeal)
         else -> ComposerRow.None
     }
 
@@ -439,12 +527,16 @@ class DiaryViewModel(
         try {
             personal.invalidate()
             val context = context(prevRefKey = entries.lastRefKey())
+            // Пропуск, остаток и раскладка дня — про «сейчас», и считать их
+            // для прошлого дня незачем: в его переписке их нет.
+            val forToday = !isPast
             personalState.value = PersonalState(
                 predictions = personal.predictions(context),
-                mealGap = personal.mealGap(context, entries),
-                dayPlan = personal.remainingPlan(context, entries),
-                tdee = personal.tdee(context.dateEpochDay),
-                dayOutline = personal.dayOutline(context),
+                mealGap = if (forToday) personal.mealGap(context, entries) else null,
+                dayPlan = if (forToday) personal.remainingPlan(context, entries) else null,
+                // Расход нужен шиту цели, а цель всегда правится с сегодня.
+                tdee = personal.tdee(today),
+                dayOutline = if (forToday) personal.dayOutline(context) else null,
             )
         } catch (cancellation: CancellationException) {
             throw cancellation
@@ -492,13 +584,14 @@ class DiaryViewModel(
 
         viewModelScope.launch {
             val context = context()
+            val target = meal ?: context.meal
             diary.add(
                 candidate = candidate,
                 grams = item.grams,
-                meal = meal ?: context.meal,
+                meal = target,
                 date = context.dateEpochDay,
                 source = item.source,
-                now = nowMillis(),
+                now = entryTime(target),
             )
             if (pickedIndex >= 0) {
                 learn(query, shown, pickedIndex, item, candidate, context)
@@ -519,13 +612,14 @@ class DiaryViewModel(
 
         viewModelScope.launch {
             val context = context()
+            val target = meal ?: context.meal
             diary.add(
                 candidate = candidate,
                 grams = grams,
-                meal = meal ?: context.meal,
+                meal = target,
                 date = context.dateEpochDay,
                 source = EntrySource.MANUAL,
-                now = nowMillis(),
+                now = entryTime(target),
             )
         }
     }
@@ -616,7 +710,7 @@ class DiaryViewModel(
                 meal = context.meal,
                 date = context.dateEpochDay,
                 source = item.source,
-                now = nowMillis(),
+                now = entryTime(context.meal),
             )
         }
     }
@@ -747,14 +841,17 @@ class DiaryViewModel(
      */
     fun onDeleteEntry(entry: DiaryEntryEntity) {
         overlay.value = Overlay.None
-        val snapshot = todayEntries.find { it.id == entry.id } ?: entry
+        val snapshot = shownEntries.find { it.id == entry.id } ?: entry
 
         viewModelScope.launch {
             diary.delete(snapshot.id)
-            sessionReplies.value += FeedItem.Deleted(
-                id = nextReplyId(),
-                entry = snapshot,
-                time = formatTime(nowMillis(), zone),
+            sessionReplies.value += DayReply(
+                day = snapshot.dateEpochDay,
+                item = FeedItem.Deleted(
+                    id = nextReplyId(),
+                    entry = snapshot,
+                    time = formatTime(nowMillis(), zone),
+                ),
             )
         }
     }
@@ -766,8 +863,8 @@ class DiaryViewModel(
      * вставил бы запись с тем же ключом ещё раз.
      */
     fun onUndoDelete(item: FeedItem.Deleted) {
-        if (item !in sessionReplies.value) return
-        sessionReplies.value -= item
+        if (sessionReplies.value.none { it.item == item }) return
+        sessionReplies.value = sessionReplies.value.filterNot { it.item == item }
 
         viewModelScope.launch {
             try {
@@ -875,11 +972,15 @@ class DiaryViewModel(
         }
     }
 
+    /** Ответ про отправку — разговор о сегодняшнем, в сегодняшней переписке. */
     private fun reply(text: String) {
-        sessionReplies.value += FeedItem.Reply(
-            id = nextReplyId(),
-            text = text,
-            time = formatTime(nowMillis(), zone),
+        sessionReplies.value += DayReply(
+            day = today,
+            item = FeedItem.Reply(
+                id = nextReplyId(),
+                text = text,
+                time = formatTime(nowMillis(), zone),
+            ),
         )
     }
 
@@ -904,30 +1005,48 @@ class DiaryViewModel(
         input.value = ""
         answer.value = null
 
+        // Вес пишется в открытый день: «вчера утром было 82,4» — обычное дело.
+        val day = shownDay
         viewModelScope.launch {
-            personal.logWeight(today, grams, nowMillis())
-            sessionReplies.value += FeedItem.WeightLogged(
-                id = nextReplyId(),
-                grams = grams,
-                time = formatTime(nowMillis(), zone),
+            personal.logWeight(day, grams, nowMillis())
+            sessionReplies.value += DayReply(
+                day = day,
+                item = FeedItem.WeightLogged(
+                    id = nextReplyId(),
+                    grams = grams,
+                    time = formatTime(nowMillis(), zone),
+                ),
             )
-            recompute(todayEntries)
+            recompute(shownEntries)
         }
     }
 
     fun onDismissMealGap(meal: MealType) {
         viewModelScope.launch {
             personal.dismissMealGap(today, meal)
-            recompute(todayEntries)
+            recompute(shownEntries)
         }
     }
 
-    private fun context(prevRefKey: String? = null) = PersonalContext(
-        dateEpochDay = today,
-        hourOfDay = hourNow(),
-        meal = mealForNow(),
-        prevRefKey = prevRefKey,
-    )
+    /**
+     * Контекст моделей: открытый день, приём и час.
+     *
+     * У прошлого дня час — не «сейчас», а время выбранного приёма: подсказки
+     * к вчерашнему ужину должны быть ужинными, а не утренними.
+     */
+    private fun context(prevRefKey: String? = null): PersonalContext {
+        val meal = mealForNow()
+        return PersonalContext(
+            dateEpochDay = shownDay,
+            hourOfDay = if (isPast) PAST_MEAL_HOURS.getValue(meal) else hourNow(),
+            meal = meal,
+            prevRefKey = prevRefKey,
+        )
+    }
+
+    /** Когда записана еда: сегодня — сейчас, в прошлом дне — время его приёма. */
+    private fun entryTime(meal: MealType): Long =
+        if (isPast) pastEntryTime(shownDate, meal, shownEntries, zone) else nowMillis()
 
     /**
      * Приём пищи по времени суток и по тому, что уже записано.
@@ -936,11 +1055,18 @@ class DiaryViewModel(
      * и разойтись они не вправе — иначе подпись «новое добавится сюда» окажется
      * под пузырьком, в который запись не попадёт.
      */
-    private fun mealForNow(): MealType = mealForHour(
-        hour = hourNow(),
-        lastEntry = todayEntries.lastOrNull(),
-        nowMillis = nowMillis(),
-    )
+    private fun mealForNow(): MealType =
+        if (isPast) {
+            // У прошлого дня нет «сейчас»: приём выбирает человек, а по умолчанию —
+            // первый незаписанный, за ним в прошлый день обычно и возвращаются.
+            pickedMeal.value ?: defaultPastMeal(shownEntries)
+        } else {
+            mealForHour(
+                hour = hourNow(),
+                lastEntry = shownEntries.lastOrNull(),
+                nowMillis = nowMillis(),
+            )
+        }
 
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 250L

@@ -53,6 +53,21 @@ fun formatDateCaps(date: LocalDate): String {
     return "${WEEKDAYS_FULL[date.weekdayIndex]}, ${date.day} ${date.monthShort}"
 }
 
+/**
+ * Чья переписка в ленте: «сегодня», «вчера», дальше — «четверг, 29 окт».
+ *
+ * Словом, пока это возможно: «вчера» читается быстрее даты и не требует
+ * сверяться с календарём.
+ */
+fun dayLabel(day: LocalDate, today: LocalDate): String = when (today.toEpochDays() - day.toEpochDays()) {
+    0L -> "сегодня"
+    1L -> "вчера"
+    else -> formatDateCaps(day)
+}
+
+/** «Четверг, 29 окт» — заголовок пустого прошлого дня. */
+fun formatDayFull(day: LocalDate): String = formatDateCaps(day).replaceFirstChar(Char::uppercase)
+
 /** «14 сент» — дата начала действия цели в шите. */
 fun formatDayMonthShort(date: LocalDate): String =
     "${date.day} ${date.monthShort}"
@@ -88,6 +103,9 @@ fun nextMealTitle(hour: Int): String = when {
     hour < 16 -> "на обед"
     else -> "на ужин"
 }
+
+/** «на ужин» — «обычно на ужин»: подсказки для приёма прошлого дня. */
+fun mealNameTarget(meal: MealType): String = "на ${mealNameLower(meal)}"
 
 /** «обед» — название приёма в середине фразы. */
 fun mealNameLower(meal: MealType): String = mealName(meal).lowercase()
