@@ -1,14 +1,26 @@
 package n7.kcalai.feature.diary
 
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.TextStyle
-import java.util.Locale
+import kotlin.time.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import n7.kcalai.model.MealType
 import n7.kcalai.personal.DayOutline
 
-private val RU = Locale("ru")
+/*
+ * Названия — свои таблицы, а не локаль платформы. Сокращения те же, что даёт
+ * CLDR на JVM и Android: «сент», «нояб», месяц в родительном падеже — «9 мая».
+ */
+private val WEEKDAYS_SHORT = listOf("пн", "вт", "ср", "чт", "пт", "сб", "вс")
+private val WEEKDAYS_FULL =
+    listOf("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье")
+private val MONTHS_SHORT =
+    listOf("янв", "февр", "мар", "апр", "мая", "июн", "июл", "авг", "сент", "окт", "нояб", "дек")
+
+private val LocalDate.weekdayIndex: Int get() = dayOfWeek.ordinal
+private val LocalDate.monthShort: String get() = MONTHS_SHORT[month.ordinal]
+
+private fun Int.twoDigits(): String = toString().padStart(2, '0')
 
 /** Сотые грамма -> «4,6». Целые значения показываются без хвоста. */
 fun formatCentigrams(cg: Int): String {
@@ -23,7 +35,7 @@ fun formatGrams(grams: Int): String =
 
 /** «пн», «вт» — ось графика за неделю: полное название дня туда семь раз не помещается. */
 fun formatWeekdayShort(date: LocalDate): String =
-    date.dayOfWeek.getDisplayName(TextStyle.SHORT, RU).trimEnd('.')
+    WEEKDAYS_SHORT[date.weekdayIndex]
 
 /** Название приёма пищи в именительном падеже. */
 fun mealName(meal: MealType): String = when (meal) {
@@ -34,23 +46,21 @@ fun mealName(meal: MealType): String = when (meal) {
 }
 
 /** «13:00» — час без минут: точнее модель привычек всё равно не знает. */
-fun formatHour(hour: Int): String = "%02d:00".format(hour)
+fun formatHour(hour: Int): String = "${hour.twoDigits()}:00"
 
 /** «понедельник, 14 сент» — шапка. Месяц сокращён: строка стоит рядом с заголовком. */
 fun formatDateCaps(date: LocalDate): String {
-    val weekday = date.dayOfWeek.getDisplayName(TextStyle.FULL, RU)
-    val month = date.month.getDisplayName(TextStyle.SHORT, RU).trimEnd('.')
-    return "$weekday, ${date.dayOfMonth} $month"
+    return "${WEEKDAYS_FULL[date.weekdayIndex]}, ${date.day} ${date.monthShort}"
 }
 
 /** «14 сент» — дата начала действия цели в шите. */
 fun formatDayMonthShort(date: LocalDate): String =
-    "${date.dayOfMonth} ${date.month.getDisplayName(TextStyle.SHORT, RU).trimEnd('.')}"
+    "${date.day} ${date.monthShort}"
 
 /** «14:10» — время записи в местной зоне: `createdAt` хранится в UTC-миллисекундах. */
-fun formatTime(millis: Long, zone: ZoneId): String =
-    Instant.ofEpochMilli(millis).atZone(zone).toLocalTime().let {
-        "%02d:%02d".format(it.hour, it.minute)
+fun formatTime(millis: Long, zone: TimeZone): String =
+    Instant.fromEpochMilliseconds(millis).toLocalDateTime(zone).let {
+        "${it.hour.twoDigits()}:${it.minute.twoDigits()}"
     }
 
 /** «82,4 кг» — вес тела. Десятые обязательны: без них взвешивание бессмысленно. */
@@ -80,7 +90,7 @@ fun nextMealTitle(hour: Int): String = when {
 }
 
 /** «обед» — название приёма в середине фразы. */
-fun mealNameLower(meal: MealType): String = mealName(meal).lowercase(RU)
+fun mealNameLower(meal: MealType): String = mealName(meal).lowercase()
 
 /** «обеда» — «сегодня обеда в дневнике нет». */
 fun mealNameGenitive(meal: MealType): String = when (meal) {

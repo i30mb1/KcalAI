@@ -8,9 +8,9 @@ import n7.kcalai.model.Nutriments
 import n7.kcalai.personal.MealGap
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.ui.mascot.Mascot
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.Test
 
 /**
  * Где стоит каждый из троих.
@@ -76,7 +76,7 @@ class MascotPlacementTest {
 
         assertEquals(Mascot.EGG, chipOwner(ComposerRow.Results(listOf(resolved))))
         assertEquals(Mascot.GRAIN, chipOwner(ComposerRow.Predictions(listOf(candidate(prot = 100, fat = 30, carb = 2300)))))
-        assertNull("у веса макроса нет", chipOwner(ComposerRow.Weight(82_400)))
+        assertNull(chipOwner(ComposerRow.Weight(82_400)), "у веса макроса нет")
         assertNull(chipOwner(ComposerRow.None))
     }
 }

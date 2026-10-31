@@ -1,30 +1,31 @@
 package n7.kcalai.feature.diary
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import java.time.Clock
-import java.time.LocalDate
-import java.time.LocalTime
 import kotlin.math.roundToInt
+import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.todayIn
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
+import n7.kcalai.model.Log
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.model.Nutriments
@@ -132,7 +133,7 @@ data class DiaryUiState(
     val totals: NutrimentTotals = NutrimentTotals.ZERO,
     /** Калории по дням за неделю, последний элемент — сегодня. Всегда семь элементов. */
     val week: List<DaySummary> = emptyList(),
-    val date: LocalDate = LocalDate.now(),
+    val date: LocalDate = Clock.System.todayIn(TimeZone.currentSystemDefault()),
     val goal: DailyGoalEntity? = null,
     /** Нужен шиту цели: расход по факту подставляется в калории одним тапом. */
     val tdee: TdeeEstimate? = null,
@@ -156,8 +157,15 @@ class DiaryViewModel(
     private val onScanFinished: () -> Unit = {},
     /** Очередь отправки. `null` — сервера нет, и пузырька про него не будет. */
     private val outbox: DiaryOutbox? = null,
-    private val clock: Clock = Clock.systemDefaultZone(),
+    private val clock: Clock = Clock.System,
+    /** Зона, в которой считаются день и час: `createdAt` хранится в UTC. */
+    private val zone: TimeZone = TimeZone.currentSystemDefault(),
 ) : ViewModel() {
+
+    private fun nowMillis(): Long = clock.now().toEpochMilliseconds()
+
+    private fun hourNow(): Int = clock.now().toLocalDateTime(zone).hour
+
 
     private val input = MutableStateFlow("")
     private val answer = MutableStateFlow<Answer?>(null)
@@ -185,16 +193,16 @@ class DiaryViewModel(
      * обращение: экран, оставленный открытым через полночь, показывал бы вчера,
      * а записывал в сегодня. Обновляется в [onResume].
      */
-    private val date = MutableStateFlow(LocalDate.now(clock))
-    private val today: Long get() = date.value.toEpochDay()
+    private val date = MutableStateFlow(clock.todayIn(zone))
+    private val today: Long get() = date.value.toEpochDays()
 
-    private val day = date.flatMapLatest { diary.observeDay(it.toEpochDay()) }
+    private val day = date.flatMapLatest { diary.observeDay(it.toEpochDays()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DayTotals.EMPTY)
 
-    private val goal = date.flatMapLatest { diary.observeGoal(it.toEpochDay()) }
+    private val goal = date.flatMapLatest { diary.observeGoal(it.toEpochDays()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val week = date.flatMapLatest { diary.observeWeek(it.toEpochDay()) }
+    private val week = date.flatMapLatest { diary.observeWeek(it.toEpochDays()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val typing = combine(input, answer, scanned, overlay, ::TypingState)
@@ -222,7 +230,7 @@ class DiaryViewModel(
 
     /** Экран снова на виду. Если за это время наступил новый день — переключаемся на него. */
     fun onResume() {
-        val now = LocalDate.now(clock)
+        val now = clock.todayIn(zone)
         if (now != date.value) date.value = now
     }
 
@@ -328,9 +336,8 @@ class DiaryViewModel(
         replies: List<FeedItem>,
         pending: FeedItem.Outbox?,
     ): List<FeedItem> {
-        val zone = clock.zone
-        val now = clock.millis()
-        val hour = LocalTime.now(clock).hour
+        val now = nowMillis()
+        val hour = hourNow()
         val feed = mutableListOf<FeedItem>(FeedItem.DaySeparator)
 
         if (dayTotals.entries.isEmpty()) {
@@ -447,7 +454,7 @@ class DiaryViewModel(
                 meal = meal ?: context.meal,
                 date = context.dateEpochDay,
                 source = item.source,
-                now = clock.millis(),
+                now = nowMillis(),
             )
             if (pickedIndex >= 0) {
                 learn(query, shown, pickedIndex, item, candidate, context)
@@ -474,7 +481,7 @@ class DiaryViewModel(
                 meal = meal ?: context.meal,
                 date = context.dateEpochDay,
                 source = EntrySource.MANUAL,
-                now = clock.millis(),
+                now = nowMillis(),
             )
         }
     }
@@ -501,7 +508,7 @@ class DiaryViewModel(
                 portion = item.portionUnit
                     ?.takeUnless { item.gramsGuessed }
                     ?.let { unit -> PortionObservation(candidate.ref, unit, item.gramsPerUnit) },
-                now = clock.millis(),
+                now = nowMillis(),
             )
         )
     }
@@ -565,7 +572,7 @@ class DiaryViewModel(
                 meal = context.meal,
                 date = context.dateEpochDay,
                 source = item.source,
-                now = clock.millis(),
+                now = nowMillis(),
             )
         }
     }
@@ -588,7 +595,7 @@ class DiaryViewModel(
 
         viewModelScope.launch {
             val candidate = try {
-                food.saveOwnProduct(gtin, name, nutriments, clock.millis())
+                food.saveOwnProduct(gtin, name, nutriments, nowMillis())
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {
@@ -683,7 +690,7 @@ class DiaryViewModel(
         if (grams <= 0) return
 
         viewModelScope.launch {
-            if (grams != entry.grams) personal.onGramsEdited(entry.id, grams, clock.millis())
+            if (grams != entry.grams) personal.onGramsEdited(entry.id, grams, nowMillis())
             if (meal != entry.meal) diary.moveToMeal(entry.id, meal)
         }
     }
@@ -767,7 +774,7 @@ class DiaryViewModel(
         sessionReplies.value += FeedItem.Reply(
             id = sessionReplies.value.size,
             text = text,
-            time = formatTime(clock.millis(), clock.zone),
+            time = formatTime(nowMillis(), zone),
         )
     }
 
@@ -793,11 +800,11 @@ class DiaryViewModel(
         answer.value = null
 
         viewModelScope.launch {
-            personal.logWeight(today, grams, clock.millis())
+            personal.logWeight(today, grams, nowMillis())
             sessionReplies.value += FeedItem.WeightLogged(
                 id = sessionReplies.value.size,
                 grams = grams,
-                time = formatTime(clock.millis(), clock.zone),
+                time = formatTime(nowMillis(), zone),
             )
             recompute(day.value.entries)
         }
@@ -812,7 +819,7 @@ class DiaryViewModel(
 
     private fun context(prevRefKey: String? = null) = PersonalContext(
         dateEpochDay = today,
-        hourOfDay = LocalTime.now(clock).hour,
+        hourOfDay = hourNow(),
         meal = mealForNow(),
         prevRefKey = prevRefKey,
     )
@@ -825,9 +832,9 @@ class DiaryViewModel(
      * под пузырьком, в который запись не попадёт.
      */
     private fun mealForNow(): MealType = mealForHour(
-        hour = LocalTime.now(clock).hour,
+        hour = hourNow(),
         lastEntry = day.value.entries.lastOrNull(),
-        nowMillis = clock.millis(),
+        nowMillis = nowMillis(),
     )
 
     private companion object {
@@ -837,20 +844,6 @@ class DiaryViewModel(
 
         /** Когда у товара не указана порция: сто грамм — то, к чему привязан сам КБЖУ. */
         const val DEFAULT_PORTION_G = 100
-    }
-
-    class Factory(
-        private val diary: DiaryRepository,
-        private val resolver: TextFoodResolver,
-        private val personal: PersonalRepository,
-        private val food: FoodRepository,
-        private val onContributionQueued: () -> Unit = {},
-        private val onScanFinished: () -> Unit = {},
-        private val outbox: DiaryOutbox? = null,
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            DiaryViewModel(diary, resolver, personal, food, onContributionQueued, onScanFinished, outbox) as T
     }
 }
 

@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlin.time.ExperimentalTime
 import n7.kcalai.feature.diary.DiaryRoute
 import n7.kcalai.feature.diary.DiaryViewModel
 import n7.kcalai.ui.KcalTheme
@@ -14,6 +15,8 @@ import n7.kcalai.work.ScanUploadWorker
 
 class MainActivity : ComponentActivity() {
 
+    // Конструктор дневника принимает kotlin.time.Clock — в Kotlin 2.2 он ещё экспериментальный.
+    @OptIn(ExperimentalTime::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -23,8 +26,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             KcalTheme {
                 DiaryRoute(
-                    viewModel = viewModel(
-                        factory = DiaryViewModel.Factory(
+                    viewModel = viewModel {
+                        DiaryViewModel(
                             diary = container.diaryRepository,
                             resolver = container.textResolver,
                             personal = container.personalRepository,
@@ -36,7 +39,7 @@ class MainActivity : ComponentActivity() {
                             // Пузырёк «не отправлено» — только когда есть куда отправлять.
                             outbox = if (container.serverConfigured) Outbox(applicationContext, container) else null,
                         )
-                    )
+                    },
                 )
             }
         }

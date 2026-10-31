@@ -1,7 +1,7 @@
 package n7.kcalai.feature.diary
 
-import java.time.Instant
-import java.time.ZoneId
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.totals
 import n7.kcalai.model.MealType
@@ -214,8 +214,8 @@ private val MEAL_WINDOWS: Map<MealType, IntRange> = mapOf(
  * ужин остаётся после обеда, а ранний завтрак — перед всем. Перекусы стоят там,
  * когда были: своего окна у них нет.
  */
-private fun bubbleOrder(group: List<DiaryEntryEntity>, zone: ZoneId): Int {
-    val first = Instant.ofEpochMilli(group.first().createdAt).atZone(zone)
+private fun bubbleOrder(group: List<DiaryEntryEntity>, zone: TimeZone): Int {
+    val first = localAt(group.first().createdAt, zone)
     val minuteOfDay = first.hour * 60 + first.minute
     val window = MEAL_WINDOWS[group.first().meal] ?: return minuteOfDay
     return minuteOfDay.coerceIn(window.first * 60, window.last * 60 + 59)
@@ -233,7 +233,7 @@ private fun bubbleOrder(group: List<DiaryEntryEntity>, zone: ZoneId): Int {
  */
 fun groupIntoBubbles(
     entries: List<DiaryEntryEntity>,
-    zone: ZoneId,
+    zone: TimeZone,
     nowMillis: Long,
 ): List<FeedItem.Meal> {
     if (entries.isEmpty()) return emptyList()
@@ -268,7 +268,7 @@ fun groupIntoBubbles(
     // Куда попадёт следующая запись: приём по правилу времени, а для перекуса —
     // последний кластер, и только пока он не остыл. Иначе подписи нет вовсе:
     // запись создаст новый пузырёк, и указывать на существующий было бы ложью.
-    val hour = Instant.ofEpochMilli(nowMillis).atZone(zone).hour
+    val hour = localAt(nowMillis, zone).hour
     val activeMeal = mealForHour(hour, sorted.lastOrNull(), nowMillis)
     val activeGroup = if (activeMeal == MealType.SNACK) {
         lastSnack?.takeIf { nowMillis - it.last().createdAt <= CLUSTER_GAP_MS }
@@ -295,10 +295,13 @@ fun groupIntoBubbles(
  * должен стоять между завтраком и ужином, а не в конце ленты, где он читался бы
  * как вопрос про то, что происходит сейчас.
  */
-fun gapPosition(bubbles: List<FeedItem.Meal>, gap: MealGap, zone: ZoneId): Int =
+fun gapPosition(bubbles: List<FeedItem.Meal>, gap: MealGap, zone: TimeZone): Int =
     bubbles.indexOfLast { bubble ->
-        Instant.ofEpochMilli(bubble.entries.first().createdAt).atZone(zone).hour < gap.typicalHour
+        localAt(bubble.entries.first().createdAt, zone).hour < gap.typicalHour
     } + 1
 
 /** Разрыв, после которого еда считается отдельной. Он же — срок годности активного пузырька. */
 const val CLUSTER_GAP_MS = 60 * 60 * 1000L
+
+private fun localAt(millis: Long, zone: TimeZone) =
+    kotlin.time.Instant.fromEpochMilliseconds(millis).toLocalDateTime(zone)

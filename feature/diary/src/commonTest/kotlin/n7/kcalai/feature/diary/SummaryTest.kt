@@ -1,11 +1,11 @@
 package n7.kcalai.feature.diary
 
 import n7.kcalai.repositories.DaySummary
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 /**
  * Сводка пустого дня и график недели над ней.

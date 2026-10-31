@@ -3,8 +3,8 @@ package n7.kcalai.feature.diary
 import n7.kcalai.model.MealType
 import n7.kcalai.personal.DayOutline
 import n7.kcalai.personal.TypicalMeal
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.Test
 
 /** Русские формы в ленте: то, что человек прочтёт, а не то, что посчитано. */
 class FormatTest {

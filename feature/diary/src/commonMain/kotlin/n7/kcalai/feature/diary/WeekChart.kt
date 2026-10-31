@@ -23,7 +23,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import java.time.LocalDate
+import kotlinx.datetime.LocalDate
 import n7.kcalai.repositories.DaySummary
 import n7.kcalai.ui.KcalTheme
 
@@ -124,7 +124,7 @@ private fun WeekdayRow(days: List<DaySummary>, todayEpochDay: Long, modifier: Mo
     ) {
         days.forEach { day ->
             Text(
-                formatWeekdayShort(LocalDate.ofEpochDay(day.dateEpochDay)),
+                formatWeekdayShort(LocalDate.fromEpochDays(day.dateEpochDay)),
                 style = KcalTheme.type.time,
                 color = if (day.dateEpochDay == todayEpochDay) colors.text2 else colors.text3,
                 textAlign = TextAlign.Center,
@@ -215,7 +215,7 @@ private fun GoalSteps(days: List<DaySummary>, scale: Int, modifier: Modifier = M
  */
 private fun weekSummary(days: List<DaySummary>): String {
     val body = days.joinToString(", ") { day ->
-        val weekday = formatWeekdayShort(LocalDate.ofEpochDay(day.dateEpochDay))
+        val weekday = formatWeekdayShort(LocalDate.fromEpochDays(day.dateEpochDay))
         val goal = day.goalKcal?.let { " из $it" }.orEmpty()
         "$weekday ${day.kcal}$goal"
     }

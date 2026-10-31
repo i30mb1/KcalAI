@@ -1,6 +1,5 @@
 package n7.kcalai.personal
 
-import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -137,7 +136,6 @@ class FoodHistory private constructor(
          * @param zone зона, в которой считается час записи: `createdAt` хранится
          *        в UTC-миллисекундах, а привычки у человека в местном времени
          */
-        @OptIn(ExperimentalTime::class)
         fun from(entries: List<DiaryEntryEntity>, today: Long, zone: TimeZone): FoodHistory {
             val accumulators = LinkedHashMap<String, Accumulator>()
             val transitions = HashMap<String, MutableMap<String, Int>>()

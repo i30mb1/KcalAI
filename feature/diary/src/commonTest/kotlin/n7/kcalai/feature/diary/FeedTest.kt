@@ -1,14 +1,14 @@
 package n7.kcalai.feature.diary
 
-import java.time.ZoneOffset
+import kotlinx.datetime.TimeZone
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.MealType
 import n7.kcalai.personal.MealGap
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 /**
  * Лента дня: какой приём пищи у записи и как записи собираются в пузырьки.
@@ -19,7 +19,7 @@ import org.junit.Test
  */
 class FeedTest {
 
-    private val zone = ZoneOffset.UTC
+    private val zone = TimeZone.UTC
 
     private fun at(hour: Int, minute: Int = 0): Long = (hour * 60L + minute) * 60_000L
 
@@ -192,7 +192,7 @@ class FeedTest {
         )
 
         assertFalse(bubbles[0].active)
-        assertTrue("в 14:00 новое добавится в обед", bubbles[1].active)
+        assertTrue(bubbles[1].active, "в 14:00 новое добавится в обед")
     }
 
     @Test
@@ -245,7 +245,7 @@ class FeedTest {
         )
         val gap = MealGap(MealType.LUNCH, typicalHour = 13, suggestions = emptyList())
 
-        assertEquals("после завтрака и перекуса, перед ужином", 2, gapPosition(bubbles, gap, zone))
+        assertEquals(2, gapPosition(bubbles, gap, zone), "после завтрака и перекуса, перед ужином")
     }
 
     @Test

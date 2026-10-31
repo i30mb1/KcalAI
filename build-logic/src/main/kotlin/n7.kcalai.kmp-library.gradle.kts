@@ -27,6 +27,10 @@ kotlin {
     }
 
     sourceSets {
+        // Instant и Clock из kotlin.time в Kotlin 2.2 ещё экспериментальные, а время
+        // нужно почти везде. В 2.3 они стабильны, и отметку можно будет снять.
+        all { languageSettings.optIn("kotlin.time.ExperimentalTime") }
+
         commonTest.dependencies {
             implementation(kotlin("test"))
         }

@@ -266,5 +266,4 @@ private fun RemoteProduct.toEntity(fetchedAt: Long): CachedProductEntity =
         fetchedAt = fetchedAt,
     )
 
-@OptIn(kotlin.time.ExperimentalTime::class)
 private fun currentTimeMillis(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()

@@ -1,6 +1,6 @@
 package n7.kcalai.feature.diary
 
-import java.time.ZoneOffset
+import kotlinx.datetime.TimeZone
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.MealType
@@ -9,9 +9,9 @@ import n7.kcalai.personal.MealGap
 import n7.kcalai.ui.Macro
 import n7.kcalai.ui.mascot.Mascot
 import n7.kcalai.ui.mascot.mascot
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.Test
 
 /**
  * Кто из троих говорит реплику.
@@ -33,7 +33,7 @@ class SpeakerTest {
                     source = EntrySource.TEXT, foodRef = "generic:1", createdAt = 0,
                 )
             ),
-            ZoneOffset.UTC,
+            TimeZone.UTC,
             nowMillis = 0,
         ).single()
         assertNull(speakerOf(meal))
