@@ -190,9 +190,15 @@ internal class ScanState(initialGtin: String?) {
     /** Название — единственное, чего нельзя ни вычислить, ни проверить арифметикой. */
     val canSave: Boolean get() = name.text.isNotBlank() && check?.valid == true
 
-    /** Сколько из пяти полей заполнено — для кольца и счётчика. */
+    /**
+     * Сколько из пяти полей заполнено: название и четыре числа с этикетки.
+     *
+     * Штрихкод не считается: он необязателен, стоит отдельной строкой, а после
+     * промаха скана заполнен с самого начала — карточка открывалась с «1 из 5»
+     * и, заполненная целиком, показывала «6 из 5».
+     */
     val filledFields: Int
-        get() = listOf(kcal, prot, fat, carb, name, barcode).count { it.filled }
+        get() = listOf(kcal, prot, fat, carb, name).count { it.filled }
 
     val requiredFilled: Int get() = listOf(kcal, prot, fat, carb).count { it.filled }
 
