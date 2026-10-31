@@ -4,6 +4,7 @@ import n7.kcalai.model.MealType
 import n7.kcalai.personal.DayOutline
 import n7.kcalai.personal.TypicalMeal
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.test.Test
 
 /** Русские формы в ленте: то, что человек прочтёт, а не то, что посчитано. */
@@ -27,6 +28,19 @@ class FormatTest {
     fun `вес тела всегда с десятыми`() {
         assertEquals("82,4 кг", formatKg(82_450))
         assertEquals("80,0 кг", formatKg(80_000))
+    }
+
+    /**
+     * Род запроса не угадать: «„Гречка“ не нашлась» верно, «„Борщ“ не нашлась»
+     * и «„Яйца“ не нашлась» — нет. Фраза строится так, чтобы род был не нужен.
+     */
+    @Test
+    fun `реплика «не нашлось» не зависит от рода запроса`() {
+        listOf("борщ", "гречка", "яйца", "молоко").forEach { query ->
+            val text = notFoundText(query)
+            assertTrue(text.startsWith("По запросу «$query» ничего не нашлось."), text)
+            assertTrue("штрих-код" in text && "этикетку" in text, text)
+        }
     }
 
     @Test

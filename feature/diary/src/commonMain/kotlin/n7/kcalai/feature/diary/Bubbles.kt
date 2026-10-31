@@ -449,10 +449,7 @@ fun OverBubble(item: FeedItem.Over) {
 @Composable
 fun NotFoundBubble(item: FeedItem.NotFound) {
     IncomingBubble(item) {
-        BubbleText(
-            "«${item.query}» не нашлась. Попробуйте назвать блюдо иначе, " +
-                "отсканируйте штрих-код или сфотографируйте этикетку — добавим в базу."
-        )
+        BubbleText(notFoundText(item.query))
     }
 }
 
