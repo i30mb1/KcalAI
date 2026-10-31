@@ -466,6 +466,9 @@ private fun ProductCard(
                 onClear = { state.barcode.clear() },
                 onFocus = { if (it) focused = state.barcode },
                 optional = true,
+                // Тринадцать цифр целиком: в поле под четырёхзначные калории код
+                // обрезался, а человек сверяет его с пачкой цифра в цифру.
+                valueWidth = 156.dp,
             )
 
             ScannedNumbers(state, focused)

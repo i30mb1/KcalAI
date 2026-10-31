@@ -301,6 +301,7 @@ fun ProgressRing(
  * @param onClear крестик: снять набранное значение. Распознавание после этого
  *        не подставит его заново — снятое значение оно больше не предлагает,
  *        иначе крестик не делал бы ничего.
+ * @param valueWidth место под значение вместе с единицей и крестиком
  */
 @Composable
 fun ScanEditRow(
@@ -316,6 +317,7 @@ fun ScanEditRow(
     optional: Boolean = false,
     decimal: Boolean = false,
     unit: String? = null,
+    valueWidth: Dp = 104.dp,
 ) {
     val colors = KcalTheme.colors
     val animated by animateFloatAsState(
@@ -348,7 +350,7 @@ fun ScanEditRow(
         )
 
         Row(
-            modifier = Modifier.width(104.dp),
+            modifier = Modifier.width(valueWidth),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End,
         ) {
