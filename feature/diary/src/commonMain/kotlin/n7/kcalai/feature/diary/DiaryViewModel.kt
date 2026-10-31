@@ -182,6 +182,17 @@ class DiaryViewModel(
      */
     private val sessionReplies = MutableStateFlow<List<FeedItem>>(emptyList())
 
+    /**
+     * Номер следующей реплики сессии — сквозной, а не размер списка.
+     *
+     * Реплики уходят из ленты («Удалил…» — после «Вернуть»), и номер по размеру
+     * списка повторил бы ключ реплики, которая всё ещё стоит: `LazyColumn`
+     * на повторном ключе падает.
+     */
+    private var replyCount = 0
+
+    private fun nextReplyId(): Int = replyCount++
+
     /** Что ждёт отправки. `null` — пусто или сервера нет; пузырька нет. */
     private val outboxItem = MutableStateFlow<FeedItem.Outbox?>(null)
 
@@ -288,7 +299,10 @@ class DiaryViewModel(
                     // Поиск не идёт и по строке, дописываемой к отсканированному:
                     // товар уже опознан кодом точнее любого совпадения по названию,
                     // а выдача поверх него была бы шумом.
-                    if (text.isBlank() || parseWeight(text) != null || text.continuesScan()) {
+                    // И по строке без единой буквы: «200» — начало «200 г гречки»,
+                    // а не блюдо, и ответ «ничего не нашлось» перебивал бы человека
+                    // на полуслове.
+                    if (text.isBlank() || parseWeight(text) != null || text.continuesScan() || text.none(Char::isLetter)) {
                         null
                     } else {
                         val items = try {
@@ -695,9 +709,70 @@ class DiaryViewModel(
         }
     }
 
-    fun onDeleteEntry(id: Long) {
+    /**
+     * Удаление — сразу и без вопроса, но с ответом «Удалил… Вернуть».
+     *
+     * Снимок берётся из дня, а не из шита: шит держит запись с момента открытия,
+     * а вернуть надо ровно ту, что лежала в дневнике.
+     */
+    fun onDeleteEntry(entry: DiaryEntryEntity) {
         overlay.value = Overlay.None
-        viewModelScope.launch { diary.delete(id) }
+        val snapshot = day.value.entries.find { it.id == entry.id } ?: entry
+
+        viewModelScope.launch {
+            diary.delete(snapshot.id)
+            sessionReplies.value += FeedItem.Deleted(
+                id = nextReplyId(),
+                entry = snapshot,
+                time = formatTime(nowMillis(), zone),
+            )
+        }
+    }
+
+    /**
+     * «Вернуть»: запись встаёт обратно той же — с прежним id, приёмом и временем.
+     *
+     * Реплика снимается сразу, до записи в базу: второй тап по той же кнопке
+     * вставил бы запись с тем же ключом ещё раз.
+     */
+    fun onUndoDelete(item: FeedItem.Deleted) {
+        if (item !in sessionReplies.value) return
+        sessionReplies.value -= item
+
+        viewModelScope.launch {
+            try {
+                diary.restore(item.entry)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                Log.e(TAG, "не удалось вернуть запись ${item.entry.id}", error)
+            }
+        }
+    }
+
+    /**
+     * ✓ на клавиатуре — то же, что тап по чипсу, когда чипс один и выбирать
+     * не из чего: вес из строки и отсканированный товар с дописанным весом.
+     *
+     * Выдачу поиска ✓ не трогает. Там выбор между вариантами, и делать его
+     * за человека значило бы добавлять первое попавшееся совпадение вслепую.
+     *
+     * @return `true`, если что-то записано; иначе ✓ просто прячет клавиатуру
+     */
+    fun onSubmit(): Boolean {
+        val text = input.value
+        val scan = scanned.value
+        return when {
+            scan != null -> {
+                onPickScanned(scan.withTypedGrams(text))
+                true
+            }
+            parseWeight(text) != null -> {
+                onLogWeight()
+                true
+            }
+            else -> false
+        }
     }
 
     // --- Цель и вес -------------------------------------------------------------------
@@ -772,7 +847,7 @@ class DiaryViewModel(
 
     private fun reply(text: String) {
         sessionReplies.value += FeedItem.Reply(
-            id = sessionReplies.value.size,
+            id = nextReplyId(),
             text = text,
             time = formatTime(nowMillis(), zone),
         )
@@ -802,7 +877,7 @@ class DiaryViewModel(
         viewModelScope.launch {
             personal.logWeight(today, grams, nowMillis())
             sessionReplies.value += FeedItem.WeightLogged(
-                id = sessionReplies.value.size,
+                id = nextReplyId(),
                 grams = grams,
                 time = formatTime(nowMillis(), zone),
             )

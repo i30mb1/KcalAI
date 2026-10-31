@@ -67,7 +67,9 @@ fun DiaryRoute(viewModel: DiaryViewModel) {
         onDismissGap = viewModel::onDismissMealGap,
         onSendOutbox = viewModel::onSendOutbox,
         onEditEntry = viewModel::onEditEntry,
+        onUndoDelete = viewModel::onUndoDelete,
         onLogWeight = viewModel::onLogWeight,
+        onSubmit = viewModel::onSubmit,
         onOpenGoal = viewModel::onOpenGoal,
         onOpenScan = viewModel::onOpenScan,
         onOpenLabelScan = viewModel::onOpenLabelScan,
@@ -89,7 +91,7 @@ fun DiaryRoute(viewModel: DiaryViewModel) {
         is Overlay.EditEntry -> EntrySheet(
             entry = overlay.entry,
             onSave = { grams, meal -> viewModel.onSaveEntry(overlay.entry, grams, meal) },
-            onDelete = { viewModel.onDeleteEntry(overlay.entry.id) },
+            onDelete = { viewModel.onDeleteEntry(overlay.entry) },
             onDismiss = viewModel::onDismissOverlay,
         )
 
@@ -133,7 +135,9 @@ fun DiaryScreen(
     onDismissGap: (MealType) -> Unit,
     onSendOutbox: () -> Unit,
     onEditEntry: (DiaryEntryEntity) -> Unit,
+    onUndoDelete: (FeedItem.Deleted) -> Unit,
     onLogWeight: () -> Unit,
+    onSubmit: () -> Boolean,
     onOpenGoal: (GoalField) -> Unit,
     onOpenScan: () -> Unit,
     onOpenLabelScan: () -> Unit,
@@ -217,6 +221,7 @@ fun DiaryScreen(
             feed = state.feed,
             listState = listState,
             onEditEntry = onEditEntry,
+            onUndoDelete = onUndoDelete,
             onPickForMeal = onPickForMeal,
             onDismissGap = onDismissGap,
             onSendOutbox = onSendOutbox,
@@ -233,6 +238,7 @@ fun DiaryScreen(
             onPickScanned = onPickScanned,
             onPickCandidate = onPickCandidate,
             onLogWeight = onLogWeight,
+            onSubmit = onSubmit,
             onOpenScan = onOpenScan,
             onOpenLabelScan = onOpenLabelScan,
             onOpenLabelDebug = onOpenLabelDebug,
@@ -255,6 +261,7 @@ private fun Feed(
     feed: List<FeedItem>,
     listState: LazyListState,
     onEditEntry: (DiaryEntryEntity) -> Unit,
+    onUndoDelete: (FeedItem.Deleted) -> Unit,
     onPickForMeal: (FoodCandidate, MealType) -> Unit,
     onDismissGap: (MealType) -> Unit,
     onSendOutbox: () -> Unit,
@@ -393,6 +400,7 @@ private fun Feed(
 
                     is FeedItem.WeightLogged -> WeightBubble(item)
                     is FeedItem.Reply -> ReplyBubble(item)
+                    is FeedItem.Deleted -> DeletedBubble(item, onUndo = { onUndoDelete(item) })
                     is FeedItem.Outbox -> OutboxBubble(item, onSendOutbox)
                 }
             }

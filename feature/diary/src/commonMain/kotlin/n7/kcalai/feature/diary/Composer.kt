@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MonitorWeight
@@ -86,6 +87,7 @@ fun Composer(
     onPickScanned: (ResolvedItem) -> Unit,
     onPickCandidate: (FoodCandidate) -> Unit,
     onLogWeight: () -> Unit,
+    onSubmit: () -> Boolean,
     onOpenScan: () -> Unit,
     onOpenLabelScan: () -> Unit,
     onOpenLabelDebug: () -> Unit,
@@ -156,6 +158,13 @@ fun Composer(
                     cursorBrush = SolidColor(colors.text),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    // ✓ записывает вес и отсканированный товар — там чипс один,
+                    // и тянуться к нему мимо клавиатуры незачем. Клавиатура
+                    // при этом остаётся: следующее блюдо набирают сразу, как
+                    // после тапа по чипсу. Нечего записать — ✓ просто её прячет.
+                    keyboardActions = KeyboardActions(
+                        onDone = { if (!onSubmit()) defaultKeyboardAction(ImeAction.Done) },
+                    ),
                     modifier = Modifier.fillMaxWidth().focusRequester(requester),
                 )
                 if (input.isEmpty()) {

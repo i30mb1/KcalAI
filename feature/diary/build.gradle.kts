@@ -23,5 +23,10 @@ kotlin {
             implementation(libs.cmp.lifecycle.viewmodel.compose)
             implementation(libs.cmp.lifecycle.runtime.compose)
         }
+        commonTest.dependencies {
+            // Экранная модель живёт на viewModelScope, то есть на главном диспетчере:
+            // в тестах его подменяет тестовый, со своим виртуальным временем.
+            implementation(libs.kotlinx.coroutines.test)
+        }
     }
 }

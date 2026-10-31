@@ -470,6 +470,24 @@ fun ReplyBubble(item: FeedItem.Reply) {
 }
 
 /**
+ * Запись удалена — и её можно вернуть.
+ *
+ * Удаление в шите идёт без вопроса «вы уверены?», а значит, отмена обязана
+ * быть под рукой: случайный тап не должен стирать завтрак насовсем.
+ */
+@Composable
+fun DeletedBubble(item: FeedItem.Deleted, onUndo: () -> Unit) {
+    val colors = KcalTheme.colors
+
+    IncomingBubble(item, time = item.time) {
+        BubbleText("Удалил «${item.entry.displayName} · ${formatGrams(item.entry.grams)}»")
+        KcalChip(onClick = onUndo, background = colors.bubble, modifier = Modifier.padding(top = 10.dp)) {
+            Text("Вернуть", style = KcalTheme.type.chip, color = colors.onBubble)
+        }
+    }
+}
+
+/**
  * Очередь отправки: что скопилось и кнопка.
  *
  * Воркеры уносят это сами, когда есть сеть, — но молча, и человек не знает,

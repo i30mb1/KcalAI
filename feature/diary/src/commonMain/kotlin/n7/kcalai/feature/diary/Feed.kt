@@ -107,6 +107,20 @@ sealed interface FeedItem {
     data class Reply(val id: Int, val text: String, val time: String) : FeedItem {
         override val key get() = "reply-$id"
     }
+
+    /**
+     * Запись удалена — и её можно вернуть.
+     *
+     * Удаление идёт без вопроса «вы уверены?»: на десятой записи за день он
+     * дороже самой опечатки. Но без отмены случайный тап стирал запись насовсем,
+     * поэтому ответ на удаление несёт кнопку «Вернуть». После возврата реплика
+     * уходит из ленты: запись снова стоит в своём пузырьке, и говорить больше не о чем.
+     *
+     * [entry] — снимок записи целиком: вернуть надо ту же запись, а не похожую.
+     */
+    data class Deleted(val id: Int, val entry: DiaryEntryEntity, val time: String) : FeedItem {
+        override val key get() = "deleted-$id"
+    }
 }
 
 /**
@@ -171,6 +185,7 @@ fun speakerOf(item: FeedItem): Mascot? = when (item) {
     is FeedItem.NotFound,
     is FeedItem.WeightLogged,
     is FeedItem.Reply,
+    is FeedItem.Deleted,
     is FeedItem.Outbox -> Mascot.EGG
 }
 

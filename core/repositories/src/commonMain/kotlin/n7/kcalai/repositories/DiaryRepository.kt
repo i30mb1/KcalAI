@@ -97,6 +97,15 @@ class DiaryRepository(
 
     suspend fun delete(id: Long) = diaryDao.delete(id)
 
+    /**
+     * Отмена удаления: запись возвращается снимком целиком — с прежним id,
+     * приёмом пищи и временем. Добавленная заново встала бы в ленте по времени
+     * возврата, и обед, удалённый по ошибке вечером, вернулся бы ужином.
+     */
+    suspend fun restore(entry: DiaryEntryEntity) {
+        diaryDao.insert(entry)
+    }
+
     /** Человек сказал, что это был обед, а не ужин. Правило по времени тут ни при чём. */
     suspend fun moveToMeal(id: Long, meal: MealType) = diaryDao.updateMeal(id, meal)
 

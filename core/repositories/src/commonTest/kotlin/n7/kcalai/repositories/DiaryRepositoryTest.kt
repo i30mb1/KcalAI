@@ -98,6 +98,22 @@ class DiaryRepositoryTest {
         assertEquals(200, entry.grams)
     }
 
+    /**
+     * Отмена удаления возвращает ту же запись, а не похожую: с прежним id,
+     * приёмом пищи, весом и временем. Новая запись встала бы в ленте по времени
+     * возврата — обед, удалённый по ошибке вечером, вернулся бы ужином.
+     */
+    @Test
+    fun `удалённая запись возвращается той же самой`() = runBlocking {
+        add(grams = 150, date = TODAY, meal = MealType.LUNCH, now = 1_000)
+        val deleted = repository.observeDay(TODAY).first().entries.single()
+        repository.delete(deleted.id)
+
+        repository.restore(deleted)
+
+        assertEquals(listOf(deleted), repository.observeDay(TODAY).first().entries)
+    }
+
     private companion object {
         const val TODAY = 20_000L
     }
@@ -108,8 +124,10 @@ private class FakeDiaryDao : DiaryDao {
     private val entries = MutableStateFlow<List<DiaryEntryEntity>>(emptyList())
     private var nextId = 1L
 
+    /** Как Room с автоключом: ноль — выдать новый id, иначе вставить с переданным. */
     override suspend fun insert(entry: DiaryEntryEntity): Long {
-        val id = nextId++
+        val id = if (entry.id != 0L) entry.id else nextId++
+        nextId = maxOf(nextId, id + 1)
         entries.value += entry.copy(id = id)
         return id
     }

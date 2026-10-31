@@ -22,7 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -439,9 +439,13 @@ fun EntrySheet(
             modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
             horizontalArrangement = Arrangement.spacedBy(9.dp),
         ) {
-            // Удаление — квадратной кнопкой и без подтверждения: запись
-            // восстанавливается одним тапом по чипсу, а диалог «вы уверены?»
-            // на каждой опечатке дороже самой опечатки.
+            // Удаление — квадратной кнопкой и без подтверждения: в ленте после
+            // него встаёт «Удалил… Вернуть», а диалог «вы уверены?» на каждой
+            // опечатке дороже самой опечатки.
+            //
+            // Корзина, а не крестик: крестик рядом с «Сохранить» читается как
+            // «закрыть без изменений», и человек, передумавший править вес,
+            // стирал запись.
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -451,7 +455,7 @@ fun EntrySheet(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    Icons.Default.Close,
+                    Icons.Outlined.Delete,
                     contentDescription = "Удалить ${entry.displayName}",
                     tint = colors.error,
                     modifier = Modifier.size(20.dp),
