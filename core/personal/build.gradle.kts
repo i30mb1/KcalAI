@@ -1,13 +1,18 @@
 plugins {
-    id("n7.kcalai.android-library")
+    id("n7.kcalai.kmp-library")
 }
 
-android {
-    namespace = "n7.kcalai.personal"
-}
+kotlin {
+    android {
+        namespace = "n7.kcalai.personal"
+    }
 
-dependencies {
-    api(project(":core:model"))
-    api(project(":core:database"))
-    api(libs.kotlinx.coroutines.core)
+    sourceSets {
+        commonMain.dependencies {
+            api(project(":core:model"))
+            api(project(":core:database"))
+            api(libs.kotlinx.coroutines.core)
+            api(libs.kotlinx.datetime)
+        }
+    }
 }

@@ -2,7 +2,7 @@ package n7.kcalai
 
 import android.content.Context
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
-import java.time.ZoneId
+import kotlinx.datetime.TimeZone
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -110,7 +110,7 @@ class AppContainer(context: Context) {
             personalDao = database.personalDao(),
             bodyMetricDao = database.bodyMetricDao(),
             goalDao = database.goalDao(),
-            zone = ZoneId.systemDefault(),
+            zone = TimeZone.currentSystemDefault(),
         )
     }
 

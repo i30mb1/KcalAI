@@ -1,12 +1,16 @@
 plugins {
-    id("n7.kcalai.android-library")
+    id("n7.kcalai.kmp-library")
 }
 
-android {
-    namespace = "n7.kcalai.resolver"
-}
+kotlin {
+    android {
+        namespace = "n7.kcalai.resolver"
+    }
 
-dependencies {
-    api(project(":core:model"))
-    api(project(":core:repositories"))
+    sourceSets {
+        commonMain.dependencies {
+            api(project(":core:model"))
+            api(project(":core:repositories"))
+        }
+    }
 }

@@ -11,6 +11,8 @@ room = "2.8.5"
 sqlite = "2.7.1"
 # 1.11.0 требует kotlin-stdlib 2.2.20 — новее встроенного в AGP компилятора 2.2.10.
 coroutines = "1.10.2"
+# 0.7.x: Instant и Clock переехали в kotlin.time, здесь — зоны и календарь.
+datetime = "0.7.1"
 # Потолок задаёт compileSdk 36: BOM 2026.08+ тянет compose ui 1.12.x с minCompileSdk 37.
 composeBom = "2026.06.01"
 activityCompose = "1.13.0"
@@ -48,6 +50,7 @@ androidx-sqlite = { group = "androidx.sqlite", name = "sqlite", version.ref = "s
 androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "sqlite" }
 
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "datetime" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
