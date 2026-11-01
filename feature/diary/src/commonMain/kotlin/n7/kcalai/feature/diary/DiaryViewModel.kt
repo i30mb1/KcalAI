@@ -62,6 +62,10 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.channels.Channel
 import kotlin.time.Instant
+import n7.kcalai.mascot.isNight
+import n7.kcalai.mascot.Speech
+import n7.kcalai.mascot.Reaction
+import n7.kcalai.database.totals
 
 /** Поле шита цели, в котором должен стоять курсор при открытии. */
 enum class GoalField { KCAL, PROT, FAT, CARB }
@@ -158,6 +162,12 @@ data class DiaryUiState(
     /** Нужен шиту цели: помощь с целью начинается с уже записанного веса. */
     val lastWeightGrams: Int? = null,
     val overlay: Overlay = Overlay.None,
+    /** Облачки над персонажами. */
+    val speech: List<SpeechUi> = emptyList(),
+    /** Последний сигнал сцене: кому подпрыгнуть, когда праздновать. */
+    val cue: CueUi? = null,
+    /** Ночь: персонажей застают спящими. */
+    val night: Boolean = false,
     /**
      * База ответила: день, цель и неделя прочитаны.
      *
@@ -225,6 +235,15 @@ class DiaryViewModel(
     /** Что ждёт отправки. `null` — пусто или сервера нет; пузырька нет. */
     private val outboxItem = MutableStateFlow<FeedItem.Outbox?>(null)
 
+    /** Облачки над персонажами — по одному на каждого. */
+    private val speech = MutableStateFlow<List<SpeechUi>>(emptyList())
+
+    /** Последний сигнал сцене. */
+    private val cue = MutableStateFlow<CueUi?>(null)
+
+    /** Сквозной номер облачков и сигналов: одинаковые подряд различаются. */
+    private var stageIds = 0L
+
     /**
      * Сегодняшняя дата — одна на экран и на записи.
      *
@@ -291,7 +310,10 @@ class DiaryViewModel(
         Session(typed, replies, pending, meal)
     }
 
-    val state = combine(typingAndReplies, data, personalState, brain.profile) { session, loaded, models, profile ->
+    /** Облачки и сигнал сцене — одним потоком: у [combine] потолок в пять. */
+    private val stage = combine(speech, cue) { lines, signal -> lines to signal }
+
+    val state = combine(typingAndReplies, data, personalState, brain.profile, stage) { session, loaded, models, profile, scene ->
         val (typed, replies, pending, meal) = session
         if (loaded == null) {
             return@combine DiaryUiState(input = typed.input, overlay = typed.overlay)
@@ -321,6 +343,9 @@ class DiaryViewModel(
             lastWeightGrams = models.lastWeightGrams,
             overlay = typed.overlay,
             pastMeal = pastMeal,
+            speech = scene.first,
+            cue = scene.second,
+            night = isNight(hourNow()),
             loaded = true,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiaryUiState())
@@ -336,12 +361,54 @@ class DiaryViewModel(
         refreshOutbox()
         // Человек снова здесь: всё написанное персонажами он видит в ленте, а планировщик
         // знает, что мешать сейчас не надо.
-        viewModelScope.launch { brain.onAppOpened(clock.now()) }
+        // Не было три часа и больше — встречают.
+        viewModelScope.launch { show(brain.onAppOpened(clock.now())) }
     }
 
-    /** Дневник открыт тапом по уведомлению персонажа. */
+    /** Дневник открыт тапом по уведомлению персонажа: автор радуется, что его прочитали. */
     fun onOpenedFromMessage(messageId: Long) {
-        viewModelScope.launch { brain.react(MascotEvent.Opened(messageId), clock.now()) }
+        viewModelScope.launch { show(brain.react(MascotEvent.Opened(messageId), clock.now())) }
+    }
+
+    // --- Сцена: облачка и сигналы -------------------------------------------------------
+
+    /** Касание персонажа: тык, трюк, подняли, отпустили, погладили, разбудили. */
+    fun onMascotEvent(event: MascotEvent) {
+        viewModelScope.launch { show(brain.react(event, clock.now())) }
+    }
+
+    /** Телефон тряхнули — голова кружится у всех. */
+    fun onPhoneShaken() = onMascotEvent(MascotEvent.Shaken)
+
+    private fun show(reaction: Reaction?) {
+        reaction ?: return
+        reaction.cue?.let { cue.value = CueUi(++stageIds, it.kind, it.mascot) }
+        reaction.speech?.let(::say)
+    }
+
+    /** Облачко над персонажем. У каждого одно: новое сменяет прошлое, а не встаёт стопкой. */
+    private fun say(line: Speech) {
+        val bubble = SpeechUi(++stageIds, line.mascot, line.text)
+        speech.value = speech.value.filterNot { it.mascot == line.mascot } + bubble
+        viewModelScope.launch {
+            delay(speechDurationMs(line.text))
+            speech.value = speech.value.filterNot { it.id == bubble.id }
+        }
+    }
+
+    /** Калории открытого дня прямо сейчас — точка отсчёта для «закрыл цель». */
+    private fun dayKcal(): Int = shownEntries.sumOf { it.totals().kcal }
+
+    /**
+     * Еда записана: хозяин макроса гордится, а запись, точно закрывшая цель, —
+     * праздник всех троих. Только сегодня: дописанный вчерашний ужин — не событие.
+     */
+    private suspend fun reactToMeal(entryId: Long, kcalBefore: Int, today: Boolean) {
+        if (!today) return
+        val entry = diary.entry(entryId) ?: return
+        val goal = data.value?.goal?.kcal?.takeIf { it > 0 }
+        val reached = goal != null && reachedGoal(kcalBefore, kcalBefore + entry.totals().kcal, goal)
+        show(brain.react(if (reached) MascotEvent.GoalReached else MascotEvent.Ate(entry), clock.now()))
     }
 
     /**
@@ -609,11 +676,13 @@ class DiaryViewModel(
 
         input.value = ""
         answer.value = null
+        val before = dayKcal()
+        val today = !isPast
 
         viewModelScope.launch {
             val context = context()
             val target = meal ?: context.meal
-            diary.add(
+            val id = diary.add(
                 candidate = candidate,
                 grams = item.grams,
                 meal = target,
@@ -624,6 +693,7 @@ class DiaryViewModel(
             if (pickedIndex >= 0) {
                 learn(query, shown, pickedIndex, item, candidate, context)
             }
+            reactToMeal(id, before, today)
         }
     }
 
@@ -637,11 +707,13 @@ class DiaryViewModel(
     fun onPickPrediction(candidate: FoodCandidate, meal: MealType? = null) {
         val grams = candidate.servingG ?: return
         if (grams <= 0) return
+        val before = dayKcal()
+        val today = !isPast
 
         viewModelScope.launch {
             val context = context()
             val target = meal ?: context.meal
-            diary.add(
+            val id = diary.add(
                 candidate = candidate,
                 grams = grams,
                 meal = target,
@@ -649,6 +721,7 @@ class DiaryViewModel(
                 source = EntrySource.MANUAL,
                 now = entryTime(target),
             )
+            reactToMeal(id, before, today)
         }
     }
 
@@ -738,9 +811,11 @@ class DiaryViewModel(
 
         scanned.value = null
         input.value = ""
+        val before = dayKcal()
+        val today = !isPast
         viewModelScope.launch {
             val context = context()
-            diary.add(
+            val id = diary.add(
                 candidate = candidate,
                 grams = item.grams,
                 meal = context.meal,
@@ -748,6 +823,7 @@ class DiaryViewModel(
                 source = item.source,
                 now = entryTime(context.meal),
             )
+            reactToMeal(id, before, today)
         }
     }
 

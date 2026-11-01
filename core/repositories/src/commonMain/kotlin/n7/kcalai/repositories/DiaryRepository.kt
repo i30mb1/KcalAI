@@ -56,6 +56,9 @@ class DiaryRepository(
         now: Long,
     ): Long = diaryDao.insert(candidate.toEntity(grams, meal, date, source, now))
 
+    /** Запись как она легла в дневник — персонажам, чтобы отозваться на неё. */
+    suspend fun entry(id: Long): DiaryEntryEntity? = diaryDao.findById(id)
+
     fun observeDay(date: Long): Flow<DayTotals> =
         diaryDao.observeDay(date).map { entries ->
             DayTotals(entries = entries, totals = entries.sumTotals())

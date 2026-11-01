@@ -21,6 +21,10 @@ import n7.kcalai.model.MealType
 import n7.kcalai.model.Mascot
 import n7.kcalai.database.WriteConsent
 import n7.kcalai.database.MascotProfileEntity
+import n7.kcalai.mascot.MascotEvent
+import n7.kcalai.mascot.CueKind
+import n7.kcalai.database.DailyGoalEntity
+import kotlinx.coroutines.test.runCurrent
 
 /**
  * Экранная модель дневника глазами человека: что он набрал, что нажал
@@ -445,5 +449,104 @@ class DiaryViewModelTest {
         harness.mascotDao.upsertProfile(MascotProfileEntity(name = "Женя", nameAsked = true))
         harness.addEntry("Гречка", 200, MealType.BREAKFAST, minutesAgo = 60)
         harness.addEntry("Кефир", 250, MealType.BREAKFAST, minutesAgo = 10)
+    }
+
+    // --- Сцена: облачка и сигналы -------------------------------------------------------
+
+    @Test
+    fun `третий тык — облачко, и оно уходит само`() = runTest(dispatcher) {
+        val vm = screen()
+
+        vm.onMascotEvent(MascotEvent.Poked(Mascot.EGG, count = 3))
+        runCurrent()
+
+        val bubble = vm.state.value.speech.single()
+        assertEquals(Mascot.EGG, bubble.mascot)
+        assertTrue(bubble.text.isNotBlank())
+
+        advanceUntilIdle()
+        assertTrue(vm.state.value.speech.isEmpty(), "облачко живёт секунды")
+    }
+
+    @Test
+    fun `у персонажа одно облачко — новое сменяет прошлое`() = runTest(dispatcher) {
+        val vm = screen()
+
+        vm.onMascotEvent(MascotEvent.Petted(Mascot.BUTTER))
+        runCurrent()
+        vm.onMascotEvent(MascotEvent.Petted(Mascot.BUTTER))
+        runCurrent()
+
+        assertEquals(1, vm.state.value.speech.count { it.mascot == Mascot.BUTTER })
+    }
+
+    @Test
+    fun `запись еды — хозяин гордится`() = runTest(dispatcher) {
+        val vm = screen()
+
+        vm.onPickPrediction(harness.kefir)
+        advanceUntilIdle()
+
+        val cue = vm.state.value.cue
+        assertEquals(CueKind.PROUD, cue?.kind)
+        assertEquals(Mascot.GRAIN, cue?.mascot, "в кефире углеводов больше всего")
+    }
+
+    @Test
+    fun `цель закрыта точно — праздник`() = runTest(dispatcher) {
+        harness.goalDao.upsert(DailyGoalEntity(harness.today, kcal = 2_000, prot = 0, fat = 0, carb = 0))
+        harness.addEntry("Обед", grams = 1_850, meal = MealType.LUNCH, kcal100 = 100)
+        val vm = screen()
+
+        vm.onPickPrediction(harness.kefir)
+        advanceUntilIdle()
+
+        assertEquals(CueKind.CELEBRATE, vm.state.value.cue?.kind)
+    }
+
+    @Test
+    fun `вернулся через пять часов — встречают`() = runTest(dispatcher) {
+        val fiveHoursAgo = harness.clock.now().toEpochMilliseconds() - 5 * 60 * 60 * 1000L
+        harness.mascotDao.upsertProfile(MascotProfileEntity(lastOpenAt = fiveHoursAgo))
+        val vm = screen()
+
+        vm.onResume()
+        advanceUntilIdle()
+
+        assertEquals(CueKind.GREET, vm.state.value.cue?.kind)
+    }
+
+    @Test
+    fun `открыл из шторки — автор радуется`() = runTest(dispatcher) {
+        val id = harness.mascotDao.insert(harness.message(Mascot.BUTTER, "Мур."))
+        val vm = screen()
+
+        vm.onOpenedFromMessage(id)
+        advanceUntilIdle()
+
+        assertEquals(CueKind.OPENED, vm.state.value.cue?.kind)
+        assertEquals(Mascot.BUTTER, vm.state.value.cue?.mascot)
+    }
+
+    @Test
+    fun `тряска — у всех кружится голова`() = runTest(dispatcher) {
+        val vm = screen()
+
+        vm.onPhoneShaken()
+        advanceUntilIdle()
+
+        assertEquals(CueKind.DIZZY, vm.state.value.cue?.kind)
+        assertEquals(null, vm.state.value.cue?.mascot)
+    }
+
+    @Test
+    fun `ночью персонажи спят, утром — нет`() = runTest(dispatcher) {
+        assertFalse(screen().state.value.night, "в девять утра")
+
+        val night = DiaryHarness(now = "2026-10-31T02:00:00Z")
+        val vm = night.viewModel(dispatcher).also { backgroundScope.launch { it.state.collect {} } }
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.night)
     }
 }
