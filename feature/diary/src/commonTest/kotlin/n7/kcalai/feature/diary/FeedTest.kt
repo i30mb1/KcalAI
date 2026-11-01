@@ -227,6 +227,19 @@ class FeedTest {
         assertEquals(listOf(bubbles[0], said), interleave(bubbles, listOf(said), zone))
     }
 
+    /**
+     * «Время завтрака!» из шторки — и через несколько секунд кнопка «Записать».
+     * Минута одна, но вопрос был раньше ответа, и в переписке он стоит выше.
+     */
+    @Test
+    fun `сообщение, написанное до записи в ту же минуту, — перед ней`() {
+        val bubbles = groupIntoBubbles(listOf(entry(1, hour = 8, meal = MealType.BREAKFAST)), zone, nowMillis = at(9))
+        val asked = FeedItem.Said(id = 7, mascot = Mascot.GRAIN, text = "Время завтрака!", time = "08:00", minute = 8 * 60, at = at(8) - 5_000)
+        val answered = FeedItem.Said(id = 8, mascot = Mascot.GRAIN, text = "Записал!", time = "08:00", minute = 8 * 60, at = at(8) + 2_000)
+
+        assertEquals(listOf(asked, bubbles[0], answered), interleave(bubbles, listOf(asked, answered), zone))
+    }
+
     @Test
     fun `вопрос про обед считает только пузырьки`() {
         val bubbles = groupIntoBubbles(

@@ -1052,7 +1052,7 @@ class DiaryViewModel(
 
     private fun MascotMessageEntity.toFeedItem(): FeedItem.Said {
         val local = Instant.fromEpochMilliseconds(createdAt).toLocalDateTime(zone)
-        return FeedItem.Said(id, mascot, text, formatTime(createdAt, zone), local.hour * 60 + local.minute)
+        return FeedItem.Said(id, mascot, text, formatTime(createdAt, zone), local.hour * 60 + local.minute, at = createdAt)
     }
 
     /**

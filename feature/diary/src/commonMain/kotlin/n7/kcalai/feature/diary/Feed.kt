@@ -155,6 +155,7 @@ sealed interface FeedItem {
      * человек откроет приложение по уведомлению: персонаж действительно ему писал.
      *
      * @param minute минута суток, когда оно написано: по ней встаёт между пузырьками
+     * @param at когда написано, мс: в одну минуту с записью решает, кто был раньше
      */
     data class Said(
         val id: Long,
@@ -162,6 +163,7 @@ sealed interface FeedItem {
         val text: String,
         val time: String,
         val minute: Int,
+        val at: Long = Long.MAX_VALUE,
     ) : FeedItem {
         override val key get() = "said-$id"
     }
@@ -353,15 +355,19 @@ fun gapPosition(body: List<FeedItem>, gap: MealGap, zone: TimeZone): Int =
 /**
  * Пузырьки дня и сообщения персонажей — по времени.
  *
- * Сообщение встаёт после всех пузырьков, начавшихся не позже него: «Три часа без
- * еды» в 15:30 стоит после обеда, а ответ на запись в ту же минуту — после неё.
+ * Сообщение встаёт после всех пузырьков, начавшихся раньше него: «Три часа без
+ * еды» в 15:30 стоит после обеда. В одну минуту с записью решают секунды: вопрос
+ * из шторки — выше записи, которой на него ответили, а ответ персонажа — ниже.
  */
 fun interleave(bubbles: List<FeedItem.Meal>, said: List<FeedItem.Said>, zone: TimeZone): List<FeedItem> {
     val body = mutableListOf<FeedItem>()
     var next = 0
     for (bubble in bubbles) {
         val order = bubbleOrder(bubble.entries, zone)
-        while (next < said.size && said[next].minute < order) body += said[next++]
+        val firstAt = bubble.entries.first().createdAt
+        while (next < said.size && (said[next].minute < order || said[next].minute == order && said[next].at < firstAt)) {
+            body += said[next++]
+        }
         body += bubble
     }
     while (next < said.size) body += said[next++]
