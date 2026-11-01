@@ -304,15 +304,41 @@ class DiaryViewModelTest {
         assertEquals(Overlay.None, vm.state.value.overlay)
     }
 
-    /** У развесного и домашнего кода нет — карточка открывается сразу, в том же окне съёмки. */
+    /**
+     * У развесного и домашнего кода нет. Кнопка в строке ввода одна — сканер, —
+     * и карточка открывается из него же, в том же окне.
+     */
     @Test
-    fun `съёмка этикетки открывает окно съёмки сразу с карточкой нового продукта`() = runTest(dispatcher) {
+    fun `«нет штрих-кода» в сканере переводит то же окно к карточке нового продукта`() = runTest(dispatcher) {
         val vm = screen()
 
-        vm.onOpenLabelScan()
+        vm.onOpenScan()
+        vm.onNoBarcode()
         advanceUntilIdle()
 
         assertEquals(Overlay.Scan(ScanStep.NewProduct(gtin = null)), vm.state.value.overlay)
+    }
+
+    /**
+     * Камера прочла код в ту же секунду, что человек нажал «нет штрих-кода».
+     * Код побеждает: найдётся товар — карточка не нужна, нет — она откроется
+     * сама, уже с кодом.
+     */
+    @Test
+    fun `«нет штрих-кода» посреди поиска по коду ничего не меняет`() = runTest(dispatcher) {
+        val network = CompletableDeferred<Unit>()
+        harness.userFoodDao.slowLookup = network
+        val vm = screen()
+
+        vm.onOpenScan()
+        vm.onScanned(UNKNOWN_GTIN)
+        vm.onNoBarcode()
+        advanceUntilIdle()
+        assertEquals(Overlay.Scan(ScanStep.Searching(UNKNOWN_GTIN)), vm.state.value.overlay)
+
+        network.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(Overlay.Scan(ScanStep.NewProduct(UNKNOWN_GTIN)), vm.state.value.overlay)
     }
 
     private companion object {

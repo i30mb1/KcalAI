@@ -11,6 +11,7 @@ import n7.kcalai.repositories.LabelReading
 actual fun ScannerDialog(
     step: ScanStep,
     onScanned: (String) -> Unit,
+    onNoBarcode: () -> Unit,
     onSave: (gtin: String?, name: String, nutriments: Nutriments) -> Unit,
     onDismiss: () -> Unit,
     frameStats: Boolean,

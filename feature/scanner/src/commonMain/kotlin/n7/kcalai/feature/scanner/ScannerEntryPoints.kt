@@ -18,6 +18,8 @@ import n7.kcalai.repositories.LabelReading
  *
  * @param onScanned код прочитан камерой или набран руками — уже нормализованный
  *        до EAN-13. Отдаётся один раз за шаг кода.
+ * @param onNoBarcode «Нет штрих-кода» на шаге кода: развесное, домашнее — дальше
+ *        карточка без кода. Окно в дневнике одно, и других дверей к этикетке нет.
  * @param onSave карточка заполнена и человек подтвердил её. Окно само ничего
  *        не сохраняет: куда класть продукт, решает дневник.
  * @param frameStats над камерой — счётчик кадров и время разбора. Для
@@ -27,6 +29,7 @@ import n7.kcalai.repositories.LabelReading
 expect fun ScannerDialog(
     step: ScanStep,
     onScanned: (String) -> Unit,
+    onNoBarcode: () -> Unit,
     onSave: (gtin: String?, name: String, nutriments: Nutriments) -> Unit,
     onDismiss: () -> Unit,
     frameStats: Boolean = false,

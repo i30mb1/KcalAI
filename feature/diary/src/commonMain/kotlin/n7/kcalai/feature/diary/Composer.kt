@@ -8,7 +8,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -32,7 +31,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MonitorWeight
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -81,8 +79,9 @@ import n7.kcalai.model.title
  * поле принимает свободный текст, и кнопка «добавить» означала бы выбор первого
  * попавшегося совпадения вслепую, ровно то, от чего предложения и защищают.
  *
- * Три способа ввода стоят рядом и равноправны: набрать, отсканировать код, снять
- * этикетку. У каждого свой случай, и прятать любой из них в меню незачем.
+ * Два способа ввода стоят рядом и равноправны: набрать и навести камеру. Камера
+ * одна на штрих-код и этикетку — это одно окно, и две кнопки в него вели бы
+ * в одно и то же место с разных шагов.
  */
 @Composable
 fun Composer(
@@ -97,7 +96,6 @@ fun Composer(
     onLogWeight: () -> Unit,
     onSubmit: () -> Boolean,
     onOpenScan: () -> Unit,
-    onOpenLabelScan: () -> Unit,
     onOpenLabelDebug: (() -> Unit)?,
 ) {
     val colors = KcalTheme.colors
@@ -190,16 +188,10 @@ fun Composer(
 
             // Штрих-код опознаёт товар в упаковке точнее любого названия, и
             // заставлять человека набирать «активиа натуральная 4%» вместо
-            // одного наведения камеры незачем.
-            TapTarget(onClick = onOpenScan, description = "Сканировать штрих-код") {
-                Icon(
-                    Icons.Default.QrCodeScanner,
-                    contentDescription = null,
-                    tint = colors.text2,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-
+            // одного наведения камеры незачем. Кнопка одна на код и этикетку:
+            // окно съёмки само переходит к этикетке — по промаху кода или по
+            // «Нет штрих-кода».
+            //
             // Долгое нажатие уводит в отладочную съёмку: кнопок в шапке экран
             // больше не носит, а проверять разбор этикетки по-прежнему нужно.
             // В сборке для людей жеста нет — см. DiaryRoute.
@@ -208,10 +200,10 @@ fun Composer(
                     .size(44.dp)
                     .clip(CircleShape)
                     .combinedClickable(
-                        onClick = onOpenLabelScan,
+                        onClick = onOpenScan,
                         onLongClick = onOpenLabelDebug,
                     )
-                    .semantics { contentDescription = "Снять этикетку" },
+                    .semantics { contentDescription = "Сканировать штрих-код" },
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
@@ -219,7 +211,7 @@ fun Composer(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Default.PhotoCamera,
+                        Icons.Default.QrCodeScanner,
                         contentDescription = null,
                         tint = colors.onBubble,
                         modifier = Modifier.size(18.dp),
@@ -500,24 +492,6 @@ private fun PredictionChip(candidate: FoodCandidate, onClick: () -> Unit) {
         )
         ChipNumbers("· ${formatGrams(grams)} · ${kcalFor(candidate, grams)}", colors.text3)
     }
-}
-
-/** Тап-таргет 44dp вокруг иконки: визуальный размер иконки от этого не меняется. */
-@Composable
-private fun TapTarget(
-    onClick: () -> Unit,
-    description: String,
-    content: @Composable () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = description },
-        contentAlignment = Alignment.Center,
-        content = { content() },
-    )
 }
 
 private fun kcalFor(candidate: FoodCandidate, grams: Int): Int =

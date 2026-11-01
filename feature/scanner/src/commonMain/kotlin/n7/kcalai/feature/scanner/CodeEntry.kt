@@ -26,13 +26,16 @@ import n7.kcalai.ui.WideButton
  * в одной цифре увела бы человека заводить продукт под несуществующим номером,
  * и найти его потом не смог бы никто, включая его самого.
  *
- * @param searching код отправлен, товар ищется — кнопка ждёт ответа
+ * @param searching код отправлен, товар ищется — кнопки ждут ответа
+ * @param onNoCode кода на пачке нет вовсе. Без камеры панель — единственное,
+ *        что видно, и дверь к карточке без кода обязана быть и здесь.
  */
 @Composable
 internal fun CodeEntry(
     title: String,
     searching: Boolean,
     onSubmit: (String) -> Unit,
+    onNoCode: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = KcalTheme.colors
@@ -73,5 +76,15 @@ internal fun CodeEntry(
             onClick = { normalized?.let(onSubmit) },
             modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
         )
+        WideButton(
+            text = NO_BARCODE,
+            enabled = !searching,
+            onClick = onNoCode,
+            filled = false,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
+
+/** У развесного и домашнего кода нет — дальше карточка без него. */
+internal const val NO_BARCODE = "Нет штрих-кода"

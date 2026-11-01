@@ -8,6 +8,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,8 +18,10 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -70,7 +74,8 @@ import androidx.compose.ui.util.lerp as lerpFloat
  * экран мигал, камера запускалась заново, пачка уходила из кадра. Теперь окно
  * одно, и шаги сменяют друг друга в нём же:
  *
- * - код: камера на весь экран, узкая рамка под штрих-код;
+ * - код: камера на весь экран, узкая рамка под штрих-код, внизу «Нет штрих-кода» —
+ *   для развесного и домашнего, сразу к карточке;
  * - поиск: та же картинка, рамка зеленеет, внизу «Ищу товар…»;
  * - новый продукт: камера плавно приближается к таблице и рамка вытягивается
  *   под неё, сверху выходят трое — каждый просит своё, — снизу выезжает карточка.
@@ -81,6 +86,7 @@ import androidx.compose.ui.util.lerp as lerpFloat
 actual fun ScannerDialog(
     step: ScanStep,
     onScanned: (String) -> Unit,
+    onNoBarcode: () -> Unit,
     onSave: (gtin: String?, name: String, nutriments: Nutriments) -> Unit,
     onDismiss: () -> Unit,
     frameStats: Boolean,
@@ -210,7 +216,7 @@ actual fun ScannerDialog(
                         // Ручной ввод рядом с крестиком, а не вместо камеры: смазанный код
                         // на мятой пачке не читается никогда, и цифры под ним — рабочий путь.
                         step == ScanStep.Barcode && granted && !typingCode -> {
-                            { CodeButton { typingCode = true } }
+                            { PillButton("Ввести код", onClick = { typingCode = true }) }
                         }
                         else -> null
                     },
@@ -246,9 +252,10 @@ actual fun ScannerDialog(
                     label = "panel",
                 ) { shown ->
                     when (shown) {
-                        is Bottom.Hint -> Box(
+                        is Bottom.Hint -> Column(
                             modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(32.dp),
-                            contentAlignment = Alignment.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             HintPill(
                                 text = when {
@@ -257,6 +264,15 @@ actual fun ScannerDialog(
                                     else -> "Наведите на штрих-код"
                                 },
                                 busy = shown.searching,
+                            )
+                            // Пока код ищется, кнопка гаснет, но место держит:
+                            // подсказка над ней не прыгает.
+                            val noCode by animateFloatAsState(if (shown.searching) 0f else 1f, label = "no-code")
+                            PillButton(
+                                text = NO_BARCODE,
+                                enabled = !shown.searching,
+                                onClick = onNoBarcode,
+                                modifier = Modifier.alpha(noCode),
                             )
                         }
 
@@ -268,6 +284,7 @@ actual fun ScannerDialog(
                             },
                             searching = shown.searching,
                             onSubmit = { code -> submit(code) },
+                            onNoCode = onNoBarcode,
                         )
 
                         is Bottom.Card -> ProductCard(
@@ -397,17 +414,22 @@ private fun ScanHaptics(state: ScanState) {
     }
 }
 
-/** «Ввести код» рядом с крестиком. */
+/** Другой путь, кроме камеры: «Ввести код» рядом с крестиком, «Нет штрих-кода» под подсказкой. */
 @Composable
-private fun CodeButton(onClick: () -> Unit) {
+private fun PillButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(999.dp))
             .background(KcalTheme.colors.surface.copy(alpha = 0.92f))
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
-        Text("Ввести код", style = KcalTheme.type.label, color = KcalTheme.colors.text)
+        Text(text, style = KcalTheme.type.label, color = KcalTheme.colors.text)
     }
 }
 

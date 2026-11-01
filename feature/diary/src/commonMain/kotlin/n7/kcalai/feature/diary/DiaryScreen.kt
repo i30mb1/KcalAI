@@ -94,7 +94,6 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         onSubmit = viewModel::onSubmit,
         onOpenGoal = viewModel::onOpenGoal,
         onOpenScan = viewModel::onOpenScan,
-        onOpenLabelScan = viewModel::onOpenLabelScan,
         onOpenLabelDebug = if (labelDebug) viewModel::onOpenLabelDebug else null,
         onMascotEvent = viewModel::onMascotEvent,
         onAnswerAsk = { kind, yes ->
@@ -133,6 +132,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         is Overlay.Scan -> ScannerDialog(
             step = overlay.step,
             onScanned = viewModel::onScanned,
+            onNoBarcode = viewModel::onNoBarcode,
             onSave = viewModel::onSaveNewProduct,
             onDismiss = viewModel::onDismissOverlay,
             // Счётчик кадров — инструмент разработчика, как и отладка разбора.
@@ -178,7 +178,6 @@ fun DiaryScreen(
     onSubmit: () -> Boolean,
     onOpenGoal: (GoalField) -> Unit,
     onOpenScan: () -> Unit,
-    onOpenLabelScan: () -> Unit,
     onOpenLabelDebug: (() -> Unit)?,
     /** Ответ на вопрос персонажа: `true` — «Сказать» / «Пишите», `false` — «Не скажу» / «Не надо». */
     onAnswerAsk: (AskKind, Boolean) -> Unit,
@@ -330,7 +329,6 @@ fun DiaryScreen(
             onLogWeight = onLogWeight,
             onSubmit = onSubmit,
             onOpenScan = onOpenScan,
-            onOpenLabelScan = onOpenLabelScan,
             onOpenLabelDebug = onOpenLabelDebug,
         )
     }
