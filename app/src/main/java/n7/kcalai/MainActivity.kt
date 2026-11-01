@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import n7.kcalai.feature.diary.DiaryRoute
 import n7.kcalai.feature.diary.DiaryViewModel
 import n7.kcalai.notify.MascotNotifier
+import n7.kcalai.shake.phoneShakes
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.work.ContributionWorker
 import n7.kcalai.work.Outbox
@@ -66,6 +67,12 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 diary.notificationRequests.collect { requestNotifications() }
+            }
+        }
+        lifecycleScope.launch {
+            // Тряску ловим, только пока дневник на экране: в кармане она — не игра.
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                phoneShakes(this@MainActivity).collect { diary.onPhoneShaken() }
             }
         }
         // При пересоздании активности тот же intent приходит снова — это не новый тап.
