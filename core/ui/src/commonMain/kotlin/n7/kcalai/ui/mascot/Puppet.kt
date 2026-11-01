@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import kotlin.math.hypot
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -104,6 +105,23 @@ class MascotPuppet internal constructor(val mascot: Mascot) {
     suspend fun play(act: MascotAct) = acting.mutate {
         try {
             perform(act)
+        } finally {
+            withContext(NonCancellable) { settle() }
+        }
+    }
+
+    /**
+     * Его держат пальцем: лицо [face], пока не отпустят, а у испуганного — капля у виска.
+     *
+     * Длится сколько угодно, но кадров не стоит: ничего не анимирует, просто держит
+     * лицо. Отпустили — сцена отменяет держание или запускает следующее действие.
+     */
+    suspend fun hold(face: MascotFace): Nothing = acting.mutate {
+        try {
+            this.face = face
+            emote = if (face == MascotFace.WORRIED) Emote.DROP else null
+            emoteProgress.snapTo(0f)
+            awaitCancellation()
         } finally {
             withContext(NonCancellable) { settle() }
         }

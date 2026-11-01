@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.filter
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import n7.kcalai.database.DiaryEntryEntity
+import n7.kcalai.mascot.MascotEvent
 import n7.kcalai.feature.scanner.LabelDebugDialog
 import n7.kcalai.feature.scanner.ScannerDialog
 import n7.kcalai.model.FoodCandidate
@@ -95,6 +96,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         onOpenScan = viewModel::onOpenScan,
         onOpenLabelScan = viewModel::onOpenLabelScan,
         onOpenLabelDebug = if (labelDebug) viewModel::onOpenLabelDebug else null,
+        onMascotEvent = viewModel::onMascotEvent,
         onAnswerAsk = { kind, yes ->
             when (kind) {
                 AskKind.NAME -> if (yes) viewModel.onAskName() else viewModel.onAnswerName(null)
@@ -180,6 +182,8 @@ fun DiaryScreen(
     onOpenLabelDebug: (() -> Unit)?,
     /** Ответ на вопрос персонажа: `true` — «Сказать» / «Пишите», `false` — «Не скажу» / «Не надо». */
     onAnswerAsk: (AskKind, Boolean) -> Unit,
+    /** С персонажем что-то сделали: ткнули, взяли в руку, погладили, разбудили. */
+    onMascotEvent: (MascotEvent) -> Unit,
 ) {
     // База ещё не ответила. Шапка с нулями и сводка «цель не задана» были бы
     // неправдой, а через долю секунды их сменили бы настоящие цифры — и записи
@@ -273,7 +277,9 @@ fun DiaryScreen(
     // Персонажи — один слой поверх всего экрана: плитки, реплики и чипс только
     // сообщают, где у них место, а кто где стоит, решает [mascotPlaces].
     val anchors = remember { MascotAnchors() }
-    Box(Modifier.fillMaxSize()) {
+    // Палец на экране — для взглядов персонажей; касаний наблюдатель не забирает.
+    val pointer = remember { StagePointer() }
+    Box(Modifier.fillMaxSize().observeTouches(pointer)) {
     CompositionLocalProvider(LocalMascotAnchors provides anchors) {
     Column(Modifier.fillMaxSize().background(KcalTheme.colors.bg)) {
         Header(
@@ -329,7 +335,17 @@ fun DiaryScreen(
         )
     }
     }
-        MascotStage(feed = state.feed, chipOwner = chipOwner(state.composer), anchors = anchors)
+        MascotStage(
+            feed = state.feed,
+            chipOwner = chipOwner(state.composer),
+            anchors = anchors,
+            pointer = pointer,
+            input = state.input,
+            speech = state.speech,
+            cue = state.cue,
+            night = state.night,
+            onEvent = onMascotEvent,
+        )
     }
 }
 

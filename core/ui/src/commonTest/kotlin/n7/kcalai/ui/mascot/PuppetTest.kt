@@ -84,6 +84,25 @@ class PuppetTest {
         }
     }
 
+    /** Держат сколько угодно долго — но кадров это не стоит: лицо просто держится. */
+    @Test
+    fun `пока держат — лицо держится, отпустили — покой`() = runTest {
+        withContext(TestFrameClock()) {
+            val puppet = MascotPuppet(Mascot.EGG)
+
+            val holding = launch { puppet.hold(MascotFace.WORRIED) }
+            delay(5_000)
+            assertEquals(MascotFace.WORRIED, puppet.face)
+            assertEquals(Emote.DROP, puppet.emote)
+
+            holding.cancel()
+            holding.join()
+            assertEquals(MascotFace.CALM, puppet.face)
+            assertNull(puppet.emote)
+            assertTrue(puppet.isStill())
+        }
+    }
+
     @Test
     fun `взгляд не уводит зрачки за край глаза`() {
         val looks = listOf(Offset(1f, 0f), Offset(-1f, -1f), Offset(5f, 5f), Offset(0f, -30f), Offset.Zero)
