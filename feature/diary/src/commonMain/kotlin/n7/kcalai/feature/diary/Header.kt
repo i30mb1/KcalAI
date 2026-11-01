@@ -77,8 +77,10 @@ fun Header(
             exit = shrinkVertically() + fadeOut(),
         ) {
             Column(
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                // Сверху почти без поля: строка состояния уже отделяет шапку от края,
+                // а пустота над датой — первое, что видно на экране, и она ничего не несёт.
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 RemainingRow(date, past, totals, goal, onOpenGoal, toToday)
                 MacroTiles(totals, goal, onOpenGoal)

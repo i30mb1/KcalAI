@@ -1,7 +1,6 @@
 package n7.kcalai.feature.diary
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,6 +8,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -467,8 +467,7 @@ private fun Feed(
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         state = listState,
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(13.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
     ) {
         items(feed.size, key = { index -> feed[index].key }) { index ->
             val item = feed[index]
@@ -490,9 +489,12 @@ private fun Feed(
                 is FeedItem.Meal -> TransformOrigin(1f, 1f)
                 else -> TransformOrigin(0f, 1f)
             }
+            // Зазор сверху — по соседу: реплики одной стороны подряд стоят тесно,
+            // смена собеседника — просторнее, как в мессенджере. См. gapBefore.
             Box(
                 Modifier
                     .animateItem(fadeOutSpec = null)
+                    .padding(top = gapBefore(feed.getOrNull(index - 1), item))
                     .popIn(origin = origin, lift = 12.dp, enabled = fresh)
             ) {
                 when (item) {

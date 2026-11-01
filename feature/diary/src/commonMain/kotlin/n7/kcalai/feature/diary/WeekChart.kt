@@ -106,7 +106,9 @@ private fun WeekPlot(days: List<DaySummary>, selected: Long, modifier: Modifier 
             .fillMaxWidth()
             .semantics { contentDescription = weekSummary(days) },
     ) {
-        Box(Modifier.fillMaxWidth().height(PLOT_HEIGHT + GOAL_LABEL_BAND)) {
+        // Полоса под подпись цели — только когда подпись есть: без цели она
+        // была пустой строкой поверх столбиков.
+        Box(Modifier.fillMaxWidth().height(PLOT_HEIGHT + if (todayGoal != null) GOAL_LABEL_BAND else 0.dp)) {
             Row(
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),

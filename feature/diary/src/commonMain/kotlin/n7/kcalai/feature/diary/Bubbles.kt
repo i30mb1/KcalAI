@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,12 +25,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.layout.LastBaseline
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.constrainHeight
+import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
+import kotlin.math.ceil
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.totals
 import n7.kcalai.model.FoodCandidate
@@ -51,6 +60,16 @@ import n7.kcalai.model.title
 
 /** Доля ширины, которую пузырёк не переступает: лента должна читаться как диалог. */
 private const val BUBBLE_WIDTH = 0.88f
+
+/** Поля пузырька — плотно, как в мессенджерах, но текст не липнет к краю. */
+private val BUBBLE_PADDING_H = 12.dp
+private val BUBBLE_PADDING_V = 8.dp
+
+/** Между концом фразы и временем. */
+private val TIME_GAP = 8.dp
+
+/** Время чуть ниже строки, а не на её линии: так оно читается подписью, а не словом фразы. */
+private val TIME_DROP = 3.dp
 
 /**
  * Место персонажа у реплики. Крупнее, чем был аватар у каждой реплики:
@@ -94,8 +113,8 @@ fun MealBubble(item: FeedItem.Meal, onEntry: (DiaryEntryEntity) -> Unit) {
                     )
                 )
                 .background(colors.bubble)
-                .padding(horizontal = 15.dp, vertical = 13.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp),
+                .padding(horizontal = BUBBLE_PADDING_H, vertical = BUBBLE_PADDING_V),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
@@ -182,7 +201,6 @@ private fun MacroValue(macro: Macro, centigrams: Int, onBubble: Boolean) {
 fun IncomingBubble(
     speaking: FeedItem,
     modifier: Modifier = Modifier,
-    time: String? = null,
     onDismiss: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
@@ -196,7 +214,9 @@ fun IncomingBubble(
             Box(Modifier.size(width = AVATAR_WIDTH, height = AVATAR_HEIGHT).mascotAnchor(speaking.key))
             Spacer(Modifier.width(4.dp))
         }
-        Column(
+        // Пузырёк облегает реплику, как в мессенджере, а не тянется на всю ширину:
+        // короткое «Записал 82,4 кг» в широком пузыре — полэкрана пустоты.
+        Row(
             modifier = Modifier
                 .weight(1f, fill = false)
                 .fillMaxWidth(BUBBLE_WIDTH)
@@ -211,50 +231,78 @@ fun IncomingBubble(
                     )
                 )
                 .background(colors.surface)
-                .padding(horizontal = 15.dp, vertical = 13.dp),
-            verticalArrangement = Arrangement.spacedBy(9.dp),
+                .padding(horizontal = BUBBLE_PADDING_H, vertical = BUBBLE_PADDING_V),
         ) {
-            Row {
-                Column(Modifier.weight(1f)) { content() }
+            Column(Modifier.weight(1f, fill = false)) { content() }
 
-                // Крестик закрывает вопрос до завтра — и это обязательный ответ.
-                // Вопрос, от которого нельзя отказаться, через неделю становится упрёком.
-                if (onDismiss != null) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .offset(x = 8.dp, y = (-6).dp)
-                            .clip(CircleShape)
-                            .clickable(onClick = onDismiss),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "Скрыть",
-                            tint = colors.text3,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
+            // Крестик закрывает вопрос до завтра — и это обязательный ответ.
+            // Вопрос, от которого нельзя отказаться, через неделю становится упрёком.
+            if (onDismiss != null) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .offset(x = 8.dp, y = (-6).dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Скрыть",
+                        tint = colors.text3,
+                        modifier = Modifier.size(18.dp),
+                    )
                 }
-            }
-
-            if (time != null) {
-                Text(
-                    time,
-                    style = KcalTheme.type.time,
-                    color = colors.text3,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.End,
-                )
             }
         }
     }
 }
 
-/** Фраза в реплике приложения. */
+/** Фраза в реплике приложения. С [time] — время в углу, в строку с концом фразы. */
 @Composable
-private fun BubbleText(text: String, modifier: Modifier = Modifier) {
-    Text(text, style = KcalTheme.type.body, color = KcalTheme.colors.text, modifier = modifier)
+private fun BubbleText(text: String, modifier: Modifier = Modifier, time: String? = null) {
+    if (time != null) {
+        TimedText(text, time, modifier)
+    } else {
+        Text(text, style = KcalTheme.type.body, color = KcalTheme.colors.text, modifier = modifier)
+    }
+}
+
+/**
+ * Фраза со временем в углу — как в мессенджере.
+ *
+ * Время не занимает своей строки: оно встаёт в строку с концом фразы, чуть ниже
+ * её, а пузырёк при нужде становится чуть шире. Последняя строка длинная — время
+ * уходит строкой ниже, к правому краю. Где кончается последняя строка, знает
+ * только раскладка текста, поэтому она запоминается прямо во время замера.
+ */
+@Composable
+private fun TimedText(text: String, time: String, modifier: Modifier = Modifier) {
+    val colors = KcalTheme.colors
+    val laidOut = remember { arrayOfNulls<TextLayoutResult>(1) }
+
+    Layout(
+        content = {
+            Text(text, style = KcalTheme.type.body, color = colors.text, onTextLayout = { laidOut[0] = it })
+            Text(time, style = KcalTheme.type.time, color = colors.text3)
+        },
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val body = measurables[0].measure(constraints.copy(minWidth = 0))
+        val stamp = measurables[1].measure(Constraints())
+        val lastLineRight = laidOut[0]?.let { ceil(it.getLineRight(it.lineCount - 1)).toInt() } ?: body.width
+        val slot = timeSlot(body.width, lastLineRight, stamp.width, TIME_GAP.roundToPx(), constraints.maxWidth)
+        val stampY = if (slot.inline) {
+            body[LastBaseline] + TIME_DROP.roundToPx() - stamp[LastBaseline]
+        } else {
+            body.height
+        }
+        val width = constraints.constrainWidth(slot.width)
+        layout(width, constraints.constrainHeight(maxOf(body.height, stampY + stamp.height))) {
+            body.place(0, 0)
+            stamp.place(width - stamp.width, stampY)
+        }
+    }
 }
 
 /** Заголовок реплики приложения. */
@@ -297,19 +345,19 @@ private fun SummaryText(item: FeedItem.Summary, onSetGoal: () -> Unit) {
         if (item.intro) {
             // Яйцо говорит само, двух других оно представляет: без этого
             // персонажи для новичка — просто картинки.
-            BubbleText("Масло следит за жирами, Зёрнышко — за углеводами.", Modifier.padding(top = 7.dp))
+            BubbleText("Масло следит за жирами, Зёрнышко — за углеводами.", Modifier.padding(top = 4.dp))
             BubbleText(
                 "Напиши, что было на тарелке, — например, «гречка 200». Цифры посчитаем сами.",
-                Modifier.padding(top = 10.dp),
+                Modifier.padding(top = 8.dp),
             )
         }
-        item.weekLine?.let { BubbleText(it, Modifier.padding(top = 7.dp)) }
+        item.weekLine?.let { BubbleText(it, Modifier.padding(top = 4.dp)) }
         item.outline?.let { outline ->
-            BubbleText(outlineSentence(outline), Modifier.padding(top = 7.dp))
-            DayOutlineBar(outline, Modifier.padding(top = 10.dp))
+            BubbleText(outlineSentence(outline), Modifier.padding(top = 4.dp))
+            DayOutlineBar(outline, Modifier.padding(top = 8.dp))
         }
         if (item.needsGoal) {
-            KcalChip(onClick = onSetGoal, background = colors.bubble, modifier = Modifier.padding(top = 10.dp)) {
+            KcalChip(onClick = onSetGoal, background = colors.bubble, modifier = Modifier.padding(top = 8.dp)) {
                 Text("Задать цель", style = KcalTheme.type.chip, color = colors.onBubble)
             }
         }
@@ -379,10 +427,10 @@ fun GapBubble(
             "Обычно ты ${mealVerb(gap.meal)} около ${formatHour(gap.typicalHour)}, " +
                 "а сегодня ${gap.meal.genitive} в дневнике нет. " +
                 "Если был — добавь одним тапом.",
-            Modifier.padding(top = 7.dp),
+            Modifier.padding(top = 4.dp),
         )
         FlowRow(
-            modifier = Modifier.padding(top = 10.dp),
+            modifier = Modifier.padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
@@ -421,7 +469,7 @@ fun RemainingBubble(item: FeedItem.Remaining, onPick: (PlanOption) -> Unit) {
             }
         )
         FlowRow(
-            modifier = Modifier.padding(top = 10.dp),
+            modifier = Modifier.padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
@@ -460,7 +508,7 @@ fun EmptyDayBubble(item: FeedItem.EmptyDay) {
         BubbleText(
             "Записей за этот день нет. Напиши, что было, — запишу сюда. " +
                 "Приём выбери над строкой ввода.",
-            Modifier.padding(top = 7.dp),
+            Modifier.padding(top = 4.dp),
         )
     }
 }
@@ -482,16 +530,16 @@ fun NotFoundBubble(item: FeedItem.NotFound) {
 /** Вес записан. Подтверждение действия, у которого больше нет своего экрана. */
 @Composable
 fun WeightBubble(item: FeedItem.WeightLogged) {
-    IncomingBubble(item, time = item.time) {
-        BubbleText("Записал ${formatKg(item.grams)}")
+    IncomingBubble(item) {
+        BubbleText("Записал ${formatKg(item.grams)}", time = item.time)
     }
 }
 
 /** Ответ на действие — «Отправлено: 2 сессии». */
 @Composable
 fun ReplyBubble(item: FeedItem.Reply) {
-    IncomingBubble(item, time = item.time) {
-        BubbleText(item.text)
+    IncomingBubble(item) {
+        BubbleText(item.text, time = item.time)
     }
 }
 
@@ -505,10 +553,17 @@ fun ReplyBubble(item: FeedItem.Reply) {
 fun DeletedBubble(item: FeedItem.Deleted, onUndo: () -> Unit) {
     val colors = KcalTheme.colors
 
-    IncomingBubble(item, time = item.time) {
-        BubbleText("Удалил «${item.entry.displayName} · ${formatGrams(item.entry.grams)}»")
-        KcalChip(onClick = onUndo, background = colors.bubble, modifier = Modifier.padding(top = 10.dp)) {
-            Text("Вернуть", style = KcalTheme.type.chip, color = colors.onBubble)
+    IncomingBubble(item) {
+        // Время — в строку с кнопкой, у правого края: своей строки ему не нужно.
+        Column(Modifier.width(IntrinsicSize.Max)) {
+            BubbleText("Удалил «${item.entry.displayName} · ${formatGrams(item.entry.grams)}»")
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.Bottom) {
+                KcalChip(onClick = onUndo, background = colors.bubble) {
+                    Text("Вернуть", style = KcalTheme.type.chip, color = colors.onBubble)
+                }
+                Spacer(Modifier.weight(1f).widthIn(min = TIME_GAP))
+                Text(item.time, style = KcalTheme.type.time, color = colors.text3)
+            }
         }
     }
 }
@@ -521,8 +576,8 @@ fun DeletedBubble(item: FeedItem.Deleted, onUndo: () -> Unit) {
  */
 @Composable
 fun SaidBubble(item: FeedItem.Said) {
-    IncomingBubble(item, time = item.time) {
-        BubbleText(item.text)
+    IncomingBubble(item) {
+        BubbleText(item.text, time = item.time)
     }
 }
 
@@ -549,7 +604,7 @@ fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit) {
     IncomingBubble(item) {
         BubbleText(question)
         FlowRow(
-            modifier = Modifier.padding(top = 10.dp),
+            modifier = Modifier.padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
@@ -578,7 +633,7 @@ fun OutboxBubble(item: FeedItem.Outbox, onSend: () -> Unit) {
         KcalChip(
             onClick = if (item.sending) null else onSend,
             background = if (item.sending) colors.chip else colors.bubble,
-            modifier = Modifier.padding(top = 10.dp),
+            modifier = Modifier.padding(top = 8.dp),
         ) {
             Text(
                 if (item.sending) "Отправляю…" else "Отправить",
