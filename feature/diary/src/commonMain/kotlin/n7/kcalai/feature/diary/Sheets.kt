@@ -68,6 +68,7 @@ import n7.kcalai.ui.tileLabel
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.model.Sex
+import n7.kcalai.model.title
 
 /**
  * Цель на день плюс — и это главное здесь — оценка реального расхода.
@@ -644,7 +645,7 @@ fun EntrySheet(
                     background = if (selected) colors.bubble else colors.chip,
                 ) {
                     Text(
-                        mealName(candidate),
+                        candidate.title,
                         style = KcalTheme.type.chip,
                         color = if (selected) colors.onBubble else colors.text,
                     )

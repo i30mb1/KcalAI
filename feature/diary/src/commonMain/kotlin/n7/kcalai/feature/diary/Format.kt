@@ -5,6 +5,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import n7.kcalai.model.MealType
+import n7.kcalai.model.title
 import n7.kcalai.personal.DayOutline
 
 /*
@@ -36,14 +37,6 @@ fun formatGrams(grams: Int): String =
 /** «пн», «вт» — ось графика за неделю: полное название дня туда семь раз не помещается. */
 fun formatWeekdayShort(date: LocalDate): String =
     WEEKDAYS_SHORT[date.weekdayIndex]
-
-/** Название приёма пищи в именительном падеже. */
-fun mealName(meal: MealType): String = when (meal) {
-    MealType.BREAKFAST -> "Завтрак"
-    MealType.LUNCH -> "Обед"
-    MealType.DINNER -> "Ужин"
-    MealType.SNACK -> "Перекус"
-}
 
 /** «13:00» — час без минут: точнее модель привычек всё равно не знает. */
 fun formatHour(hour: Int): String = "${hour.twoDigits()}:00"
@@ -108,15 +101,7 @@ fun nextMealTitle(hour: Int): String = when {
 fun mealNameTarget(meal: MealType): String = "на ${mealNameLower(meal)}"
 
 /** «обед» — название приёма в середине фразы. */
-fun mealNameLower(meal: MealType): String = mealName(meal).lowercase()
-
-/** «обеда» — «сегодня обеда в дневнике нет». */
-fun mealNameGenitive(meal: MealType): String = when (meal) {
-    MealType.BREAKFAST -> "завтрака"
-    MealType.LUNCH -> "обеда"
-    MealType.DINNER -> "ужина"
-    MealType.SNACK -> "перекуса"
-}
+fun mealNameLower(meal: MealType): String = meal.title.lowercase()
 
 /** «обедаете» — «обычно вы обедаете около 13:00». */
 fun mealVerb(meal: MealType): String = when (meal) {

@@ -72,6 +72,7 @@ import n7.kcalai.ui.popIn
 import n7.kcalai.ui.colors
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
+import n7.kcalai.model.title
 
 /**
  * Композер: строка ввода и ряд подсказок над ней.
@@ -287,7 +288,7 @@ private fun MealPicker(selected: MealType, onPick: (MealType) -> Unit) {
                 background = if (chosen) colors.bubble else colors.surface,
                 modifier = Modifier.semantics { this.selected = chosen },
             ) {
-                Text(mealName(meal), style = KcalTheme.type.chip, color = if (chosen) colors.onBubble else colors.text)
+                Text(meal.title, style = KcalTheme.type.chip, color = if (chosen) colors.onBubble else colors.text)
             }
         }
     }

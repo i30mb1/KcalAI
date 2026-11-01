@@ -46,6 +46,8 @@ import n7.kcalai.ui.colors
 import n7.kcalai.ui.letter
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
+import n7.kcalai.model.genitive
+import n7.kcalai.model.title
 
 /** Доля ширины, которую пузырёк не переступает: лента должна читаться как диалог. */
 private const val BUBBLE_WIDTH = 0.88f
@@ -96,7 +98,7 @@ fun MealBubble(item: FeedItem.Meal, onEntry: (DiaryEntryEntity) -> Unit) {
         ) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    mealName(item.meal),
+                    item.meal.title,
                     style = type.bubbleTitle,
                     // Перекус приглушён: это не полноценный приём пищи, и ставить
                     // его в ленте вровень с обедом значило бы врать про день.
@@ -370,10 +372,10 @@ fun GapBubble(
     val gap: MealGap = item.gap
 
     IncomingBubble(item, onDismiss = onDismiss) {
-        BubbleTitle("${mealName(gap.meal)} пропустили?")
+        BubbleTitle("${gap.meal.title} пропустили?")
         BubbleText(
             "Обычно вы ${mealVerb(gap.meal)} около ${formatHour(gap.typicalHour)}, " +
-                "а сегодня ${mealNameGenitive(gap.meal)} в дневнике нет. " +
+                "а сегодня ${gap.meal.genitive} в дневнике нет. " +
                 "Если ели — добавьте одним тапом.",
             Modifier.padding(top = 7.dp),
         )
