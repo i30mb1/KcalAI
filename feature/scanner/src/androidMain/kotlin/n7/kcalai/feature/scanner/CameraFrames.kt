@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +69,8 @@ internal fun CameraFrames(
 
     var request by remember { mutableStateOf<SurfaceRequest?>(null) }
     var camera by remember { mutableStateOf<Camera?>(null) }
+    // Жест ставится один раз, а обработчик щипка меняется: зовётся всегда свежий.
+    val pinch by rememberUpdatedState(onPinch)
 
     LaunchedEffect(lifecycleOwner, frames) {
         val provider = ProcessCameraProvider.awaitInstance(context)
@@ -113,7 +116,7 @@ internal fun CameraFrames(
                 .then(
                     if (onPinch != null) {
                         Modifier.pointerInput(Unit) {
-                            detectTransformGestures { _, _, factor, _ -> onPinch(factor) }
+                            detectTransformGestures { _, _, factor, _ -> pinch?.invoke(factor) }
                         }
                     } else {
                         Modifier

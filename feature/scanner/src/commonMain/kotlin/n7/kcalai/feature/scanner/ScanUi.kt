@@ -1,6 +1,6 @@
 package n7.kcalai.feature.scanner
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -19,14 +19,12 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,7 +33,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -43,17 +40,13 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import n7.kcalai.ui.CapsLabel
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
-import n7.kcalai.ui.MiniBar
 import n7.kcalai.ui.WideButton
 
 /**
@@ -66,40 +59,60 @@ import n7.kcalai.ui.WideButton
  * прямоугольниками вокруг: у скруглённого окна четыре прямоугольника оставляют
  * незатемнённые уголки, и видно это сразу.
  *
- * @param zone верхняя доля холста, в которой стоит окно. Холст — весь экран,
- *        а нижнюю его часть закрывает панель разбора; окно должно стоять выше неё.
- * @param windowHeight высота окна как доля [zone]
+ * Положение окна задаёт экран съёмки: на шаге кода это узкая полоса посередине,
+ * в карточке — окно под таблицу между персонажами и панелью, и между ними окно
+ * перетекает плавно, вместе с камерой.
+ *
+ * @param top верх окна от верха экрана
+ * @param height высота окна
+ * @param caught код пойман — рамка зеленеет, пока ищется товар
  */
 @Composable
-fun Viewfinder(modifier: Modifier = Modifier, zone: Float = 1f, windowHeight: Float = 0.42f) {
+fun Viewfinder(top: Dp, height: Dp, modifier: Modifier = Modifier, caught: Boolean = false) {
+    val frame by animateColorAsState(
+        if (caught) CAUGHT else ON_CAMERA.copy(alpha = 0.85f),
+        tween(FRAME_MS),
+        label = "frame",
+    )
 
     Canvas(
-        modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        modifier
+            .fillMaxSize()
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     ) {
         val inset = 24.dp.toPx()
-        val zoneHeight = size.height * zone
-        val height = zoneHeight * windowHeight
-        // Окно стоит выше геометрического центра зоны: снизу его подпирает
-        // панель разбора, и по оптическому центру оно уезжает ей под край.
-        val top = (zoneHeight - height) * 0.42f
         val corner = CornerRadius(22.dp.toPx())
-        val topLeft = Offset(inset, top)
-        val window = Size(size.width - inset * 2, height)
+        val topLeft = Offset(inset, top.toPx())
+        val window = Size(size.width - inset * 2, height.toPx().coerceAtLeast(0f))
 
         drawRect(SCRIM)
         drawRoundRect(Color.Transparent, topLeft, window, corner, blendMode = BlendMode.Clear)
         drawRoundRect(
-            color = ON_CAMERA.copy(alpha = 0.85f),
+            color = frame,
             topLeft = topLeft,
             size = window,
             cornerRadius = corner,
-            style = Stroke(width = 1.5.dp.toPx()),
+            style = Stroke(width = (if (caught) 2.5.dp else 1.5.dp).toPx()),
         )
     }
 }
 
+/** Рамка пойманного кода: зелёный углеводов на тёмном — виден на любой пачке. */
+private val CAUGHT = Color(0xFF93CCA0)
+
+private const val FRAME_MS = 200
+
+/**
+ * Подложка под камерой — пока она не отдала первый кадр.
+ *
+ * Тёмная, как выключенная камера, а не фон приложения: окно видоискателя
+ * вырезает затемнение до подложки, и на светлом фоне первые полсекунды в рамке
+ * стоял белый прямоугольник — экран вспыхивал ровно при открытии.
+ */
+val CAMERA_BACKDROP = Color(0xFF1C1914)
+
 /** Затемнение вокруг окна. Одно на обе темы: за ним живая картинка, а не наш фон. */
-private val SCRIM = Color(0xFF1C1914).copy(alpha = 0.44f)
+private val SCRIM = CAMERA_BACKDROP.copy(alpha = 0.44f)
 
 /**
  * Чернила поверх камеры.
@@ -114,7 +127,7 @@ private val ON_CAMERA = Color(0xFFF4EFE4)
  * Строка поверх камеры: что за экран слева, что происходит справа.
  *
  * [meta] — счётчик кадров для разработчика. Человеку о том, что съёмка идёт,
- * говорит подсказка над панелью, см. [scanHint].
+ * говорят персонажи над камерой и подсказка в карточке, см. [panelHint].
  *
  * @param onCamera под строкой живое превью. Без камеры — ручной ввод кода,
  *        отказ в доступе — под ней фон темы, и светлые «чернила камеры»
@@ -199,19 +212,35 @@ fun DiscardDraftDialog(onDiscard: () -> Unit, onKeep: () -> Unit) {
     )
 }
 
-/** Подсказка поверх камеры. Пилюля, а не текст по фону: за ней живая картинка. */
+/**
+ * Подсказка поверх камеры. Пилюля, а не текст по фону: за ней живая картинка.
+ *
+ * @param busy идёт поиск — рядом с текстом крутится индикатор. Крутится он,
+ *        только пока ищется товар: это секунды, а не всё время съёмки.
+ */
 @Composable
-fun HintPill(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text,
-        style = KcalTheme.type.label,
-        color = KcalTheme.colors.text,
-        textAlign = TextAlign.Center,
+fun HintPill(text: String, modifier: Modifier = Modifier, busy: Boolean = false) {
+    Row(
         modifier = modifier
             .clip(RoundedCornerShape(999.dp))
             .background(KcalTheme.colors.surface.copy(alpha = 0.92f))
             .padding(horizontal = 16.dp, vertical = 8.dp),
-    )
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (busy) {
+            CircularProgressIndicator(
+                modifier = Modifier.padding(end = 8.dp).size(12.dp),
+                color = KcalTheme.colors.text2,
+                strokeWidth = 1.5.dp,
+            )
+        }
+        Text(
+            text,
+            style = KcalTheme.type.label,
+            color = KcalTheme.colors.text,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 /**
@@ -233,199 +262,6 @@ fun ScanPanel(modifier: Modifier = Modifier, content: @Composable ColumnScope.()
             .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp),
     ) {
         content()
-    }
-}
-
-/**
- * Кольцо общего прогресса.
- *
- * Одно число вместо шести полосок — ответ на «долго ли ещё». Полоски отвечают
- * на другой вопрос, «на чём именно застряло», и одно другое не заменяет.
- */
-@Composable
-fun ProgressRing(
-    fraction: Float,
-    modifier: Modifier = Modifier,
-    size: Dp = 72.dp,
-) {
-    val colors = KcalTheme.colors
-    val animated by animateFloatAsState(
-        targetValue = fraction.coerceIn(0f, 1f),
-        animationSpec = tween(FILL_MS),
-        label = "ring",
-    )
-
-    Box(modifier.size(size), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val stroke = 7.dp.toPx()
-            val inset = stroke / 2
-            drawArc(
-                color = colors.line,
-                startAngle = 0f,
-                sweepAngle = 360f,
-                useCenter = false,
-                topLeft = Offset(inset, inset),
-                size = Size(this.size.width - stroke, this.size.height - stroke),
-                style = Stroke(width = stroke),
-            )
-            drawArc(
-                color = colors.bubble,
-                startAngle = -90f,
-                sweepAngle = 360f * animated,
-                useCenter = false,
-                topLeft = Offset(inset, inset),
-                size = Size(this.size.width - stroke, this.size.height - stroke),
-                style = Stroke(width = stroke),
-            )
-        }
-        Text(
-            "${(animated * 100).toInt()}%",
-            style = KcalTheme.type.number,
-            color = colors.text,
-        )
-    }
-}
-
-/**
- * Одно поле разбора: подпись, полоска набранной уверенности, значение.
- *
- * Полоска показывает не «идёт загрузка», а согласие кадров: значение встаёт
- * в поле, только когда несколько кадров подряд прочитали одно и то же. Видеть
- * надо именно **какое** поле не набралось — это подсказывает действие: подвинуть
- * камеру, убрать блик с той самой строки, поднести ближе.
- *
- * Значение при этом всегда можно набрать самому, поверх распознанного. Съёмка —
- * способ не печатать пять чисел с мобильной клавиатуры, а не обязанность ждать,
- * пока камера прочитает то, что человек видит на пачке своими глазами.
- *
- * @param onClear крестик: снять набранное значение. Распознавание после этого
- *        не подставит его заново — снятое значение оно больше не предлагает,
- *        иначе крестик не делал бы ничего.
- * @param valueWidth место под значение вместе с единицей и крестиком
- */
-@Composable
-fun ScanEditRow(
-    label: String,
-    value: String,
-    placeholder: String,
-    fraction: Float,
-    color: Color,
-    onValueChange: (String) -> Unit,
-    onClear: () -> Unit,
-    onFocus: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    optional: Boolean = false,
-    decimal: Boolean = false,
-    unit: String? = null,
-    valueWidth: Dp = 104.dp,
-) {
-    val colors = KcalTheme.colors
-    val animated by animateFloatAsState(
-        targetValue = fraction.coerceIn(0f, 1f),
-        animationSpec = tween(FILL_MS),
-        label = label,
-    )
-    val done = fraction >= 1f
-
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.width(74.dp)) {
-            CapsLabel(label, color = if (optional) colors.text3 else colors.text2)
-            // «Необязательное» сказано словом, а не одной бледностью: бледное
-            // читается как «недоступно», и человек ждёт, пока оно заполнится.
-            if (optional) {
-                Text(
-                    "необяз.",
-                    style = KcalTheme.type.time,
-                    color = colors.text3,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-        }
-
-        MiniBar(
-            fraction = animated,
-            fill = if (done) color else color.copy(alpha = 0.55f),
-            modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
-            height = if (optional) 4.dp else 6.dp,
-        )
-
-        Row(
-            modifier = Modifier.width(valueWidth),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End,
-        ) {
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                BasicTextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    textStyle = KcalTheme.type.number.copy(
-                        color = colors.text,
-                        textAlign = TextAlign.End,
-                    ),
-                    cursorBrush = SolidColor(colors.text),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
-                        imeAction = ImeAction.Next,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { onFocus(it.isFocused) },
-                )
-                if (value.isEmpty()) {
-                    // На месте пустого значения стоит процент набранного, а не
-                    // прочерк: прочерк читается как «не будет», а полоска в это
-                    // время как раз ползёт.
-                    Text(
-                        placeholder,
-                        style = KcalTheme.type.time,
-                        color = colors.text3,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-
-            if (unit != null && value.isNotEmpty()) {
-                Text(
-                    unit,
-                    style = KcalTheme.type.time,
-                    color = colors.text3,
-                    modifier = Modifier.padding(start = 3.dp),
-                )
-            }
-
-            ClearButton(visible = value.isNotEmpty(), onClick = onClear)
-        }
-    }
-}
-
-/**
- * Крестик, снимающий уже набранное значение.
- *
- * Место под него занято всегда, даже когда значения нет: иначе строка дёргается
- * по ширине ровно в тот момент, когда камера что-то дочитала, — и палец промахивается
- * мимо соседнего поля.
- */
-@Composable
-private fun ClearButton(visible: Boolean, onClick: () -> Unit) {
-    val colors = KcalTheme.colors
-
-    Box(
-        modifier = Modifier
-            .size(28.dp)
-            .clip(CircleShape)
-            .then(if (visible) Modifier.clickable(onClick = onClick) else Modifier),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (visible) {
-            Icon(
-                Icons.Default.Close,
-                contentDescription = "Стереть значение",
-                tint = colors.text3,
-                modifier = Modifier.size(14.dp),
-            )
-        }
     }
 }
 
@@ -464,6 +300,3 @@ fun ScanActions(
         }
     }
 }
-
-/** Заполнение полоски: за глазом успевает, за кадром — тоже. */
-private const val FILL_MS = 280

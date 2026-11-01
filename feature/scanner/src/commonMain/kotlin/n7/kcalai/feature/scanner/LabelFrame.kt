@@ -25,4 +25,6 @@ internal data class LabelFrame(
     val names: List<String> = emptyList(),
     /** Название, за которое проголосовали кадры. `null` — ещё не набралось. */
     val name: String? = null,
+    /** `false` — кадр мыльный и пропущен; остальное в нём — от прошлого резкого. */
+    val sharp: Boolean = true,
 )

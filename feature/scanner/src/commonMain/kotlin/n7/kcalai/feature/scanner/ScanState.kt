@@ -10,6 +10,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import kotlin.math.roundToInt
+import kotlin.time.TimeSource
 import n7.kcalai.model.Nutriments
 import n7.kcalai.repositories.BarcodeValidator
 import n7.kcalai.repositories.LabelReading
@@ -73,7 +74,11 @@ internal class ScanField(initial: String = "", manual: Boolean = false) {
  * пришло из кадров, и то, что поправил человек.
  */
 @Stable
-internal class ScanState(initialGtin: String?) {
+internal class ScanState(
+    initialGtin: String?,
+    /** Миллисекунды с открытия карточки. Свои, а не системные: тест двигает их сам. */
+    private val clock: () -> Long = monotonicClock(),
+) {
 
     val name = ScanField()
     val kcal = ScanField()
@@ -87,6 +92,128 @@ internal class ScanState(initialGtin: String?) {
      * с соседней пачки нельзя.
      */
     val barcode = ScanField(initialGtin.orEmpty(), manual = initialGtin != null)
+
+    /** Карточка открылась с промаха скана: товара нет ни в одной базе. */
+    val fromMiss: Boolean = initialGtin != null
+
+    /**
+     * Числа в порядке строк этикетки: белки, жиры, углеводы — и калории.
+     * В этом порядке их и вписывают: глаза идут по пачке сверху вниз.
+     */
+    val numberFields: List<ScanField> get() = listOf(prot, fat, carb, kcal)
+
+    /**
+     * Камера не справилась — персонажи просят вписать руками. Или человек сам
+     * взялся вписывать числа: тогда просьба та же, а камера по-прежнему читает.
+     */
+    var manual by mutableStateOf(false)
+        private set
+
+    /**
+     * Поле, которое сейчас набирают: числа и код — цифровой панелью, название —
+     * клавиатурой. `null` — панели нет. Камера в это поле не пишет.
+     */
+    var typing by mutableStateOf<ScanField?>(null)
+        private set
+
+    /** Когда в последний раз заполненных полей прибавилось — с камеры или руками. */
+    private var calmSince = clock()
+    private var lastFilled = 0
+
+    /** С какого кадра камера мылит без перерыва. `null` — последний кадр резкий. */
+    private var blurSince: Long? = null
+
+    /**
+     * Пора ли просить вписать руками. Зовётся раз в секунду, пока карточка открыта.
+     *
+     * Двадцать секунд — без нового числа, а не с открытия карточки: камеру, которая
+     * читает медленно, но читает, не перебивают. Мыло — раньше: распознавание мыльный
+     * кадр пропускает, и шесть секунд одного мыла значат, что ждать нечего.
+     */
+    fun tick() {
+        noteProgress()
+        // Человек сам что-то набирает — название, например: цифры посреди слова
+        // спрятали бы клавиатуру у него из-под пальцев.
+        if (manual || typing != null) return
+        val first = firstMissingNumber() ?: return
+        val now = clock()
+        val stalled = now - calmSince >= STALL_MS
+        val blurred = blurSince?.let { now - it >= BLUR_MS } ?: false
+        if (stalled || blurred) {
+            manual = true
+            typing = first
+        }
+    }
+
+    /** Камеры нет или распознавать нечем — просить вписать сразу. */
+    fun withoutCamera() {
+        if (manual) return
+        manual = true
+        typing = firstMissingNumber()
+    }
+
+    /** Тап по полю. Число — значит, человек взялся вписывать сам, и панель с цифрами встаёт. */
+    fun startTyping(field: ScanField) {
+        typing = field
+        if (field in numberFields) manual = true
+    }
+
+    /**
+     * Цифры спрятаны: человек хочет ещё раз камерой. Она получает свои двадцать
+     * секунд заново — иначе просьба вернулась бы через мгновение.
+     */
+    fun stopTyping() {
+        typing = null
+        manual = false
+        calmSince = clock()
+        blurSince = null
+    }
+
+    /** Кнопка цифровой панели — в поле, которое набирают. */
+    fun press(key: PadKey) {
+        val field = typing ?: return
+        val number = padNumber(field) ?: return
+        field.type(field.text.press(key, number))
+        noteProgress()
+    }
+
+    /**
+     * Число, которое камера распознала, но не разложила по полям, — тапом по нему
+     * в поле, которое набирают. Приложение не угадывает, куда его поставить, а
+     * показывает всё, что увидело, и отдаёт решение человеку.
+     */
+    fun put(value: String) {
+        val field = typing?.takeIf { padNumber(it) != null } ?: return
+        field.type(value)
+        noteProgress()
+    }
+
+    /** Долгое «стереть»: поле пустеет, и камера снятое значение больше не предлагает. */
+    fun clearTyping() {
+        typing?.takeIf { padNumber(it) != null }?.clear()
+    }
+
+    /** Чем набирается поле. `null` — название: его набирают клавиатурой. */
+    fun padNumber(field: ScanField): PadNumber? = when (field) {
+        kcal -> PadNumber.KCAL
+        barcode -> PadNumber.CODE
+        prot, fat, carb -> PadNumber.GRAMS
+        else -> null
+    }
+
+    /** Число с этикетки, которого ещё нет. */
+    fun isMissing(field: ScanField): Boolean =
+        if (field === kcal) field.text.toIntOrNull() == null else field.text.toCentigrams() == null
+
+    private fun firstMissingNumber(): ScanField? = numberFields.firstOrNull(::isMissing)
+
+    private fun noteProgress() {
+        val filled = filledFields
+        if (filled != lastFilled) {
+            lastFilled = filled
+            calmSince = clock()
+        }
+    }
 
     var frame by mutableStateOf(LabelFrame(LabelReading.EMPTY, 0))
         private set
@@ -114,7 +241,8 @@ internal class ScanState(initialGtin: String?) {
 
     fun onFrame(next: LabelFrame) {
         frame = next
-        if (next.available) seen++
+        if (next.available) seen++ else withoutCamera()
+        blurSince = if (next.sharp) null else blurSince ?: clock()
 
         val fields = next.fields.toMap()
         votes = fields
@@ -126,10 +254,10 @@ internal class ScanState(initialGtin: String?) {
         // арифметикой. Поле белков при этом всё ещё считалось набранным:
         // три кадра с этикетки из окна не ушли, — и в него уезжало 5,5 с ценника
         // вместо нуля, за который кадры голосовали.
-        kcal.offer(fields["ккал"]?.settledValue?.toString())
-        prot.offer(fields["Б"]?.settledValue.centigramsToField())
-        fat.offer(fields["Ж"]?.settledValue.centigramsToField())
-        carb.offer(fields["У"]?.settledValue.centigramsToField())
+        offer(kcal, fields["ккал"]?.settledValue?.toString())
+        offer(prot, fields["Б"]?.settledValue.centigramsToField())
+        offer(fat, fields["Ж"]?.settledValue.centigramsToField())
+        offer(carb, fields["У"]?.settledValue.centigramsToField())
 
         // Название не пересматривается на каждом кадре, в отличие от чисел,
         // и это не мелочь, а разница в природе величины. Числа на этикетке
@@ -144,11 +272,21 @@ internal class ScanState(initialGtin: String?) {
         // Поэтому первое подтверждённое остаётся. Человек не заперт: крестик
         // освобождает поле и помнит снятое, а чипсы под полем держат остальных
         // кандидатов — включая тот, что камера видит прямо сейчас.
-        if (!name.filled) name.offer(next.name)
+        if (!name.filled) offer(name, next.name)
+        noteProgress()
+    }
+
+    /**
+     * В поле, которое сейчас набирают, камера не пишет вовсе. Камера прочла «5,5»,
+     * человек стёр — и следующий же кадр вписывал «5,5» обратно: стёртое поле
+     * снова считалось свободным.
+     */
+    private fun offer(field: ScanField, value: String?) {
+        if (field !== typing) field.offer(value)
     }
 
     fun onBarcode(code: String) {
-        barcode.offer(code)
+        offer(barcode, code)
     }
 
     fun progress(key: String): Float = when {
@@ -208,14 +346,6 @@ internal class ScanState(initialGtin: String?) {
      */
     val warning: String? get() = check?.warning?.takeIf { missing.isEmpty() }
 
-    /** Почему сохранить пока нельзя — словами, а не серой кнопкой. */
-    val saveHint: String?
-        get() = when {
-            name.text.isBlank() -> "Назовите продукт — без названия его потом не найти"
-            missing.isNotEmpty() -> missingHint(missing)
-            else -> null
-        }
-
     /** Код уходит в сохранение только пройдя контрольную цифру. */
     val gtin: String? get() = BarcodeValidator.normalize(barcode.text)
 
@@ -225,9 +355,8 @@ internal class ScanState(initialGtin: String?) {
     /**
      * Сколько из пяти полей заполнено: название и четыре числа с этикетки.
      *
-     * Штрихкод не считается: он необязателен, стоит отдельной строкой, а после
-     * промаха скана заполнен с самого начала — карточка открывалась с «1 из 5»
-     * и, заполненная целиком, показывала «6 из 5».
+     * Штрихкод не считается: он необязателен, а после промаха скана заполнен
+     * с самого начала — засчитай его, и пустая карточка считалась бы начатой.
      */
     val filledFields: Int
         get() = listOf(kcal, prot, fat, carb, name).count { it.filled }
@@ -248,10 +377,6 @@ internal class ScanState(initialGtin: String?) {
     /** Сколько полей заполнила камера, а не человек, — для отклика ладони. */
     val cameraFilled: Int
         get() = listOf(kcal, prot, fat, carb, name, barcode).count { it.filled && !it.manual }
-
-    /** Кольцо считает обязательную четвёрку: без неё сохранять нечего. */
-    val overall: Float
-        get() = REQUIRED.map(::progress).average().toFloat()
 
     /**
      * Чем кончилась съёмка — последняя и самая ценная строка диагностики.
@@ -290,8 +415,18 @@ internal class ScanState(initialGtin: String?) {
     }
 
     companion object {
-        val REQUIRED = listOf("ккал", "Б", "Ж", "У")
+        /** Сколько ждать нового числа с камеры, прежде чем просить вписать руками. */
+        const val STALL_MS = 20_000L
+
+        /** Сколько терпеть мыло подряд: дольше — камера не наведётся сама. */
+        const val BLUR_MS = 6_000L
     }
+}
+
+/** Часы карточки: с нуля в момент, когда она открылась. */
+private fun monotonicClock(): () -> Long {
+    val start = TimeSource.Monotonic.markNow()
+    return { start.elapsedNow().inWholeMilliseconds }
 }
 
 /**
@@ -322,60 +457,6 @@ private val ScanStateSaver: Saver<ScanState, Any> = listSaver(
             carb.type(saved[4])
         }
     },
-)
-
-/**
- * Подсказка над камерой — или `null`, когда говорить нечего.
- *
- * Пока камера не прочла ни одного поля, подсказка стоит: она и объясняет, что
- * делать, и показывает, что съёмка идёт. Раньше она гасла после первого кадра,
- * а о том, что экран не завис, говорил счётчик «кадр 48 · 542 мс» — телеметрия,
- * которая человеку ничего не объясняет. Счётчик теперь только у разработчика,
- * и у него подсказка по-прежнему гаснет после первого кадра.
- *
- * @param camera доступ к камере есть
- * @param answered человек ответил на запрос доступа
- * @param ocr распознавание на этом устройстве работает
- * @param seen сколько кадров прошло через распознавание
- * @param cameraFilled сколько полей заполнила камера
- * @param stats над камерой стоит счётчик кадров
- */
-internal fun scanHint(
-    camera: Boolean,
-    answered: Boolean,
-    ocr: Boolean,
-    seen: Int,
-    cameraFilled: Int,
-    stats: Boolean,
-): String? = when {
-    !camera && answered -> "Камеры нет — заполните поля сами"
-    !camera -> "Запрашиваем доступ к камере"
-    !ocr -> "Распознавание недоступно — заполните сами"
-    seen == 0 -> TABLE_HINT
-    !stats && cameraFilled == 0 -> TABLE_HINT
-    else -> null
-}
-
-private const val TABLE_HINT = "Держите таблицу пищевой ценности в рамке"
-
-/**
- * «Не хватает белков и углеводов…» — что дописать и как.
- *
- * Ноль назван прямо: у сахара строк «Белки» и «Жиры» на пачке нет вовсе,
- * и человек иначе ищет, что вписать в поле, которого на этикетке нет.
- */
-private fun missingHint(missing: List<String>): String {
-    val what = missing.map { GENITIVE.getValue(it) }
-    val list = if (what.size == 1) what.single() else what.dropLast(1).joinToString(", ") + " и " + what.last()
-    val rows = if (missing.size == 1) "эту строку" else "эти строки"
-    return "Не хватает $list. Наведите камеру на $rows или впишите с пачки — если строки на пачке нет, впишите 0."
-}
-
-private val GENITIVE = mapOf(
-    "калории" to "калорий",
-    "белки" to "белков",
-    "жиры" to "жиров",
-    "углеводы" to "углеводов",
 )
 
 /** Сотые грамма в то, что человек ожидает увидеть в поле: «12,4», но «5», а не «5,0». */

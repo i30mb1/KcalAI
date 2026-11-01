@@ -43,8 +43,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.feature.scanner.LabelDebugDialog
-import n7.kcalai.feature.scanner.LabelScannerDialog
-import n7.kcalai.feature.scanner.ScanStep
 import n7.kcalai.feature.scanner.ScannerDialog
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.MealType
@@ -128,22 +126,16 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
             onDismiss = viewModel::onDismissOverlay,
         )
 
-        is Overlay.Scan -> when (val step = overlay.step) {
-            is ScanStep.NewProduct -> LabelScannerDialog(
-                onSave = viewModel::onSaveNewProduct,
-                onDismiss = viewModel::onDismissOverlay,
-                // Код с промаха скана: сам экран его тоже ловит, но отсканированный
-                // человеком намеренно сильнее случайно попавшего в кадр.
-                gtin = step.gtin,
-                // Счётчик кадров — инструмент разработчика, как и отладка разбора.
-                frameStats = labelDebug,
-            )
-            // Пока ищется товар, сканер остаётся открытым: ответ придёт сюда же.
-            else -> ScannerDialog(
-                onScanned = viewModel::onScanned,
-                onDismiss = viewModel::onDismissOverlay,
-            )
-        }
+        // Одно окно на все шаги — от кода до карточки: оно не закрывается между
+        // ними, и камера не перезапускается. Шаг меняет экранная модель.
+        is Overlay.Scan -> ScannerDialog(
+            step = overlay.step,
+            onScanned = viewModel::onScanned,
+            onSave = viewModel::onSaveNewProduct,
+            onDismiss = viewModel::onDismissOverlay,
+            // Счётчик кадров — инструмент разработчика, как и отладка разбора.
+            frameStats = labelDebug,
+        )
 
         Overlay.LabelDebug -> LabelDebugDialog(
             onRead = viewModel::onLabelDebugRead,

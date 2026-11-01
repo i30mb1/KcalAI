@@ -8,15 +8,11 @@ import n7.kcalai.repositories.LabelReading
 // Камеры на iOS пока нет: сканер сразу закрывается, и человек остаётся в ручном вводе.
 
 @Composable
-actual fun ScannerDialog(onScanned: (String) -> Unit, onDismiss: () -> Unit) {
-    LaunchedEffect(Unit) { onDismiss() }
-}
-
-@Composable
-actual fun LabelScannerDialog(
+actual fun ScannerDialog(
+    step: ScanStep,
+    onScanned: (String) -> Unit,
     onSave: (gtin: String?, name: String, nutriments: Nutriments) -> Unit,
     onDismiss: () -> Unit,
-    gtin: String?,
     frameStats: Boolean,
 ) {
     LaunchedEffect(Unit) { onDismiss() }

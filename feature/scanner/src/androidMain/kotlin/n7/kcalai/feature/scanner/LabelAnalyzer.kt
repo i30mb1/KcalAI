@@ -6,6 +6,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +38,12 @@ internal class LabelAnalyzer(
     private val scope: CoroutineScope,
     /** Куда складывать последние секунды съёмки для разбора потом. */
     private val recorder: LabelRecorder?,
+    /**
+     * Читать этикетку. `false` — кадр ищет только штрих-код: шаг кода в том же
+     * окне. Спрашивается на каждом кадре — окно переходит к карточке посреди
+     * сессии, а камера и анализ при этом не пересоздаются.
+     */
+    private val reading: () -> Boolean = { true },
     /**
      * Штрих-код, пойманный попутно.
      *
@@ -98,6 +105,11 @@ internal class LabelAnalyzer(
             proxy.close()
         }
 
+        if (!reading()) {
+            seekBarcode(frame, rotation)
+            return
+        }
+
         scope.launch {
             try {
                 val started = SystemClock.elapsedRealtime()
@@ -112,7 +124,11 @@ internal class LabelAnalyzer(
                 if (sharpness < MIN_SHARPNESS) {
                     val note = "смазан · резкость ${sharpness.roundToInt()} < ${MIN_SHARPNESS.roundToInt()} · пропущен"
                     recorder?.add(bitmap, started, note, label = false)
-                    lastFrame?.let { onFrame(it.copy(elapsedMs = SystemClock.elapsedRealtime() - started)) }
+                    // Наружу уходит прошлый резкий кадр — голоса и поля не дёргаются, —
+                    // но с пометкой: карточка считает, сколько камера мылит подряд,
+                    // и после нескольких секунд одного мыла просит вписать руками.
+                    val shown = lastFrame ?: LabelFrame(LabelReading.EMPTY, 0)
+                    onFrame(shown.copy(elapsedMs = SystemClock.elapsedRealtime() - started, sharp = false))
                     // Пропуск обязан стоить времени. Распознавание держит темп
                     // в три кадра в секунду, а пропуск отпускал кадр за
                     // миллисекунды — и шли все тридцать: тридцать JPEG в записи,
@@ -170,6 +186,27 @@ internal class LabelAnalyzer(
                 busy.set(false)
             }
         }
+    }
+
+    /**
+     * Шаг кода: кадр идёт только в распознаватель штрих-кода.
+     *
+     * Текст не читается — движок распознавания даже не поднимается, пока окно
+     * не перешло к карточке. Следующий кадр берётся, когда распознаватель кода
+     * ответил и прошла короткая пауза: кадр — это пять мегабайт, и тридцать
+     * таких в секунду ради кода, который ловится и с десяти, — пустая трата.
+     */
+    private fun seekBarcode(frame: Bitmap, rotation: Int) {
+        barcodes.read(
+            image = InputImage.fromBitmap(frame, rotation),
+            onDone = {
+                scope.launch {
+                    delay(BARCODE_PAUSE_MS)
+                    busy.set(false)
+                }
+            },
+            onCode = onBarcode,
+        )
     }
 
     /**
@@ -235,6 +272,9 @@ internal class LabelAnalyzer(
 
         /** Сколько держать паузу после пропущенного кадра — примерно кадр распознавания. */
         const val SKIP_PAUSE_MS = 300L
+
+        /** Пауза между кадрами на шаге кода: около восьми кадров в секунду. */
+        const val BARCODE_PAUSE_MS = 80L
     }
 }
 
