@@ -26,6 +26,7 @@ import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryEntryEntity
+import n7.kcalai.feature.scanner.ScanStep
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.Log
@@ -65,22 +66,8 @@ sealed interface Overlay {
     /** Правка записи: вес, приём пищи, удаление. Открывается тапом по чипсу в пузырьке. */
     data class EditEntry(val entry: DiaryEntryEntity) : Overlay
 
-    /** Камера. */
-    data object Scan : Overlay
-
-    /**
-     * Карточка нового продукта поверх камеры.
-     *
-     * Единственный путь завести продукт — и для промаха штрих-кода, и для
-     * развесного, домашнего, вскрытой пачки. Раньше их было два: форма на пять
-     * полей и сканер, после которого она открывалась. Промах скана — исход
-     * основной, а не аварийный (российских товаров в Open Food Facts порядка
-     * тридцати шести тысяч), и вести к нему через два экрана было незачем.
-     *
-     * @param gtin код, с промаха которого сюда пришли. `null` — этикетку снимают
-     *        напрямую; экран попробует поймать код сам или примет его руками.
-     */
-    data class LabelScan(val gtin: String? = null) : Overlay
+    /** Камера: от штрих-кода до карточки нового продукта — одно окно, см. [ScanStep]. */
+    data class Scan(val step: ScanStep = ScanStep.Barcode) : Overlay
 
     /**
      * Съёмка этикетки вхолостую — чтобы посмотреть, что вообще читается.
@@ -665,7 +652,7 @@ class DiaryViewModel(
     // --- Скан штрих-кода --------------------------------------------------------------
 
     fun onOpenScan() {
-        overlay.value = Overlay.Scan
+        overlay.value = Overlay.Scan()
     }
 
     /**
@@ -676,7 +663,11 @@ class DiaryViewModel(
      * целую пачку было бы хуже, чем не записать ничего.
      */
     fun onScanned(gtin: String) {
-        overlay.value = Overlay.None
+        // Окно не закрывается, пока идёт поиск: он доходит до сети и длится
+        // секунды, а закрытое окно на это время показывало дневник, и промах
+        // открывал уже второе окно со своей камерой — экран мигал.
+        val searching = Overlay.Scan(ScanStep.Searching(gtin))
+        overlay.value = searching
         scanned.value = null
 
         viewModelScope.launch {
@@ -691,11 +682,15 @@ class DiaryViewModel(
                 null
             }
 
+            // Окно могли закрыть посреди поиска — тогда промах его не открывает.
+            val stillWaiting = overlay.value == searching
+
             if (candidate == null) {
-                // Промах ведёт прямо в карточку продукта: код уже известен,
-                // остальное человек снимет камерой или наберёт сам.
-                overlay.value = Overlay.LabelScan(gtin)
+                // Промах ведёт прямо в карточку продукта в том же окне: код уже
+                // известен, остальное человек снимет камерой или впишет сам.
+                if (stillWaiting) overlay.value = Overlay.Scan(ScanStep.NewProduct(gtin))
             } else {
+                if (stillWaiting) overlay.value = Overlay.None
                 // Название уезжает в поле ввода, курсор — за ним. Скан опознал
                 // товар, но не знает, сколько его съели, и дописать «150» к уже
                 // готовой строке быстрее, чем открывать отдельный шит веса.
@@ -770,7 +765,7 @@ class DiaryViewModel(
      * сначала сканировать несуществующий код, чтобы добраться до камеры, незачем.
      */
     fun onOpenLabelScan() {
-        overlay.value = Overlay.LabelScan()
+        overlay.value = Overlay.Scan(ScanStep.NewProduct())
     }
 
     // --- Проверка распознавания этикетки ----------------------------------------------
@@ -922,7 +917,9 @@ class DiaryViewModel(
     fun onDismissOverlay() {
         val closing = overlay.value
         overlay.value = Overlay.None
-        if (closing is Overlay.LabelScan || closing == Overlay.LabelDebug) {
+        // Сессия съёмки этикетки пишется на диск при закрытии окна — её пора отправлять.
+        val labelShot = closing is Overlay.Scan && closing.step is ScanStep.NewProduct
+        if (labelShot || closing == Overlay.LabelDebug) {
             onScanFinished()
             refreshOutbox()
         }

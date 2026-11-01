@@ -1,5 +1,6 @@
 package n7.kcalai.feature.diary
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -15,6 +16,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import n7.kcalai.feature.scanner.ScanStep
 
 /**
  * Экранная модель дневника глазами человека: что он набрал, что нажал
@@ -241,7 +243,74 @@ class DiaryViewModelTest {
         assertTrue(vm.state.value.feed.any { it is FeedItem.NotFound })
     }
 
+    // --- Съёмка: от кода до карточки — одно окно ---------------------------------------------
+
+    /**
+     * Поиск идёт до сети и может занять секунды. Раньше окно закрывалось сразу,
+     * на это время мелькал дневник, а при промахе открывалось второе окно со своей
+     * камерой. Теперь окно ждёт ответа открытым.
+     */
+    @Test
+    fun `пока товар ищется по коду, окно съёмки открыто, а нашёлся — закрывается`() = runTest(dispatcher) {
+        harness.userFoodDao.add(barcode = GTIN, name = "Сыр", kcal100 = 350)
+        val network = CompletableDeferred<Unit>()
+        harness.userFoodDao.slowLookup = network
+        val vm = screen()
+
+        vm.onOpenScan()
+        vm.onScanned(GTIN)
+        advanceUntilIdle()
+        assertEquals(Overlay.Scan(ScanStep.Searching(GTIN)), vm.state.value.overlay)
+
+        network.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(Overlay.None, vm.state.value.overlay)
+        assertEquals("Сыр ", vm.state.value.input)
+    }
+
+    @Test
+    fun `кода нет в базе — то же окно переходит к карточке нового продукта`() = runTest(dispatcher) {
+        val vm = screen()
+
+        vm.onOpenScan()
+        vm.onScanned(UNKNOWN_GTIN)
+        advanceUntilIdle()
+
+        assertEquals(Overlay.Scan(ScanStep.NewProduct(UNKNOWN_GTIN)), vm.state.value.overlay)
+    }
+
+    /** Человек передумал и закрыл окно, пока шёл поиск, — промах не открывает его снова. */
+    @Test
+    fun `окно закрыли посреди поиска — карточка нового продукта сама не открывается`() = runTest(dispatcher) {
+        val network = CompletableDeferred<Unit>()
+        harness.userFoodDao.slowLookup = network
+        val vm = screen()
+
+        vm.onOpenScan()
+        vm.onScanned(UNKNOWN_GTIN)
+        advanceUntilIdle()
+        vm.onDismissOverlay()
+        network.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(Overlay.None, vm.state.value.overlay)
+    }
+
+    /** У развесного и домашнего кода нет — карточка открывается сразу, в том же окне съёмки. */
+    @Test
+    fun `съёмка этикетки открывает окно съёмки сразу с карточкой нового продукта`() = runTest(dispatcher) {
+        val vm = screen()
+
+        vm.onOpenLabelScan()
+        advanceUntilIdle()
+
+        assertEquals(Overlay.Scan(ScanStep.NewProduct(gtin = null)), vm.state.value.overlay)
+    }
+
     private companion object {
         const val GTIN = "4607001771234"
+
+        /** Код с верной контрольной цифрой, которого нет ни в одной базе. */
+        const val UNKNOWN_GTIN = "4600000000008"
     }
 }

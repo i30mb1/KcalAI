@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.feature.scanner.LabelDebugDialog
 import n7.kcalai.feature.scanner.LabelScannerDialog
+import n7.kcalai.feature.scanner.ScanStep
 import n7.kcalai.feature.scanner.ScannerDialog
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.MealType
@@ -120,20 +121,22 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
             onDismiss = viewModel::onDismissOverlay,
         )
 
-        Overlay.Scan -> ScannerDialog(
-            onScanned = viewModel::onScanned,
-            onDismiss = viewModel::onDismissOverlay,
-        )
-
-        is Overlay.LabelScan -> LabelScannerDialog(
-            onSave = viewModel::onSaveNewProduct,
-            onDismiss = viewModel::onDismissOverlay,
-            // Код с промаха скана: сам экран его тоже ловит, но отсканированный
-            // человеком намеренно сильнее случайно попавшего в кадр.
-            gtin = overlay.gtin,
-            // Счётчик кадров — инструмент разработчика, как и отладка разбора.
-            frameStats = labelDebug,
-        )
+        is Overlay.Scan -> when (val step = overlay.step) {
+            is ScanStep.NewProduct -> LabelScannerDialog(
+                onSave = viewModel::onSaveNewProduct,
+                onDismiss = viewModel::onDismissOverlay,
+                // Код с промаха скана: сам экран его тоже ловит, но отсканированный
+                // человеком намеренно сильнее случайно попавшего в кадр.
+                gtin = step.gtin,
+                // Счётчик кадров — инструмент разработчика, как и отладка разбора.
+                frameStats = labelDebug,
+            )
+            // Пока ищется товар, сканер остаётся открытым: ответ придёт сюда же.
+            else -> ScannerDialog(
+                onScanned = viewModel::onScanned,
+                onDismiss = viewModel::onDismissOverlay,
+            )
+        }
 
         Overlay.LabelDebug -> LabelDebugDialog(
             onRead = viewModel::onLabelDebugRead,

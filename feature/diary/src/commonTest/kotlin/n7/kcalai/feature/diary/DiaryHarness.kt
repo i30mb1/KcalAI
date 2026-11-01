@@ -2,6 +2,7 @@ package n7.kcalai.feature.diary
 
 import kotlin.time.Clock
 import kotlin.time.Instant
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -250,7 +251,16 @@ internal class FakeUserFoodDao : UserFoodDao {
         foods.replaceAll { if (it.id == food.id) food else it }
     }
 
-    override suspend fun findByBarcode(barcode: String): UserFoodEntity? = foods.find { it.barcode == barcode }
+    /**
+     * Поиск по коду ждёт этого сигнала — как ждёт ответа сети на устройстве.
+     * `null` — отвечает сразу. Нужно, чтобы застать экран посреди поиска.
+     */
+    var slowLookup: CompletableDeferred<Unit>? = null
+
+    override suspend fun findByBarcode(barcode: String): UserFoodEntity? {
+        slowLookup?.await()
+        return foods.find { it.barcode == barcode }
+    }
 
     override suspend fun findById(id: Long): UserFoodEntity? = foods.find { it.id == id }
 
