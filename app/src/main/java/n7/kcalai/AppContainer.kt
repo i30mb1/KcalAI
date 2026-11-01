@@ -13,6 +13,8 @@ import n7.kcalai.database.buildKcalDatabase
 import n7.kcalai.fooddb.FoodDb
 import n7.kcalai.fooddb.FoodDbFactory
 import n7.kcalai.fooddb.SeedInstaller
+import n7.kcalai.mascot.FactsBuilder
+import n7.kcalai.mascot.MascotBrain
 import n7.kcalai.personal.PersonalRepository
 import n7.kcalai.remote.ChainedProductSource
 import n7.kcalai.remote.ContributionUploader
@@ -118,6 +120,20 @@ class AppContainer(context: Context) {
 
     val textResolver: TextFoodResolver by lazy {
         TextFoodResolver(foodRepository, personalRepository)
+    }
+
+    /**
+     * Мозг Яйца, Масла и Зёрнышка: когда написать первыми, что ответить, как
+     * отозваться на касание. Всё — по дневнику и на телефоне: факты в сеть не уходят.
+     */
+    val mascotBrain: MascotBrain by lazy {
+        val zone = TimeZone.currentSystemDefault()
+        MascotBrain(
+            dao = database.mascotDao(),
+            facts = FactsBuilder(database.diaryDao(), database.goalDao(), personalRepository, zone),
+            diaryDao = database.diaryDao(),
+            zone = zone,
+        )
     }
 
     private companion object {

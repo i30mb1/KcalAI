@@ -75,4 +75,15 @@ class SpeakerTest {
         assertEquals(Mascot.BUTTER, Macro.FAT.mascot)
         assertEquals(Mascot.GRAIN, Macro.CARB.mascot)
     }
+
+    @Test
+    fun `сообщение говорит его автор`() {
+        assertEquals(Mascot.BUTTER, speakerOf(FeedItem.Said(id = 1, mascot = Mascot.BUTTER, text = "Мур.", time = "10:00", minute = 600)))
+    }
+
+    @Test
+    fun `имя спрашивает Яйцо, разрешение писать — Зёрнышко`() {
+        assertEquals(Mascot.EGG, speakerOf(FeedItem.Ask(AskKind.NAME)))
+        assertEquals(Mascot.GRAIN, speakerOf(FeedItem.Ask(AskKind.WRITE)))
+    }
 }

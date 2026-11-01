@@ -103,16 +103,16 @@ fun mealNameTarget(meal: MealType): String = "на ${mealNameLower(meal)}"
 /** «обед» — название приёма в середине фразы. */
 fun mealNameLower(meal: MealType): String = meal.title.lowercase()
 
-/** «обедаете» — «обычно вы обедаете около 13:00». */
+/** «обедаешь» — «обычно ты обедаешь около 13:00». */
 fun mealVerb(meal: MealType): String = when (meal) {
-    MealType.BREAKFAST -> "завтракаете"
-    MealType.LUNCH -> "обедаете"
-    MealType.DINNER -> "ужинаете"
-    MealType.SNACK -> "перекусываете"
+    MealType.BREAKFAST -> "завтракаешь"
+    MealType.LUNCH -> "обедаешь"
+    MealType.DINNER -> "ужинаешь"
+    MealType.SNACK -> "перекусываешь"
 }
 
 /**
- * «Обычно завтрак у вас около 08:00 и это ~450 ккал, обед ~850, ужин ~600».
+ * «Обычно завтрак у тебя около 08:00 и это ~450 ккал, обед ~850, ужин ~600».
  *
  * Время названо один раз, у первого приёма. Повторять «обед около 13:00 и это
  * ~850 ккал, ужин около 19:00 и это ~600 ккал» значит превратить фразу в таблицу,
@@ -120,7 +120,7 @@ fun mealVerb(meal: MealType): String = when (meal) {
  */
 fun outlineSentence(outline: DayOutline): String {
     val first = outline.meals.firstOrNull() ?: return ""
-    val head = "Обычно ${mealNameLower(first.meal)} у вас около ${formatHour(first.hour)} " +
+    val head = "Обычно ${mealNameLower(first.meal)} у тебя около ${formatHour(first.hour)} " +
         "и это ~${first.kcal} ккал"
     val rest = outline.meals.drop(1).joinToString("") { ", ${mealNameLower(it.meal)} ~${it.kcal}" }
     return head + rest
@@ -149,8 +149,8 @@ fun daysWord(count: Int): String {
  * пишет по-русски. Поэтому глагол стоит при «ничего», а не при запросе.
  */
 fun notFoundText(query: String): String =
-    "По запросу «$query» ничего не нашлось. Попробуйте назвать блюдо иначе, " +
-        "отсканируйте штрих-код или сфотографируйте этикетку — добавим в базу."
+    "По запросу «$query» ничего не нашлось. Попробуй назвать блюдо иначе, " +
+        "отсканируй штрих-код или сфотографируй этикетку — добавим в базу."
 
 /** «2 сессии съёмки и 1 продукт» — что лежит в очереди отправки. */
 fun describeOutbox(scans: Int, products: Int): String {

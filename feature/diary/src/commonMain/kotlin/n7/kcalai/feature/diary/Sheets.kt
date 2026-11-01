@@ -90,6 +90,8 @@ fun GoalSheet(
     focus: GoalField,
     onConfirm: (kcal: Int, prot: Int, fat: Int, carb: Int) -> Unit,
     onDismiss: () -> Unit,
+    /** Пол из помощника — отдаётся вместе с сохранённой целью, чтобы персонажи не путали род. */
+    onSex: (Sex) -> Unit = {},
 ) {
     var kcal by remember { mutableStateOf(goal?.kcal?.toString().orEmpty()) }
     var prot by remember { mutableStateOf(goal?.prot?.toString().orEmpty()) }
@@ -100,6 +102,10 @@ fun GoalSheet(
     // поле с курсором наготове закрывало бы второй путь — «посчитаем».
     // Тап по конкретной плитке — другое дело: человек показал, что править.
     val autofocus = goal != null || focus != GoalField.KCAL
+
+    // Пол из помощника запоминается, только если цель сохранили: посчитать
+    // и закрыть шит — не повод что-то о человеке хранить.
+    var helperSex by remember { mutableStateOf<Sex?>(null) }
 
     Sheet(onDismiss) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -112,7 +118,8 @@ fun GoalSheet(
             lastWeightGrams = lastWeightGrams,
             // Новичок видит помощь раскрытой: без цели ему почти наверняка нужна она.
             initiallyOpen = goal == null && focus == GoalField.KCAL,
-            onSuggest = { suggestion ->
+            onSuggest = { suggestion, sex ->
+                helperSex = sex
                 kcal = suggestion.kcal.toString()
                 prot = suggestion.prot.toString()
                 fat = suggestion.fat.toString()
@@ -176,6 +183,7 @@ fun GoalSheet(
                     fat.toIntOrNull() ?: 0,
                     carb.toIntOrNull() ?: 0,
                 )
+                helperSex?.let(onSex)
             },
             // Во всю ширину, как в шите правки: узкая кнопка у левого края
             // выглядела недоделанной и терялась под текстом.
@@ -192,15 +200,15 @@ fun GoalSheet(
  * правит и сохраняет сам. Формула ошибается на ±20%, и это сказано прямо:
  * через две недели взвешиваний карточка ниже предложит расход по факту.
  *
- * Рост и возраст не хранятся: подсказка нужна раз, на старте, а заводить ради
- * неё профиль значило бы менять схему базы.
+ * Рост и возраст не хранятся: подсказка нужна раз, на старте. Пол — хранится,
+ * если цель сохранили: по нему персонажи говорят «ты ел» и «ты ела» правильно.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GoalHelperCard(
     lastWeightGrams: Int?,
     initiallyOpen: Boolean,
-    onSuggest: (GoalSuggestion) -> Unit,
+    onSuggest: (GoalSuggestion, Sex) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = KcalTheme.colors
@@ -277,7 +285,7 @@ private fun GoalHelperCard(
                     text = "Посчитать",
                     enabled = body != null,
                     onClick = {
-                        body?.let { onSuggest(suggestGoal(it)) }
+                        body?.let { onSuggest(suggestGoal(it), it.sex) }
                         applied = true
                         open = false
                         focusManager.clearFocus()
@@ -709,7 +717,7 @@ private fun StepButton(label: String, onClick: () -> Unit) {
 /** Общая обвязка шита: своя поверхность, свой радиус, отступы под навигацию. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Sheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+internal fun Sheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
     val colors = KcalTheme.colors
 
     ModalBottomSheet(

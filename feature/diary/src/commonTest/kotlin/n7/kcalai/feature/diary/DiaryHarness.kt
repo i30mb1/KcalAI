@@ -40,6 +40,14 @@ import n7.kcalai.repositories.FoodDbSource
 import n7.kcalai.repositories.FoodRepository
 import n7.kcalai.repositories.RemoteProductSource
 import n7.kcalai.resolver.TextFoodResolver
+import n7.kcalai.model.Mascot
+import n7.kcalai.mascot.MascotBrain
+import n7.kcalai.mascot.FactsBuilder
+import n7.kcalai.database.MascotProfileEntity
+import n7.kcalai.database.MascotMessageEntity
+import n7.kcalai.database.MascotDao
+import n7.kcalai.database.Delivery
+import kotlin.random.Random
 
 /**
  * Экранная модель дневника со всем окружением в памяти.
@@ -58,6 +66,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
     val goalDao = FakeGoalDao()
     val bodyMetricDao = FakeBodyMetricDao()
     val userFoodDao = FakeUserFoodDao()
+    val mascotDao = FakeMascotDao()
 
     val today: Long get() = clock.now().toLocalDateTime(zone).date.toEpochDays()
 
@@ -71,11 +80,19 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
             remote = RemoteProductSource { null },
             dispatcher = dispatcher,
         )
+        val brain = MascotBrain(
+            dao = mascotDao,
+            facts = FactsBuilder(diaryDao, goalDao, personal, zone),
+            diaryDao = diaryDao,
+            zone = zone,
+            random = Random(1),
+        )
         return DiaryViewModel(
             diary = DiaryRepository(diaryDao, goalDao),
             resolver = TextFoodResolver(food, personal),
             personal = personal,
             food = food,
+            brain = brain,
             outbox = outbox,
             clock = clock,
             zone = zone,
@@ -111,6 +128,17 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
         val id = diaryDao.insert(entry)
         return entry.copy(id = id)
     }
+
+    /** Сообщение персонажа, пришедшее раньше, чем открылся экран. */
+    fun message(mascot: Mascot, text: String, minutesAgo: Int = 30) = MascotMessageEntity(
+        mascot = mascot,
+        topic = "LONG_GAP",
+        text = text,
+        lineIds = "",
+        delivery = Delivery.NOTIFICATION,
+        dateEpochDay = today,
+        createdAt = clock.now().toEpochMilliseconds() - minutesAgo * 60_000L,
+    )
 
     /** Продукт, который предложила бы модель: с порцией, чтобы его можно было записать тапом. */
     val kefir = FoodCandidate(
@@ -318,5 +346,42 @@ private class FakePersonalDao : PersonalDao {
 
     override suspend fun trimDismissed(beforeEpochDay: Long) {
         dismissed.removeAll { it.dateEpochDay < beforeEpochDay }
+    }
+}
+
+/** Сообщения и профиль персонажей в памяти. */
+internal class FakeMascotDao : MascotDao {
+    val messages = MutableStateFlow<List<MascotMessageEntity>>(emptyList())
+    val profileRow = MutableStateFlow<MascotProfileEntity?>(null)
+    private var nextId = 1L
+
+    override suspend fun insert(message: MascotMessageEntity): Long {
+        val id = nextId++
+        messages.value += message.copy(id = id)
+        return id
+    }
+
+    override fun observeDay(dateEpochDay: Long): Flow<List<MascotMessageEntity>> =
+        messages.map { all -> all.filter { it.dateEpochDay == dateEpochDay }.sortedWith(compareBy({ it.createdAt }, { it.id })) }
+
+    override suspend fun recent(limit: Int): List<MascotMessageEntity> =
+        messages.value.sortedWith(compareByDescending<MascotMessageEntity> { it.createdAt }.thenByDescending { it.id }).take(limit)
+
+    override suspend fun findById(id: Long): MascotMessageEntity? = messages.value.find { it.id == id }
+
+    override suspend fun markOpened(id: Long, at: Long) {
+        messages.value = messages.value.map { if (it.id == id && it.openedAt == null) it.copy(openedAt = at) else it }
+    }
+
+    override suspend fun markAllOpened(at: Long) {
+        messages.value = messages.value.map { if (it.openedAt == null) it.copy(openedAt = at) else it }
+    }
+
+    override fun observeProfile(): Flow<MascotProfileEntity?> = profileRow
+
+    override suspend fun profile(): MascotProfileEntity? = profileRow.value
+
+    override suspend fun upsertProfile(profile: MascotProfileEntity) {
+        profileRow.value = profile
     }
 }

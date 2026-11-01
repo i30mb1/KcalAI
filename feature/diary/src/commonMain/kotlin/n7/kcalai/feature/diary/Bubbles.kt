@@ -297,7 +297,7 @@ private fun SummaryText(item: FeedItem.Summary, onSetGoal: () -> Unit) {
             // персонажи для новичка — просто картинки.
             BubbleText("Масло следит за жирами, Зёрнышко — за углеводами.", Modifier.padding(top = 7.dp))
             BubbleText(
-                "Напишите, что съели, — например, «гречка 200». Цифры посчитаем сами.",
+                "Напиши, что было на тарелке, — например, «гречка 200». Цифры посчитаем сами.",
                 Modifier.padding(top = 10.dp),
             )
         }
@@ -358,9 +358,9 @@ private val OUTLINE_ALPHA = floatArrayOf(0.85f, 0.6f, 0.4f, 0.25f)
 /**
  * Идея 4: приём пищи, который человек, похоже, забыл записать.
  *
- * Формулировка намеренно нейтральная. «Вы не обедали» — упрёк и повод удалить
- * приложение; «Обед пропустили?» — вопрос, на который есть три ответа в один тап
- * и четвёртый, закрывающий его до завтра.
+ * Формулировка намеренно нейтральная. «Ты не обедал» — упрёк, повод удалить
+ * приложение, да ещё и с родом, который приложению неизвестен; «Обед был?» —
+ * вопрос, на который есть три ответа в один тап и четвёртый, закрывающий его до завтра.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -372,11 +372,11 @@ fun GapBubble(
     val gap: MealGap = item.gap
 
     IncomingBubble(item, onDismiss = onDismiss) {
-        BubbleTitle("${gap.meal.title} пропустили?")
+        BubbleTitle("${gap.meal.title} был?")
         BubbleText(
-            "Обычно вы ${mealVerb(gap.meal)} около ${formatHour(gap.typicalHour)}, " +
+            "Обычно ты ${mealVerb(gap.meal)} около ${formatHour(gap.typicalHour)}, " +
                 "а сегодня ${gap.meal.genitive} в дневнике нет. " +
-                "Если ели — добавьте одним тапом.",
+                "Если был — добавь одним тапом.",
             Modifier.padding(top = 7.dp),
         )
         FlowRow(
@@ -415,7 +415,7 @@ fun RemainingBubble(item: FeedItem.Remaining, onPick: (PlanOption) -> Unit) {
                     append(formatCentigrams(plan.remainingProtCg))
                     append(" г белка")
                 }
-                append(". Из вашего обычного подходит:")
+                append(". Из твоего обычного подходит:")
             }
         )
         FlowRow(
@@ -456,8 +456,8 @@ fun EmptyDayBubble(item: FeedItem.EmptyDay) {
     IncomingBubble(item) {
         BubbleTitle(item.title)
         BubbleText(
-            "Записей за этот день нет. Напишите, что ели, — запишу сюда. " +
-                "Приём выберите над строкой ввода.",
+            "Записей за этот день нет. Напиши, что было, — запишу сюда. " +
+                "Приём выбери над строкой ввода.",
             Modifier.padding(top = 7.dp),
         )
     }
@@ -507,6 +507,56 @@ fun DeletedBubble(item: FeedItem.Deleted, onUndo: () -> Unit) {
         BubbleText("Удалил «${item.entry.displayName} · ${formatGrams(item.entry.grams)}»")
         KcalChip(onClick = onUndo, background = colors.bubble, modifier = Modifier.padding(top = 10.dp)) {
             Text("Вернуть", style = KcalTheme.type.chip, color = colors.onBubble)
+        }
+    }
+}
+
+/**
+ * Сообщение персонажа — из шторки или ответ на имя и согласие.
+ *
+ * Обычный входящий пузырёк со временем: персонаж в переписке такой же
+ * собеседник, как в шторке, и его слова стоят там же, где были сказаны.
+ */
+@Composable
+fun SaidBubble(item: FeedItem.Said) {
+    IncomingBubble(item, time = item.time) {
+        BubbleText(item.text)
+    }
+}
+
+/**
+ * Персонаж спрашивает — ответ одним тапом.
+ *
+ * Оба ответа равноправны: «Не скажу» и «Не надо» — такие же кнопки, а не мелкий
+ * текст снизу. Вопрос, от которого неудобно отказаться, перестаёт быть вопросом.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit) {
+    val colors = KcalTheme.colors
+    val (question, yes, no) = when (item.kind) {
+        AskKind.NAME -> Triple("Кстати, как тебя зовут? Буду знать, к кому обращаться.", "Сказать", "Не скажу")
+        AskKind.WRITE -> Triple(
+            "Можно мы будем иногда писать тебе сами? Если пропадёшь или забудешь поесть. " +
+                "Не чаще пары раз в день — честно.",
+            "Пишите",
+            "Не надо",
+        )
+    }
+
+    IncomingBubble(item) {
+        BubbleText(question)
+        FlowRow(
+            modifier = Modifier.padding(top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            KcalChip(onClick = onYes, background = colors.bubble) {
+                Text(yes, style = KcalTheme.type.chip, color = colors.onBubble)
+            }
+            KcalChip(onClick = onNo, background = colors.chip) {
+                Text(no, style = KcalTheme.type.chip, color = colors.text)
+            }
         }
     }
 }

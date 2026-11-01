@@ -147,6 +147,38 @@ sealed interface FeedItem {
     data class Deleted(val id: Int, val entry: DiaryEntryEntity, val time: String) : FeedItem {
         override val key get() = "deleted-$id"
     }
+
+    /**
+     * Сообщение персонажа: написанное первым в шторку или ответ в ленте.
+     *
+     * Хранится в базе, а не в сессии, — и поэтому стоит в переписке дня, когда
+     * человек откроет приложение по уведомлению: персонаж действительно ему писал.
+     *
+     * @param minute минута суток, когда оно написано: по ней встаёт между пузырьками
+     */
+    data class Said(
+        val id: Long,
+        val mascot: Mascot,
+        val text: String,
+        val time: String,
+        val minute: Int,
+    ) : FeedItem {
+        override val key get() = "said-$id"
+    }
+
+    /** Персонаж о чём-то спрашивает, и ответить можно одним тапом. */
+    data class Ask(val kind: AskKind) : FeedItem {
+        override val key get() = "ask-$kind"
+    }
+}
+
+/** О чём спрашивают персонажи. */
+enum class AskKind {
+    /** Яйцо: как тебя зовут. */
+    NAME,
+
+    /** Зёрнышко: можно ли писать первыми. */
+    WRITE,
 }
 
 /**
@@ -183,7 +215,7 @@ fun daySummary(goalKcal: Int?, week: List<DaySummary>, outline: DayOutline?, hou
         val hit = judged.count { it.kcal <= (it.goalKcal ?: 0) }
         // Знаменатель — дни, когда цель вообще была: поставленная позавчера
         // цель не может быть «выполнена 2 дня из 7».
-        "За неделю вы уложились в цель $hit ${daysWord(hit)} из ${judged.size}"
+        "За неделю в цель: $hit ${daysWord(hit)} из ${judged.size}"
     }
 
     return FeedItem.Summary(
@@ -204,6 +236,11 @@ fun daySummary(goalKcal: Int?, week: List<DaySummary>, outline: DayOutline?, hou
  */
 fun speakerOf(item: FeedItem): Mascot? = when (item) {
     is FeedItem.DaySeparator, is FeedItem.Meal -> null
+    is FeedItem.Said -> item.mascot
+    is FeedItem.Ask -> when (item.kind) {
+        AskKind.NAME -> Mascot.EGG
+        AskKind.WRITE -> Mascot.GRAIN
+    }
     is FeedItem.Over -> Mascot.BUTTER
     is FeedItem.Gap -> Mascot.GRAIN
     is FeedItem.Remaining -> if (item.plan.remainingProtCg > 0) Mascot.EGG else Mascot.GRAIN
@@ -308,10 +345,28 @@ fun groupIntoBubbles(
  * должен стоять между завтраком и ужином, а не в конце ленты, где он читался бы
  * как вопрос про то, что происходит сейчас.
  */
-fun gapPosition(bubbles: List<FeedItem.Meal>, gap: MealGap, zone: TimeZone): Int =
-    bubbles.indexOfLast { bubble ->
-        localAt(bubble.entries.first().createdAt, zone).hour < gap.typicalHour
+fun gapPosition(body: List<FeedItem>, gap: MealGap, zone: TimeZone): Int =
+    body.indexOfLast { item ->
+        item is FeedItem.Meal && localAt(item.entries.first().createdAt, zone).hour < gap.typicalHour
     } + 1
+
+/**
+ * Пузырьки дня и сообщения персонажей — по времени.
+ *
+ * Сообщение встаёт после всех пузырьков, начавшихся не позже него: «Три часа без
+ * еды» в 15:30 стоит после обеда, а ответ на запись в ту же минуту — после неё.
+ */
+fun interleave(bubbles: List<FeedItem.Meal>, said: List<FeedItem.Said>, zone: TimeZone): List<FeedItem> {
+    val body = mutableListOf<FeedItem>()
+    var next = 0
+    for (bubble in bubbles) {
+        val order = bubbleOrder(bubble.entries, zone)
+        while (next < said.size && said[next].minute < order) body += said[next++]
+        body += bubble
+    }
+    while (next < said.size) body += said[next++]
+    return body
+}
 
 /**
  * В какой приём писать прошлый день, пока человек не выбрал сам.

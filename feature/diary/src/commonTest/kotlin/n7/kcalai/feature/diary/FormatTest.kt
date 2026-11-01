@@ -40,6 +40,8 @@ class FormatTest {
             val text = notFoundText(query)
             assertTrue(text.startsWith("По запросу «$query» ничего не нашлось."), text)
             assertTrue("штрих-код" in text && "этикетку" in text, text)
+            // Персонажи говорят на «ты»: «Попробуйте» от Яйца звучало бы чужим голосом.
+            assertTrue("Попробуй назвать" in text, text)
         }
     }
 
@@ -74,7 +76,7 @@ class FormatTest {
         )
 
         assertEquals(
-            "Обычно завтрак у вас около 08:00 и это ~450 ккал, обед ~850, ужин ~600",
+            "Обычно завтрак у тебя около 08:00 и это ~450 ккал, обед ~850, ужин ~600",
             outlineSentence(outline),
         )
     }

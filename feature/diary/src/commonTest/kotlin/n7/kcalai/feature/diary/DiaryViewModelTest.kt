@@ -17,6 +17,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import n7.kcalai.feature.scanner.ScanStep
+import n7.kcalai.model.MealType
+import n7.kcalai.model.Mascot
+import n7.kcalai.database.WriteConsent
+import n7.kcalai.database.MascotProfileEntity
 
 /**
  * Экранная модель дневника глазами человека: что он набрал, что нажал
@@ -312,5 +316,110 @@ class DiaryViewModelTest {
 
         /** Код с верной контрольной цифрой, которого нет ни в одной базе. */
         const val UNKNOWN_GTIN = "4600000000008"
+    }
+
+    // --- Персонажи пишут и спрашивают -------------------------------------------------
+
+    @Test
+    fun `сообщение из шторки стоит в ленте своего дня`() = runTest(dispatcher) {
+        harness.mascotDao.insert(harness.message(Mascot.GRAIN, "Уже три часа без еды!", minutesAgo = 20))
+        val vm = screen()
+
+        val said = vm.state.value.feed.filterIsInstance<FeedItem.Said>().single()
+        assertEquals("Уже три часа без еды!", said.text)
+        assertEquals(Mascot.GRAIN, said.mascot)
+    }
+
+    @Test
+    fun `пустой день — имя ещё не спрашивают`() = runTest(dispatcher) {
+        val vm = screen()
+
+        assertTrue(vm.state.value.feed.none { it is FeedItem.Ask })
+    }
+
+    @Test
+    fun `после первой записи Яйцо спрашивает имя`() = runTest(dispatcher) {
+        harness.addEntry("Гречка", 200, MealType.BREAKFAST)
+        val vm = screen()
+
+        assertEquals(listOf(FeedItem.Ask(AskKind.NAME)), vm.state.value.feed.filterIsInstance<FeedItem.Ask>())
+    }
+
+    @Test
+    fun `«Не скажу» убирает вопрос насовсем`() = runTest(dispatcher) {
+        harness.addEntry("Гречка", 200, MealType.BREAKFAST)
+        val vm = screen()
+
+        vm.onAnswerName(null)
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.feed.none { it == FeedItem.Ask(AskKind.NAME) })
+        assertEquals(true, harness.mascotDao.profileRow.value?.nameAsked)
+    }
+
+    @Test
+    fun `имя сохраняется, и Яйцо отвечает в ленте`() = runTest(dispatcher) {
+        harness.addEntry("Гречка", 200, MealType.BREAKFAST)
+        val vm = screen()
+
+        vm.onAnswerName("  Женя ")
+        advanceUntilIdle()
+
+        assertEquals("Женя", harness.mascotDao.profileRow.value?.name)
+        val thanks = vm.state.value.feed.filterIsInstance<FeedItem.Said>().single()
+        assertEquals(Mascot.EGG, thanks.mascot)
+        assertTrue("Женя" in thanks.text, thanks.text)
+    }
+
+    @Test
+    fun `после имени и двух записей Зёрнышко спрашивает, можно ли писать`() = runTest(dispatcher) {
+        harness.mascotDao.upsertProfile(MascotProfileEntity(name = "Женя", nameAsked = true))
+        harness.addEntry("Гречка", 200, MealType.BREAKFAST, minutesAgo = 60)
+        val vm = screen()
+        assertTrue(vm.state.value.feed.none { it is FeedItem.Ask }, "одна запись — ещё рано")
+
+        harness.addEntry("Кефир", 250, MealType.BREAKFAST, minutesAgo = 10)
+        advanceUntilIdle()
+
+        assertEquals(listOf(FeedItem.Ask(AskKind.WRITE)), vm.state.value.feed.filterIsInstance<FeedItem.Ask>())
+    }
+
+    @Test
+    fun `«Пишите» спрашивает разрешение телефона и отвечает по итогу`() = runTest(dispatcher) {
+        readyToAskWrite()
+        val vm = screen()
+        val requests = mutableListOf<Unit>()
+        backgroundScope.launch { vm.notificationRequests.collect { requests += it } }
+
+        vm.onAnswerWrite(allow = true)
+        advanceUntilIdle()
+
+        assertEquals(1, requests.size)
+        assertEquals(WriteConsent.ALLOWED, harness.mascotDao.profileRow.value?.consent)
+        assertTrue(vm.state.value.feed.none { it is FeedItem.Ask })
+
+        vm.onNotificationsResult(granted = true)
+        advanceUntilIdle()
+
+        assertEquals(Mascot.GRAIN, vm.state.value.feed.filterIsInstance<FeedItem.Said>().single().mascot)
+    }
+
+    @Test
+    fun `«Не надо» — согласие отозвано, вопрос не возвращается`() = runTest(dispatcher) {
+        readyToAskWrite()
+        val vm = screen()
+
+        vm.onAnswerWrite(allow = false)
+        advanceUntilIdle()
+
+        assertEquals(WriteConsent.DECLINED, harness.mascotDao.profileRow.value?.consent)
+        assertTrue(vm.state.value.feed.none { it is FeedItem.Ask })
+        assertEquals(Mascot.GRAIN, vm.state.value.feed.filterIsInstance<FeedItem.Said>().single().mascot)
+    }
+
+    private suspend fun readyToAskWrite() {
+        harness.mascotDao.upsertProfile(MascotProfileEntity(name = "Женя", nameAsked = true))
+        harness.addEntry("Гречка", 200, MealType.BREAKFAST, minutesAgo = 60)
+        harness.addEntry("Кефир", 250, MealType.BREAKFAST, minutesAgo = 10)
     }
 }

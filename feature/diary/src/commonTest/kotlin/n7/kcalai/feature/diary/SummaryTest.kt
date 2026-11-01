@@ -58,7 +58,7 @@ class SummaryTest {
         )
         val summary = daySummary(goalKcal = 2000, week = days, outline = null, hour = 9)
 
-        assertEquals("За неделю вы уложились в цель 1 день из 2", summary.weekLine)
+        assertEquals("За неделю в цель: 1 день из 2", summary.weekLine)
         assertNull(daySummary(goalKcal = null, week = week(0, 0), outline = null, hour = 9).weekLine)
     }
 
@@ -85,7 +85,7 @@ class SummaryTest {
         )
         val summary = daySummary(goalKcal = 2000, week = days, outline = null, hour = 9)
 
-        assertEquals("За неделю вы уложились в цель 1 день из 2", summary.weekLine)
+        assertEquals("За неделю в цель: 1 день из 2", summary.weekLine)
     }
 
     @Test

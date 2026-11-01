@@ -52,6 +52,15 @@ import n7.kcalai.repositories.FoodRepository
 import n7.kcalai.repositories.LabelReading
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.resolver.TextFoodResolver
+import n7.kcalai.model.Sex
+import n7.kcalai.mascot.asksToWrite
+import n7.kcalai.mascot.MascotBrain
+import n7.kcalai.database.MascotProfileEntity
+import n7.kcalai.database.MascotMessageEntity
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.channels.Channel
+import kotlin.time.Instant
 
 /** Поле шита цели, в котором должен стоять курсор при открытии. */
 enum class GoalField { KCAL, PROT, FAT, CARB }
@@ -82,6 +91,9 @@ sealed interface Overlay {
      * больше не носит, а отладке отдельный жест дешевле отдельной кнопки.
      */
     data object LabelDebug : Overlay
+
+    /** «Как тебя зовут?» — ответ на вопрос Яйца. */
+    data object Name : Overlay
 }
 
 /** Что стоит над строкой ввода. Ряд ровно один — выбор между ними делает состояние. */
@@ -160,6 +172,8 @@ class DiaryViewModel(
     private val resolver: TextFoodResolver,
     private val personal: PersonalRepository,
     private val food: FoodRepository,
+    /** Мозг персонажей: их сообщения в ленте, вопросы и ответы на них. */
+    private val brain: MascotBrain,
     /**
      * Пнуть очередь отправки после того, как человек завёл продукт.
      *
@@ -254,7 +268,9 @@ class DiaryViewModel(
                 // Неделя — всегда последние семь дней до сегодня: по ней и выбирают день.
                 diary.observeWeek(now.toEpochDays()),
                 diary.observeGoal(now.toEpochDays()),
-            ) { dayTotals, goal, week, todayGoal -> DayData(day, now, dayTotals, goal, week, todayGoal) }
+                // Что персонажи написали в этот день — из шторки или ответом в ленте.
+                brain.messages(day.toEpochDays()),
+            ) { dayTotals, goal, week, todayGoal, said -> DayData(day, now, dayTotals, goal, week, todayGoal, said) }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -274,7 +290,7 @@ class DiaryViewModel(
         Session(typed, replies, pending, meal)
     }
 
-    val state = combine(typingAndReplies, data, personalState) { session, loaded, models ->
+    val state = combine(typingAndReplies, data, personalState, brain.profile) { session, loaded, models, profile ->
         val (typed, replies, pending, meal) = session
         if (loaded == null) {
             return@combine DiaryUiState(input = typed.input, overlay = typed.overlay)
@@ -291,6 +307,7 @@ class DiaryViewModel(
                 // Очередь отправки — разговор о сегодняшнем, во вчерашней переписке ей не место.
                 pending = pending.takeIf { pastMeal == null },
                 pastMeal = pastMeal,
+                profile = profile,
             ),
             composer = composerRow(typed, models, pastMeal),
             totals = loaded.day.totals,
@@ -351,6 +368,7 @@ class DiaryViewModel(
         val goal: DailyGoalEntity?,
         val week: List<DaySummary>,
         val todayGoal: DailyGoalEntity?,
+        val said: List<MascotMessageEntity>,
     )
 
     /** Реплика сессии и день, в переписке которого она стоит. */
@@ -457,6 +475,7 @@ class DiaryViewModel(
         replies: List<FeedItem>,
         pending: FeedItem.Outbox?,
         pastMeal: MealType?,
+        profile: MascotProfileEntity,
     ): List<FeedItem> {
         val now = nowMillis()
         val hour = hourNow()
@@ -474,13 +493,15 @@ class DiaryViewModel(
         }
 
         val bubbles = groupIntoBubbles(dayTotals.entries, zone, now, activeMeal = pastMeal)
-        val body = bubbles.toMutableList<FeedItem>()
+        val body = interleave(bubbles, loaded.said.map { it.toFeedItem() }, zone).toMutableList()
         models.mealGap?.takeIf { isToday }?.let { gap ->
-            body.add(gapPosition(bubbles, gap, zone), FeedItem.Gap(gap))
+            body.add(gapPosition(body, gap, zone), FeedItem.Gap(gap))
         }
         feed += body
         feed += replies
         pending?.let { feed += it }
+        // Вопрос — последняя реплика: на него отвечают сейчас, а не листая вверх.
+        if (isToday) ask(profile, dayTotals.entries.size, now)?.let { feed += FeedItem.Ask(it) }
 
         // Перебор вытесняет остаток, а не дополняет его: это один и тот же ответ
         // на один и тот же вопрос, и показывать оба значило бы спорить с собой.
@@ -1002,6 +1023,63 @@ class DiaryViewModel(
                 time = formatTime(nowMillis(), zone),
             ),
         )
+    }
+
+    // --- Персонажи: имя и разрешение писать ---------------------------------------------
+
+    /**
+     * О чём спросить человека.
+     *
+     * Не с порога: имя — после первой записи дня, когда человек уже начал.
+     * Разрешение писать — после имени и второй записи: сначала знакомство,
+     * потом просьба. «Не надо» переспрашивается через месяц, см. [asksToWrite].
+     */
+    private fun ask(profile: MascotProfileEntity, entries: Int, now: Long): AskKind? = when {
+        entries == 0 -> null
+        profile.name == null && !profile.nameAsked -> AskKind.NAME
+        entries >= 2 && profile.asksToWrite(Instant.fromEpochMilliseconds(now)) -> AskKind.WRITE
+        else -> null
+    }
+
+    private fun MascotMessageEntity.toFeedItem(): FeedItem.Said {
+        val local = Instant.fromEpochMilliseconds(createdAt).toLocalDateTime(zone)
+        return FeedItem.Said(id, mascot, text, formatTime(createdAt, zone), local.hour * 60 + local.minute)
+    }
+
+    /**
+     * Просьбы спросить разрешение у телефона.
+     *
+     * Событием, а не колбэком в конструктор: спрашивает экран, а экранная модель
+     * переживает его пересоздание и держать его не должна. Ответ — [onNotificationsResult].
+     */
+    private val notificationAsks = Channel<Unit>(Channel.BUFFERED)
+    val notificationRequests: Flow<Unit> = notificationAsks.receiveAsFlow()
+
+    fun onAskName() {
+        overlay.value = Overlay.Name
+    }
+
+    /** Имя названо, или `null` — «Не скажу». Второй раз не спрашивают ни в том, ни в другом случае. */
+    fun onAnswerName(name: String?) {
+        if (overlay.value == Overlay.Name) overlay.value = Overlay.None
+        viewModelScope.launch { brain.answerName(name?.let(::cleanName), clock.now()) }
+    }
+
+    /** «Пишите» или «Не надо». На «Пишите» сначала спрашивается телефон. */
+    fun onAnswerWrite(allow: Boolean) {
+        viewModelScope.launch {
+            brain.answerWrite(allow, clock.now())
+            if (allow) notificationAsks.send(Unit)
+        }
+    }
+
+    fun onNotificationsResult(granted: Boolean) {
+        viewModelScope.launch { brain.notificationsResult(granted, clock.now()) }
+    }
+
+    /** Пол из помощника цели: с ним персонажи говорят «ты ел» и «ты ела» правильно. */
+    fun onSex(sex: Sex) {
+        viewModelScope.launch { brain.setSex(sex) }
     }
 
     fun onSetGoal(kcal: Int, prot: Int, fat: Int, carb: Int) {

@@ -9,6 +9,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.Test
+import n7.kcalai.model.Mascot
 
 /**
  * Лента дня: какой приём пищи у записи и как записи собираются в пузырьки.
@@ -201,5 +202,42 @@ class FeedTest {
         val gap = MealGap(MealType.BREAKFAST, typicalHour = 8, suggestions = emptyList())
 
         assertEquals(0, gapPosition(bubbles, gap, zone))
+    }
+
+    // --- Сообщения персонажей -------------------------------------------------------------
+
+    /** Сообщение из шторки — часть переписки дня, и стоит оно там, когда было написано. */
+    @Test
+    fun `сообщение персонажа встаёт между пузырьками по времени`() {
+        val bubbles = groupIntoBubbles(
+            listOf(entry(1, hour = 8, meal = MealType.BREAKFAST), entry(2, hour = 13, meal = MealType.LUNCH)),
+            zone,
+            nowMillis = at(14),
+        )
+        val said = FeedItem.Said(id = 7, mascot = Mascot.GRAIN, text = "Эй!", time = "10:30", minute = 10 * 60 + 30)
+
+        assertEquals(listOf(bubbles[0], said, bubbles[1]), interleave(bubbles, listOf(said), zone))
+    }
+
+    @Test
+    fun `сообщение в ту же минуту, что запись, — после неё`() {
+        val bubbles = groupIntoBubbles(listOf(entry(1, hour = 8, meal = MealType.BREAKFAST)), zone, nowMillis = at(9))
+        val said = FeedItem.Said(id = 7, mascot = Mascot.EGG, text = "Принято.", time = "08:00", minute = 8 * 60)
+
+        assertEquals(listOf(bubbles[0], said), interleave(bubbles, listOf(said), zone))
+    }
+
+    @Test
+    fun `вопрос про обед считает только пузырьки`() {
+        val bubbles = groupIntoBubbles(
+            listOf(entry(1, hour = 8, meal = MealType.BREAKFAST), entry(2, hour = 19, meal = MealType.DINNER)),
+            zone,
+            nowMillis = at(20),
+        )
+        val said = FeedItem.Said(id = 7, mascot = Mascot.GRAIN, text = "Обед где-то бегает?", time = "14:00", minute = 14 * 60)
+        val body = interleave(bubbles, listOf(said), zone)
+        val gap = MealGap(MealType.LUNCH, typicalHour = 13, suggestions = emptyList())
+
+        assertEquals(1, gapPosition(body, gap, zone), "после завтрака, перед сообщением в 14:00")
     }
 }

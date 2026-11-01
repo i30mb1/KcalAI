@@ -97,6 +97,12 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         onOpenScan = viewModel::onOpenScan,
         onOpenLabelScan = viewModel::onOpenLabelScan,
         onOpenLabelDebug = if (labelDebug) viewModel::onOpenLabelDebug else null,
+        onAnswerAsk = { kind, yes ->
+            when (kind) {
+                AskKind.NAME -> if (yes) viewModel.onAskName() else viewModel.onAnswerName(null)
+                AskKind.WRITE -> viewModel.onAnswerWrite(yes)
+            }
+        },
     )
 
     when (val overlay = state.overlay) {
@@ -112,6 +118,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
             focus = overlay.field,
             onConfirm = viewModel::onSetGoal,
             onDismiss = viewModel::onDismissOverlay,
+            onSex = viewModel::onSex,
         )
 
         is Overlay.EditEntry -> EntrySheet(
@@ -140,6 +147,11 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
 
         Overlay.LabelDebug -> LabelDebugDialog(
             onRead = viewModel::onLabelDebugRead,
+            onDismiss = viewModel::onDismissOverlay,
+        )
+
+        Overlay.Name -> NameSheet(
+            onConfirm = viewModel::onAnswerName,
             onDismiss = viewModel::onDismissOverlay,
         )
     }
@@ -174,6 +186,8 @@ fun DiaryScreen(
     onOpenScan: () -> Unit,
     onOpenLabelScan: () -> Unit,
     onOpenLabelDebug: (() -> Unit)?,
+    /** Ответ на вопрос персонажа: `true` — «Сказать» / «Пишите», `false` — «Не скажу» / «Не надо». */
+    onAnswerAsk: (AskKind, Boolean) -> Unit,
 ) {
     // База ещё не ответила. Шапка с нулями и сводка «цель не задана» были бы
     // неправдой, а через долю секунды их сменили бы настоящие цифры — и записи
@@ -301,6 +315,7 @@ fun DiaryScreen(
             onSendOutbox = onSendOutbox,
             onPickPlan = onPickPlan,
             onOpenGoal = onOpenGoal,
+            onAnswerAsk = onAnswerAsk,
             modifier = Modifier.weight(1f).nestedScroll(expandOnPull),
         )
         }
@@ -361,6 +376,7 @@ private fun Feed(
     onSendOutbox: () -> Unit,
     onPickPlan: (PlanOption) -> Unit,
     onOpenGoal: (GoalField) -> Unit,
+    onAnswerAsk: (AskKind, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     /*
@@ -498,6 +514,12 @@ private fun Feed(
                     is FeedItem.Reply -> ReplyBubble(item)
                     is FeedItem.Deleted -> DeletedBubble(item, onUndo = { onUndoDelete(item) })
                     is FeedItem.Outbox -> OutboxBubble(item, onSendOutbox)
+                    is FeedItem.Said -> SaidBubble(item)
+                    is FeedItem.Ask -> AskBubble(
+                        item = item,
+                        onYes = { onAnswerAsk(item.kind, true) },
+                        onNo = { onAnswerAsk(item.kind, false) },
+                    )
                 }
             }
         }

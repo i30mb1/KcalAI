@@ -103,6 +103,8 @@ dependencies {
     implementation(project(":core:remote"))
     implementation(project(":core:ui"))
     implementation(project(":feature:diary"))
+    // Мозг персонажей: фоновая работа пишет уведомления от их имени.
+    implementation(project(":core:mascot"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)

@@ -10,6 +10,12 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!--
+        Яйцо, Масло и Зёрнышко пишут первыми — только если человек сам разрешил
+        в ленте («Пишите»), и только тогда спрашивается это разрешение.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
         WorkManager объявляет foreground-сервис «на всякий случай», а Google Play
         за каждое такое разрешение требует декларацию с видео. Отправка вкладов
         идёт обычной фоновой работой и в передний план не выходит никогда.
