@@ -13,7 +13,10 @@ import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.model.plus
 import n7.kcalai.personal.DayPlan
 import n7.kcalai.personal.DayOutline
+import n7.kcalai.personal.CLUSTER_GAP_MS
+import n7.kcalai.personal.MEAL_WINDOWS
 import n7.kcalai.personal.MealGap
+import n7.kcalai.personal.mealForHour
 import n7.kcalai.repositories.DaySummary
 import n7.kcalai.model.Mascot
 
@@ -214,40 +217,6 @@ fun speakerOf(item: FeedItem): Mascot? = when (item) {
 }
 
 /**
- * Приём пищи по времени суток.
- *
- * Окна с зазорами, а не встык: в 11:20 человек может доедать завтрак и может
- * обедать, и угадывать здесь нечем. Поэтому между окнами решает не расписание,
- * а сам дневник — запись, сделанную сразу после предыдущей, логично считать
- * её продолжением. Час без записей означает, что это уже отдельная еда.
- *
- * Первая еда дня перекусом не бывает: в 11:00 на пустом дневнике это поздний
- * завтрак, в 16:00 — поздний обед. Перекус — это то, что между приёмами,
- * а между чем и чем ему быть, если приёмов ещё не было.
- *
- * @param lastEntry последняя запись за сегодня, `null` — сегодня ещё не ели
- */
-fun mealForHour(hour: Int, lastEntry: DiaryEntryEntity?, nowMillis: Long): MealType {
-    MEAL_WINDOWS.entries.firstOrNull { (_, window) -> hour in window }?.let { return it.key }
-    if (lastEntry == null) return lastMainMealBefore(hour)
-    return lastEntry
-        .takeIf { nowMillis - it.createdAt <= CLUSTER_GAP_MS }
-        ?.meal
-        ?: MealType.SNACK
-}
-
-/** Ближайший прошедший основной приём. Ночью — ужин: он последний в сутках. */
-private fun lastMainMealBefore(hour: Int): MealType =
-    MEAL_WINDOWS.entries.lastOrNull { (_, window) -> window.last < hour }?.key ?: MealType.DINNER
-
-/** Часы, в которые приём пищи — свой. У перекуса своего времени нет. */
-private val MEAL_WINDOWS: Map<MealType, IntRange> = mapOf(
-    MealType.BREAKFAST to 5..10,
-    MealType.LUNCH to 12..15,
-    MealType.DINNER to 17..21,
-)
-
-/**
  * Где пузырьку стоять в ленте, минуты от начала суток.
  *
  * Завтрак, обед и ужин держатся своего окна: запись 13:00, перенесённую человеком
@@ -343,9 +312,6 @@ fun gapPosition(bubbles: List<FeedItem.Meal>, gap: MealGap, zone: TimeZone): Int
     bubbles.indexOfLast { bubble ->
         localAt(bubble.entries.first().createdAt, zone).hour < gap.typicalHour
     } + 1
-
-/** Разрыв, после которого еда считается отдельной. Он же — срок годности активного пузырька. */
-const val CLUSTER_GAP_MS = 60 * 60 * 1000L
 
 /**
  * В какой приём писать прошлый день, пока человек не выбрал сам.

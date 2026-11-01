@@ -43,6 +43,7 @@ import n7.kcalai.personal.PersonalRepository
 import n7.kcalai.personal.PortionObservation
 import n7.kcalai.personal.ShownCandidate
 import n7.kcalai.personal.TdeeEstimate
+import n7.kcalai.personal.mealForHour
 import n7.kcalai.repositories.DaySummary
 import n7.kcalai.repositories.DayTotals
 import n7.kcalai.repositories.DiaryRepository
