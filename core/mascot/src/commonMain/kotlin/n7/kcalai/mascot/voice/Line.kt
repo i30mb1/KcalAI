@@ -44,7 +44,13 @@ class Line(val text: String, private val fits: (Facts) -> Boolean = { true }) {
     override fun toString(): String = text
 }
 
-internal val TOKEN = Regex("""\{([^{}]+)}""")
+/**
+ * `{факт}` или `{м|ж}`.
+ *
+ * Закрывающая скобка экранирована не для красоты: JVM прощает голую `}`, а ICU,
+ * на котором регулярные выражения в Android, — нет, и первая же фраза роняла приложение.
+ */
+internal val TOKEN = Regex("""\{([^{}]+)\}""")
 
 /** FNV-1a, 32 бита, восемь hex-знаков: стабилен между запусками и платформами, в отличие от hashCode. */
 private fun fnv1a(text: String): String {
