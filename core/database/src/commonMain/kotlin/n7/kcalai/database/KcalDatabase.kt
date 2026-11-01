@@ -1,5 +1,6 @@
 package n7.kcalai.database
 
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.ConstructedBy
 import androidx.room.RoomDatabaseConstructor
@@ -21,9 +22,15 @@ import kotlinx.coroutines.IO
         RankerWeightEntity::class,
         RankerStateEntity::class,
         MealGapDismissEntity::class,
+        MascotMessageEntity::class,
+        MascotProfileEntity::class,
     ],
     version = KCAL_DB_VERSION,
     exportSchema = true,
+    autoMigrations = [
+        // Сообщения и профиль персонажей — только новые таблицы, дневник не трогается.
+        AutoMigration(from = 4, to = 5),
+    ],
 )
 @ConstructedBy(KcalDatabaseConstructor::class)
 abstract class KcalDatabase : RoomDatabase() {
@@ -34,10 +41,11 @@ abstract class KcalDatabase : RoomDatabase() {
     abstract fun goalDao(): GoalDao
     abstract fun bodyMetricDao(): BodyMetricDao
     abstract fun personalDao(): PersonalDao
+    abstract fun mascotDao(): MascotDao
 }
 
 /** Версия схемы базы. Константой — её читают тесты обновления и выгрузки схемы. */
-const val KCAL_DB_VERSION = 4
+const val KCAL_DB_VERSION = 5
 
 /** Реализацию для каждой платформы генерирует Room. */
 @Suppress("KotlinNoActualForExpect")
