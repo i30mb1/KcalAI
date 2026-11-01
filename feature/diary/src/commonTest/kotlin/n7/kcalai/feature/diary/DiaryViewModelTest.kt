@@ -417,6 +417,30 @@ class DiaryViewModelTest {
         assertEquals(Mascot.GRAIN, vm.state.value.feed.filterIsInstance<FeedItem.Said>().single().mascot)
     }
 
+    /** Вернулся в приложение — всё, что персонажи писали, прочитано: ленту он видит. */
+    @Test
+    fun `возвращение в приложение отмечает сообщения прочитанными`() = runTest(dispatcher) {
+        harness.mascotDao.insert(harness.message(Mascot.GRAIN, "Эй!"))
+        val vm = screen()
+
+        vm.onResume()
+        advanceUntilIdle()
+
+        assertTrue(harness.mascotDao.messages.value.all { it.openedAt != null })
+        assertEquals(harness.clock.now().toEpochMilliseconds(), harness.mascotDao.profileRow.value?.lastOpenAt)
+    }
+
+    @Test
+    fun `открыл из шторки — сообщение прочитано`() = runTest(dispatcher) {
+        val id = harness.mascotDao.insert(harness.message(Mascot.BUTTER, "Мур."))
+        val vm = screen()
+
+        vm.onOpenedFromMessage(id)
+        advanceUntilIdle()
+
+        assertEquals(harness.clock.now().toEpochMilliseconds(), harness.mascotDao.findById(id)?.openedAt)
+    }
+
     private suspend fun readyToAskWrite() {
         harness.mascotDao.upsertProfile(MascotProfileEntity(name = "Женя", nameAsked = true))
         harness.addEntry("Гречка", 200, MealType.BREAKFAST, minutesAgo = 60)

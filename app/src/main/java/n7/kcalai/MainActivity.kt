@@ -1,6 +1,7 @@
 package n7.kcalai
 
 import android.Manifest
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -18,6 +19,7 @@ import kotlin.time.ExperimentalTime
 import kotlinx.coroutines.launch
 import n7.kcalai.feature.diary.DiaryRoute
 import n7.kcalai.feature.diary.DiaryViewModel
+import n7.kcalai.notify.MascotNotifier
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.work.ContributionWorker
 import n7.kcalai.work.Outbox
@@ -66,6 +68,8 @@ class MainActivity : ComponentActivity() {
                 diary.notificationRequests.collect { requestNotifications() }
             }
         }
+        // При пересоздании активности тот же intent приходит снова — это не новый тап.
+        if (savedInstanceState == null) openedFromNotification(intent)
 
         setContent {
             KcalTheme {
@@ -73,6 +77,24 @@ class MainActivity : ComponentActivity() {
                 DiaryRoute(labelDebug = BuildConfig.DEBUG, viewModel = diary)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        openedFromNotification(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Всё, что писали персонажи, теперь стоит в ленте: шторку пора освободить.
+        MascotNotifier(this).cancelAll()
+    }
+
+    /** Открыто тапом по сообщению персонажа — пусть он знает, что его прочитали. */
+    private fun openedFromNotification(intent: Intent) {
+        val messageId = intent.getLongExtra(MascotNotifier.EXTRA_MESSAGE_ID, 0)
+        if (messageId > 0) diary.onOpenedFromMessage(messageId)
+        intent.removeExtra(MascotNotifier.EXTRA_MESSAGE_ID)
     }
 
     /**

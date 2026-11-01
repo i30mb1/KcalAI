@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Локальный сервер отвечает по http без TLS. Только в debug: release этот оверлей не видит. -->
-    <application android:networkSecurityConfig="@xml/network_security_config" />
+    <application android:networkSecurityConfig="@xml/network_security_config">
+
+        <!--
+            Сообщение персонажа по команде adb — посмотреть на шторку, не дожидаясь повода.
+            Открыт наружу, чтобы до него дотянулся adb; в сборке для людей его нет.
+        -->
+        <receiver
+            android:name="n7.kcalai.notify.DebugWriteReceiver"
+            android:exported="true" />
+    </application>
 </manifest>

@@ -103,6 +103,12 @@ class MascotBrain(
         return Written(message, snapshot.suggestions[topic], thread)
     }
 
+    /** Сообщение по id — первая реплика переписки в шторке после «Записать». */
+    suspend fun message(id: Long): MascotMessageEntity? = dao.findById(id)
+
+    /** Человек ответил на сообщение из шторки — значит, прочитал его. */
+    suspend fun markOpened(id: Long, now: Instant) = dao.markOpened(id, now.toEpochMilliseconds())
+
     // --- Отвечает в ленте -----------------------------------------------------------------
 
     /** Ответ на действие человека — в ленту дня. [food] — о какой еде речь. */

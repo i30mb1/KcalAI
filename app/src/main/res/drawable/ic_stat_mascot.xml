@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Значок в строке состояния: силуэт Яйца с глазами-прорезями.
+    Строка состояния красит всё в один цвет, поэтому узнаётся он по форме.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M60,14 C78,14 89,48 89,72 C89,93 76,106 60,106 C44,106 31,93 31,72 C31,48 42,14 60,14 Z M44.5,73 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0 Z M64.5,73 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0 Z" />
+</vector>

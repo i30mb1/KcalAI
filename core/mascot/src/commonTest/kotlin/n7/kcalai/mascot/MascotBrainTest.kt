@@ -190,6 +190,17 @@ class MascotBrainTest {
         assertEquals(Mascot.BUTTER, reaction?.speech?.mascot)
     }
 
+    /** «Записать» в шторке — это ответ: сообщение прочитано, и в переписке оно стоит первым. */
+    @Test
+    fun `ответ из шторки — сообщение прочитано и находится`() = runTest {
+        val id = mascots.insert(message(Mascot.GRAIN))
+        val brain = brain()
+
+        brain.markOpened(id, now)
+
+        assertEquals(now.toEpochMilliseconds(), brain.message(id)?.openedAt)
+    }
+
     @Test
     fun `тряска — не чаще раза в десять секунд`() = runTest {
         val brain = brain()

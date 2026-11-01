@@ -1,6 +1,7 @@
 package n7.kcalai
 
 import android.app.Application
+import n7.kcalai.notify.MascotWorker
 import n7.kcalai.work.ContributionWorker
 import n7.kcalai.work.ScanUploadWorker
 import n7.kcalai.work.SeedUpdateWorker
@@ -21,5 +22,8 @@ class KcalApp : Application() {
         if (container.serverConfigured) SeedUpdateWorker.enqueue(this)
         // Сессии съёмки: прошлая отправка могла не удаться.
         ScanUploadWorker.enqueue(this)
+        // Персонажи раз в полчаса проверяют, есть ли повод написать первыми.
+        // Писать без согласия человека они всё равно не станут.
+        MascotWorker.schedule(this)
     }
 }

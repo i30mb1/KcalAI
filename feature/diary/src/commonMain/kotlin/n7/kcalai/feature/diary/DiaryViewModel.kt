@@ -55,6 +55,7 @@ import n7.kcalai.resolver.TextFoodResolver
 import n7.kcalai.model.Sex
 import n7.kcalai.mascot.asksToWrite
 import n7.kcalai.mascot.MascotBrain
+import n7.kcalai.mascot.MascotEvent
 import n7.kcalai.database.MascotProfileEntity
 import n7.kcalai.database.MascotMessageEntity
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -333,6 +334,14 @@ class DiaryViewModel(
         val now = clock.todayIn(zone)
         if (now != date.value) date.value = now
         refreshOutbox()
+        // Человек снова здесь: всё написанное персонажами он видит в ленте, а планировщик
+        // знает, что мешать сейчас не надо.
+        viewModelScope.launch { brain.onAppOpened(clock.now()) }
+    }
+
+    /** Дневник открыт тапом по уведомлению персонажа. */
+    fun onOpenedFromMessage(messageId: Long) {
+        viewModelScope.launch { brain.react(MascotEvent.Opened(messageId), clock.now()) }
     }
 
     /**
