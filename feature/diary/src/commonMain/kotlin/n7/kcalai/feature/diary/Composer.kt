@@ -113,9 +113,11 @@ fun Composer(
         }
     }
 
+    // Облачко персонажа над чипсом не должно ложиться на чипсы и строку.
     Column(
         Modifier
             .fillMaxWidth()
+            .speechObstacle("composer")
             .background(colors.bg)
             .imePadding()
             .navigationBarsPadding()

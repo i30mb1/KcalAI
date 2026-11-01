@@ -84,11 +84,38 @@ const val SPEECH_GAP_PX = 12
 /** Ближе к краю облачка хвостик не подходит: там скругление. */
 const val TAIL_INSET_PX = 24
 
+/** Облачко, которое надо поставить: у кого и какого размера. */
+data class SpeechRequest(val anchor: Rect, val bubble: IntSize)
+
+/**
+ * Облачка всех, кто говорит разом, — по очереди.
+ *
+ * Каждое следующее обходит уже поставленные так же, как занятое на экране:
+ * двое заговорили одновременно — второе облачко не ложится на первое.
+ */
+fun speechPlacements(
+    requests: List<SpeechRequest>,
+    bounds: IntSize,
+    marginPx: Int,
+    taken: List<Rect> = emptyList(),
+    gapPx: Int = SPEECH_GAP_PX,
+    tailInsetPx: Int = TAIL_INSET_PX,
+): List<SpeechPlacement> {
+    val occupied = taken.toMutableList()
+    return requests.map { request ->
+        speechPlacement(request.anchor, request.bubble, bounds, marginPx, gapPx, tailInsetPx, occupied)
+            .also { occupied += it.rect(request.bubble) }
+    }
+}
+
 /**
  * Облачко над персонажем, хвостиком к нему.
  *
- * Над ним, пока есть место; у верхнего края — под ним. По бокам — прижато
- * к краю экрана, а хвостик тянется к персонажу, насколько позволяет скругление.
+ * Над ним, пока есть место; у верхнего края — под ним, у нижнего — над ним.
+ * Когда влезает с обеих сторон, выбирается та, где облачко закроет меньше из
+ * [taken]: реплики ленты и строка ввода того же светлого цвета, и облачко поверх
+ * них сливалось с ними в одно пятно. Поровну — над персонажем. По бокам —
+ * прижато к краю экрана, а хвостик тянется к персонажу, насколько позволяет скругление.
  */
 fun speechPlacement(
     anchor: Rect,
@@ -97,12 +124,33 @@ fun speechPlacement(
     marginPx: Int,
     gapPx: Int = SPEECH_GAP_PX,
     tailInsetPx: Int = TAIL_INSET_PX,
+    taken: List<Rect> = emptyList(),
 ): SpeechPlacement {
     val centerX = anchor.center.x.roundToInt()
     val x = (centerX - bubble.width / 2).coerceIn(marginPx, (bounds.width - marginPx - bubble.width).coerceAtLeast(marginPx))
-    val above = anchor.top.roundToInt() - gapPx - bubble.height
-    val tailUp = above < marginPx
-    val y = if (tailUp) anchor.bottom.roundToInt() + gapPx else above
+    val above = IntOffset(x, anchor.top.roundToInt() - gapPx - bubble.height)
+    val below = IntOffset(x, anchor.bottom.roundToInt() + gapPx)
+    val tailUp = when {
+        above.y < marginPx -> true
+        below.y + bubble.height > bounds.height - marginPx -> false
+        else -> covered(below, bubble, taken) < covered(above, bubble, taken)
+    }
     val tailX = (centerX - x).coerceIn(tailInsetPx, (bubble.width - tailInsetPx).coerceAtLeast(tailInsetPx))
-    return SpeechPlacement(IntOffset(x, y), tailUp, tailX)
+    return SpeechPlacement(if (tailUp) below else above, tailUp, tailX)
+}
+
+private fun SpeechPlacement.rect(bubble: IntSize) = Rect(
+    left = offset.x.toFloat(),
+    top = offset.y.toFloat(),
+    right = (offset.x + bubble.width).toFloat(),
+    bottom = (offset.y + bubble.height).toFloat(),
+)
+
+/** Сколько площади из [taken] закрыло бы облачко, встань оно в [at]. */
+private fun covered(at: IntOffset, bubble: IntSize, taken: List<Rect>): Float {
+    val cloud = SpeechPlacement(at, tailUp = false, tailX = 0).rect(bubble)
+    return taken.fold(0f) { sum, rect ->
+        val overlap = cloud.intersect(rect)
+        if (overlap.width > 0f && overlap.height > 0f) sum + overlap.width * overlap.height else sum
+    }
 }

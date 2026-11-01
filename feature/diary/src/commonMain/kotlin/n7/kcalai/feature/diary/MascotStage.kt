@@ -54,6 +54,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -75,6 +76,8 @@ import n7.kcalai.mascot.CueKind
 import n7.kcalai.mascot.MascotEvent
 import n7.kcalai.model.Mascot
 import n7.kcalai.ui.KcalTheme
+import n7.kcalai.ui.MacroColors
+import n7.kcalai.ui.colors
 import n7.kcalai.ui.mascot.IDLE_SLEEP_MS
 import n7.kcalai.ui.mascot.IDLE_YAWN_MS
 import n7.kcalai.ui.mascot.MascotAct
@@ -83,9 +86,11 @@ import n7.kcalai.ui.mascot.MascotFigure
 import n7.kcalai.ui.mascot.MascotPose
 import n7.kcalai.ui.mascot.MascotPuppet
 import n7.kcalai.ui.mascot.PokeMeter
+import n7.kcalai.ui.mascot.SpeechRequest
 import n7.kcalai.ui.mascot.gaze
+import n7.kcalai.ui.mascot.macro
 import n7.kcalai.ui.mascot.rememberMascotPuppet
-import n7.kcalai.ui.mascot.speechPlacement
+import n7.kcalai.ui.mascot.speechPlacements
 import n7.kcalai.ui.popIn
 
 /**
@@ -97,6 +102,9 @@ import n7.kcalai.ui.popIn
  */
 class MascotAnchors {
     internal val rects = mutableStateMapOf<String, Rect>()
+
+    /** Что облачку закрывать нельзя: реплики ленты, записи, строка ввода. */
+    internal val obstacles = mutableStateMapOf<String, Rect>()
 }
 
 val LocalMascotAnchors = staticCompositionLocalOf<MascotAnchors?> { null }
@@ -116,6 +124,19 @@ fun Modifier.mascotAnchor(key: String): Modifier = composed {
     val anchors = LocalMascotAnchors.current ?: return@composed this
     DisposableEffect(anchors, key) { onDispose { anchors.rects.remove(key) } }
     onGloballyPositioned { anchors.rects[key] = Rect(it.positionInRoot(), it.size.toSize()) }
+}
+
+/**
+ * Это облачку не закрывать: реплику ленты, запись, строку ввода.
+ *
+ * Персонаж стоит в углу своей реплики, и облачко над ним ложилось на её текст —
+ * текст на текст, светлое на светлое. Берётся видимая часть: что ушло под шапку
+ * или за край ленты, закрыть уже нельзя. Ушедшее с экрана из реестра пропадает.
+ */
+fun Modifier.speechObstacle(key: String): Modifier = composed {
+    val anchors = LocalMascotAnchors.current ?: return@composed this
+    DisposableEffect(anchors, key) { onDispose { anchors.obstacles.remove(key) } }
+    onGloballyPositioned { anchors.obstacles[key] = it.boundsInRoot() }
 }
 
 /**
@@ -238,9 +259,7 @@ fun MascotStage(
             Blinking(actor, pointer, typing)
             StagedMascot(actor, places.getValue(actor.mascot), anchors, origin, night) { event(it) }
         }
-        speech.forEach { line ->
-            key(line.id) { actors[line.mascot]?.let { SpeechBubble(line.text, it, origin) } }
-        }
+        SpeechClouds(speech, actors, anchors.obstacles, origin)
     }
 }
 
@@ -541,68 +560,95 @@ private fun Modifier.mascotGestures(
 }
 
 /**
- * Облачко с репликой над персонажем.
+ * Облачка с репликами над персонажами — одной раскладкой на всех.
+ *
+ * Облачко встаёт над персонажем или под ним — там, где не закроет реплику ленты,
+ * запись и строку ввода, а двое, заговорившие разом, не ложатся друг на друга.
+ * Цвет — его персонажа, как плитка его макроса в шапке: белое облачко поверх
+ * белой реплики сливалось с ней в одно пятно, а по цвету ещё и видно, кто говорит.
  *
  * Хвостик смотрит на персонажа; облачко едет за ним, даже если его тащат.
  * Касаний не ловит: сквозь облачко листается лента.
  */
 @Composable
-private fun SpeechBubble(text: String, actor: Actor, origin: Offset) {
-    val colors = KcalTheme.colors
+private fun SpeechClouds(
+    lines: List<SpeechUi>,
+    actors: Map<Mascot, Actor>,
+    obstacles: Map<String, Rect>,
+    origin: Offset,
+) {
     val density = LocalDensity.current
     val margin = with(density) { SPEECH_MARGIN.roundToPx() }
     val gap = with(density) { SPEECH_GAP.roundToPx() }
     val inset = with(density) { SPEECH_TAIL_INSET.roundToPx() }
     val overlap = with(density) { 1.dp.roundToPx() }
-    val shape = RoundedCornerShape(14.dp)
 
     Layout(
         content = {
-            Box(
-                Modifier
-                    .popIn(origin = TransformOrigin(0.5f, 1f), lift = 6.dp)
-                    .widthIn(max = SPEECH_MAX_WIDTH)
-                    .shadow(3.dp, shape)
-                    .clip(shape)
-                    .background(colors.surface)
-                    .border(1.dp, colors.line, shape)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text(text, style = KcalTheme.type.body, color = colors.text)
+            lines.forEach { line ->
+                key(line.id) {
+                    val palette = line.mascot.macro.colors()
+                    SpeechBody(line.text, palette)
+                    SpeechTail(up = true, palette)
+                    SpeechTail(up = false, palette)
+                }
             }
-            SpeechTail(up = true)
-            SpeechTail(up = false)
         },
     ) { measurables, constraints ->
         val free = Constraints(maxWidth = constraints.maxWidth, maxHeight = constraints.maxHeight)
-        val body = measurables[0].measure(free)
-        val upTail = measurables[1].measure(free)
-        val downTail = measurables[2].measure(free)
+        // На каждую реплику — три куска: облачко и два хвостика, вверх и вниз.
+        val parts = measurables.map { it.measure(free) }.chunked(3)
         layout(constraints.maxWidth, constraints.maxHeight) {
-            val rect = actor.rect ?: return@layout
-            val anchor = rect.translate(actor.drag.value - origin)
-            val placed = speechPlacement(
-                anchor = anchor,
-                bubble = IntSize(body.width, body.height),
+            val shown = lines.indices.mapNotNull { index ->
+                val actor = actors[lines[index].mascot] ?: return@mapNotNull null
+                val rect = actor.rect ?: return@mapNotNull null
+                index to rect.translate(actor.drag.value - origin)
+            }
+            val placed = speechPlacements(
+                requests = shown.map { (index, anchor) ->
+                    SpeechRequest(anchor, IntSize(parts[index][0].width, parts[index][0].height))
+                },
                 bounds = IntSize(constraints.maxWidth, constraints.maxHeight),
                 marginPx = margin,
+                taken = obstacles.values.map { it.translate(-origin) },
                 gapPx = gap,
                 tailInsetPx = inset,
             )
-            body.place(placed.offset)
-            if (placed.tailUp) {
-                upTail.place(placed.offset.x + placed.tailX - upTail.width / 2, placed.offset.y - upTail.height + overlap)
-            } else {
-                downTail.place(placed.offset.x + placed.tailX - downTail.width / 2, placed.offset.y + body.height - overlap)
+            shown.forEachIndexed { order, (index, _) ->
+                val (body, upTail, downTail) = parts[index]
+                val at = placed[order]
+                body.place(at.offset)
+                if (at.tailUp) {
+                    upTail.place(at.offset.x + at.tailX - upTail.width / 2, at.offset.y - upTail.height + overlap)
+                } else {
+                    downTail.place(at.offset.x + at.tailX - downTail.width / 2, at.offset.y + body.height - overlap)
+                }
             }
         }
     }
 }
 
+/** Само облачко: над персонажем оно или под ним, решает раскладка — растёт оно из середины. */
+@Composable
+private fun SpeechBody(text: String, palette: MacroColors) {
+    val shape = RoundedCornerShape(14.dp)
+    Box(
+        Modifier
+            .popIn(lift = 6.dp)
+            .widthIn(max = SPEECH_MAX_WIDTH)
+            .shadow(3.dp, shape)
+            .clip(shape)
+            .background(palette.tile)
+            .border(1.dp, palette.fill.copy(alpha = SPEECH_EDGE_ALPHA), shape)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(text, style = KcalTheme.type.body, color = palette.text)
+    }
+}
+
 /** Хвостик облачка: треугольник той же бумаги, обведённый той же линией. */
 @Composable
-private fun SpeechTail(up: Boolean) {
-    val colors = KcalTheme.colors
+private fun SpeechTail(up: Boolean, palette: MacroColors) {
     Canvas(Modifier.size(width = 14.dp, height = 8.dp)) {
         val path = Path().apply {
             if (up) {
@@ -615,8 +661,8 @@ private fun SpeechTail(up: Boolean) {
                 lineTo(size.width, 0f)
             }
         }
-        drawPath(path, colors.surface)
-        drawPath(path, colors.line, style = Stroke(width = 1.dp.toPx()))
+        drawPath(path, palette.tile)
+        drawPath(path, palette.fill.copy(alpha = SPEECH_EDGE_ALPHA), style = Stroke(width = 1.dp.toPx()))
     }
 }
 
@@ -651,3 +697,6 @@ private val SPEECH_MAX_WIDTH = 220.dp
 private val SPEECH_MARGIN = 12.dp
 private val SPEECH_GAP = 6.dp
 private val SPEECH_TAIL_INSET = 16.dp
+
+/** Кромка облачка — цветом персонажа, но вполсилы: обводка, а не рамка. */
+private const val SPEECH_EDGE_ALPHA = 0.4f

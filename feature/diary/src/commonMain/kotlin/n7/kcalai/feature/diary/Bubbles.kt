@@ -84,6 +84,7 @@ fun MealBubble(item: FeedItem.Meal, onEntry: (DiaryEntryEntity) -> Unit) {
             modifier = Modifier
                 .fillMaxWidth(BUBBLE_WIDTH)
                 .wrapContentWidth(Alignment.End)
+                .speechObstacle("meal:${item.key}")
                 .clip(
                     RoundedCornerShape(
                         topStart = KcalShapes.bubble,
@@ -200,6 +201,7 @@ fun IncomingBubble(
                 .weight(1f, fill = false)
                 .fillMaxWidth(BUBBLE_WIDTH)
                 .wrapContentWidth(Alignment.Start)
+                .speechObstacle("bubble:${speaking.key}")
                 .clip(
                     RoundedCornerShape(
                         topStart = KcalShapes.bubble,

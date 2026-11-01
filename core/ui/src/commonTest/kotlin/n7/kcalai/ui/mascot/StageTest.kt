@@ -130,4 +130,56 @@ class StageTest {
         assertEquals(32, placed.offset.x)
         assertEquals(TAIL_INSET_PX, placed.tailX, "хвостик сдвинут к персонажу до упора")
     }
+
+    /**
+     * Персонаж стоит в углу своей реплики, и над ним — её текст. Облачко сверху
+     * легло бы на реплику того же цвета, и обе слились бы в кашу.
+     */
+    @Test
+    fun `над персонажем его реплика — облачко встаёт под ним`() {
+        val mascot = Rect(left = 40f, top = 800f, right = 140f, bottom = 900f)
+        val reply = Rect(left = 150f, top = 600f, right = 900f, bottom = 900f)
+
+        val placed = speechPlacement(mascot, bubble, screen, marginPx = 32, taken = listOf(reply))
+
+        assertTrue(placed.tailUp)
+        assertEquals(900 + SPEECH_GAP_PX, placed.offset.y)
+    }
+
+    @Test
+    fun `занято и сверху, и снизу — облачко встаёт там, где закроет меньше`() {
+        val mascot = Rect(left = 400f, top = 800f, right = 520f, bottom = 900f)
+        val above = Rect(left = 0f, top = 600f, right = 1_080f, bottom = 790f)
+        val below = Rect(left = 0f, top = 905f, right = 300f, bottom = 950f)
+
+        val placed = speechPlacement(mascot, bubble, screen, marginPx = 32, taken = listOf(above, below))
+
+        assertTrue(placed.tailUp)
+    }
+
+    @Test
+    fun `сверху занято, а снизу край экрана — облачко всё равно над персонажем`() {
+        val mascot = Rect(left = 400f, top = 1_820f, right = 520f, bottom = 1_920f)
+        val reply = Rect(left = 0f, top = 1_600f, right = 1_080f, bottom = 1_810f)
+
+        val placed = speechPlacement(mascot, bubble, screen, marginPx = 32, taken = listOf(reply))
+
+        assertFalse(placed.tailUp)
+    }
+
+    /** Двое заговорили разом: второе облачко не ложится на первое. */
+    @Test
+    fun `облачки соседей не ложатся друг на друга`() {
+        val egg = Rect(left = 300f, top = 800f, right = 420f, bottom = 900f)
+        val butter = Rect(left = 480f, top = 800f, right = 600f, bottom = 900f)
+
+        val placed = speechPlacements(
+            listOf(SpeechRequest(egg, bubble), SpeechRequest(butter, bubble)),
+            screen,
+            marginPx = 32,
+        )
+
+        assertFalse(placed[0].tailUp)
+        assertTrue(placed[1].tailUp)
+    }
 }

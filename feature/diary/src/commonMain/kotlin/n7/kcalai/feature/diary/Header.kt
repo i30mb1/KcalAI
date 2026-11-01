@@ -205,6 +205,9 @@ private fun MacroTile(
 
     Column(
         modifier = modifier
+            // Облачко хозяина плитки — того же цвета, что она сама, и на ней
+            // сливалось бы с ней. Оно встаёт под плиткой, а не на ней.
+            .speechObstacle("tile:$macro")
             .clip(RoundedCornerShape(KcalShapes.tile))
             .background(palette.tile)
             .clickable { onOpenGoal(field) }
