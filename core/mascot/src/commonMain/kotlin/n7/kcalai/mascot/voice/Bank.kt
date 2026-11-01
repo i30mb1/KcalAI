@@ -62,6 +62,9 @@ class TopicBuilder internal constructor() {
 
     /** Фраза из одного слота — для облачков и коротких ответов. */
     fun say(block: LinesBuilder.() -> Unit) = recipe { slot(block = block) }
+
+    /** Набор вариантов темы, общий для нескольких её рецептов. */
+    fun pool(block: LinesBuilder.() -> Unit): List<Line> = LinesBuilder().apply(block).lines.toList()
 }
 
 @VoiceDsl

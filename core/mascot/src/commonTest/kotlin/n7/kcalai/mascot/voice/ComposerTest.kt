@@ -54,7 +54,7 @@ class ComposerTest {
         }
     }
 
-    private fun compose(topic: Topic, facts: Facts, recent: Set<String> = emptySet(), seed: Int = 1) =
+    private fun compose(topic: Topic, facts: Facts, recent: List<List<String>> = emptyList(), seed: Int = 1) =
         toy.compose(topic, facts, recent, Random(seed))
 
     @Test
@@ -78,17 +78,47 @@ class ComposerTest {
 
     @Test
     fun `недавно сказанное не повторяется, пока есть свежее`() {
-        val recent = Line("Щекотно!").id to Line("Ай!").id
+        val recent = listOf(listOf(Line("Щекотно!").id), listOf(Line("Ай!").id))
 
         repeat(20) { seed ->
-            val said = compose(Topic.POKE, facts, setOf(recent.first, recent.second), seed)
+            val said = compose(Topic.POKE, facts, recent, seed)
             assertEquals("Хи-хи.", said?.text)
+        }
+    }
+
+    /** Ротация, а не жребий: из сказанного раньше всего возвращается то, что звучало давнее. */
+    @Test
+    fun `давно сказанное возвращается раньше недавнего`() {
+        val newestFirst = listOf("Хи-хи.", "Ай!", "Щекотно!").map { listOf(Line(it).id) }
+
+        repeat(20) { seed ->
+            val said = compose(Topic.POKE, facts, newestFirst, seed)?.text
+            assertTrue(said != "Хи-хи.", "только что сказанное вернулось первым")
+        }
+    }
+
+    /** Каждая часть уже звучала, но в этом сочетании — ещё нет. Так и надо собрать. */
+    @Test
+    fun `точный повтор недавнего сообщения не собирается, пока можно иначе`() {
+        val pairs = voice(Mascot.GRAIN) {
+            topic(Topic.EMPTY_DAY) {
+                recipe {
+                    slot { +"А1."; +"А2." }
+                    slot { +"Б1."; +"Б2." }
+                }
+            }
+        }
+        val recent = listOf(listOf("А1.", "Б1."), listOf("А2.", "Б2.")).map { message -> message.map { Line(it).id } }
+
+        repeat(20) { seed ->
+            val said = pairs.compose(Topic.EMPTY_DAY, facts, recent, Random(seed))?.text
+            assertTrue(said == "А1. Б2." || said == "А2. Б1.", "$said")
         }
     }
 
     @Test
     fun `всё сказано — повтор лучше молчания`() {
-        val everything = pokes.map { Line(it).id }.toSet()
+        val everything = pokes.map { listOf(Line(it).id) }
 
         val said = compose(Topic.POKE, facts, everything)
 
@@ -132,6 +162,54 @@ class ComposerTest {
         val texts = (0 until 40).mapNotNull { compose(Topic.EMPTY_DAY, facts, seed = it)?.text }.toSet()
 
         assertEquals(setOf("Сегодня в дневнике пусто.", "Эй! Сегодня в дневнике пусто."), texts)
+    }
+
+    /** «Женя, привет. Женя, ты сможешь!» — так не пишет никто. */
+    @Test
+    fun `один факт звучит во фразе один раз`() {
+        val named = voice(Mascot.GRAIN) {
+            topic(Topic.EMPTY_DAY) {
+                recipe {
+                    slot { +"{name}, привет!" }
+                    slot { +"{name}, ты сможешь!"; +"Пусто сегодня." }
+                }
+            }
+        }
+
+        repeat(20) { seed ->
+            val said = named.compose(Topic.EMPTY_DAY, facts.copy(name = "Женя"), emptyList(), Random(seed))
+            assertEquals("Женя, привет! Пусто сегодня.", said?.text)
+        }
+    }
+
+    /** Обрезанное на полуслове уведомление выглядит сломанным; лучше промолчать о необязательном. */
+    @Test
+    fun `длинная фраза теряет необязательные части, а не обрезается`() {
+        val chatty = voice(Mascot.EGG) {
+            topic(Topic.STREAK_KEEP) {
+                recipe {
+                    slot(skip = 0.01) { +("А".repeat(100) + ".") }
+                    slot { +"Серия под угрозой." }
+                    slot(skip = 0.01) { +("Б".repeat(100) + ".") }
+                }
+            }
+        }
+
+        repeat(20) { seed ->
+            val said = chatty.compose(Topic.STREAK_KEEP, facts, emptyList(), Random(seed))
+            assertNotNull(said)
+            assertTrue(said.text.length <= TopicKind.NOTE.maxLength, said.text)
+            assertTrue("Серия под угрозой." in said.text, said.text)
+        }
+    }
+
+    @Test
+    fun `обязательное не влезает — эта форма фразы не годится`() {
+        val tooLong = voice(Mascot.EGG) {
+            topic(Topic.POKE) { say { +("Щ".repeat(TopicKind.SPEECH.maxLength + 1)) } }
+        }
+
+        assertNull(tooLong.compose(Topic.POKE, facts, emptyList(), Random(1)))
     }
 
     @Test
