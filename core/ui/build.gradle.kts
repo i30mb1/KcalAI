@@ -21,6 +21,10 @@ kotlin {
             api(project(":core:model"))
             implementation(libs.cmp.resources)
         }
+        commonTest.dependencies {
+            // Анимации куклы гоняются на виртуальном времени: без экрана и без ожидания.
+            implementation(libs.kotlinx.coroutines.test)
+        }
     }
 }
 

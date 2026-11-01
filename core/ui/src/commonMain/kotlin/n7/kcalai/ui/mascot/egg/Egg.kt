@@ -5,8 +5,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
+import n7.kcalai.ui.mascot.FaceGeometry
 import n7.kcalai.ui.mascot.MascotArt
-import n7.kcalai.ui.mascot.face
 import n7.kcalai.ui.mascot.paper
 import n7.kcalai.ui.mascot.paperDot
 import n7.kcalai.ui.mascot.svgPath
@@ -33,7 +33,19 @@ internal object EggArt : MascotArt {
     private val crack by lazy { svgPath("M0,0 H120 V36 L102,32 L92,41 L82,32 L71,41 L60,32 L49,41 L38,32 L28,41 L18,32 L0,38 Z") }
     private val mouth by lazy { svgPath("M55,78 C57,81 63,81 65,77") }
 
-    override fun DrawScope.draw() {
+    override val face by lazy {
+        FaceGeometry(
+            leftEye = Offset(50f, 63f),
+            rightEye = Offset(70f, 63f),
+            mouth = mouth,
+            mouthCenter = Offset(60f, 79f),
+            mouthWidth = 10f,
+            leftCheek = Offset(42f, 74f),
+            rightCheek = Offset(78f, 74f),
+        )
+    }
+
+    override fun DrawScope.drawBody() {
         // Вырезку положили чуть криво — так она выглядит положенной руками.
         rotate(-3f, pivot = Offset(60f, 60f)) {
             paper(body, White)
@@ -41,6 +53,5 @@ internal object EggArt : MascotArt {
             paperDot(Offset(42f, 74f), 5f, Blush)
             paperDot(Offset(78f, 74f), 5f, Blush)
         }
-        face(50f, 70f, 63f, mouth)
     }
 }

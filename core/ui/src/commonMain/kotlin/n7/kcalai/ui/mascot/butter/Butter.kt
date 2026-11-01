@@ -4,8 +4,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
+import n7.kcalai.ui.mascot.FaceGeometry
 import n7.kcalai.ui.mascot.MascotArt
-import n7.kcalai.ui.mascot.face
 import n7.kcalai.ui.mascot.paper
 import n7.kcalai.ui.mascot.paperStroke
 import n7.kcalai.ui.mascot.svgPath
@@ -32,13 +32,24 @@ internal object ButterArt : MascotArt {
     private val curl by lazy { svgPath("M44,40 C40,28 50,18 60,20 C70,22 72,32 65,35 C60,37 57,32 61,29") }
     private val mouth by lazy { svgPath("M54,77 C57,81 63,81 66,77") }
 
-    override fun DrawScope.draw() {
+    override val face by lazy {
+        FaceGeometry(
+            leftEye = Offset(46f, 66f),
+            rightEye = Offset(74f, 66f),
+            mouth = mouth,
+            mouthCenter = Offset(60f, 79f),
+            mouthWidth = 12f,
+            leftCheek = Offset(36f, 76f),
+            rightCheek = Offset(84f, 76f),
+        )
+    }
+
+    override fun DrawScope.drawBody() {
         rotate(2f, pivot = Offset(60f, 64f)) {
             paper(front, Front)
             paper(top, Top)
             paper(drip, Front)
             paperStroke(curl, Curl, 6f)
         }
-        face(46f, 74f, 66f, mouth)
     }
 }

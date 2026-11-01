@@ -1,23 +1,16 @@
 package n7.kcalai.ui.mascot
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -77,11 +70,17 @@ enum class MascotPose {
 
     /** В пустой ленте: машет. */
     WAVE,
+
+    /** Его подняли пальцем: обе ручки вверх. */
+    HELD,
 }
 
 /**
  * Рисунок одного персонажа на холсте [VIEW_W]×[VIEW_H] — тех же координатах,
  * что у макетов, чтобы контуры переносились из них один в один.
+ *
+ * Тело — бумага, лицо — ручкой поверх и отдельно: выражения у троих общие,
+ * а где у кого глаза и рот, говорит [face].
  */
 internal interface MascotArt {
 
@@ -92,76 +91,80 @@ internal interface MascotArt {
     val skin: Color
     val armOutline: Color
 
-    fun DrawScope.draw()
+    val face: FaceGeometry
+
+    fun DrawScope.drawBody()
 }
 
 internal const val VIEW_W = 120f
 internal const val VIEW_H = 100f
 
 /**
- * Персонаж в позе [pose].
+ * Персонаж в позе [pose], сам по себе: дышит, в [MascotPose.WAVE] машет, от тапа трясётся.
  *
- * Желейный: от тапа трясётся, вздыхает, в [MascotPose.WAVE] машет.
- * Ручки выходят за холст — у [MascotPose.LEAN] тянутся к пузырьку, — поэтому
- * обрезать рисунок по рамке нельзя. Размер задаёт [modifier]; пропорция 6:5.
- *
- * Дышит и машет он несколько раз — встав в новую позу или от тапа, — а потом
- * замирает. Бесконечная анимация держала экран в перерисовке на частоте
- * дисплея всё время, пока открыт дневник: девяносто кадров в секунду над
- * неподвижной лентой — батарея, а экран не мог сбросить частоту. Заодно она
- * не давала инструментам доступности и тестам интерфейса дождаться покоя.
+ * Для мест, где он просто живёт, а не играет со сценой. Дышит и машет несколько раз —
+ * встав в новую позу или от тапа, — а потом замирает. Бесконечная анимация держала
+ * экран в перерисовке на частоте дисплея всё время, пока открыт дневник: девяносто
+ * кадров в секунду над неподвижной лентой — батарея, а экран не мог сбросить частоту.
+ * Заодно она не давала инструментам доступности и тестам интерфейса дождаться покоя.
  */
 @Composable
 fun MascotFigure(mascot: Mascot, pose: MascotPose, modifier: Modifier = Modifier) {
-    // Тряска — затухающая синусоида по прогрессу 0→1. В покое прогресс 1: поворот ноль.
-    val shake = remember { Animatable(1f) }
+    val puppet = rememberMascotPuppet(mascot)
     val scope = rememberCoroutineScope()
-
-    // Ноль — покой: выдох и опущенная к плечу рука.
-    val breath = remember { Animatable(0f) }
-    val wave = remember { Animatable(0f) }
-    var stirred by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(pose, stirred) {
-        launch { breath.swing(BREATHS, mascot.art.breathMs) }
-        if (pose == MascotPose.WAVE) launch { wave.swing(WAVES, WAVE_MS) }
-    }
-
-    Canvas(
-        modifier
-            .pointerInput(Unit) {
-                detectTapGestures {
-                    stirred++
-                    scope.launch {
-                        shake.snapTo(0f)
-                        shake.animateTo(1f, tween(SHAKE_MS, easing = LinearEasing))
-                    }
-                }
+    MascotFigure(
+        puppet = puppet,
+        pose = pose,
+        modifier = modifier.pointerInput(puppet) {
+            detectTapGestures {
+                scope.launch { puppet.play(MascotAct.SHAKE) }
+                scope.launch { puppet.breathe(BREATHS) }
             }
-            .graphicsLayer {
-                val p = shake.value
-                val angle = sin(p * PI * SHAKE_SWINGS).toFloat() * SHAKE_DEGREES * (1f - p)
-                rotationZ = angle
-                // Желе приседает, пока качается, и чуть дышит в покое.
-                val squash = abs(angle) / 120f + breath.value * 0.035f
-                scaleY = 1f - squash
-                scaleX = 1f + squash * 0.8f
-                transformOrigin = TransformOrigin(0.5f, 0.95f)
-            }
-    ) {
-        scale(size.width / VIEW_W, size.height / VIEW_H, pivot = Offset.Zero) {
-            val art = mascot.art
-            arms(pose, art.skin, art.armOutline, waveDegrees = -WAVE_DEGREES * wave.value)
-            with(art) { draw() }
-        }
-    }
+        },
+    )
 }
 
-/** Туда и обратно [times] раз — и в покой. */
-private suspend fun Animatable<Float, *>.swing(times: Int, halfMs: Int) {
-    repeat(times) {
-        animateTo(1f, tween(halfMs, easing = FastOutSlowInEasing))
-        animateTo(0f, tween(halfMs, easing = FastOutSlowInEasing))
+/**
+ * Персонаж, которым управляет [puppet]: лицо, взгляд, действия задаёт сцена.
+ *
+ * Ручки выходят за холст — у [MascotPose.LEAN] тянутся к пузырьку, — поэтому
+ * обрезать рисунок по рамке нельзя. Размер задаёт [modifier]; пропорция 6:5.
+ * Значения куклы читаются при рисовании: анимация перерисовывает только персонажа.
+ */
+@Composable
+fun MascotFigure(puppet: MascotPuppet, pose: MascotPose, modifier: Modifier = Modifier) {
+    LaunchedEffect(puppet, pose) {
+        launch { puppet.breathe(BREATHS) }
+        if (pose == MascotPose.WAVE) launch { puppet.wave(WAVES) }
+    }
+    val art = puppet.mascot.art
+
+    Canvas(
+        modifier.graphicsLayer {
+            // Тряска — затухающая синусоида по прогрессу 0→1, головокружение — медленнее и шире.
+            val shake = puppet.shake.value
+            val shakeAngle = sin(shake * PI * SHAKE_SWINGS).toFloat() * SHAKE_DEGREES * (1f - shake)
+            val wobble = puppet.wobble.value
+            val wobbleAngle = sin(wobble * PI * WOBBLE_SWINGS).toFloat() * WOBBLE_DEGREES * (1f - wobble)
+            rotationZ = shakeAngle + wobbleAngle
+            // Желе приседает, пока качается, и чуть дышит в покое.
+            val squash = abs(shakeAngle) / 120f + puppet.breath.value * 0.035f + puppet.squash.value
+            scaleY = 1f - squash
+            scaleX = (1f + squash * 0.8f) * puppet.turn.value
+            translationY = -puppet.hop.value * size.height * HOP_HEIGHT
+            translationX = puppet.slide.value * size.width * SLIDE_WIDTH
+            transformOrigin = TransformOrigin(0.5f, 0.95f)
+        }
+    ) {
+        scale(size.width / VIEW_W, size.height / VIEW_H, pivot = Offset.Zero) {
+            // Сальто — вокруг середины тела, а не вокруг ног: иначе это колесо по экрану.
+            rotate(puppet.spin.value, pivot = SPIN_PIVOT) {
+                arms(pose, art.skin, art.armOutline, waveDegrees = -WAVE_DEGREES * puppet.wave.value)
+                with(art) { drawBody() }
+                face(art.face, puppet.face, puppet.gaze.value, puppet.blinking.value)
+            }
+            puppet.emote?.let { emote(it, puppet.emoteProgress.value) }
+        }
     }
 }
 
@@ -171,8 +174,16 @@ private const val BREATHS = 3
 /** Взмахов на знакомстве. */
 private const val WAVES = 4
 
-private const val SHAKE_MS = 620
 private const val SHAKE_SWINGS = 5
 private const val SHAKE_DEGREES = 11f
-private const val WAVE_MS = 550
+private const val WOBBLE_SWINGS = 4
+private const val WOBBLE_DEGREES = 14f
 private const val WAVE_DEGREES = 28f
+
+/** Высота прыжка — доля роста. */
+private const val HOP_HEIGHT = 0.45f
+
+/** Насколько далеко скользит Масло — доля ширины. */
+private const val SLIDE_WIDTH = 0.3f
+
+private val SPIN_PIVOT = Offset(60f, 55f)

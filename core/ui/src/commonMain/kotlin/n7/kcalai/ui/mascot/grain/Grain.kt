@@ -6,8 +6,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import n7.kcalai.ui.mascot.FaceGeometry
 import n7.kcalai.ui.mascot.MascotArt
-import n7.kcalai.ui.mascot.face
 import n7.kcalai.ui.mascot.paper
 import n7.kcalai.ui.mascot.paperStroke
 import n7.kcalai.ui.mascot.svgPath
@@ -34,13 +34,24 @@ internal object GrainArt : MascotArt {
     private val crease by lazy { svgPath("M60,28 C57,42 54,52 56,62 C57,72 58,80 60,88") }
     private val mouth by lazy { svgPath("M54,75 C57,79 63,79 66,75") }
 
-    override fun DrawScope.draw() {
+    override val face by lazy {
+        FaceGeometry(
+            leftEye = Offset(48f, 62f),
+            rightEye = Offset(72f, 62f),
+            mouth = mouth,
+            mouthCenter = Offset(60f, 77f),
+            mouthWidth = 12f,
+            leftCheek = Offset(40f, 72f),
+            rightCheek = Offset(80f, 72f),
+        )
+    }
+
+    override fun DrawScope.drawBody() {
         rotate(4f, pivot = Offset(60f, 60f)) {
             paperStroke(tuft, Tuft, 4f)
             paper(body, Body)
             // Бороздка ручкой, а не бумагой: вырезать такую тонкую линию нечем.
             drawPath(crease, Crease, style = Stroke(width = 1.8f, cap = StrokeCap.Round))
         }
-        face(48f, 72f, 62f, mouth)
     }
 }

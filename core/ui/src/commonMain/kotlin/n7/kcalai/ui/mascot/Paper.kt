@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.vector.PathParser
 /** Контур из макета: `d` атрибута SVG-пути, как есть. */
 internal fun svgPath(d: String): Path = PathParser().parsePathString(d).toPath()
 
-private val Ink = Color(0xFF2C2618)
 private val PaperShadow = Color(0x593B2A12)
 private val ShadowOffset = Offset(0.6f, 1.8f)
 
@@ -62,6 +61,10 @@ internal fun DrawScope.arms(pose: MascotPose, skin: Color, outline: Color, waveD
             rotate(waveDegrees, pivot = WaveShoulder) { arm(waveUp, skin, outline) }
             arm(waveRest, skin, outline)
         }
+        MascotPose.HELD -> {
+            arm(waveUp, skin, outline)
+            arm(heldRight, skin, outline)
+        }
     }
 }
 
@@ -75,12 +78,4 @@ private val leanReach by lazy { svgPath("M88,66 C102,60 114,62 128,70") }
 private val leanRest by lazy { svgPath("M32,70 C24,76 22,84 26,90") }
 private val waveUp by lazy { svgPath("M30,62 C20,52 14,40 12,28") }
 private val waveRest by lazy { svgPath("M90,70 C98,76 100,84 96,90") }
-
-/** Глаза и рот ручкой — поверх бумаги и без наклона: лицо смотрит прямо. */
-internal fun DrawScope.face(leftX: Float, rightX: Float, eyeY: Float, mouth: Path) {
-    drawCircle(Ink, EYE_RADIUS, Offset(leftX, eyeY))
-    drawCircle(Ink, EYE_RADIUS, Offset(rightX, eyeY))
-    drawPath(mouth, Ink, style = Stroke(width = 2f, cap = StrokeCap.Round))
-}
-
-private const val EYE_RADIUS = 5.5f
+private val heldRight by lazy { svgPath("M90,62 C100,52 106,40 108,28") }
