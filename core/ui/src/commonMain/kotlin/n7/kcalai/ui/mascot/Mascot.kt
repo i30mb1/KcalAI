@@ -25,31 +25,28 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
 import kotlinx.coroutines.launch
+import n7.kcalai.model.Mascot
 import n7.kcalai.ui.Macro
 import n7.kcalai.ui.mascot.butter.ButterArt
 import n7.kcalai.ui.mascot.egg.EggArt
 import n7.kcalai.ui.mascot.grain.GrainArt
 
 /**
- * Трое, с кем человек переписывается: каждый — свой макрос и узнаваемый продукт.
+ * Рисунок персонажа.
  *
- * Персонажи статичны: не растут и не меняются от съеденного. Цифры живут в тексте
+ * Персонажи не растут и не меняются от съеденного. Цифры живут в тексте
  * реплики, а персонаж — это голос, и голос должен узнаваться с первого взгляда,
  * в 24 dp и без цвета.
  *
  * Каждый лежит в своей папке ([EggArt], [ButterArt], [GrainArt]): цвета, контуры
  * и характер движения меняются там, не задевая остальных.
  */
-enum class Mascot(internal val art: MascotArt) {
-    /** Белок. Яйцо в скорлупе-шапке. */
-    EGG(EggArt),
-
-    /** Жиры. Брусок масла с завитком. */
-    BUTTER(ButterArt),
-
-    /** Углеводы. Зёрнышко с хохолком. */
-    GRAIN(GrainArt),
-}
+internal val Mascot.art: MascotArt
+    get() = when (this) {
+        Mascot.EGG -> EggArt
+        Mascot.BUTTER -> ButterArt
+        Mascot.GRAIN -> GrainArt
+    }
 
 /** Кто отвечает за макрос: в плитке шапки сидит тот же, кто говорит о нём в ленте. */
 val Macro.mascot: Mascot
@@ -57,6 +54,14 @@ val Macro.mascot: Mascot
         Macro.PROTEIN -> Mascot.EGG
         Macro.FAT -> Mascot.BUTTER
         Macro.CARB -> Mascot.GRAIN
+    }
+
+/** Макрос персонажа: цвет его плитки, его аватарки в шторке. */
+val Mascot.macro: Macro
+    get() = when (this) {
+        Mascot.EGG -> Macro.PROTEIN
+        Mascot.BUTTER -> Macro.FAT
+        Mascot.GRAIN -> Macro.CARB
     }
 
 /** Что делают ручки. Тело одно на все позы — меняются только они. */

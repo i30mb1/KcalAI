@@ -41,7 +41,7 @@ import n7.kcalai.ui.ChipNumbers
 import n7.kcalai.ui.KcalChip
 import n7.kcalai.ui.Macro
 import n7.kcalai.ui.MacroDot
-import n7.kcalai.ui.mascot.Mascot
+import n7.kcalai.model.Mascot
 import n7.kcalai.ui.colors
 import n7.kcalai.ui.letter
 import n7.kcalai.ui.KcalShapes

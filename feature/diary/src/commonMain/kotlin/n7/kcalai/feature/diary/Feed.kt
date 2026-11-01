@@ -15,7 +15,7 @@ import n7.kcalai.personal.DayPlan
 import n7.kcalai.personal.DayOutline
 import n7.kcalai.personal.MealGap
 import n7.kcalai.repositories.DaySummary
-import n7.kcalai.ui.mascot.Mascot
+import n7.kcalai.model.Mascot
 
 /**
  * Готовая лента дня.

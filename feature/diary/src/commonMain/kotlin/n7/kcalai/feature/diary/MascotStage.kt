@@ -32,7 +32,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
-import n7.kcalai.ui.mascot.Mascot
+import n7.kcalai.model.Mascot
 import n7.kcalai.ui.mascot.MascotFigure
 import n7.kcalai.ui.mascot.MascotPose
 

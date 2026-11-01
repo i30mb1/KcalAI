@@ -7,7 +7,7 @@ import n7.kcalai.model.MealType
 import n7.kcalai.personal.DayPlan
 import n7.kcalai.personal.MealGap
 import n7.kcalai.ui.Macro
-import n7.kcalai.ui.mascot.Mascot
+import n7.kcalai.model.Mascot
 import n7.kcalai.ui.mascot.mascot
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

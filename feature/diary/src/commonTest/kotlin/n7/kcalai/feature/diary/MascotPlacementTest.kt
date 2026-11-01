@@ -7,7 +7,7 @@ import n7.kcalai.model.MealType
 import n7.kcalai.model.Nutriments
 import n7.kcalai.personal.MealGap
 import n7.kcalai.resolver.ResolvedItem
-import n7.kcalai.ui.mascot.Mascot
+import n7.kcalai.model.Mascot
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.Test

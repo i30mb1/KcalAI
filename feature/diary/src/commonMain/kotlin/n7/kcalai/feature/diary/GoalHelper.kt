@@ -1,6 +1,7 @@
 package n7.kcalai.feature.diary
 
 import kotlin.math.roundToInt
+import n7.kcalai.model.Sex
 
 /*
  * Цель для новичка по росту, весу и возрасту.
@@ -12,10 +13,12 @@ import kotlin.math.roundToInt
  * карточка расхода по факту предложит его собственное число.
  */
 
-enum class Sex(val title: String) {
-    MALE("Мужчина"),
-    FEMALE("Женщина"),
-}
+/** Подпись выбора в помощнике цели. */
+val Sex.title: String
+    get() = when (this) {
+        Sex.MALE -> "Мужчина"
+        Sex.FEMALE -> "Женщина"
+    }
 
 /** Сколько человек двигается: множитель к обмену покоя. */
 enum class Activity(val factor: Double, val title: String) {

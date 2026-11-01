@@ -67,6 +67,7 @@ import n7.kcalai.ui.colors
 import n7.kcalai.ui.tileLabel
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
+import n7.kcalai.model.Sex
 
 /**
  * Цель на день плюс — и это главное здесь — оценка реального расхода.

@@ -17,6 +17,8 @@ kotlin {
             api(libs.cmp.foundation)
             api(libs.cmp.ui)
             api(libs.cmp.material3)
+            // Кто такие Яйцо, Масло и Зёрнышко, знает модель; здесь — как они выглядят.
+            api(project(":core:model"))
             implementation(libs.cmp.resources)
         }
     }

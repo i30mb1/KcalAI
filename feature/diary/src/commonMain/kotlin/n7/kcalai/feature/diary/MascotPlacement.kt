@@ -1,6 +1,6 @@
 package n7.kcalai.feature.diary
 
-import n7.kcalai.ui.mascot.Mascot
+import n7.kcalai.model.Mascot
 import n7.kcalai.ui.mascot.mascot
 
 /**

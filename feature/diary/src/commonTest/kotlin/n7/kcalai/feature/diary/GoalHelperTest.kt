@@ -3,6 +3,7 @@ package n7.kcalai.feature.diary
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.Test
+import n7.kcalai.model.Sex
 
 /**
  * Цель для новичка по росту, весу и возрасту.
