@@ -1,6 +1,8 @@
 package n7.kcalai.feature.scanner
 
 import n7.kcalai.model.ProductDraft
+import n7.kcalai.model.TextLine
+import n7.kcalai.repositories.LabelParser
 import n7.kcalai.repositories.LabelReading
 import n7.kcalai.repositories.LabelTrace
 import kotlin.test.assertEquals
@@ -33,6 +35,36 @@ class LabelConsensusTest {
         names = names,
         trace = LabelTrace(route = route),
     )
+
+    /**
+     * Пастила, строки с живой съёмки: три кадра подряд читают один и тот же абзац,
+     * а в двух над таблицей лежит чужое число — обрезок «НА 10» и «96поки».
+     * Белок раскалывался на 10, 96 и 2,5, и на третьем кадре согласия не было,
+     * хотя настоящая строка прочитана во всех трёх.
+     */
+    @Test
+    fun `числа вокруг слова «белок» не раскалывают голоса белка`() {
+        val paragraph = listOf(
+            "белки - 2,5г,углеводы -76,0 г. ЭНЕРГЕТИЧЕСКАЯЦЕННОСТЬ",
+            "ПРОДУКТА: 1330 кДЖ/310 ккал. *Аналитические данные",
+        )
+        val frames = listOf(
+            listOf("НЕПЕРЕНОСИМОСТИЯИЧНОГО БЕЛКА. ПИЩЕВАЯ ЦЕННОСТЬ (СРЕДНИЕ ЗНАЧЕНИЯ*) НА 10"),
+            listOf("COCТАВ:96поки свежие.малина,яичный белок.ПРОТИВОНЮNASR"),
+            listOf("НЕПЕРЕНОСИМОСТИЯИЧНОГО БЕЛКА. ПИЩЕВАЯ ЦЕННОСТЬ (СРЕДНИЕ"),
+        ).map { head ->
+            (head + paragraph).mapIndexed { index, text ->
+                TextLine(text, centerX = 480f, centerY = 40f + index * 30f, width = 900f, height = 20f)
+            }
+        }
+        val consensus = LabelConsensus()
+
+        val verdict = frames.map { consensus.add(LabelParser.parseLines(it)) }.last()
+
+        assertTrue(verdict.settled)
+        assertEquals(250, verdict.reading.draft.prot100)
+        assertEquals(310, verdict.reading.draft.kcal100)
+    }
 
     @Test
     fun `одного сошедшегося кадра мало`() {

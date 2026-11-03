@@ -129,8 +129,8 @@ internal class LabelAnalyzer(
                 // с честным чтением. Плюс шестьсот миллисекунд процессора
                 // на кадр, из которого заведомо ничего не выйдет.
                 val sharpness = bitmap.sharpness()
-                if (sharpness < MIN_SHARPNESS) {
-                    val note = "смазан · резкость ${sharpness.roundToInt()} < ${MIN_SHARPNESS.roundToInt()} · пропущен"
+                if (sharpness < FrameSharpness.MIN) {
+                    val note = "смазан · резкость ${sharpness.roundToInt()} < ${FrameSharpness.MIN.roundToInt()} · пропущен"
                     recorder?.add(bitmap, started, note, label = false)
                     // Наружу уходит прошлый резкий кадр — голоса и поля не дёргаются, —
                     // но с пометкой: карточка считает, сколько камера мылит подряд,
@@ -267,19 +267,6 @@ internal class LabelAnalyzer(
          */
         const val DENSE_LINES = 15
 
-        /**
-         * Ниже этой резкости кадр пропускается — см. [sharpness].
-         *
-         * Порог режет только явный смаз, и это принципиально: метрика
-         * зависит от контраста не меньше, чем от фокуса. Чёрный текст
-         * на белом при хорошем свете даёт 650–2000, а коричневый на бежевом
-         * при тусклом — 160–190 в идеальном фокусе, и тот же кадр в движении
-         * — 27–58. Порог в 250 отбраковывал вторую сцену целиком, хотя
-         * «1330 кДж/310 ккал» на ней читалось глазом чётко. Восемьдесят
-         * отделяет движение от фокуса на всех записанных сессиях.
-         */
-        const val MIN_SHARPNESS = 80.0
-
         /** Сколько держать паузу после пропущенного кадра — примерно кадр распознавания. */
         const val SKIP_PAUSE_MS = 300L
 
@@ -288,46 +275,15 @@ internal class LabelAnalyzer(
     }
 }
 
-/**
- * Резкость кадра: дисперсия лапласиана по яркости в центральной четверти.
- *
- * Лапласиан — вторая производная, и на резкой границе буквы он даёт всплеск,
- * на размытой — пологий холмик. Дисперсия по площади собирает это в одно
- * число: у смазанного кадра всплесков нет, и она мала. Считается только
- * по центру кадра — там окно видоискателя и этикетка, а фон по краям
- * (кухня, полка) резкости этикетки не касается, но число портил бы.
- *
- * Полное разрешение, без уменьшения: метрика калибровалась по сохранённым
- * кадрам как есть, а уменьшение сглаживает границы и сдвигает шкалу.
- * Триста тысяч пикселей — единицы миллисекунд, рядом с сотнями у распознавания.
- */
+/** Яркость кадра для [FrameSharpness]: пиксели переводятся на месте, второго массива не нужно. */
 private fun Bitmap.sharpness(): Double {
-    val w = width / 2
-    val h = height / 2
-    if (w < 3 || h < 3) return 0.0
-    val pixels = IntArray(w * h)
-    getPixels(pixels, 0, w, width / 4, height / 4, w, h)
-
-    val luma = IntArray(w * h)
-    for (i in pixels.indices) {
-        val p = pixels[i]
+    val luma = IntArray(width * height)
+    getPixels(luma, 0, width, 0, 0, width, height)
+    for (i in luma.indices) {
+        val p = luma[i]
         luma[i] = ((p shr 16 and 0xFF) * 299 + (p shr 8 and 0xFF) * 587 + (p and 0xFF) * 114) / 1000
     }
-
-    var sum = 0L
-    var squares = 0L
-    for (y in 1 until h - 1) {
-        val row = y * w
-        for (x in 1 until w - 1) {
-            val i = row + x
-            val lap = 4 * luma[i] - luma[i - 1] - luma[i + 1] - luma[i - w] - luma[i + w]
-            sum += lap
-            squares += lap.toLong() * lap
-        }
-    }
-    val count = ((w - 2) * (h - 2)).toDouble()
-    val mean = sum / count
-    return squares / count - mean * mean
+    return FrameSharpness.of(luma, width, height)
 }
 
 /**

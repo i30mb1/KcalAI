@@ -331,7 +331,7 @@ internal object LabelAnchors {
     )
 
     /** Найденное число и то, где именно оно стояло: по этому адресу его и занимают. */
-    private class Found(val value: Double, val row: Int, val at: Int)
+    private class Found(val value: Double, val row: Int, val at: Int, val end: Int)
 
     /** Число с единицей энергии и место, где оно стоит. */
     private class Energy(val anchor: Anchor, val value: Double, val row: Row, val at: Int)
@@ -372,9 +372,14 @@ internal object LabelAnchors {
         else -> minByOrNull { abs(line(it).centerX - column) }
     }
 
-    /** Найденная подпись и то, где она кончилась: значение стоит правее неё. */
-    /** @param exact подпись совпала буква в букву, а не по расстоянию Левенштейна */
-    private class Hit(val anchor: Anchor, val after: Int, val exact: Boolean)
+    /**
+     * Найденная подпись и где она стоит в строке: значение — вплотную к ней.
+     *
+     * @param start где подпись началась
+     * @param after где кончилась
+     * @param exact подпись совпала буква в букву, а не по расстоянию Левенштейна
+     */
+    private class Hit(val anchor: Anchor, val start: Int, val after: Int, val exact: Boolean)
 
     /**
      * Все подписи, которые есть в строке, а не первая попавшаяся.
@@ -391,15 +396,15 @@ internal object LabelAnchors {
         val tokens = tokenize(text)
         return Anchor.entries.mapNotNull { anchor ->
             val words = WORDS[anchor].orEmpty()
-            exactEnd(text, words)?.let { Hit(anchor, it, exact = true) }
-                ?: fuzzyEnd(tokens, words)?.let { Hit(anchor, it, exact = false) }
+            exactSpan(text, words)?.let { Hit(anchor, it.first, it.last + 1, exact = true) }
+                ?: fuzzySpan(tokens, words)?.let { Hit(anchor, it.first, it.last + 1, exact = false) }
         }
     }
 
     /** Самое левое точное вхождение: подпись стоит перед своим числом. */
-    private fun exactEnd(text: String, words: List<String>): Int? = words
-        .mapNotNull { word -> text.indexOf(word).takeIf { it >= 0 }?.plus(word.length) }
-        .minOrNull()
+    private fun exactSpan(text: String, words: List<String>): IntRange? = words
+        .mapNotNull { word -> text.indexOf(word).takeIf { it >= 0 }?.let { it until it + word.length } }
+        .minByOrNull { it.first }
 
     /**
      * Порог длины проверяется у эталона, а не у прочитанного слова.
@@ -413,7 +418,7 @@ internal object LabelAnchors {
      * Отдельная проверка длины тут и не нужна: [levenshtein] сам отсекает всё,
      * что отличается длиной больше допуска.
      */
-    private fun fuzzyEnd(tokens: List<Token>, words: List<String>): Int? {
+    private fun fuzzySpan(tokens: List<Token>, words: List<String>): IntRange? {
         for (token in tokens) {
             for (word in words) {
                 if (word.length < MIN_FUZZY_LENGTH) continue
@@ -424,7 +429,9 @@ internal object LabelAnchors {
 
                 val allowed = (word.length * MAX_ERROR_RATIO).toInt()
                     .coerceIn(1, MAX_ERRORS)
-                if (levenshtein(token.text, word, allowed) <= allowed) return token.end
+                if (levenshtein(token.text, word, allowed) <= allowed) {
+                    return token.end - token.text.length until token.end
+                }
             }
         }
         return null
@@ -438,9 +445,9 @@ internal object LabelAnchors {
      * на той же высоте.
      *
      * @param soleAnchor подпись в строке одна. Тогда — и только тогда — годится
-     *        любое число строки, даже стоящее перед подписью: вёрстка с числом
-     *        слева редка, но бывает, и терять на ней значение незачем. Когда
-     *        подписей несколько, такая поблажка отдала бы углеводам число жиров.
+     *        и число, стоящее вплотную перед подписью: вёрстка с числом слева
+     *        редка, но бывает, и терять на ней значение незачем. Когда подписей
+     *        несколько, такая поблажка отдала бы углеводам число жиров.
      */
     private fun valueFor(
         hit: Hit,
@@ -450,8 +457,14 @@ internal object LabelAnchors {
         column: Float?,
         soleAnchor: Boolean,
     ): Found? {
-        numberAfter(row, hit.after, taken)?.let { return it }
-        if (soleAnchor) numberAfter(row, 0, taken)?.let { return it }
+        numberAfter(row, hit.after, taken)
+            ?.takeIf { onlyFiller(row.text, hit.after, it.at) }
+            ?.let { return it }
+        if (soleAnchor) {
+            numberBefore(row, hit.start, taken)
+                ?.takeIf { onlyFiller(row.text, it.end, hit.start) }
+                ?.let { return it }
+        }
 
         // Строки той же высоты, что подпись, — это её строка таблицы. Какая
         // из них нужная колонка, решает заголовок, а не порядок слева направо.
@@ -500,15 +513,57 @@ internal object LabelAnchors {
 
     /** Первое свободное число, начинающееся не раньше [from]. «на 100 г» сюда уже не попадает. */
     private fun numberAfter(row: Row, from: Int, taken: Set<Pair<Int, Int>>): Found? =
+        freeNumbers(row, taken).firstOrNull { it.at >= from }
+
+    /** Ближайшее к подписи свободное число из тех, что кончились до [before]. */
+    private fun numberBefore(row: Row, before: Int, taken: Set<Pair<Int, Int>>): Found? =
+        freeNumbers(row, taken).lastOrNull { it.end <= before }
+
+    private fun freeNumbers(row: Row, taken: Set<Pair<Int, Int>>): Sequence<Found> =
         NUMBER.findAll(row.text)
-            .filter { it.range.first >= from }
             .filterNot { leadingZero(it.value) }
             .filterNot { (row.index to it.range.first) in taken }
-            .firstOrNull()
-            ?.let { match ->
+            .mapNotNull { match ->
                 match.value.replace(',', '.').toDoubleOrNull()
-                    ?.let { Found(it, row.index, match.range.first) }
+                    ?.let { Found(it, row.index, match.range.first, match.range.last + 1) }
             }
+
+    /**
+     * Между подписью и числом нет других слов — только единицы, знаки и числа.
+     *
+     * Подпись и её значение на пачке стоят вплотную: «белки – 2,5 г», «Жиры, г 5,0».
+     * Слово между ними значит, что число принадлежит уже не подписи, а тексту
+     * дальше по строке. На пастиле так и выходило дважды за одну съёмку:
+     * «яичного БЕЛКА. ПИЩЕВАЯ ЦЕННОСТЬ (СРЕДНИЕ ЗНАЧЕНИЯ*) НА 10» — обрезок
+     * «на 100 г» краем кадра — давало белком десять грамм, а «СОСТАВ: 96поки
+     * свежие, малина, яичный белок» — девяносто шесть. Оба кадра расходились
+     * с остальными, и белок набирал голоса последним.
+     *
+     * Числа между ними не мешают: это значения, уже отданные соседним подписям, —
+     * «ккал/кДж 310/1330» читает килоджоули через калории.
+     */
+    private fun onlyFiller(text: String, from: Int, to: Int): Boolean {
+        if (from >= to) return true
+        return text.substring(from, to)
+            .split(' ')
+            .map { word -> word.filter(Char::isLetter) }
+            .all { it.length <= SHORT_WORD || it in FILLER }
+    }
+
+    /**
+     * Короче этого слово между подписью и числом не мешает: «г», «мг», «не», «в т ч».
+     */
+    private const val SHORT_WORD = 2
+
+    /**
+     * Слова, которые законно стоят между подписью и числом, — уже нормализованные.
+     *
+     * Единицы энергии — оттого, что подпись «ккал/кДж» стоит перед парой чисел,
+     * «не более» и «не менее» — из формулировок молочных этикеток, а «продукта» —
+     * хвост «на 100 г продукта»: сама «на 100 г» вымарана заранее, хвост остаётся.
+     */
+    private val FILLER: Set<String> =
+        (ENERGY_UNITS.keys + listOf("более", "менее", "продукта")).toSet()
 
     /**
      * «00» и подобное — не значение, а объеденная распознавателем единица.
