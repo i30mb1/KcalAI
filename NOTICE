@@ -65,3 +65,17 @@ Open Food Facts скриптом tools/builddb.
 
 Share-alike ODbL распространяется на базу, не на код приложения. Производный
 срез публикуется под ODbL, скрипт сборки — в tools/builddb.
+
+
+EmbeddingGemma 2 Text 270M и LiteRT-LM
+--------------------------------------
+
+Поиск по смыслу (:core:semantic, пак :assets:embedding) — модель
+litert-community/embeddinggemma-2-text-270m-litert-lm на движке
+com.google.ai.edge.litertlm. Файл модели в репозитории не хранится:
+сборка берёт его с Hugging Face по ссылке и sha256 из tools/embeddb/model.properties.
+
+    Copyright 2026 Google LLC
+    https://huggingface.co/litert-community/embeddinggemma-2-text-270m-litert-lm
+    https://github.com/google-ai-edge/LiteRT-LM
+    Licensed under the Apache License, Version 2.0

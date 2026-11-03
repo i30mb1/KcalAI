@@ -6,6 +6,9 @@
 /core/*/build
 /feature/*/build
 /smoke/build
+/assets/*/build
+# Модель кладёт туда сборка (см. assets/embedding/build.gradle.kts): 165 МБ в git не место.
+/assets/embedding/src/main/assets/
 /build-logic/build
 /server/build
 /server/.gradle
@@ -28,6 +31,9 @@ local.properties
 /tools/builddb/.venv/
 /tools/builddb/cache/
 /tools/builddb/out/
+/tools/embeddb/build/
+/tools/embeddb/.gradle/
+/tools/embeddb/model/
 
 # Служебные данные Kotlin Gradle Plugin (сессии и ошибки демона).
 .kotlin/

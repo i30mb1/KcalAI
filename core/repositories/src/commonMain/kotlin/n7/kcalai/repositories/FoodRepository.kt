@@ -9,6 +9,7 @@ import n7.kcalai.database.ContributionEntity
 import n7.kcalai.database.UserFoodDao
 import n7.kcalai.database.UserFoodEntity
 import n7.kcalai.fooddb.FoodDb
+import n7.kcalai.fooddb.GenericRow
 import n7.kcalai.fooddb.ProductRow
 import n7.kcalai.fooddb.matchesQuery
 import n7.kcalai.model.FoodCandidate
@@ -56,6 +57,7 @@ fun interface RemoteProductSource {
  *
  * @param dispatcher обязан быть однопоточным: [FoodDb] держит одно соединение SQLite,
  *        а оно не потокобезопасно. Пул (обычный `Dispatchers.IO`) сюда не годится.
+ * @param embedder модель для поиска по смыслу; `null` — его нет вовсе (iOS, тесты)
  */
 class FoodRepository(
     private val foodDb: FoodDbSource,
@@ -64,10 +66,22 @@ class FoodRepository(
     private val contributionDao: ContributionDao,
     private val remote: RemoteProductSource,
     private val dispatcher: CoroutineDispatcher,
+    embedder: QueryEmbedder? = null,
 ) {
 
     private suspend fun <T> onDb(block: (FoodDb) -> T): T =
         withContext(dispatcher) { block(foodDb.get()) }
+
+    /** Отпечатки читаются один раз: справочник меняется только с перезапуском приложения. */
+    private var index: SemanticIndex? = null
+
+    private val semantic = embedder?.let {
+        SemanticFoodSearch(
+            embedder = it,
+            index = { index ?: SemanticIndex(onDb { db -> db.genericEmbeddings() }).also { built -> index = built } },
+            rows = { ids -> onDb { db -> db.genericsByIds(ids) }.map { row -> row.toCandidate() } },
+        )
+    }
 
     /**
      * Цепочка поиска по штрих-коду: локальное, потом сеть.
@@ -155,22 +169,24 @@ class FoodRepository(
         )
     }
 
+    /**
+     * Свои продукты, справочник, товары — по словам. Не нашлось ничего — по смыслу:
+     * так ловятся опечатки и разговорное («барщ», «кофеёк с молочком»), а точные
+     * совпадения по словам остаются за словами.
+     */
     suspend fun search(query: String, limit: Int): List<FoodCandidate> {
         if (query.isBlank() || limit <= 0) return emptyList()
+        val byWords = searchByWords(query, limit)
+        if (byWords.isNotEmpty() || semantic == null) return byWords
+        return semantic.search(query, limit)
+    }
 
+    private suspend fun searchByWords(query: String, limit: Int): List<FoodCandidate> {
         val own = ownMatches(query, limit)
         if (own.size >= limit) return own.take(limit)
 
         return onDb { db ->
-            val generic = db.searchGeneric(query, limit - own.size).map {
-                FoodCandidate(
-                    ref = FoodRef.Generic(it.id),
-                    displayName = it.nameRu,
-                    nutriments = it.nutriments,
-                    servingG = it.defaultPortionG,
-                    exactMatch = it.exactMatch,
-                )
-            }
+            val generic = db.searchGeneric(query, limit - own.size).map { it.toCandidate() }
             val taken = own.size + generic.size
             if (taken >= limit) {
                 (own + generic).take(limit)
@@ -202,6 +218,15 @@ class FoodRepository(
         else -> emptyMap()
     }
 }
+
+private fun GenericRow.toCandidate(): FoodCandidate =
+    FoodCandidate(
+        ref = FoodRef.Generic(id),
+        displayName = nameRu,
+        nutriments = nutriments,
+        servingG = defaultPortionG,
+        exactMatch = exactMatch,
+    )
 
 private fun ProductRow.toCandidate(): FoodCandidate =
     FoodCandidate(

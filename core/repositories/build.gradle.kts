@@ -15,5 +15,8 @@ kotlin {
             api(project(":core:personal"))
             api(libs.kotlinx.coroutines.core)
         }
+        commonTest.dependencies {
+            implementation(libs.kotlinx.coroutines.test)
+        }
     }
 }

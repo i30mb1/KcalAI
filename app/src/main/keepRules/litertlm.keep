@@ -1,0 +1,27 @@
+# Поиск по смыслу (:core:semantic) — EmbeddingGemma через LiteRT-LM.
+#
+# Правил R8 библиотека с собой не приносит, а её нативный код (liblitertlm_jni.so)
+# находит классы по имени: на каждом computeEmbedding он разбирает входы через
+# FindClass("…/InputData$Text") и getText(), а ответ собирает конструктором
+# EmbeddingResponse(float[]). Переименуй R8 любой из них — процесс падает с SIGABRT
+# на первом же запросе, который обычный поиск не нашёл. Debug собирается без R8,
+# поэтому при разработке этого не видно.
+#
+# Держим только путь отпечатков. BenchmarkInfo и колбэки генерации нужны чату с
+# моделью, которого в приложении нет. Image и Audio нам не нужны, но нативный код
+# проверяет тип входа по всем трём классам, и без них FindClass падает так же.
+-keep class com.google.ai.edge.litertlm.InputData$Text {
+    java.lang.String getText();
+}
+-keep class com.google.ai.edge.litertlm.InputData$Image {
+    byte[] getBytes();
+}
+-keep class com.google.ai.edge.litertlm.InputData$Audio {
+    byte[] getBytes();
+}
+-keep class com.google.ai.edge.litertlm.EmbeddingResponse {
+    <init>(float[]);
+}
+-keep class com.google.ai.edge.litertlm.LiteRtLmJniException {
+    <init>(java.lang.String);
+}

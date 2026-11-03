@@ -54,5 +54,13 @@ internal class FoodDbQueries(hasFullDb: Boolean) {
 
         const val PORTION_UNITS: String =
             "SELECT unit, grams FROM portion_unit WHERE generic_id = ?"
+
+        const val HAS_EMBEDDINGS: String =
+            "SELECT 1 FROM main.sqlite_master WHERE type = 'table' AND name = 'generic_embedding'"
+
+        const val EMBEDDINGS: String = "SELECT generic_id, vec FROM main.generic_embedding"
+
+        fun genericsByIds(count: Int): String =
+            "SELECT $GENERIC_COLUMNS FROM generic g WHERE g.id IN (${List(count) { "?" }.joinToString(",")})"
     }
 }

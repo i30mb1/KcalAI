@@ -77,6 +77,30 @@ class FoodDb internal constructor(
             buildMap { while (stmt.step()) put(stmt.getText(0), stmt.getInt(1)) }
         }
 
+    /**
+     * Отпечатки продуктов для поиска по смыслу, по id генерика.
+     *
+     * Пусто, если таблицы нет: докачанный с сервера справочник старой сборки её не знает,
+     * и тогда работает только обычный поиск.
+     */
+    fun genericEmbeddings(): Map<Long, FloatArray> {
+        val present = connection.prepare(FoodDbQueries.HAS_EMBEDDINGS).use { it.step() }
+        if (!present) return emptyMap()
+        return connection.prepare(FoodDbQueries.EMBEDDINGS).use { stmt ->
+            buildMap { while (stmt.step()) put(stmt.getLong(0), decodeEmbedding(stmt.getBlob(1))) }
+        }
+    }
+
+    /** Генерики по id в том же порядке; пропавшие после обновления справочника пропускаются. */
+    fun genericsByIds(ids: List<Long>): List<GenericRow> {
+        if (ids.isEmpty()) return emptyList()
+        val found = connection.prepare(FoodDbQueries.genericsByIds(ids.size)).use { stmt ->
+            ids.forEachIndexed { i, id -> stmt.bindLong(i + 1, id) }
+            buildList { while (stmt.step()) add(stmt.readGeneric(exactMatch = false)) }
+        }.associateBy { it.id }
+        return ids.mapNotNull(found::get)
+    }
+
     override fun close() {
         connection.close()
     }

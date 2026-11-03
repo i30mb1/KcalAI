@@ -54,6 +54,12 @@ mlkitGenaiPrompt = "1.0.0-beta5"
 mlkitGenaiSchema = "1.0.0-alpha2"
 # Инструменты агента — AppFunctions платформы (Android 16+), схема из KDoc на сборке.
 appfunctions = "1.0.0-beta01"
+# Поиск по смыслу: отпечаток запроса считает EmbeddingGemma через LiteRT-LM (до 1.0,
+# API меняется). Та же версия litertlm-jvm в tools/embeddb — отпечатки справочника
+# и запроса обязаны считаться одним движком.
+litertlm = "0.19.0"
+# Модель поиска по смыслу (165 МБ) приезжает fast-follow паком сразу после установки.
+playAssetDelivery = "2.3.0"
 junitVersion = "1.1.5"
 # Раннер отдельной зависимостью: androidx.test.ext:junit его за собой не тянет,
 # а без него инструментальный запуск падает на ClassNotFoundException.
@@ -63,6 +69,8 @@ espressoCore = "3.5.1"
 uiautomator = "2.3.0"
 
 [libraries]
+litertlm-android = { group = "com.google.ai.edge.litertlm", name = "litertlm-android", version.ref = "litertlm" }
+play-asset-delivery-ktx = { group = "com.google.android.play", name = "asset-delivery-ktx", version.ref = "playAssetDelivery" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 androidx-graphics-shapes = { group = "androidx.graphics", name = "graphics-shapes", version.ref = "graphicsShapes" }
@@ -131,6 +139,8 @@ androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomato
 android-application = { id = "com.android.application", version.ref = "agp" }
 # Отдельный модуль тестов против собранного приложения — :smoke.
 android-test = { id = "com.android.test", version.ref = "agp" }
+# Пак Play Asset Delivery: модель поиска по смыслу — :assets:embedding.
+android-asset-pack = { id = "com.android.asset-pack", version.ref = "agp" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 # Выгрузка схемы базы в schemas/: по ней строятся и проверяются миграции.
 room = { id = "androidx.room", version.ref = "room" }

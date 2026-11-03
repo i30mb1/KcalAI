@@ -94,6 +94,9 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Модель поиска по смыслу: в AAB отдельным fast-follow паком, в APK её нет.
+    assetPacks += ":assets:embedding"
 }
 
 dependencies {
@@ -102,6 +105,8 @@ dependencies {
     implementation(project(":core:database"))
     implementation(project(":core:repositories"))
     implementation(project(":core:resolver"))
+    // Поиск по смыслу, когда поиск по словам не нашёл ничего: «барщ», «кофеёк с молочком».
+    implementation(project(":core:semantic"))
     // Gemini Nano на телефоне: разбор фраз, вопросы к дневнику, второе мнение по этикетке.
     implementation(project(":core:assistant"))
     implementation(libs.androidx.appfunctions)

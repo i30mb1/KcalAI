@@ -38,6 +38,7 @@ import n7.kcalai.repositories.FoodDbSource
 import n7.kcalai.repositories.FoodRepository
 import n7.kcalai.repositories.RemoteProductSource
 import n7.kcalai.resolver.TextFoodResolver
+import n7.kcalai.semantic.LiteRtQueryEmbedder
 
 /**
  * Ручная сборка зависимостей.
@@ -107,6 +108,7 @@ class AppContainer(context: Context) {
             contributionDao = database.contributionDao(),
             remote = remoteProductSource,
             dispatcher = foodDbDispatcher,
+            embedder = LiteRtQueryEmbedder(appContext),
         )
     }
 

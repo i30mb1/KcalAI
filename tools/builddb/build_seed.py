@@ -5,6 +5,7 @@
 Запуск:
     python3 build_seed.py                  # -> out/seed.db + проверка инвариантов
     python3 build_seed.py --install        # то же + копия в app/src/main/assets/
+    python3 build_seed.py --no-embed       # без отпечатков для поиска по смыслу: быстро, но не для --install
 """
 
 from __future__ import annotations
@@ -12,8 +13,10 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import os
 import shutil
 import sqlite3
+import subprocess
 import sys
 from datetime import date
 from pathlib import Path
@@ -265,12 +268,55 @@ def verify_seed(db_path: Path) -> list[str]:
     return problems
 
 
+EMBEDDB = HERE.parent / "embeddb"
+
+
+def embed(db_path: Path) -> None:
+    """Отпечатки продуктов для поиска по смыслу: tools/embeddb пишет их в generic_embedding.
+
+    Модель и движок живут в Kotlin-утилите, а не здесь: этот скрипт обходится стандартной
+    библиотекой, а считать отпечатки обязана та же LiteRT-LM, что и на телефоне.
+    """
+    gradlew = EMBEDDB / ("gradlew.bat" if os.name == "nt" else "gradlew")
+    subprocess.run([str(gradlew), "-q", "run", f"--args={db_path.resolve()}"], cwd=EMBEDDB, check=True)
+
+
+def verify_embeddings(db_path: Path) -> list[str]:
+    """У каждого продукта есть отпечаток одной и той же длины."""
+    conn = sqlite3.connect(db_path)
+    try:
+        dim = conn.execute("SELECT value FROM meta WHERE key = 'embedding_dim'").fetchone()
+        if dim is None:
+            return ["generic_embedding: нет отпечатков — поиск по смыслу будет выключен"]
+        missing = conn.execute(
+            "SELECT count(*) FROM generic g "
+            "WHERE NOT EXISTS (SELECT 1 FROM generic_embedding e WHERE e.generic_id = g.id)"
+        ).fetchone()[0]
+        bad = conn.execute(
+            "SELECT count(*) FROM generic_embedding WHERE length(vec) != ?", (int(dim[0]) * 4,)
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    problems = []
+    if missing:
+        problems.append(f"generic_embedding: у {missing} продуктов нет отпечатка")
+    if bad:
+        problems.append(f"generic_embedding: {bad} отпечатков не по {dim[0]} чисел")
+    return problems
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Сборка seed.db")
     parser.add_argument(
         "--install", action="store_true", help="скопировать результат в app/src/main/assets/"
     )
+    parser.add_argument(
+        "--no-embed", action="store_true", help="не считать отпечатки (быстрая проверка данных)"
+    )
     args = parser.parse_args()
+    if args.install and args.no_embed:
+        print("ПРОВАЛ: --install без отпечатков выключил бы поиск по смыслу у всех")
+        return 1
 
     out = HERE / "out" / "seed.db"
     build_seed(out, HERE / "data")
@@ -280,6 +326,14 @@ def main() -> int:
         for problem in found:
             print(f"ПРОВАЛ: {problem}")
         return 1
+
+    if not args.no_embed:
+        embed(out)
+        found = verify_embeddings(out)
+        if found:
+            for problem in found:
+                print(f"ПРОВАЛ: {problem}")
+            return 1
 
     conn = sqlite3.connect(out)
     generics = conn.execute("SELECT count(*) FROM generic").fetchone()[0]

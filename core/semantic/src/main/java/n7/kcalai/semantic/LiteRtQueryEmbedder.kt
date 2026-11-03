@@ -1,0 +1,70 @@
+package n7.kcalai.semantic
+
+import android.content.Context
+import android.util.Log
+import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.EmbeddingEngine
+import com.google.ai.edge.litertlm.EmbeddingEngineConfig
+import com.google.ai.edge.litertlm.EmbeddingOptions
+import com.google.ai.edge.litertlm.InputData
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import n7.kcalai.repositories.QueryEmbedder
+
+/**
+ * Отпечаток запроса — EmbeddingGemma 2 270M через LiteRT-LM, на процессоре.
+ *
+ * Видеокарта здесь не нужна: один отпечаток — десятки миллисекунд, а её запуск
+ * дороже самого расчёта. Движок поднимается при первом запросе, который обычный
+ * поиск не осилил, и живёт до конца процесса.
+ */
+class LiteRtQueryEmbedder(context: Context) : QueryEmbedder {
+
+    private val model = EmbeddingModel(context.applicationContext)
+    private val cacheDir = context.cacheDir.path
+
+    /** Движок не потокобезопасен: все обращения — по одному. */
+    private val dispatcher = Dispatchers.IO.limitedParallelism(1)
+    private var engine: EmbeddingEngine? = null
+    private var broken = false
+
+    override suspend fun embed(text: String): FloatArray? = withContext(dispatcher) {
+        val engine = engine ?: open() ?: return@withContext null
+        try {
+            engine.computeEmbedding(listOf(InputData.Text(QUERY_PREFIX + text)), OPTIONS).embedding
+        } catch (error: Exception) {
+            Log.w(TAG, "отпечаток запроса не посчитан", error)
+            null
+        }
+    }
+
+    private fun open(): EmbeddingEngine? {
+        if (broken) return null
+        // Модели может не быть ещё: пак докачается — следующий запрос её найдёт.
+        val file = model.locate() ?: return null
+        return try {
+            EmbeddingEngine(EmbeddingEngineConfig(modelPath = file.path, backend = Backend.CPU(), cacheDir = cacheDir))
+                .also { it.initialize() }
+                .also { engine = it }
+        } catch (error: Throwable) {
+            // UnsatisfiedLinkError — это Error, а не Exception: ловим всё. Сломанный
+            // движок повторно не открываем — поиск по словам работает и без него.
+            Log.w(TAG, "движок поиска по смыслу не поднялся", error)
+            broken = true
+            null
+        }
+    }
+
+    private companion object {
+        const val TAG = "LiteRtQueryEmbedder"
+
+        /**
+         * Разметка запроса для EmbeddingGemma. Продукты в tools/embeddb размечены как
+         * документы («title: none | text: …») — разная разметка и есть то, что учит
+         * модель отличать вопрос от ответа.
+         */
+        const val QUERY_PREFIX = "task: search result | query: "
+
+        val OPTIONS = EmbeddingOptions(normalize = true)
+    }
+}
