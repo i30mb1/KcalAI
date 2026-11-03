@@ -8,6 +8,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.time.Clock
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
+import kotlinx.datetime.todayIn
+import n7.kcalai.assistant.DiaryTools
+import n7.kcalai.assistant.FoodAssistant
+import n7.kcalai.assistant.NanoAssistant
+import n7.kcalai.assistant.NanoLabelReader
+import n7.kcalai.feature.scanner.LabelVision
 import n7.kcalai.database.KcalDatabase
 import n7.kcalai.database.buildKcalDatabase
 import n7.kcalai.fooddb.FoodDb
@@ -120,6 +130,32 @@ class AppContainer(context: Context) {
 
     val textResolver: TextFoodResolver by lazy {
         TextFoodResolver(foodRepository, personalRepository)
+    }
+
+    /** Живёт дольше экрана: докачка модели не должна обрываться вместе с ним. */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * Инструменты нейросети: поиск по той же базе, что у строки ввода, и итоги
+     * дневника. Один экземпляр на приложение — его зовёт служба AppFunctions, а
+     * предложения проверяет экран, и помнить, что поиск показывал, они должны общее.
+     */
+    val diaryTools: DiaryTools by lazy {
+        DiaryTools(
+            search = { query, limit -> foodRepository.search(query, limit) },
+            day = { epochDay -> diaryRepository.observeDay(epochDay).first().entries },
+            goal = { epochDay -> diaryRepository.goalFor(epochDay) },
+            today = { Clock.System.todayIn(TimeZone.currentSystemDefault()).toEpochDays() },
+        )
+    }
+
+    /** Gemini Nano: есть не на каждом телефоне, и экран спрашивает об этом сам. */
+    val assistant: FoodAssistant by lazy { NanoAssistant(appContext, diaryTools, appScope) }
+
+    /** Gemini Nano по этикетке — когда камера с распознаванием застряли. */
+    val labelVision: LabelVision by lazy {
+        val reader = NanoLabelReader()
+        LabelVision { label -> reader.read(label) }
     }
 
     /**

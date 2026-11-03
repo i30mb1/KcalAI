@@ -103,9 +103,32 @@ sealed interface FeedItem {
         override val key get() = "empty-day"
     }
 
-    /** Набранное не находится. Ответ репликой, а не строкой в композере. */
-    data class NotFound(val query: String) : FeedItem {
+    /**
+     * Набранное не находится. Ответ репликой, а не строкой в композере.
+     *
+     * @param assist что здесь может нейросеть: см. [Assist]
+     */
+    data class NotFound(val query: String, val assist: Assist = Assist.NONE) : FeedItem {
         override val key get() = "not-found"
+    }
+
+    /**
+     * Вопрос человека к дневнику — исходящий пузырёк, как приём пищи.
+     *
+     * Живёт до конца сессии экрана, как [Reply]: вопрос и ответ — разговор,
+     * а не запись дневника.
+     */
+    data class Question(val id: Int, val text: String, val time: String) : FeedItem {
+        override val key get() = "question-$id"
+    }
+
+    /**
+     * Ответ нейросети на [Question]. Растёт по мере того, как модель его пишет.
+     *
+     * @param done модель закончила: пока нет, вместо пустого текста — многоточие
+     */
+    data class Answer(val id: Int, val text: String, val time: String, val done: Boolean) : FeedItem {
+        override val key get() = "answer-$id"
     }
 
     /**
@@ -229,6 +252,21 @@ fun daySummary(goalKcal: Int?, week: List<DaySummary>, outline: DayOutline?, hou
     )
 }
 
+/** Что может нейросеть с фразой, которую не нашёл поиск. */
+enum class Assist {
+    /** Нейросети на телефоне нет — реплика как была. */
+    NONE,
+
+    /** Есть: в реплике кнопка «разобрать». */
+    OFFER,
+
+    /** Разбирает прямо сейчас. */
+    THINKING,
+
+    /** Разбирала и тоже не поняла — второй раз не предлагается. */
+    FAILED,
+}
+
 /**
  * Кто из троих говорит реплику. `null` — реплика не приложения, а человека.
  *
@@ -237,7 +275,7 @@ fun daySummary(goalKcal: Int?, week: List<DaySummary>, outline: DayOutline?, hou
  * и их ведёт Яйцо: у ленты должен быть один голос по умолчанию, а не жребий.
  */
 fun speakerOf(item: FeedItem): Mascot? = when (item) {
-    is FeedItem.DaySeparator, is FeedItem.Meal -> null
+    is FeedItem.DaySeparator, is FeedItem.Meal, is FeedItem.Question -> null
     is FeedItem.Said -> item.mascot
     is FeedItem.Ask -> when (item.kind) {
         AskKind.NAME -> Mascot.EGG
@@ -251,6 +289,7 @@ fun speakerOf(item: FeedItem): Mascot? = when (item) {
     is FeedItem.NotFound,
     is FeedItem.WeightLogged,
     is FeedItem.Reply,
+    is FeedItem.Answer,
     is FeedItem.Deleted,
     is FeedItem.Outbox -> Mascot.EGG
 }

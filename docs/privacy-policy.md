@@ -34,7 +34,7 @@
 ## Что уходит в интернет
 
 - **Open Food Facts.** Если штрих-кода нет в справочнике на телефоне, приложение запрашивает его в открытой базе Open Food Facts (world.openfoodfacts.org). Отправляется только номер штрих-кода. Как любой веб-сервер, Open Food Facts видит IP-адрес запроса; его политика — https://world.openfoodfacts.org/privacy.
-- **Google ML Kit.** Сканер штрих-кодов построен на ML Kit от Google. Распознавание идёт на телефоне, но ML Kit отправляет в Google технические сведения: модель устройства и версию Android, версию приложения, идентификатор установки (не привязан к человеку), время работы и коды ошибок. Google использует их для диагностики и не передаёт третьим лицам. Подробнее: https://developers.google.com/ml-kit/android-data-disclosure.
+- **Google ML Kit.** Сканер штрих-кодов построен на ML Kit от Google, как и нейросеть Gemini Nano, которая на поддерживающих её телефонах разбирает непонятые фразы, отвечает на вопросы о дневнике и помогает прочитать этикетку. Распознавание и нейросеть работают на телефоне: ваши фразы, вопросы, дневник и кадры с камеры в интернет не уходят. Но ML Kit отправляет в Google технические сведения: модель устройства и версию Android, версию приложения, идентификатор установки (не привязан к человеку), время работы и коды ошибок. Google использует их для диагностики и не передаёт третьим лицам. Подробнее: https://developers.google.com/ml-kit/android-data-disclosure.
 
 Больше приложение ничего не отправляет. Аналитики, рекламы и трекеров нет.
 
@@ -64,7 +64,7 @@ There is no sign-up. Your food diary, goals, body weight and custom foods are st
 
 **Network:**
 - *Open Food Facts.* When a barcode is not in the on-device database, only the barcode number is sent to Open Food Facts (world.openfoodfacts.org), which, like any web server, sees the request's IP address.
-- *Google ML Kit.* The barcode scanner uses Google ML Kit. Scanning runs on the device, but ML Kit sends Google device and app information, a per-installation identifier not tied to a person, performance metrics and error codes for diagnostics and analytics. This data is not shared with third parties. See https://developers.google.com/ml-kit/android-data-disclosure.
+- *Google ML Kit.* The barcode scanner uses Google ML Kit, and so does Gemini Nano, the on-device model that, on phones that support it, parses phrases the search did not understand, answers questions about the diary and helps read nutrition labels. Scanning and the model run on the device: your phrases, questions, diary and camera frames do not leave it. But ML Kit sends Google device and app information, a per-installation identifier not tied to a person, performance metrics and error codes for diagnostics and analytics. This data is not shared with third parties. See https://developers.google.com/ml-kit/android-data-disclosure.
 
 Nothing else leaves the device. No analytics, ads or trackers.
 

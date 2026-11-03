@@ -60,6 +60,16 @@ class BubbleLayoutTest {
     }
 
     @Test
+    fun `вопрос к дневнику стоит на стороне человека, ответ на него — на стороне приложения`() {
+        val question = FeedItem.Question(id = 1, text = "сколько белка?", time = "09:00")
+        val answer = FeedItem.Answer(id = 2, text = "62 г", time = "09:00", done = true)
+
+        assertEquals(SAME_SIDE_GAP, gapBefore(meal(), question))
+        assertEquals(SIDE_CHANGE_GAP, gapBefore(question, answer))
+        assertEquals(SIDE_CHANGE_GAP, gapBefore(answer, question))
+    }
+
+    @Test
     fun `над первым элементом зазора нет, после разделителя дня — как при смене стороны`() {
         val separator = FeedItem.DaySeparator("сегодня")
 

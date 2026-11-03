@@ -13,6 +13,8 @@ kotlin {
             api(project(":core:personal"))
             api(project(":core:repositories"))
             api(project(":core:resolver"))
+            // Нейросеть на телефоне: разбор фразы, которую не нашёл поиск, и вопросы к дневнику.
+            api(project(":core:assistant"))
             // Мозг персонажей: их сообщения стоят в ленте, а вопросы и облачка — его ответы.
             api(project(":core:mascot"))
             api(project(":core:ui"))

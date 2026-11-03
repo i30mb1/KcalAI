@@ -88,6 +88,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         onPickPlan = { option -> option.items.forEach { viewModel.onPickPrediction(it) } },
         onDismissGap = viewModel::onDismissMealGap,
         onSendOutbox = viewModel::onSendOutbox,
+        onAskAssistant = viewModel::onAskAssistant,
         onEditEntry = viewModel::onEditEntry,
         onUndoDelete = viewModel::onUndoDelete,
         onLogWeight = viewModel::onLogWeight,
@@ -172,6 +173,8 @@ fun DiaryScreen(
     onPickPlan: (PlanOption) -> Unit,
     onDismissGap: (MealType) -> Unit,
     onSendOutbox: () -> Unit,
+    /** «Разобрать» в реплике «не нашлось»: фразу разбирает нейросеть. */
+    onAskAssistant: (String) -> Unit,
     onEditEntry: (DiaryEntryEntity) -> Unit,
     onUndoDelete: (FeedItem.Deleted) -> Unit,
     onLogWeight: () -> Unit,
@@ -310,6 +313,7 @@ fun DiaryScreen(
             onPickForMeal = onPickForMeal,
             onDismissGap = onDismissGap,
             onSendOutbox = onSendOutbox,
+            onAskAssistant = onAskAssistant,
             onPickPlan = onPickPlan,
             onOpenGoal = onOpenGoal,
             onAnswerAsk = onAnswerAsk,
@@ -380,6 +384,8 @@ private fun Feed(
     onPickForMeal: (FoodCandidate, MealType) -> Unit,
     onDismissGap: (MealType) -> Unit,
     onSendOutbox: () -> Unit,
+    /** «Разобрать» в реплике «не нашлось»: фразу разбирает нейросеть. */
+    onAskAssistant: (String) -> Unit,
     onPickPlan: (PlanOption) -> Unit,
     onOpenGoal: (GoalField) -> Unit,
     onAnswerAsk: (AskKind, Boolean) -> Unit,
@@ -486,7 +492,7 @@ private fun Feed(
             // ответ — слева снизу, как в любом мессенджере.
             val origin = when (item) {
                 is FeedItem.DaySeparator -> TransformOrigin.Center
-                is FeedItem.Meal -> TransformOrigin(1f, 1f)
+                is FeedItem.Meal, is FeedItem.Question -> TransformOrigin(1f, 1f)
                 else -> TransformOrigin(0f, 1f)
             }
             // Зазор сверху — по соседу: реплики одной стороны подряд стоят тесно,
@@ -516,10 +522,12 @@ private fun Feed(
 
                     is FeedItem.Over -> OverBubble(item)
 
-                    is FeedItem.NotFound -> NotFoundBubble(item)
+                    is FeedItem.NotFound -> NotFoundBubble(item, onAsk = { onAskAssistant(item.query) })
 
                     is FeedItem.WeightLogged -> WeightBubble(item)
                     is FeedItem.Reply -> ReplyBubble(item)
+                    is FeedItem.Question -> QuestionBubble(item)
+                    is FeedItem.Answer -> AnswerBubble(item)
                     is FeedItem.Deleted -> DeletedBubble(item, onUndo = { onUndoDelete(item) })
                     is FeedItem.Outbox -> OutboxBubble(item, onSendOutbox)
                     is FeedItem.Said -> SaidBubble(item)

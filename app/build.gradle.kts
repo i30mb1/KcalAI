@@ -3,6 +3,8 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
+    // Схема AppFunctions — инструментов нейросети — генерируется из KDoc на сборке.
+    alias(libs.plugins.ksp)
 }
 
 // Адрес локального сервера — в local.properties (не в git): kcal.server=http://192.168.1.10:8080
@@ -100,6 +102,10 @@ dependencies {
     implementation(project(":core:database"))
     implementation(project(":core:repositories"))
     implementation(project(":core:resolver"))
+    // Gemini Nano на телефоне: разбор фраз, вопросы к дневнику, второе мнение по этикетке.
+    implementation(project(":core:assistant"))
+    implementation(libs.androidx.appfunctions)
+    ksp(libs.androidx.appfunctions.compiler)
     implementation(project(":core:remote"))
     implementation(project(":core:ui"))
     implementation(project(":feature:diary"))

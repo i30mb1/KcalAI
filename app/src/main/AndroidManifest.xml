@@ -56,6 +56,27 @@
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             tools:node="remove" />
 
+        <!--
+            Инструменты нейросети на телефоне (AppFunctions, Android 16+). Экспортирована,
+            потому что её вызывает система от имени агента, но каждая функция открыта
+            только своему приложению (ACCESS_LEVEL_SELF), а привязаться к службе может
+            лишь держатель системного разрешения BIND_APP_FUNCTION_SERVICE.
+        -->
+        <service
+            android:name=".assistant.KcalAppFunctionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE">
+            <property
+                android:name="android.app.appfunctions.schema"
+                android:value="app_functions_schema.xsd" />
+            <property
+                android:name="android.app.appfunctions.v2"
+                android:value="kcal_app_functions.xml" />
+            <intent-filter>
+                <action android:name="android.app.appfunctions.AppFunctionService" />
+            </intent-filter>
+        </service>
+
         <!-- «Записать: гречка» в уведомлении персонажа. Только для своих PendingIntent. -->
         <receiver
             android:name=".notify.LogSuggestionReceiver"

@@ -1,6 +1,7 @@
 package n7.kcalai.feature.scanner
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.os.Process
 import android.util.Size
 import androidx.camera.core.ImageAnalysis
@@ -10,6 +11,7 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -34,6 +36,7 @@ import n7.kcalai.ocr.LabelOcr
  * @param onFrame разобранный кадр этикетки — на главном потоке
  * @param outcome чем кончилась съёмка — для записи на диск при закрытии.
  *        `null` — карточки не было, и записывать нечего.
+ * @param latest куда класть последний резкий кадр этикетки — для нейросети
  */
 internal fun scanAnalysis(
     context: Context,
@@ -41,6 +44,7 @@ internal fun scanAnalysis(
     onBarcode: (String) -> Unit,
     onFrame: (LabelFrame) -> Unit,
     outcome: () -> String?,
+    latest: AtomicReference<Bitmap?>? = null,
 ): FrameAnalysis {
     val executor = Executors.newSingleThreadExecutor(unhurried("label-frame"))
     val inference = Executors.newSingleThreadExecutor(unhurried("label-ocr"))
@@ -61,6 +65,7 @@ internal fun scanAnalysis(
         reading = reading,
         onBarcode = { code -> main.execute { onBarcode(code) } },
         onFrame = { read -> main.execute { onFrame(read) } },
+        latest = latest,
     )
 
     val useCase = ImageAnalysis.Builder()

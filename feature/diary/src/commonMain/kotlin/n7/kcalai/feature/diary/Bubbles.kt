@@ -521,9 +521,74 @@ fun EmptyDayBubble(item: FeedItem.EmptyDay) {
  * превращается в ответ собеседника и называет все три выхода.
  */
 @Composable
-fun NotFoundBubble(item: FeedItem.NotFound) {
+fun NotFoundBubble(item: FeedItem.NotFound, onAsk: () -> Unit) {
+    val colors = KcalTheme.colors
+
     IncomingBubble(item) {
-        BubbleText(notFoundText(item.query))
+        BubbleText(notFoundText(item.query, item.assist))
+        // Нейросеть — четвёртый выход, и только по просьбе: разбор идёт секунды
+        // и греет телефон, а запускать его на каждую паузу в наборе незачем.
+        if (item.assist == Assist.OFFER || item.assist == Assist.THINKING) {
+            val thinking = item.assist == Assist.THINKING
+            KcalChip(
+                onClick = if (thinking) null else onAsk,
+                background = if (thinking) colors.chip else colors.bubble,
+                modifier = Modifier.padding(top = 8.dp),
+            ) {
+                Text(
+                    if (thinking) "Разбираю…" else "Разобрать нейросетью",
+                    style = KcalTheme.type.chip,
+                    color = if (thinking) colors.text3 else colors.onBubble,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Вопрос к дневнику — справа и тёмным, как всё, что пишет человек.
+ *
+ * Свой пузырёк, а не [MealBubble]: у вопроса нет ни приёма, ни калорий,
+ * а форма и сторона те же — это реплика того же собеседника.
+ */
+@Composable
+fun QuestionBubble(item: FeedItem.Question) {
+    val colors = KcalTheme.colors
+
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(BUBBLE_WIDTH)
+                .wrapContentWidth(Alignment.End)
+                .speechObstacle("question:${item.key}")
+                .clip(
+                    RoundedCornerShape(
+                        topStart = KcalShapes.bubble,
+                        topEnd = KcalShapes.bubble,
+                        bottomEnd = KcalShapes.bubbleTail,
+                        bottomStart = KcalShapes.bubble,
+                    )
+                )
+                .background(colors.bubble)
+                .padding(horizontal = BUBBLE_PADDING_H, vertical = BUBBLE_PADDING_V),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text(item.text, style = KcalTheme.type.body, color = colors.onBubble, modifier = Modifier.weight(1f, fill = false))
+            Spacer(Modifier.width(TIME_GAP))
+            Text(item.time, style = KcalTheme.type.time, color = colors.onBubble2)
+        }
+    }
+}
+
+/** Ответ нейросети. Пока модель не написала ни слова — многоточие, а не пустой пузырёк. */
+@Composable
+fun AnswerBubble(item: FeedItem.Answer) {
+    IncomingBubble(item) {
+        when {
+            item.text.isEmpty() -> BubbleText("…")
+            item.done -> BubbleText(item.text, time = item.time)
+            else -> BubbleText(item.text)
+        }
     }
 }
 

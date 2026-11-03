@@ -7,6 +7,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.Test
 import n7.kcalai.model.Mascot
+import n7.kcalai.model.ProductDraft
 import n7.kcalai.repositories.LabelReading
 
 /**
@@ -444,6 +445,92 @@ class ScanStateTest {
             "Распознавание недоступно — впишите числа с пачки",
             panelHint(camera = true, answered = true, ocr = false, manual = true, numbersMissing = true, nameMissing = true),
         )
+    }
+
+    // --- Нейросеть: второе мнение по этикетке ---------------------------------------------
+
+    /** Творог 5%: 121 ккал, Б 16, Ж 5, У 3 — сходится по Этуотеру (64 + 45 + 12 = 121). */
+    private val curd = ProductDraft(name = "Творог 5%", kcal100 = 121, prot100 = 1_600, fat100 = 500, carb100 = 300)
+
+    @Test
+    fun `камера восемь секунд без нового числа — зовут нейросеть, и только раз`() {
+        var now = 0L
+        val state = ScanState(GTIN) { now }
+        state.onFrame(read())
+
+        now = 7_999
+        state.tick()
+        assertFalse(state.visionDue)
+
+        now = 8_000
+        state.tick()
+        assertTrue(state.visionDue)
+
+        state.onVision(null)
+        assertFalse(state.visionDue)
+        now = 30_000
+        state.tick()
+        assertFalse(state.visionDue)
+    }
+
+    @Test
+    fun `камера дочитала всё — нейросеть не нужна`() {
+        var now = 0L
+        val state = ScanState(GTIN) { now }
+        state.onFrame(read(kcal = 121, prot = 1_600, fat = 500, carb = 300))
+
+        now = 9_000
+        state.tick()
+
+        assertFalse(state.visionDue)
+    }
+
+    @Test
+    fun `без камеры нейросеть не зовут — смотреть ей не на что`() {
+        var now = 0L
+        val state = ScanState(GTIN) { now }
+        state.withoutCamera()
+
+        now = 9_000
+        state.tick()
+
+        assertFalse(state.visionDue)
+    }
+
+    @Test
+    fun `нейросеть дописывает только пустые поля — прочитанное камерой и вписанное руками не трогает`() {
+        val state = ScanState(GTIN)
+        state.onFrame(read(prot = 1_240))
+        state.fat.type("4")
+
+        state.onVision(curd)
+
+        assertEquals("12,4", state.prot.text)
+        assertEquals("4", state.fat.text)
+        assertEquals("121", state.kcal.text)
+        assertEquals("3", state.carb.text)
+        assertEquals("Творог 5%", state.name.text)
+        // Камерой, а не руками: человек проверяет и при нужде снимает крестиком.
+        assertFalse(state.kcal.manual)
+    }
+
+    @Test
+    fun `цифры нейросети, не сходящиеся по Этуотеру, в поля не встают`() {
+        val state = ScanState(GTIN)
+
+        state.onVision(curd.copy(kcal100 = 480))
+
+        assertEquals(0, state.filledFields)
+    }
+
+    @Test
+    fun `неполный ответ нейросети не встаёт — проверить его нечем`() {
+        val state = ScanState(GTIN)
+
+        state.onVision(curd.copy(carb100 = null))
+
+        assertEquals("", state.kcal.text)
+        assertEquals("", state.prot.text)
     }
 
     private companion object {

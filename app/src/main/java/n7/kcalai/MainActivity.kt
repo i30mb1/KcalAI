@@ -19,6 +19,8 @@ import kotlin.time.ExperimentalTime
 import kotlinx.coroutines.launch
 import n7.kcalai.feature.diary.DiaryRoute
 import n7.kcalai.feature.diary.DiaryViewModel
+import n7.kcalai.feature.scanner.LocalLabelVision
+import androidx.compose.runtime.CompositionLocalProvider
 import n7.kcalai.notify.MascotNotifier
 import n7.kcalai.shake.phoneShakes
 import n7.kcalai.ui.KcalTheme
@@ -51,6 +53,7 @@ class MainActivity : ComponentActivity() {
                     onScanFinished = { ScanUploadWorker.enqueue(applicationContext) },
                     // Пузырёк «не отправлено» — только когда есть куда отправлять.
                     outbox = if (container.serverConfigured) Outbox(applicationContext, container) else null,
+                    assistant = container.assistant,
                 )
             }
         }
@@ -80,8 +83,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             KcalTheme {
-                // Отладка разбора этикетки — инструмент разработчика.
-                DiaryRoute(labelDebug = BuildConfig.DEBUG, viewModel = diary)
+                // Нейросеть читает этикетку, когда камера застряла, — если она есть на телефоне.
+                CompositionLocalProvider(LocalLabelVision provides container.labelVision) {
+                    // Отладка разбора этикетки — инструмент разработчика.
+                    DiaryRoute(labelDebug = BuildConfig.DEBUG, viewModel = diary)
+                }
             }
         }
     }

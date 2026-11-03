@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import kotlin.math.roundToInt
 import kotlin.time.TimeSource
 import n7.kcalai.model.Nutriments
+import n7.kcalai.model.ProductDraft
 import n7.kcalai.repositories.BarcodeValidator
 import n7.kcalai.repositories.LabelReading
 import n7.kcalai.repositories.NutrimentValidator
@@ -137,12 +138,60 @@ internal class ScanState(
         if (manual || typing != null) return
         val first = firstMissingNumber() ?: return
         val now = clock()
+        // Смотреть нейросети есть на что, только когда камера отдала хоть кадр.
+        if (!visionAsked && seen > 0 && now - calmSince >= VISION_MS) {
+            visionAsked = true
+            visionDue = true
+        }
         val stalled = now - calmSince >= STALL_MS
         val blurred = blurSince?.let { now - it >= BLUR_MS } ?: false
         if (stalled || blurred) {
             manual = true
             typing = first
         }
+    }
+
+    /**
+     * Пора спросить нейросеть: камера смотрит, а числа не прибавляются.
+     *
+     * Раньше, чем просьба вписать руками, — у той двадцать секунд, у этой восемь:
+     * модель за пару секунд читает этикетку целиком, и если прочтёт, человеку
+     * останется только проверить. Один раз на карточку: второй ответ той же
+     * модели по той же пачке ничего нового не скажет.
+     */
+    var visionDue by mutableStateOf(false)
+        private set
+
+    private var visionAsked = false
+
+    /**
+     * Что нейросеть прочла на этикетке. `null` — не прочла или её нет.
+     *
+     * Её цифры — такое же предложение, как у камеры, и встают только в пустые
+     * поля: прочитанное голосованием кадров и вписанное руками надёжнее. И только
+     * все четыре разом и сходящиеся по Этуотеру — иначе проверить их нечем,
+     * а неправдоподобное число в поле хуже пустого.
+     */
+    fun onVision(draft: ProductDraft?) {
+        visionDue = false
+        visionAsked = true
+        draft ?: return
+
+        val kcal = draft.kcal100 ?: return
+        val numbers = Nutriments(kcal, draft.prot100 ?: return, draft.fat100 ?: return, draft.carb100 ?: return)
+        val check = NutrimentValidator.check(numbers)
+        if (!check.valid || check.warning != null) return
+
+        offerEmpty(this.kcal, kcal.toString())
+        offerEmpty(prot, numbers.prot100.centigramsToField())
+        offerEmpty(fat, numbers.fat100.centigramsToField())
+        offerEmpty(carb, numbers.carb100.centigramsToField())
+        draft.name?.trim()?.takeIf(String::isNotEmpty)?.let { offerEmpty(name, it) }
+        noteProgress()
+    }
+
+    private fun offerEmpty(field: ScanField, value: String?) {
+        if (!field.filled) offer(field, value)
     }
 
     /** Камеры нет или распознавать нечем — просить вписать сразу. */
@@ -420,6 +469,9 @@ internal class ScanState(
 
         /** Сколько терпеть мыло подряд: дольше — камера не наведётся сама. */
         const val BLUR_MS = 6_000L
+
+        /** Сколько ждать нового числа с камеры, прежде чем спросить нейросеть. */
+        const val VISION_MS = 8_000L
     }
 }
 

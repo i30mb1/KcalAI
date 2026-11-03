@@ -61,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.core.content.ContextCompat
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import android.graphics.Bitmap
 import kotlinx.coroutines.delay
 import n7.kcalai.model.Nutriments
 import n7.kcalai.ui.KcalTheme
@@ -116,9 +118,13 @@ actual fun ScannerDialog(
     val card = (step as? ScanStep.NewProduct)?.let { rememberScanState(it.gtin) }
     var typingCode by rememberSaveable { mutableStateOf(false) }
 
+    // Последний резкий кадр этикетки: его читает нейросеть, когда камера застряла.
+    val latest = remember { AtomicReference<Bitmap?>(null) }
+
     if (card != null) {
         CardClock(card)
         ScanHaptics(card)
+        LabelSecondOpinion(card, latest)
         LaunchedEffect(card, answered, granted) {
             if (answered && !granted) card.withoutCamera()
         }
@@ -197,6 +203,7 @@ actual fun ScannerDialog(
                             },
                             onFrame = { frame -> currentCard?.onFrame(frame) },
                             outcome = { currentCard?.let { it.outcome(it.saved) } },
+                            latest = latest,
                         )
                     }
                     Viewfinder(top = window.top, height = window.height, caught = searching)
@@ -372,6 +379,23 @@ private fun CardClock(card: ScanState) {
             delay(TICK_MS)
             card.tick()
         }
+    }
+}
+
+/**
+ * Нейросеть читает этикетку, когда камера восемь секунд не прибавляет чисел.
+ *
+ * Один раз на карточку и только по последнему резкому кадру. Ответ встаёт
+ * в пустые поля, если сходится по Этуотеру, — решает карточка, а не здесь.
+ * Без читателя на телефоне ничего не происходит: карточка ждёт камеру и человека.
+ */
+@Composable
+private fun LabelSecondOpinion(card: ScanState, latest: AtomicReference<Bitmap?>) {
+    val vision = LocalLabelVision.current ?: return
+    val due = card.visionDue
+    LaunchedEffect(card, due) {
+        if (!due) return@LaunchedEffect
+        card.onVision(latest.get()?.let { frame -> vision.read(frame) })
     }
 }
 

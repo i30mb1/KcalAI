@@ -24,6 +24,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
+import n7.kcalai.assistant.FoodAssistant
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.feature.scanner.ScanStep
@@ -196,6 +197,7 @@ class DiaryViewModel(
     private val onScanFinished: () -> Unit = {},
     /** Очередь отправки. `null` — сервера нет, и пузырька про него не будет. */
     private val outbox: DiaryOutbox? = null,
+    private val assistant: FoodAssistant? = null,
     private val clock: Clock = Clock.System,
     /** Зона, в которой считаются день и час: `createdAt` хранится в UTC. */
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
@@ -211,6 +213,9 @@ class DiaryViewModel(
     private val scanned = MutableStateFlow<ResolvedItem?>(null)
     private val overlay = MutableStateFlow<Overlay>(Overlay.None)
     private val personalState = MutableStateFlow(PersonalState())
+
+    /** Что сейчас с нейросетью: есть ли она, что разбирает, что разобрать не смогла. */
+    private val assist = MutableStateFlow(AssistState())
 
     /**
      * Реплики, которые сказало приложение в этой сессии.
@@ -303,7 +308,7 @@ class DiaryViewModel(
     private val shownEntries: List<DiaryEntryEntity>
         get() = data.value?.takeIf { it.date == shownDate }?.day?.entries.orEmpty()
 
-    private val typing = combine(input, answer, scanned, overlay, ::TypingState)
+    private val typing = combine(input, answer, scanned, overlay, assist, ::TypingState)
 
     /** Вложенный combine: у типизированного [combine] потолок в пять потоков, а их больше. */
     private val typingAndReplies = combine(typing, sessionReplies, outboxItem, pickedMeal) { typed, replies, pending, meal ->
@@ -458,11 +463,32 @@ class DiaryViewModel(
         val meal: MealType?,
     )
 
+    /**
+     * Нейросеть в этой сессии экрана.
+     *
+     * @param ready модель на телефоне есть — без неё реплики и строка ввода ведут себя как прежде
+     * @param thinking фраза, которую она разбирает прямо сейчас
+     * @param failed фразы, которые она уже не разобрала: второй раз их не предлагаем
+     */
+    private data class AssistState(
+        val ready: Boolean = false,
+        val thinking: String? = null,
+        val failed: Set<String> = emptySet(),
+    ) {
+        fun about(query: String): Assist = when {
+            !ready -> Assist.NONE
+            thinking == query -> Assist.THINKING
+            query in failed -> Assist.FAILED
+            else -> Assist.OFFER
+        }
+    }
+
     private class TypingState(
         val input: String,
         val answer: Answer?,
         val scanned: ResolvedItem?,
         val overlay: Overlay,
+        val assist: AssistState,
     ) {
         val suggestions: List<ResolvedItem> get() = answer?.items.orEmpty()
 
@@ -498,7 +524,11 @@ class DiaryViewModel(
                     // И по строке без единой буквы: «200» — начало «200 г гречки»,
                     // а не блюдо, и ответ «ничего не нашлось» перебивал бы человека
                     // на полуслове.
-                    if (text.isBlank() || parseWeight(text) != null || text.continuesScan() || text.none(Char::isLetter)) {
+                    // И по вопросу, когда на него есть кому ответить: «сколько я
+                    // съел вчера?» — не блюдо, и «ничего не нашлось» было бы глупостью.
+                    if (text.isBlank() || parseWeight(text) != null || text.continuesScan() ||
+                        text.none(Char::isLetter) || (assist.value.ready && isQuestion(text))
+                    ) {
                         null
                     } else {
                         val items = try {
@@ -515,6 +545,22 @@ class DiaryViewModel(
                     }
                 }
                 .collect { answer.value = it }
+        }
+
+        // Есть ли нейросеть, спрашивается один раз: модель не появляется
+        // и не пропадает посреди сессии экрана.
+        assistant?.let { model ->
+            viewModelScope.launch {
+                val ready = try {
+                    model.ready()
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (error: Exception) {
+                    Log.e(TAG, "нейросеть не ответила, есть ли она", error)
+                    false
+                }
+                assist.value = assist.value.copy(ready = ready)
+            }
         }
 
         // Модели пересчитываются от любого изменения дня или цели. Ставить пересчёт
@@ -588,7 +634,10 @@ class DiaryViewModel(
             models.dayPlan?.let { feed += FeedItem.Remaining(it, nextMealTitle(hour)) }
         }
 
-        typed.notFound?.let { feed += FeedItem.NotFound(it.query.trim()) }
+        typed.notFound?.let {
+            val query = it.query.trim()
+            feed += FeedItem.NotFound(query, typed.assist.about(query))
+        }
 
         return feed
     }
@@ -673,9 +722,18 @@ class DiaryViewModel(
         val shown = answer.value?.items.orEmpty()
         val pickedIndex = shown.indexOfFirst { it.candidate?.ref == candidate.ref }
         val query = input.value
+        val proposed = item.source == EntrySource.LLM
 
-        input.value = ""
-        answer.value = null
+        // Предложения нейросети — это несколько блюд одной фразы, а не варианты
+        // одного: «борщ и кефир» записываются двумя тапами, и после первого
+        // кефир обязан остаться на месте вместе со строкой.
+        val rest = if (proposed) shown - item else emptyList()
+        if (rest.isEmpty()) {
+            input.value = ""
+            answer.value = null
+        } else {
+            answer.value = Answer(query, rest)
+        }
         val before = dayKcal()
         val today = !isPast
 
@@ -690,7 +748,9 @@ class DiaryViewModel(
                 source = item.source,
                 now = entryTime(target),
             )
-            if (pickedIndex >= 0) {
+            // Выбор из предложений нейросети ранжированию не урок: она показывала
+            // не выдачу поиска, и правильного места в ней у продукта не было.
+            if (pickedIndex >= 0 && !proposed) {
                 learn(query, shown, pickedIndex, item, candidate, context)
             }
             reactToMeal(id, before, today)
@@ -750,6 +810,82 @@ class DiaryViewModel(
                 now = nowMillis(),
             )
         )
+    }
+
+    // --- Нейросеть ------------------------------------------------------------------------
+
+    /**
+     * «Разобрать нейросетью» в реплике «не нашлось».
+     *
+     * Предложения встают чипсами над строкой ввода — туда же, где стоит выдача
+     * поиска, — и записываются только тапом. Пока модель думала, человек мог
+     * переписать строку: тогда ответ про старую фразу уже не нужен.
+     */
+    fun onAskAssistant(query: String) {
+        val model = assistant ?: return
+        if (!assist.value.ready || assist.value.thinking != null) return
+        assist.value = assist.value.copy(thinking = query)
+
+        viewModelScope.launch {
+            val items = try {
+                model.propose(query).filter { it.candidate != null && it.grams > 0 }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                // Модель занята, не скачана, ответила кашей — для человека всё это
+                // одно: не разобрала. Падать посреди дневника из-за неё нельзя.
+                Log.e(TAG, "нейросеть не разобрала «$query»", error)
+                emptyList()
+            }
+            val state = assist.value
+            assist.value = state.copy(
+                thinking = null,
+                failed = if (items.isEmpty()) state.failed + query else state.failed,
+            )
+            val current = input.value
+            if (items.isNotEmpty() && current.trim() == query) answer.value = Answer(current, items)
+        }
+    }
+
+    /**
+     * Вопрос к дневнику: «сколько белка за неделю?», «что я ел вчера?».
+     *
+     * Вопрос и ответ встают в ленту открытого дня как разговор этой сессии,
+     * а не как записи: завтра вчерашний ответ «осталось 400 ккал» был бы неправдой.
+     */
+    private fun askDiary(question: String) {
+        val model = assistant ?: return
+        input.value = ""
+        answer.value = null
+
+        val time = formatTime(nowMillis(), zone)
+        val asked = FeedItem.Question(nextReplyId(), question.trim(), time)
+        val reply = FeedItem.Answer(nextReplyId(), text = "", time = time, done = false)
+        val day = shownDay
+        sessionReplies.value += listOf(DayReply(day, asked), DayReply(day, reply))
+
+        viewModelScope.launch {
+            var text = ""
+            try {
+                model.answer(asked.text).collect { partial ->
+                    text = partial
+                    updateAnswer(reply.id) { it.copy(text = partial) }
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                Log.e(TAG, "нейросеть не ответила на «${asked.text}»", error)
+            }
+            val final = text.trim().ifEmpty { NO_ANSWER }
+            updateAnswer(reply.id) { it.copy(text = final, time = formatTime(nowMillis(), zone), done = true) }
+        }
+    }
+
+    private fun updateAnswer(id: Int, change: (FeedItem.Answer) -> FeedItem.Answer) {
+        sessionReplies.value = sessionReplies.value.map { reply ->
+            val item = reply.item
+            if (item is FeedItem.Answer && item.id == id) reply.copy(item = change(item)) else reply
+        }
     }
 
     // --- Скан штрих-кода --------------------------------------------------------------
@@ -1014,6 +1150,10 @@ class DiaryViewModel(
                 onLogWeight()
                 true
             }
+            assist.value.ready && isQuestion(text) -> {
+                askDiary(text)
+                true
+            }
             else -> false
         }
     }
@@ -1260,6 +1400,9 @@ class DiaryViewModel(
         const val OUTBOX_SETTLE_MS = 3_000L
         const val TAG = "DiaryViewModel"
 
+        /** Модель промолчала или упала — ответ всё равно должен быть, иначе многоточие висит вечно. */
+        const val NO_ANSWER = "Не получилось ответить: нейросеть занята или ещё скачивается. Спроси через минуту."
+
         /** Когда у товара не указана порция: сто грамм — то, к чему привязан сам КБЖУ. */
         const val DEFAULT_PORTION_G = 100
     }
@@ -1288,6 +1431,14 @@ private fun ResolvedItem.withTypedGrams(input: String): ResolvedItem {
 }
 
 private val TRAILING_GRAMS = Regex("""(\d{1,4})\s*(?:г|гр|грамм\w*|мл)?$""", RegexOption.IGNORE_CASE)
+
+/**
+ * «сколько я съел вчера?» — вопрос к дневнику, а не блюдо.
+ *
+ * Признак один — знак вопроса в конце. Угадывать вопрос по словам «сколько»
+ * и «что» нельзя: «что-то сладкое» — тоже еда.
+ */
+internal fun isQuestion(text: String): Boolean = text.trim().let { it.length > 1 && it.endsWith('?') }
 
 /** Последний съеденный продукт — вход модели переходов. */
 private fun List<DiaryEntryEntity>.lastRefKey(): String? =

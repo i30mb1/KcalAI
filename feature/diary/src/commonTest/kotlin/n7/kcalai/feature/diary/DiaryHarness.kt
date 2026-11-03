@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import n7.kcalai.assistant.FoodAssistant
 import n7.kcalai.database.BodyMetricDao
 import n7.kcalai.database.BodyMetricEntity
 import n7.kcalai.database.CachedProductDao
@@ -70,7 +71,11 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
 
     val today: Long get() = clock.now().toLocalDateTime(zone).date.toEpochDays()
 
-    fun viewModel(dispatcher: CoroutineDispatcher, outbox: DiaryOutbox? = null): DiaryViewModel {
+    fun viewModel(
+        dispatcher: CoroutineDispatcher,
+        outbox: DiaryOutbox? = null,
+        assistant: FoodAssistant? = null,
+    ): DiaryViewModel {
         val personal = PersonalRepository(diaryDao, FakePersonalDao(), bodyMetricDao, goalDao, zone)
         val food = FoodRepository(
             foodDb = FoodDbSource { error("справочник в этих тестах не открывается") },
@@ -94,6 +99,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
             food = food,
             brain = brain,
             outbox = outbox,
+            assistant = assistant,
             clock = clock,
             zone = zone,
         )

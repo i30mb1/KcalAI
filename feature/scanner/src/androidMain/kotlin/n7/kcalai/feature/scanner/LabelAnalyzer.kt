@@ -8,6 +8,7 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -56,6 +57,13 @@ internal class LabelAnalyzer(
      */
     private val onBarcode: (String) -> Unit = {},
     private val onFrame: (LabelFrame) -> Unit,
+    /**
+     * Последний резкий кадр этикетки, уже развёрнутый, — для нейросети.
+     *
+     * Ей нужен один кадр по запросу, а не поток: она читает его секунды.
+     * Держится ровно один, предыдущий отпускается.
+     */
+    private val latest: AtomicReference<Bitmap?>? = null,
 ) : ImageAnalysis.Analyzer {
 
     private val barcodes = BarcodeReader()
@@ -137,6 +145,8 @@ internal class LabelAnalyzer(
                     delay(SKIP_PAUSE_MS)
                     return@launch
                 }
+
+                latest?.set(bitmap)
 
                 // null — OCR на этом устройстве недоступен. Не событие, а состояние,
                 // и сказать о нём надо один раз: дальше кадры пойдут те же.

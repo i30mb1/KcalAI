@@ -43,6 +43,14 @@ mlkitBarcode = "17.3.0"
 litert = "2.1.0"
 work = "2.11.2"
 junit = "4.13.2"
+# Gemini Nano на телефоне через AICore: агент с инструментами и Prompt API с типизированным
+# ответом. Агент в alpha, Prompt API в beta — API может меняться между версиями.
+mlkitGenaiAgent = "1.0.0-alpha1"
+mlkitGenaiPrompt = "1.0.0-beta5"
+# Процессор @Generable: схема ответа модели генерируется на сборке, а не отражением.
+mlkitGenaiSchema = "1.0.0-alpha2"
+# Инструменты агента — AppFunctions платформы (Android 16+), схема из KDoc на сборке.
+appfunctions = "1.0.0-beta01"
 junitVersion = "1.1.5"
 # Раннер отдельной зависимостью: androidx.test.ext:junit его за собой не тянет,
 # а без него инструментальный запуск падает на ClassNotFoundException.
@@ -103,6 +111,11 @@ litert = { group = "com.google.ai.edge.litert", name = "litert", version.ref = "
 
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 
+mlkit-genai-agent = { group = "com.google.mlkit", name = "genai-agent", version.ref = "mlkitGenaiAgent" }
+mlkit-genai-prompt = { group = "com.google.mlkit", name = "genai-prompt", version.ref = "mlkitGenaiPrompt" }
+mlkit-genai-schema-compiler = { group = "com.google.mlkit", name = "genai-schema-compiler", version.ref = "mlkitGenaiSchema" }
+androidx-appfunctions = { group = "androidx.appfunctions", name = "appfunctions", version.ref = "appfunctions" }
+androidx-appfunctions-compiler = { group = "androidx.appfunctions", name = "appfunctions-compiler", version.ref = "appfunctions" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "testRunner" }
