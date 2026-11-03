@@ -24,4 +24,5 @@ dependencies {
     implementation(libs.litertlm.android)
     implementation(libs.play.asset.delivery.ktx)
     implementation(libs.kotlinx.coroutines.android)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

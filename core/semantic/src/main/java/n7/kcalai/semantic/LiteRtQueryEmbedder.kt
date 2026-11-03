@@ -7,7 +7,9 @@ import com.google.ai.edge.litertlm.EmbeddingEngine
 import com.google.ai.edge.litertlm.EmbeddingEngineConfig
 import com.google.ai.edge.litertlm.EmbeddingOptions
 import com.google.ai.edge.litertlm.InputData
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withContext
 import n7.kcalai.repositories.QueryEmbedder
 
@@ -16,22 +18,21 @@ import n7.kcalai.repositories.QueryEmbedder
  *
  * Видеокарта здесь не нужна: один отпечаток — десятки миллисекунд, а её запуск
  * дороже самого расчёта. Движок поднимается при первом запросе, который обычный
- * поиск не осилил, и живёт до конца процесса.
+ * поиск не осилил, и закрывается после двух минут простоя, см. [IdleHolder].
  */
 class LiteRtQueryEmbedder(context: Context) : QueryEmbedder {
 
     private val model = EmbeddingModel(context.applicationContext)
     private val cacheDir = context.cacheDir.path
 
-    /** Движок не потокобезопасен: все обращения — по одному. */
+    /** Движок не потокобезопасен: все обращения и закрытие по таймеру — по одному. */
     private val dispatcher = Dispatchers.IO.limitedParallelism(1)
-    private var engine: EmbeddingEngine? = null
+    private val engine = IdleHolder(CoroutineScope(SupervisorJob() + dispatcher), IDLE_MILLIS, ::open)
     private var broken = false
 
     override suspend fun embed(text: String): FloatArray? = withContext(dispatcher) {
-        val engine = engine ?: open() ?: return@withContext null
         try {
-            engine.computeEmbedding(listOf(InputData.Text(QUERY_PREFIX + text)), OPTIONS).embedding
+            engine.use { it.computeEmbedding(listOf(InputData.Text(QUERY_PREFIX + text)), OPTIONS).embedding }
         } catch (error: Exception) {
             Log.w(TAG, "отпечаток запроса не посчитан", error)
             null
@@ -45,7 +46,6 @@ class LiteRtQueryEmbedder(context: Context) : QueryEmbedder {
         return try {
             EmbeddingEngine(EmbeddingEngineConfig(modelPath = file.path, backend = Backend.CPU(), cacheDir = cacheDir))
                 .also { it.initialize() }
-                .also { engine = it }
         } catch (error: Throwable) {
             // UnsatisfiedLinkError — это Error, а не Exception: ловим всё. Сломанный
             // движок повторно не открываем — поиск по словам работает и без него.
@@ -64,6 +64,9 @@ class LiteRtQueryEmbedder(context: Context) : QueryEmbedder {
          * модель отличать вопрос от ответа.
          */
         const val QUERY_PREFIX = "task: search result | query: "
+
+        /** Человек вводит еду подряд по нескольку строк — на это время движок остаётся в памяти. */
+        const val IDLE_MILLIS = 120_000L
 
         val OPTIONS = EmbeddingOptions(normalize = true)
     }
