@@ -32,6 +32,8 @@ activityCompose = "1.13.0"
 lifecycle = "2.11.0"
 coreKtx = "1.18.0"
 material = "1.10.0"
+# Морфинг форм (RoundedPolygon, Morph): мультиплатформенная, iOS включительно.
+graphicsShapes = "1.1.0"
 camerax = "1.6.2"
 # Bundled-вариант: модель распознавания внутри APK, работает без сети
 # и без Google Play Services. Unbundled докачивает её — не подходит.
@@ -62,6 +64,7 @@ uiautomator = "2.3.0"
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+androidx-graphics-shapes = { group = "androidx.graphics", name = "graphics-shapes", version.ref = "graphicsShapes" }
 
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }

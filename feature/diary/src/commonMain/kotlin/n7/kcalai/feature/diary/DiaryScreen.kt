@@ -2,7 +2,6 @@ package n7.kcalai.feature.diary
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.geometry.Offset
@@ -33,9 +33,12 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
@@ -283,31 +286,19 @@ fun DiaryScreen(
     val pointer = remember { StagePointer() }
     Box(Modifier.fillMaxSize().observeTouches(pointer)) {
     CompositionLocalProvider(LocalMascotAnchors provides anchors) {
-    Column(Modifier.fillMaxSize().background(KcalTheme.colors.bg)) {
-        Header(
-            date = state.date,
-            today = state.today,
-            onSelectDay = onSelectDay,
-            totals = state.totals,
-            goal = state.goal,
-            week = state.week,
-            collapsed = collapsed,
-            onOpenGoal = onOpenGoal,
-            modifier = Modifier.onSizeChanged { size ->
-                if (collapsed) {
-                    closedHeight = if (closedHeight == 0) size.height else minOf(closedHeight, size.height)
-                } else {
-                    openHeight = maxOf(openHeight, size.height)
-                }
-            },
-        )
-
+    // Высоты шапки и строки ввода — отступы ленты: лента идёт под обеими,
+    // и в покое реплики стоят там же, где стояли между непрозрачными полосами.
+    var headerHeight by remember { mutableIntStateOf(0) }
+    var composerHeight by remember { mutableIntStateOf(0) }
+    Box(Modifier.fillMaxSize().background(KcalTheme.colors.bg)) {
         // Новый день — новая лента целиком: его записи не «приходят» в переписку,
         // они в ней были, и выпрыгивать с анимацией им незачем.
         key(state.date) {
         Feed(
             feed = state.feed,
             listState = listState,
+            topInset = with(density) { headerHeight.toDp() },
+            bottomInset = with(density) { composerHeight.toDp() },
             onEditEntry = onEditEntry,
             onUndoDelete = onUndoDelete,
             onPickForMeal = onPickForMeal,
@@ -317,9 +308,30 @@ fun DiaryScreen(
             onPickPlan = onPickPlan,
             onOpenGoal = onOpenGoal,
             onAnswerAsk = onAnswerAsk,
-            modifier = Modifier.weight(1f).nestedScroll(expandOnPull),
+            modifier = Modifier.fillMaxSize().nestedScroll(expandOnPull),
         )
         }
+
+        Header(
+            date = state.date,
+            today = state.today,
+            onSelectDay = onSelectDay,
+            totals = state.totals,
+            goal = state.goal,
+            week = state.week,
+            collapsed = collapsed,
+            onOpenGoal = onOpenGoal,
+            modifier = Modifier
+                .onSizeChanged { size ->
+                    headerHeight = size.height
+                    if (collapsed) {
+                        closedHeight = if (closedHeight == 0) size.height else minOf(closedHeight, size.height)
+                    } else {
+                        openHeight = maxOf(openHeight, size.height)
+                    }
+                }
+                .onGloballyPositioned { anchors.coverBottom = it.boundsInRoot().bottom },
+        )
 
         Composer(
             input = state.input,
@@ -334,6 +346,10 @@ fun DiaryScreen(
             onSubmit = onSubmit,
             onOpenScan = onOpenScan,
             onOpenLabelDebug = onOpenLabelDebug,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .onSizeChanged { composerHeight = it.height }
+                .onGloballyPositioned { anchors.floorTop = it.boundsInRoot().top },
         )
     }
     }
@@ -379,6 +395,10 @@ private fun LazyListState.spareHeight(): Int? {
 private fun Feed(
     feed: List<FeedItem>,
     listState: LazyListState,
+    /** Высота шапки над лентой: лента идёт под ней, и первая реплика начинается ниже. */
+    topInset: Dp,
+    /** Высота строки ввода под лентой: последняя реплика стоит над ней. */
+    bottomInset: Dp,
     onEditEntry: (DiaryEntryEntity) -> Unit,
     onUndoDelete: (FeedItem.Deleted) -> Unit,
     onPickForMeal: (FoodCandidate, MealType) -> Unit,
@@ -436,7 +456,7 @@ private fun Feed(
      * Клавиатура укорачивает ленту, а не накрывает её.
      *
      * Композер несёт `imePadding()`, поэтому при открытии клавиатуры он вырастает,
-     * а лента под `weight(1f)` на столько же сжимается. Само по себе это ленту
+     * а с ним на столько же растёт отступ ленты снизу. Само по себе это ленту
      * не двигает: `LazyColumn` держится за верхний край, и всё, что было внизу,
      * уезжает под композер — последняя реплика пропадает ровно в тот момент,
      * когда человек садится писать следующую.
@@ -473,7 +493,7 @@ private fun Feed(
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         state = listState,
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = topInset + 8.dp, bottom = bottomInset + 6.dp),
     ) {
         items(feed.size, key = { index -> feed[index].key }) { index ->
             val item = feed[index]

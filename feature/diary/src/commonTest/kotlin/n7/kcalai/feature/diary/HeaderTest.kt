@@ -55,4 +55,22 @@ class HeaderTest {
         assertEquals(Headline(900, "съедено", "задать цель ›", over = false), headline(900, null, past = false))
         assertEquals(Headline(900, "съедено", "задать цель ›", over = false), headline(900, null, past = true))
     }
+
+    // --- Фон шапки и строки ввода ------------------------------------------------------
+
+    /**
+     * Лента идёт под шапкой и под строкой ввода. Без матового стекла (до Android 17.2)
+     * сквозь полупрозрачный фон реплики читались бы поверх цифр и набранного — фон
+     * обязан быть плотным.
+     */
+    @Test
+    fun `без стекла шапка и строка ввода непрозрачны`() {
+        assertEquals(1f, glassScrimAlpha(frosted = false))
+    }
+
+    @Test
+    fun `со стеклом сквозь них видна размытая лента`() {
+        assertTrue(glassScrimAlpha(frosted = true) < 1f)
+        assertTrue(glassScrimAlpha(frosted = true) > 0f)
+    }
 }

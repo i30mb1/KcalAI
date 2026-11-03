@@ -5,7 +5,10 @@ import n7.kcalai.resolver.ResolvedItem
 import kotlin.test.assertEquals
 import kotlin.test.Test
 
-/** Подпись над рядом подсказок: она называет то, что произошло, а не что-то похожее. */
+/**
+ * Подпись над рядом подсказок называет то, что произошло, а не что-то похожее.
+ * Кнопка у строки ввода делает то же, что ✓ на клавиатуре, когда записать есть что.
+ */
 class ComposerTest {
 
     private fun scanned(source: EntrySource, guessed: Boolean) = ResolvedItem(
@@ -31,5 +34,27 @@ class ComposerTest {
     fun `заведённый с этикетки продукт найденным по коду не называется`() {
         assertEquals("продукт сохранён · допишите вес", scannedCaption(scanned(EntrySource.MANUAL, guessed = true)))
         assertEquals("продукт сохранён", scannedCaption(scanned(EntrySource.MANUAL, guessed = false)))
+    }
+
+    /**
+     * Вес и отсканированный товар — ровно те случаи, где ✓ на клавиатуре записывает
+     * (см. [DiaryViewModel.onSubmit]): чипс один, выбирать не из чего. Тянуться к нему
+     * мимо клавиатуры незачем — кнопка под пальцем становится «записать».
+     */
+    @Test
+    fun `кнопка записывает вес и отсканированный товар`() {
+        assertEquals(ComposerAction.RECORD, composerAction(ComposerRow.Weight(grams = 72_400)))
+        assertEquals(ComposerAction.RECORD, composerAction(ComposerRow.Scanned(scanned(EntrySource.BARCODE, guessed = false))))
+    }
+
+    /**
+     * В выдаче поиска выбор между вариантами, и делать его за человека кнопка не будет:
+     * там, как и в пустой строке, она по-прежнему открывает сканер.
+     */
+    @Test
+    fun `в остальных случаях кнопка открывает сканер`() {
+        assertEquals(ComposerAction.SCAN, composerAction(ComposerRow.None))
+        assertEquals(ComposerAction.SCAN, composerAction(ComposerRow.Predictions(emptyList())))
+        assertEquals(ComposerAction.SCAN, composerAction(ComposerRow.Results(listOf(scanned(EntrySource.MANUAL, guessed = true)))))
     }
 }

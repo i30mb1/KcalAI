@@ -53,6 +53,8 @@ import n7.kcalai.ui.mascot.mascot
  *
  * Полосы прогресса калорий здесь нет намеренно: остаток уже стоит крупным числом,
  * а полоса повторяла бы ту же величину второй раз, отбирая место у недели.
+ *
+ * Лента идёт под шапкой, фон — матовое стекло с mesh-градиентом ([meshGlass]).
  */
 @Composable
 fun Header(
@@ -70,7 +72,7 @@ fun Header(
     val past = date < today
     val toToday = { onSelectDay(today.toEpochDays()) }
 
-    Column(modifier.fillMaxWidth().background(colors.bg).statusBarsPadding()) {
+    Column(modifier.fillMaxWidth().meshGlass().statusBarsPadding()) {
         AnimatedVisibility(
             visible = !collapsed,
             enter = expandVertically() + fadeIn(),

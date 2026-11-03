@@ -27,6 +27,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -105,11 +106,18 @@ class MascotAnchors {
 
     /** Что облачку закрывать нельзя: реплики ленты, записи, строка ввода. */
     internal val obstacles = mutableStateMapOf<String, Rect>()
+
+    /** Нижний край шапки: лента идёт под ней, и что ушло под шапку, не видно. См. [shownAnchors]. */
+    internal var coverBottom by mutableFloatStateOf(0f)
+
+    /** Верхний край строки ввода: под неё лента уходит так же, как под шапку. */
+    internal var floorTop by mutableFloatStateOf(Float.MAX_VALUE)
 }
 
 val LocalMascotAnchors = staticCompositionLocalOf<MascotAnchors?> { null }
 
-fun homeAnchor(mascot: Mascot) = "home:$mascot"
+internal const val HOME_PREFIX = "home:"
+fun homeAnchor(mascot: Mascot) = "$HOME_PREFIX$mascot"
 fun stageAnchor(mascot: Mascot) = "stage:$mascot"
 const val CHIP_ANCHOR = "chip"
 
@@ -233,7 +241,7 @@ fun MascotStage(
     modifier: Modifier = Modifier,
 ) {
     var origin by remember { mutableStateOf(Offset.Zero) }
-    val places = mascotPlaces(feed, anchors.rects.keys, chipOwner)
+    val places = mascotPlaces(feed, shownAnchors(anchors.rects, anchors.coverBottom, anchors.floorTop), chipOwner)
     val puppets = Mascot.entries.map { rememberMascotPuppet(it) }
     val actors = remember(puppets) { puppets.associate { it.mascot to Actor(it.mascot, it) } }
     val event by rememberUpdatedState(onEvent)

@@ -8,6 +8,7 @@ import n7.kcalai.model.Nutriments
 import n7.kcalai.personal.MealGap
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.model.Mascot
+import androidx.compose.ui.geometry.Rect
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.Test
@@ -78,5 +79,51 @@ class MascotPlacementTest {
         assertEquals(Mascot.GRAIN, chipOwner(ComposerRow.Predictions(listOf(candidate(prot = 100, fat = 30, carb = 2300)))))
         assertNull(chipOwner(ComposerRow.Weight(82_400)), "у веса макроса нет")
         assertNull(chipOwner(ComposerRow.None))
+    }
+
+    // --- Лента под шапкой --------------------------------------------------------------
+
+    /**
+     * Лента идёт под стеклянной шапкой, и реплика, целиком ушедшая под неё, из ленты
+     * не выпадает — раньше её место пропадало вместе с ней. Персонаж у такой реплики
+     * стоял бы поверх цифр шапки, поэтому её место считается пропавшим.
+     */
+    @Test
+    fun `место у реплики, целиком ушедшей под шапку, пропадает`() {
+        val rects = mapOf(
+            "said:1" to Rect(left = 16f, top = 120f, right = 60f, bottom = 160f),
+            "said:2" to Rect(left = 16f, top = 380f, right = 60f, bottom = 420f),
+        )
+        assertEquals(setOf("said:2"), shownAnchors(rects, coverBottom = 300f, floorTop = 2000f))
+    }
+
+    @Test
+    fun `место у реплики, выглядывающей из-под шапки, остаётся`() {
+        val rects = mapOf("said:1" to Rect(left = 16f, top = 280f, right = 60f, bottom = 320f))
+        assertEquals(setOf("said:1"), shownAnchors(rects, coverBottom = 300f, floorTop = 2000f))
+    }
+
+    /** Дома, в плитках шапки, персонаж стоит над стеклом, а не под ним. */
+    @Test
+    fun `места в самой шапке шапка не закрывает`() {
+        val rects = mapOf(homeAnchor(Mascot.EGG) to Rect(left = 16f, top = 120f, right = 60f, bottom = 160f))
+        assertEquals(setOf(homeAnchor(Mascot.EGG)), shownAnchors(rects, coverBottom = 300f, floorTop = 2000f))
+    }
+
+    /** То же снизу: лента идёт и под стеклянной строкой ввода. */
+    @Test
+    fun `место у реплики, целиком ушедшей под строку ввода, пропадает`() {
+        val rects = mapOf(
+            "said:1" to Rect(left = 16f, top = 1700f, right = 60f, bottom = 1740f),
+            "said:2" to Rect(left = 16f, top = 2050f, right = 60f, bottom = 2090f),
+        )
+        assertEquals(setOf("said:1"), shownAnchors(rects, coverBottom = 300f, floorTop = 2000f))
+    }
+
+    /** Чипс — часть строки ввода: персонаж выглядывает из-за него поверх стекла. */
+    @Test
+    fun `место на чипсе строка ввода не закрывает`() {
+        val rects = mapOf(CHIP_ANCHOR to Rect(left = 16f, top = 2050f, right = 60f, bottom = 2090f))
+        assertEquals(setOf(CHIP_ANCHOR), shownAnchors(rects, coverBottom = 300f, floorTop = 2000f))
     }
 }

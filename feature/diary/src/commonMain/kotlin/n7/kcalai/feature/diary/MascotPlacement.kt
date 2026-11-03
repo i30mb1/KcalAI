@@ -1,5 +1,6 @@
 package n7.kcalai.feature.diary
 
+import androidx.compose.ui.geometry.Rect
 import n7.kcalai.model.Mascot
 import n7.kcalai.ui.mascot.mascot
 
@@ -23,6 +24,23 @@ sealed interface MascotPlace {
     /** Пустой первый день: все трое крупно в ленте. Места полно, и это знакомство. */
     data object Stage : MascotPlace
 }
+
+/**
+ * Места, которые сейчас видно.
+ *
+ * Лента идёт под стеклянными шапкой и строкой ввода, и реплика, целиком ушедшая
+ * под них, из ленты не выпадает. Её место считается пропавшим, как у реплики за
+ * краем ленты: иначе персонаж стоял бы поверх цифр шапки или набранного текста.
+ * Выглядывающая реплика место держит. Места в самих полосах — дом в плитке шапки
+ * и чипс над строкой ввода — стекло не закрывает.
+ *
+ * @param coverBottom нижний край шапки в координатах корня
+ * @param floorTop верхний край строки ввода в координатах корня
+ */
+internal fun shownAnchors(rects: Map<String, Rect>, coverBottom: Float, floorTop: Float): Set<String> =
+    rects.filter { (key, rect) ->
+        key.startsWith(HOME_PREFIX) || key == CHIP_ANCHOR || (rect.bottom > coverBottom && rect.top < floorTop)
+    }.keys
 
 /**
  * Места всех троих.

@@ -2,6 +2,7 @@ package n7.kcalai.feature.diary
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -16,7 +17,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -30,8 +33,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +55,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.graphics.shapes.CornerRounding
+import androidx.graphics.shapes.Morph
+import androidx.graphics.shapes.RoundedPolygon
+import androidx.graphics.shapes.circle
+import androidx.graphics.shapes.star
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -65,6 +76,7 @@ import n7.kcalai.ui.CapsLabel
 import n7.kcalai.ui.ChipNumbers
 import n7.kcalai.ui.KcalChip
 import n7.kcalai.ui.MacroDot
+import n7.kcalai.ui.MorphShape
 import n7.kcalai.ui.PopSpring
 import n7.kcalai.ui.popIn
 import n7.kcalai.ui.colors
@@ -97,6 +109,7 @@ fun Composer(
     onSubmit: () -> Boolean,
     onOpenScan: () -> Unit,
     onOpenLabelDebug: (() -> Unit)?,
+    modifier: Modifier = Modifier,
 ) {
     val colors = KcalTheme.colors
     val requester = remember { FocusRequester() }
@@ -114,15 +127,17 @@ fun Composer(
     }
 
     // Облачко персонажа над чипсом не должно ложиться на чипсы и строку.
+    // Лента идёт и под строкой ввода: фон — то же стекло, что у шапки.
     Column(
-        Modifier
+        modifier
             .fillMaxWidth()
             .speechObstacle("composer")
-            .background(colors.bg)
+            .meshGlass(flipped = true)
             .imePadding()
             .navigationBarsPadding()
-            .padding(top = 10.dp, bottom = 10.dp)
     ) {
+        HorizontalDivider(color = colors.line)
+        Spacer(Modifier.height(10.dp))
         HintRow(row, onPick, onPickScanned, onPickCandidate, onLogWeight)
 
         if (pastMeal != null) {
@@ -194,33 +209,20 @@ fun Composer(
             // окно съёмки само переходит к этикетке — по промаху кода или по
             // «Нет штрих-кода».
             //
+            // Когда записать есть что — вес или отсканированный товар, — кнопка
+            // становится ✓ и записывает, как ✓ на клавиатуре: палец уже здесь.
+            //
             // Долгое нажатие уводит в отладочную съёмку: кнопок в шапке экран
             // больше не носит, а проверять разбор этикетки по-прежнему нужно.
             // В сборке для людей жеста нет — см. DiaryRoute.
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .combinedClickable(
-                        onClick = onOpenScan,
-                        onLongClick = onOpenLabelDebug,
-                    )
-                    .semantics { contentDescription = "Сканировать штрих-код" },
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier.size(36.dp).clip(CircleShape).background(colors.bubble),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Default.QrCodeScanner,
-                        contentDescription = null,
-                        tint = colors.onBubble,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
+            ComposerButton(
+                action = composerAction(row),
+                onScan = onOpenScan,
+                onRecord = { onSubmit() },
+                onLongClick = onOpenLabelDebug,
+            )
         }
+        Spacer(Modifier.height(10.dp))
     }
 }
 
@@ -298,6 +300,94 @@ private fun MealPicker(selected: MealType, onPick: (MealType) -> Unit) {
 internal fun scannedCaption(item: ResolvedItem): String {
     val head = if (item.source == EntrySource.BARCODE) "найдено по коду" else "продукт сохранён"
     return if (item.gramsGuessed) "$head · допишите вес" else head
+}
+
+/**
+ * Кнопка у строки ввода: круг сканера перетекает в «печеньку» с ✓.
+ *
+ * Форма, поворот и значки меняются в слое отрисовки, а шаг перехода читается
+ * только там: пружина гонит кадры, но композицию не пересобирает.
+ */
+@Composable
+private fun ComposerButton(
+    action: ComposerAction,
+    onScan: () -> Unit,
+    onRecord: () -> Unit,
+    onLongClick: (() -> Unit)?,
+) {
+    val colors = KcalTheme.colors
+    val morph = remember { Morph(RoundedPolygon.circle(numVertices = 8), COOKIE) }
+    val record = action == ComposerAction.RECORD
+    val progress = animateFloatAsState(
+        targetValue = if (record) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = 380f),
+    )
+
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .combinedClickable(onClick = if (record) onRecord else onScan, onLongClick = onLongClick)
+            .semantics { contentDescription = if (record) "Записать" else "Сканировать штрих-код" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .graphicsLayer {
+                    val step = progress.value
+                    shape = MorphShape(morph, step)
+                    clip = true
+                    // Форма доворачивается на 45°, пока перетекает: так переход читается
+                    // как движение, а не как подмена картинки.
+                    rotationZ = TURN_DEGREES * step
+                }
+                .background(colors.bubble),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Значки стоят ровно: поворот формы они гасят своим.
+            Icon(
+                Icons.Default.QrCodeScanner,
+                contentDescription = null,
+                tint = colors.onBubble,
+                modifier = Modifier.size(18.dp).graphicsLayer {
+                    alpha = (1f - 2f * progress.value).coerceIn(0f, 1f)
+                    rotationZ = -TURN_DEGREES * progress.value
+                },
+            )
+            Icon(
+                Icons.Default.Check,
+                contentDescription = null,
+                tint = colors.onBubble,
+                modifier = Modifier.size(20.dp).graphicsLayer {
+                    alpha = (2f * progress.value - 1f).coerceIn(0f, 1f)
+                    rotationZ = -TURN_DEGREES * progress.value
+                },
+            )
+        }
+    }
+}
+
+/** Четыре мягких лепестка: форма «записать», непохожая на круг сканера ни на кадр. */
+private val COOKIE = RoundedPolygon.star(
+    numVerticesPerRadius = 4,
+    innerRadius = 0.62f,
+    rounding = CornerRounding(0.5f),
+    innerRounding = CornerRounding(0.2f),
+)
+private const val TURN_DEGREES = 45f
+
+/** Что делает кнопка у строки ввода. */
+enum class ComposerAction { SCAN, RECORD }
+
+/**
+ * Кнопка записывает там же, где ✓ на клавиатуре (см. [DiaryViewModel.onSubmit]):
+ * вес и отсканированный товар — чипс один, выбирать не из чего. В выдаче поиска
+ * выбор за человека не делается, и кнопка, как и в пустой строке, открывает сканер.
+ */
+internal fun composerAction(row: ComposerRow): ComposerAction = when (row) {
+    is ComposerRow.Weight, is ComposerRow.Scanned -> ComposerAction.RECORD
+    is ComposerRow.Results, is ComposerRow.Predictions, ComposerRow.None -> ComposerAction.SCAN
 }
 
 /** Пружина по высоте для expand/shrink: у них свой тип, но характер тот же. */
