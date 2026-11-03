@@ -255,6 +255,32 @@ class AssistantTest {
         assertTrue(answer.done)
         assertTrue(answer.text.startsWith("Не получилось ответить"), answer.text)
     }
+
+    // --- Кнопка «отправить» у строки ввода ---------------------------------------------
+
+    /** Кнопка показывает «отправить», и ✓ — ею или на клавиатуре — отдаёт фразу на разбор. */
+    @Test
+    fun `с нейросетью ✓ отправляет фразу на разбор`() = runTest(dispatcher) {
+        val vm = screen()
+        vm.onInputChange("доел за ребёнком макароны")
+        advanceUntilIdle()
+        assertEquals(ComposerAction.RECORD, vm.state.value.action)
+
+        assertTrue(vm.onSubmit())
+        advanceUntilIdle()
+
+        assertEquals(listOf("доел за ребёнком макароны"), assistant.asked)
+    }
+
+    @Test
+    fun `без нейросети фраза кнопку не трогает`() = runTest(dispatcher) {
+        val vm = screen(withAssistant = false)
+        vm.onInputChange("доел за ребёнком макароны")
+        advanceUntilIdle()
+
+        assertEquals(ComposerAction.SCAN, vm.state.value.action)
+        assertFalse(vm.onSubmit())
+    }
 }
 
 /** Модель, которая отвечает тем, что ей велели, и тогда, когда ей велели. */

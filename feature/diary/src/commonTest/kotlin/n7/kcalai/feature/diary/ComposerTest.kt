@@ -37,24 +37,52 @@ class ComposerTest {
     }
 
     /**
-     * Вес и отсканированный товар — ровно те случаи, где ✓ на клавиатуре записывает
+     * Вес и отсканированный товар — ровно те случаи, где ✓ записывает и без нейросети
      * (см. [DiaryViewModel.onSubmit]): чипс один, выбирать не из чего. Тянуться к нему
-     * мимо клавиатуры незачем — кнопка под пальцем становится «записать».
+     * мимо клавиатуры незачем — кнопка под пальцем становится ✓.
      */
     @Test
     fun `кнопка записывает вес и отсканированный товар`() {
-        assertEquals(ComposerAction.RECORD, composerAction(ComposerRow.Weight(grams = 72_400)))
-        assertEquals(ComposerAction.RECORD, composerAction(ComposerRow.Scanned(scanned(EntrySource.BARCODE, guessed = false))))
+        assertEquals(ComposerAction.RECORD, composerAction(ComposerRow.Weight(grams = 72_400), "72 кг", Assist.NONE))
+        assertEquals(
+            ComposerAction.RECORD,
+            composerAction(ComposerRow.Scanned(scanned(EntrySource.BARCODE, guessed = false)), "Сыр 30", Assist.NONE),
+        )
+    }
+
+    /** Без нейросети выбор в выдаче поиска за человека не делается: кнопка — сканер. */
+    @Test
+    fun `без нейросети фраза оставляет кнопку сканером`() {
+        assertEquals(ComposerAction.SCAN, composerAction(ComposerRow.None, "", Assist.NONE))
+        assertEquals(ComposerAction.SCAN, composerAction(ComposerRow.Predictions(emptyList()), "", Assist.NONE))
+        assertEquals(
+            ComposerAction.SCAN,
+            composerAction(ComposerRow.Results(listOf(scanned(EntrySource.MANUAL, guessed = true))), "гречка 200", Assist.NONE),
+        )
+    }
+
+    /** С нейросетью — как в мессенджере: набрал фразу, кнопка «отправить» отдаёт её на разбор. */
+    @Test
+    fun `с нейросетью любая фраза отправляется на разбор`() {
+        assertEquals(
+            ComposerAction.RECORD,
+            composerAction(ComposerRow.Results(listOf(scanned(EntrySource.MANUAL, guessed = true))), "гречка 200", Assist.OFFER),
+        )
+        assertEquals(ComposerAction.RECORD, composerAction(ComposerRow.None, "доел за ребёнком макароны", Assist.OFFER))
     }
 
     /**
-     * В выдаче поиска выбор между вариантами, и делать его за человека кнопка не будет:
-     * там, как и в пустой строке, она по-прежнему открывает сканер.
+     * Отправлять нечего: строка без букв — начало «200 г гречки»; фразу нейросеть уже
+     * не поняла; её ответ уже стоит чипсами — дальше тап по чипсу, а не второй разбор.
      */
     @Test
-    fun `в остальных случаях кнопка открывает сканер`() {
-        assertEquals(ComposerAction.SCAN, composerAction(ComposerRow.None))
-        assertEquals(ComposerAction.SCAN, composerAction(ComposerRow.Predictions(emptyList())))
-        assertEquals(ComposerAction.SCAN, composerAction(ComposerRow.Results(listOf(scanned(EntrySource.MANUAL, guessed = true)))))
+    fun `с нейросетью кнопка остаётся сканером, когда отправлять нечего`() {
+        assertEquals(ComposerAction.SCAN, composerAction(ComposerRow.None, "", Assist.OFFER))
+        assertEquals(ComposerAction.SCAN, composerAction(ComposerRow.None, "200", Assist.OFFER))
+        assertEquals(ComposerAction.SCAN, composerAction(ComposerRow.None, "хрючево", Assist.FAILED))
+        assertEquals(
+            ComposerAction.SCAN,
+            composerAction(ComposerRow.Results(listOf(scanned(EntrySource.LLM, guessed = true))), "тарелка борща", Assist.OFFER),
+        )
     }
 }

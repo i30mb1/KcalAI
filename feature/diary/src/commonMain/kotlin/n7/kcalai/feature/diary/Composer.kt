@@ -99,6 +99,8 @@ import n7.kcalai.model.title
 fun Composer(
     input: String,
     row: ComposerRow,
+    /** Чем сейчас стала кнопка у строки ввода: сканером или ✓. */
+    action: ComposerAction,
     pastMeal: MealType?,
     onPickMeal: (MealType) -> Unit,
     onInputChange: (String) -> Unit,
@@ -209,14 +211,15 @@ fun Composer(
             // окно съёмки само переходит к этикетке — по промаху кода или по
             // «Нет штрих-кода».
             //
-            // Когда записать есть что — вес или отсканированный товар, — кнопка
-            // становится ✓ и записывает, как ✓ на клавиатуре: палец уже здесь.
+            // Когда отправить есть что — вес, отсканированный товар или, где есть
+            // нейросеть, любая фраза, — кнопка становится ✓ и делает то же, что ✓
+            // на клавиатуре: палец уже здесь. См. composerAction.
             //
             // Долгое нажатие уводит в отладочную съёмку: кнопок в шапке экран
             // больше не носит, а проверять разбор этикетки по-прежнему нужно.
             // В сборке для людей жеста нет — см. DiaryRoute.
             ComposerButton(
-                action = composerAction(row),
+                action = action,
                 onScan = onOpenScan,
                 onRecord = { onSubmit() },
                 onLongClick = onOpenLabelDebug,
@@ -328,7 +331,7 @@ private fun ComposerButton(
             .size(44.dp)
             .clip(CircleShape)
             .combinedClickable(onClick = if (record) onRecord else onScan, onLongClick = onLongClick)
-            .semantics { contentDescription = if (record) "Записать" else "Сканировать штрих-код" },
+            .semantics { contentDescription = if (record) "Отправить" else "Сканировать штрих-код" },
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -381,13 +384,23 @@ private const val TURN_DEGREES = 45f
 enum class ComposerAction { SCAN, RECORD }
 
 /**
- * Кнопка записывает там же, где ✓ на клавиатуре (см. [DiaryViewModel.onSubmit]):
- * вес и отсканированный товар — чипс один, выбирать не из чего. В выдаче поиска
- * выбор за человека не делается, и кнопка, как и в пустой строке, открывает сканер.
+ * Кнопка делает то же, что ✓ на клавиатуре (см. [DiaryViewModel.onSubmit]).
+ *
+ * Вес и отсканированный товар записываются сразу: чипс один, выбирать не из чего.
+ * Где есть нейросеть, любая фраза — «отправить» на разбор, как в мессенджере.
+ * Отправлять нечего, и кнопка остаётся сканером: в строке нет букв («200» —
+ * начало «200 г гречки»), фразу нейросеть уже не поняла, её ответ уже стоит
+ * чипсами — дальше тап по чипсу. Без нейросети выбор в выдаче поиска за
+ * человека не делается.
+ *
+ * @param assist что нейросеть может с этой фразой
  */
-internal fun composerAction(row: ComposerRow): ComposerAction = when (row) {
-    is ComposerRow.Weight, is ComposerRow.Scanned -> ComposerAction.RECORD
-    is ComposerRow.Results, is ComposerRow.Predictions, ComposerRow.None -> ComposerAction.SCAN
+internal fun composerAction(row: ComposerRow, input: String, assist: Assist): ComposerAction = when {
+    row is ComposerRow.Weight || row is ComposerRow.Scanned -> ComposerAction.RECORD
+    assist == Assist.NONE || assist == Assist.FAILED -> ComposerAction.SCAN
+    input.none(Char::isLetter) -> ComposerAction.SCAN
+    row is ComposerRow.Results && row.items.any { it.source == EntrySource.LLM } -> ComposerAction.SCAN
+    else -> ComposerAction.RECORD
 }
 
 /** Пружина по высоте для expand/shrink: у них свой тип, но характер тот же. */

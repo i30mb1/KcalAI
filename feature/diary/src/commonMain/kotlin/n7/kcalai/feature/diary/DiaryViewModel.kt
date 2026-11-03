@@ -145,6 +145,8 @@ data class DiaryUiState(
     val feed: List<FeedItem> = emptyList(),
     /** Ряд чипсов над строкой ввода. */
     val composer: ComposerRow = ComposerRow.None,
+    /** Чем сейчас стала кнопка у строки ввода. См. [composerAction]. */
+    val action: ComposerAction = ComposerAction.SCAN,
     val totals: NutrimentTotals = NutrimentTotals.ZERO,
     /** Калории по дням за неделю, последний элемент — сегодня. Всегда семь элементов. */
     val week: List<DaySummary> = emptyList(),
@@ -325,6 +327,7 @@ class DiaryViewModel(
         }
         val day = loaded.date.toEpochDays()
         val pastMeal = if (loaded.date < loaded.today) meal ?: defaultPastMeal(loaded.day.entries) else null
+        val row = composerRow(typed, models, pastMeal)
         DiaryUiState(
             input = typed.input,
             feed = buildFeed(
@@ -337,7 +340,8 @@ class DiaryViewModel(
                 pastMeal = pastMeal,
                 profile = profile,
             ),
-            composer = composerRow(typed, models, pastMeal),
+            composer = row,
+            action = composerAction(row, typed.input, typed.assist.about(typed.input.trim())),
             totals = loaded.day.totals,
             week = loaded.week,
             date = loaded.date,
@@ -1133,10 +1137,13 @@ class DiaryViewModel(
      * ✓ на клавиатуре — то же, что тап по чипсу, когда чипс один и выбирать
      * не из чего: вес из строки и отсканированный товар с дописанным весом.
      *
-     * Выдачу поиска ✓ не трогает. Там выбор между вариантами, и делать его
-     * за человека значило бы добавлять первое попавшееся совпадение вслепую.
+     * Выдачу поиска ✓ сама не записывает: там выбор между вариантами, и делать
+     * его за человека значило бы добавлять первое попавшееся совпадение вслепую.
+     * Но где есть нейросеть, любая фраза уходит ей на разбор — как сообщение
+     * в мессенджере, — и разобранное встаёт чипсами. Тот же выбор делает
+     * кнопка у строки ввода: см. [composerAction].
      *
-     * @return `true`, если что-то записано; иначе ✓ просто прячет клавиатуру
+     * @return `true`, если что-то записано или отправлено; иначе ✓ просто прячет клавиатуру
      */
     fun onSubmit(): Boolean {
         val text = input.value
@@ -1152,6 +1159,14 @@ class DiaryViewModel(
             }
             assist.value.ready && isQuestion(text) -> {
                 askDiary(text)
+                true
+            }
+            composerAction(
+                ComposerRow.Results(answer.value?.items.orEmpty()),
+                text,
+                assist.value.about(text.trim()),
+            ) == ComposerAction.RECORD -> {
+                onAskAssistant(text.trim())
                 true
             }
             else -> false

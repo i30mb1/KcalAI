@@ -27,7 +27,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -40,6 +39,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -75,9 +77,11 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
 
     // Из прошлого дня «назад» ведёт к сегодня, а не прочь из приложения:
     // открыть вчера и выйти одним жестом — не то, чего человек ждёт.
-    BackHandler(enabled = state.pastMeal != null) {
-        viewModel.onSelectDay(state.today.toEpochDays())
-    }
+    NavigationBackHandler(
+        state = rememberNavigationEventState(NavigationEventInfo.None),
+        isBackEnabled = state.pastMeal != null,
+        onBackCompleted = { viewModel.onSelectDay(state.today.toEpochDays()) },
+    )
 
     DiaryScreen(
         state = state,
@@ -336,6 +340,7 @@ fun DiaryScreen(
         Composer(
             input = state.input,
             row = state.composer,
+            action = state.action,
             pastMeal = state.pastMeal,
             onPickMeal = onPickMeal,
             onInputChange = onInputChange,

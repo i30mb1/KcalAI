@@ -23,6 +23,7 @@ cmpMaterial3 = "1.9.0"
 # Иконки после 1.7.3 не выпускаются: набор заморожен и живёт как есть.
 cmpIcons = "1.7.3"
 cmpLifecycle = "2.9.6"
+cmpNavigationEvent = "1.1.0"
 # 0.7.x: Instant и Clock переехали в kotlin.time, здесь — зоны и календарь.
 datetime = "0.7.1"
 # Compose 1.12 — пара к CMP 1.12. Требует compileSdk 37.
@@ -80,7 +81,8 @@ cmp-material3 = { group = "org.jetbrains.compose.material3", name = "material3",
 cmp-material-icons-extended = { group = "org.jetbrains.compose.material", name = "material-icons-extended", version.ref = "cmpIcons" }
 cmp-resources = { group = "org.jetbrains.compose.components", name = "components-resources", version.ref = "cmp" }
 # Системное «назад» в общем коде: из прошлого дня возвращает к сегодня.
-cmp-ui-backhandler = { group = "org.jetbrains.compose.ui", name = "ui-backhandler", version.ref = "cmp" }
+# Версия — та, что тянет Compose Multiplatform 1.12.
+cmp-navigationevent-compose = { group = "org.jetbrains.androidx.navigationevent", name = "navigationevent-compose", version.ref = "cmpNavigationEvent" }
 cmp-lifecycle-viewmodel-compose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "cmpLifecycle" }
 cmp-lifecycle-runtime-compose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "cmpLifecycle" }
 ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
