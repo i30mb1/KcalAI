@@ -13,8 +13,8 @@ val localProperties = Properties().apply {
 android {
     namespace = "n7.kcalai"
     compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
+        version = release(37) {
+            minorApiLevel = 2
         }
     }
 
