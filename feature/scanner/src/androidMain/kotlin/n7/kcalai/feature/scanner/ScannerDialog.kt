@@ -64,6 +64,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import android.graphics.Bitmap
 import kotlinx.coroutines.delay
+import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.Nutriments
 import n7.kcalai.ui.KcalTheme
 import androidx.compose.ui.util.lerp as lerpFloat
@@ -90,6 +91,8 @@ actual fun ScannerDialog(
     onScanned: (String) -> Unit,
     onNoBarcode: () -> Unit,
     onSave: (gtin: String?, name: String, nutriments: Nutriments) -> Unit,
+    findByName: suspend (String) -> FoodCandidate?,
+    onPickMatch: (FoodCandidate) -> Unit,
     onDismiss: () -> Unit,
     frameStats: Boolean,
 ) {
@@ -125,6 +128,7 @@ actual fun ScannerDialog(
         CardClock(card)
         ScanHaptics(card)
         LabelSecondOpinion(card, latest)
+        LabelNameMatch(card, findByName)
         LaunchedEffect(card, answered, granted) {
             if (answered && !granted) card.withoutCamera()
         }
@@ -308,6 +312,10 @@ actual fun ScannerDialog(
                                 shown.state.onSaved()
                                 onSave(shown.state.gtin, shown.state.name.text.trim(), nutriments)
                             },
+                            onPickMatch = { candidate ->
+                                shown.state.onPicked(candidate)
+                                onPickMatch(candidate)
+                            },
                             modifier = Modifier.heightIn(min = cardMin, max = cardMax),
                         )
                     }
@@ -399,6 +407,23 @@ private fun LabelSecondOpinion(card: ScanState, latest: AtomicReference<Bitmap?>
     }
 }
 
+/**
+ * Справочник ищется по названию с пачки — с паузой. Кандидаты в названия
+ * сменяются от кадра к кадру, человек набирает название по букве, а поиск
+ * по смыслу считает отпечаток запроса моделью: искать каждую промежуточную
+ * строку незачем, нужна та, на которой остановились.
+ */
+@Composable
+private fun LabelNameMatch(card: ScanState, findByName: suspend (String) -> FoodCandidate?) {
+    val query = card.nameQuery
+    val find by rememberUpdatedState(findByName)
+    LaunchedEffect(card, query) {
+        if (query == null) return@LaunchedEffect
+        delay(MATCH_DELAY_MS)
+        card.onMatch(query, find(query))
+    }
+}
+
 /** Код пойман — ладонь это чувствует: человек смотрит на пачку, а не на экран. */
 @Composable
 private fun CaughtHaptic(caught: Boolean) {
@@ -475,3 +500,6 @@ private const val FIT_MS = 650
 private const val PANEL_MS = 320
 
 private const val TICK_MS = 1_000L
+
+/** Пауза перед поиском по названию: дольше смены кадра, короче, чем человек ждёт подсказки. */
+private const val MATCH_DELAY_MS = 700L

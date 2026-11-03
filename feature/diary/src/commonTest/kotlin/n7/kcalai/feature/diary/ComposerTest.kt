@@ -36,6 +36,15 @@ class ComposerTest {
         assertEquals("продукт сохранён", scannedCaption(scanned(EntrySource.MANUAL, guessed = false)))
     }
 
+    /** Похожий из справочника по названию с пачки — не найденный по коду и не сохранённый. */
+    @Test
+    fun `похожий по названию с пачки так и подписан`() {
+        assertEquals(
+            "похоже по названию с пачки · допишите вес",
+            scannedCaption(scanned(EntrySource.VISION, guessed = true)),
+        )
+    }
+
     /**
      * Вес и отсканированный товар — ровно те случаи, где ✓ записывает и без нейросети
      * (см. [DiaryViewModel.onSubmit]): чипс один, выбирать не из чего. Тянуться к нему

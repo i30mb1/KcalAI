@@ -46,8 +46,10 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.Nutriments
 import n7.kcalai.ui.CapsLabel
+import n7.kcalai.ui.ChipNumbers
 import n7.kcalai.ui.KcalChip
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
@@ -73,6 +75,8 @@ internal fun ProductCard(
     state: ScanState,
     hint: String?,
     onSave: (Nutriments) -> Unit,
+    /** Тап по похожему из справочника — взять его вместо того, чтобы заводить продукт. */
+    onPickMatch: (FoodCandidate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = KcalTheme.colors
@@ -94,6 +98,7 @@ internal fun ProductCard(
             BarcodeLine(state)
             Spacer(Modifier.height(12.dp))
             FieldCards(state)
+            state.match?.let { MatchChoice(it, onPick = { onPickMatch(it) }) }
 
             // Ошибка прячет кнопку, замечание — нет. Расходящиеся цифры бывают
             // напечатаны на реальной упаковке, и спорить с упаковкой мы не вправе.
@@ -351,6 +356,30 @@ private fun ScannedNumbers(state: ScanState) {
                     Text(value, style = KcalTheme.type.chip, color = KcalTheme.colors.text)
                 }
             }
+        }
+    }
+}
+
+/**
+ * Похожий продукт из справочника — под числами, потому что он их альтернатива:
+ * таблицу не прочесть, а «Творог 5%» в справочнике есть. Подписан своими
+ * калориями, чтобы человек сверил их с пачкой, прежде чем взять.
+ */
+@Composable
+private fun MatchChoice(candidate: FoodCandidate, onPick: () -> Unit) {
+    val colors = KcalTheme.colors
+    Column(Modifier.padding(top = 12.dp)) {
+        CapsLabel("похоже на")
+        KcalChip(onClick = onPick, background = colors.chip, modifier = Modifier.padding(top = 6.dp)) {
+            Text(
+                candidate.displayName,
+                style = KcalTheme.type.chip,
+                color = colors.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            ChipNumbers("· ${candidate.nutriments.kcal100} ккал на 100 г", colors.text3)
         }
     }
 }

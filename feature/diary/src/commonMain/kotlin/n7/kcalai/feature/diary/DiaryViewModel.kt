@@ -1004,6 +1004,36 @@ class DiaryViewModel(
     }
 
     /**
+     * Название с пачки — в справочник: вдруг такой продукт там уже есть.
+     *
+     * Промах по коду и нечитаемая таблица — частый исход, а «Творог 5%» в справочнике
+     * есть почти всегда. Поиск тот же, что у строки ввода: по словам, а не нашлось —
+     * по смыслу. Найденное карточка только предлагает; сбой — значит, предлагать нечего.
+     */
+    suspend fun matchLabelName(query: String): FoodCandidate? =
+        try {
+            food.search(query, limit = 1).firstOrNull()
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: Exception) {
+            Log.e(TAG, "справочник не ответил на «$query»", error)
+            null
+        }
+
+    /**
+     * Человек взял похожий из справочника вместо того, чтобы заводить продукт.
+     *
+     * Ничего не сохраняется: числа у похожего справочные, а не с этой пачки, и
+     * записать их под её кодом — отправить в общую базу выдумку. Дальше тот же путь,
+     * что у найденного по коду: название в строке ввода, чипс ждёт веса.
+     */
+    fun onPickLabelMatch(candidate: FoodCandidate) {
+        onDismissOverlay()
+        scanned.value = candidate.toScannedItem(EntrySource.VISION)
+        input.value = "${candidate.displayName} "
+    }
+
+    /**
      * «Нет штрих-кода» в сканере: снимать будут этикетку.
      *
      * У развесного, домашнего, вскрытой упаковки кода нет вовсе, а таблица
