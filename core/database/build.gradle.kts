@@ -22,6 +22,10 @@ kotlin {
             api(libs.kotlinx.coroutines.core)
             implementation(libs.androidx.sqlite.bundled)
         }
+        // Миграции проверяются и без телефона: настоящий SQLite, собранный под компьютер.
+        getByName("androidHostTest").dependencies {
+            implementation(libs.androidx.sqlite.bundled.jvm)
+        }
         getByName("androidDeviceTest").dependencies {
             implementation(libs.androidx.junit)
             implementation(libs.androidx.test.runner)

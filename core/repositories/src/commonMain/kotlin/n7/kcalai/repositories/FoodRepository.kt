@@ -58,6 +58,7 @@ fun interface RemoteProductSource {
  * @param dispatcher обязан быть однопоточным: [FoodDb] держит одно соединение SQLite,
  *        а оно не потокобезопасно. Пул (обычный `Dispatchers.IO`) сюда не годится.
  * @param embedder модель для поиска по смыслу; `null` — его нет вовсе (iOS, тесты)
+ * @param personal свои продукты и прошлые выборы в поиске по смыслу; `null` — только справочник
  */
 class FoodRepository(
     private val foodDb: FoodDbSource,
@@ -67,6 +68,7 @@ class FoodRepository(
     private val remote: RemoteProductSource,
     private val dispatcher: CoroutineDispatcher,
     embedder: QueryEmbedder? = null,
+    personal: PersonalSemantic? = null,
 ) {
 
     private suspend fun <T> onDb(block: (FoodDb) -> T): T =
@@ -79,8 +81,33 @@ class FoodRepository(
         SemanticFoodSearch(
             embedder = it,
             index = { index ?: SemanticIndex(onDb { db -> db.genericEmbeddings() }).also { built -> index = built } },
-            rows = { ids -> onDb { db -> db.genericsByIds(ids) }.map { row -> row.toCandidate() } },
+            resolve = ::candidates,
+            cache = personal?.let { p -> EmbeddingCache(p.dao, it, p.model, p.dim) },
+            ownFoods = { userFoodDao.all().map { food -> food.toCandidate() } },
+            pastPicks = {
+                personal?.let { p -> pastPicks(p.dao.pastPicks(PAST_PICKS_WINDOW), p.queryOf) }.orEmpty()
+            },
         )
+    }
+
+    /**
+     * Продукты по ссылкам — в том же порядке, пропавшие пропускаются.
+     *
+     * Ссылка из журнала могла протухнуть: справочник обновился, продукт удалён.
+     * По коду ищется как в [byBarcode], но без сети: поиск её не поднимает.
+     */
+    private suspend fun candidates(refs: List<FoodRef>): List<FoodCandidate> {
+        val generics = onDb { db -> db.genericsByIds(refs.filterIsInstance<FoodRef.Generic>().map { it.id }) }
+            .associateBy { it.id }
+        return refs.mapNotNull { ref ->
+            when (ref) {
+                is FoodRef.Generic -> generics[ref.id]?.toCandidate()
+                is FoodRef.User -> userFoodDao.findById(ref.id)?.toCandidate()
+                is FoodRef.Barcode -> userFoodDao.findByBarcode(ref.gtin)?.toCandidate()
+                    ?: onDb { it.findByBarcode(ref.gtin) }?.toCandidate()
+                    ?: cachedProductDao.findByGtin(ref.gtin)?.toCandidate()
+            }
+        }
     }
 
     /**
@@ -171,8 +198,8 @@ class FoodRepository(
 
     /**
      * Свои продукты, справочник, товары — по словам. Не нашлось ничего — по смыслу:
-     * так ловятся опечатки и разговорное («барщ», «кофеёк с молочком»), а точные
-     * совпадения по словам остаются за словами.
+     * так ловятся опечатки и разговорное («барщ», «кофеёк с молочком»), свои продукты
+     * и прошлые выборы человека, а точные совпадения по словам остаются за словами.
      */
     suspend fun search(query: String, limit: Int): List<FoodCandidate> {
         if (query.isBlank() || limit <= 0) return emptyList()
@@ -216,6 +243,11 @@ class FoodRepository(
     suspend fun portionUnits(ref: FoodRef): Map<String, Int> = when (ref) {
         is FoodRef.Generic -> onDb { it.portionUnits(ref.id) }
         else -> emptyMap()
+    }
+
+    private companion object {
+        /** Пар «запрос, выбор», которые помнит поиск по смыслу. Старше — уже не нынешние привычки. */
+        const val PAST_PICKS_WINDOW = 300
     }
 }
 

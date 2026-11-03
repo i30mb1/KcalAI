@@ -36,8 +36,11 @@ import n7.kcalai.remote.ServerProbe
 import n7.kcalai.repositories.DiaryRepository
 import n7.kcalai.repositories.FoodDbSource
 import n7.kcalai.repositories.FoodRepository
+import n7.kcalai.repositories.PersonalSemantic
 import n7.kcalai.repositories.RemoteProductSource
 import n7.kcalai.resolver.TextFoodResolver
+import n7.kcalai.resolver.parseSegment
+import n7.kcalai.semantic.EmbeddingModelInfo
 import n7.kcalai.semantic.LiteRtQueryEmbedder
 
 /**
@@ -109,6 +112,12 @@ class AppContainer(context: Context) {
             remote = remoteProductSource,
             dispatcher = foodDbDispatcher,
             embedder = LiteRtQueryEmbedder(appContext),
+            personal = PersonalSemantic(
+                dao = database.semanticDao(),
+                model = EmbeddingModelInfo.ID,
+                dim = EmbeddingModelInfo.DIM,
+                queryOf = { logged -> parseSegment(logged)?.name },
+            ),
         )
     }
 

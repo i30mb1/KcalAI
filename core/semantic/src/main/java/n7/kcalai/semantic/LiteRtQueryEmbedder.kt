@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
 import n7.kcalai.repositories.QueryEmbedder
 
 /**
- * Отпечаток запроса — EmbeddingGemma 2 270M через LiteRT-LM, на процессоре.
+ * Отпечатки запросов и своих продуктов — EmbeddingGemma 2 270M через LiteRT-LM, на процессоре.
  *
  * Видеокарта здесь не нужна: один отпечаток — десятки миллисекунд, а её запуск
  * дороже самого расчёта. Движок поднимается при первом запросе, который обычный
@@ -30,11 +30,15 @@ class LiteRtQueryEmbedder(context: Context) : QueryEmbedder {
     private val engine = IdleHolder(CoroutineScope(SupervisorJob() + dispatcher), IDLE_MILLIS, ::open)
     private var broken = false
 
-    override suspend fun embed(text: String): FloatArray? = withContext(dispatcher) {
+    override suspend fun embed(text: String): FloatArray? = compute(QUERY_PREFIX + text)
+
+    override suspend fun embedDocument(text: String): FloatArray? = compute(DOCUMENT_PREFIX + text)
+
+    private suspend fun compute(input: String): FloatArray? = withContext(dispatcher) {
         try {
-            engine.use { it.computeEmbedding(listOf(InputData.Text(QUERY_PREFIX + text)), OPTIONS).embedding }
+            engine.use { it.computeEmbedding(listOf(InputData.Text(input)), OPTIONS).embedding }
         } catch (error: Exception) {
-            Log.w(TAG, "отпечаток запроса не посчитан", error)
+            Log.w(TAG, "отпечаток не посчитан", error)
             null
         }
     }
@@ -64,6 +68,9 @@ class LiteRtQueryEmbedder(context: Context) : QueryEmbedder {
          * модель отличать вопрос от ответа.
          */
         const val QUERY_PREFIX = "task: search result | query: "
+
+        /** Та же разметка, что у продуктов в tools/embeddb: свои продукты сравниваются с ними на равных. */
+        const val DOCUMENT_PREFIX = "title: none | text: "
 
         /** Человек вводит еду подряд по нескольку строк — на это время движок остаётся в памяти. */
         const val IDLE_MILLIS = 120_000L
