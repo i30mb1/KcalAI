@@ -61,11 +61,14 @@
             потому что её вызывает система от имени агента, но каждая функция открыта
             только своему приложению (ACCESS_LEVEL_SELF), а привязаться к службе может
             лишь держатель системного разрешения BIND_APP_FUNCTION_SERVICE.
+            Ниже Android 16 служба выключена: её класс наследует платформенный, которого там нет.
         -->
         <service
             android:name=".assistant.KcalAppFunctionService"
+            android:enabled="@bool/app_functions"
             android:exported="true"
-            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE">
+            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE"
+            tools:targetApi="36">
             <property
                 android:name="android.app.appfunctions.schema"
                 android:value="app_functions_schema.xsd" />

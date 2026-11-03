@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AppFunctions — платформенный API с Android 16: ниже служба инструментов выключена. -->
+    <bool name="app_functions">false</bool>
+</resources>

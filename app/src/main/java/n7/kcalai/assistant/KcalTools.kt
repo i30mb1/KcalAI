@@ -2,6 +2,8 @@
 
 package n7.kcalai.assistant
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.appfunctions.AppFunctionAccessLevel
 import androidx.appfunctions.AppFunctionDeclaration
 import androidx.appfunctions.AppFunctionService
@@ -20,6 +22,9 @@ import n7.kcalai.KcalApp
  * Логика — в [DiaryTools], здесь только объявления: так её можно проверить
  * тестами без платформы, которой AppFunctions нужны.
  */
+// Службу привязывает только AppFunctionManager, а он есть с Android 16: ниже
+// класс не создаётся никогда, хотя объявлен в манифесте для всех версий.
+@RequiresApi(Build.VERSION_CODES.BAKLAVA)
 @AppFunctionServiceEntryPoint(
     serviceName = "KcalAppFunctionService",
     appFunctionXmlFileName = "kcal_app_functions",
