@@ -4,7 +4,7 @@ plugins {
     id("n7.kcalai.android-library")
 }
 
-// Имя файла модели — из того же места, откуда его берут пак и tools/embeddb.
+// Имя файла и длина отпечатка — из того же места, откуда их берут пак и tools/embeddb.
 val model = Properties().apply { rootProject.file("tools/embeddb/model.properties").reader().use(::load) }
 
 android {
@@ -12,6 +12,8 @@ android {
 
     defaultConfig {
         buildConfigField("String", "MODEL_FILE", "\"${model.getProperty("file")}\"")
+        buildConfigField("String", "MODEL_SHA256", "\"${model.getProperty("sha256")}\"")
+        buildConfigField("int", "MODEL_DIM", model.getProperty("dim"))
     }
 
     buildFeatures {

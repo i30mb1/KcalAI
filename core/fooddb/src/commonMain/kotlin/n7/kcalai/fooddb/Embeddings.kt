@@ -17,3 +17,21 @@ fun decodeEmbedding(blob: ByteArray): FloatArray {
         Float.fromBits(bits)
     }
 }
+
+/**
+ * Обратное к [decodeEmbedding] — для отпечатков, посчитанных на телефоне.
+ *
+ * Формат тот же, что у справочника: один способ хранить вектор на всё приложение.
+ */
+fun encodeEmbedding(vector: FloatArray): ByteArray {
+    val blob = ByteArray(vector.size * Float.SIZE_BYTES)
+    vector.forEachIndexed { i, value ->
+        val bits = value.toRawBits()
+        val o = i * Float.SIZE_BYTES
+        blob[o] = bits.toByte()
+        blob[o + 1] = (bits shr 8).toByte()
+        blob[o + 2] = (bits shr 16).toByte()
+        blob[o + 3] = (bits shr 24).toByte()
+    }
+    return blob
+}

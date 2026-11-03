@@ -50,4 +50,12 @@ class SemanticIndexTest {
     fun `пустой индекс ничего не находит`() {
         assertTrue(SemanticIndex(emptyMap()).nearest(unit(1f, 0f, 0f), limit = 3, minScore = 0f).isEmpty())
     }
+
+    @Test
+    fun `похожесть на один продукт обрезает запрос до длины индекса`() {
+        val index = SemanticIndex(mapOf(1L to floatArrayOf(1f, 0f)))
+
+        assertEquals(0.6f, index.score(floatArrayOf(3f, 4f, 100f), 1L))
+        assertEquals(null, index.score(floatArrayOf(1f, 0f), 2L))
+    }
 }

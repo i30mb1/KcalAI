@@ -24,12 +24,15 @@ import kotlinx.coroutines.IO
         MealGapDismissEntity::class,
         MascotMessageEntity::class,
         MascotProfileEntity::class,
+        TextEmbeddingEntity::class,
     ],
     version = KCAL_DB_VERSION,
     exportSchema = true,
     autoMigrations = [
         // Сообщения и профиль персонажей — только новые таблицы, дневник не трогается.
         AutoMigration(from = 4, to = 5),
+        // Кэш отпечатков для поиска по смыслу — новая таблица, остальное не трогается.
+        AutoMigration(from = 5, to = 6),
     ],
 )
 @ConstructedBy(KcalDatabaseConstructor::class)
@@ -42,10 +45,11 @@ abstract class KcalDatabase : RoomDatabase() {
     abstract fun bodyMetricDao(): BodyMetricDao
     abstract fun personalDao(): PersonalDao
     abstract fun mascotDao(): MascotDao
+    abstract fun semanticDao(): SemanticDao
 }
 
 /** Версия схемы базы. Константой — её читают тесты обновления и выгрузки схемы. */
-const val KCAL_DB_VERSION = 5
+const val KCAL_DB_VERSION = 6
 
 /** Реализацию для каждой платформы генерирует Room. */
 @Suppress("KotlinNoActualForExpect")
