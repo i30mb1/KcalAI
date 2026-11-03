@@ -17,6 +17,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import n7.kcalai.feature.scanner.ScanStep
+import n7.kcalai.model.EntrySource
 import n7.kcalai.model.MealType
 import n7.kcalai.model.Mascot
 import n7.kcalai.database.WriteConsent
@@ -339,6 +340,48 @@ class DiaryViewModelTest {
         network.complete(Unit)
         advanceUntilIdle()
         assertEquals(Overlay.Scan(ScanStep.NewProduct(UNKNOWN_GTIN)), vm.state.value.overlay)
+    }
+
+    // --- Похожий продукт по названию с пачки ----------------------------------------------
+
+    @Test
+    fun `название с пачки находит продукт в справочнике`() = runTest(dispatcher) {
+        harness.userFoodDao.add(barcode = null, name = "Творог 5%", kcal100 = 121)
+        val vm = screen()
+
+        assertEquals("Творог 5%", vm.matchLabelName("Творог 5%")?.displayName)
+    }
+
+    /** Поиск — подсказка к карточке, и его сбой не роняет съёмку: карточка просто без подсказки. */
+    @Test
+    fun `сбой справочника — похожего просто нет`() = runTest(dispatcher) {
+        val vm = screen()
+
+        assertEquals(null, vm.matchLabelName("Кефир 1%"))
+    }
+
+    /**
+     * Взятый похожий не сохраняется как новый продукт: числа у него справочные,
+     * а не с этой пачки. Он встаёт в строку ввода, как найденное по коду, и ждёт веса.
+     */
+    @Test
+    fun `взятый похожий закрывает окно и ждёт веса в строке ввода`() = runTest(dispatcher) {
+        val curd = harness.userFoodDao.add(barcode = null, name = "Творог 5%", kcal100 = 121)
+        val vm = screen()
+        vm.onOpenScan()
+        vm.onScanned(UNKNOWN_GTIN)
+        advanceUntilIdle()
+        val found = vm.matchLabelName("Творог 5%")!!
+
+        vm.onPickLabelMatch(found)
+        advanceUntilIdle()
+
+        assertEquals(Overlay.None, vm.state.value.overlay)
+        assertEquals("Творог 5% ", vm.state.value.input)
+        val row = vm.state.value.composer as ComposerRow.Scanned
+        assertEquals(EntrySource.VISION, row.item.source)
+        assertEquals(found, row.item.candidate)
+        assertEquals(listOf(curd), harness.userFoodDao.all(), "нового продукта не заводится")
     }
 
     private companion object {

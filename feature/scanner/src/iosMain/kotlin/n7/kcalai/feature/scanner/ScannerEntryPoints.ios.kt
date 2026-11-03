@@ -2,6 +2,7 @@ package n7.kcalai.feature.scanner
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.Nutriments
 import n7.kcalai.repositories.LabelReading
 
@@ -13,6 +14,8 @@ actual fun ScannerDialog(
     onScanned: (String) -> Unit,
     onNoBarcode: () -> Unit,
     onSave: (gtin: String?, name: String, nutriments: Nutriments) -> Unit,
+    findByName: suspend (String) -> FoodCandidate?,
+    onPickMatch: (FoodCandidate) -> Unit,
     onDismiss: () -> Unit,
     frameStats: Boolean,
 ) {

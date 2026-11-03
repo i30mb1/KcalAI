@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import kotlin.math.roundToInt
 import kotlin.time.TimeSource
+import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.Nutriments
 import n7.kcalai.model.ProductDraft
 import n7.kcalai.repositories.BarcodeValidator
@@ -277,6 +278,39 @@ internal class ScanState(
     var seen by mutableIntStateOf(0)
         private set
 
+    /**
+     * По чему искать пачку в справочнике: название в поле, а пока его нет —
+     * лучший кандидат с пачки. Поле заполняется, только когда кадры сошлись,
+     * а искать можно и по догадке: найденное всё равно лишь предлагается.
+     */
+    val nameQuery: String? get() = LabelNameQuery.pick(listOf(name.text) + nameChoices)
+
+    /** Что нашёл справочник и по какому запросу. Запрос держится рядом: ответ мог опоздать. */
+    private var matched by mutableStateOf<Pair<String, FoodCandidate>?>(null)
+
+    fun onMatch(query: String, found: FoodCandidate?) {
+        matched = found?.let { query to it }
+    }
+
+    /**
+     * Похожий продукт из справочника — предложение, а не подстановка.
+     *
+     * Его числа в поля не встают никогда: это числа другого продукта, и сохранить
+     * их под кодом этой пачки значило бы отправить в общую базу выдумку. Взять его
+     * можно только целиком, тапом, — и тогда сохраняется не новый продукт, а запись
+     * справочного. Пока таблица не дочитана: числа с самой пачки вернее любых похожих.
+     * Ответ про прежнее название не показывается — он уже не о той пачке.
+     */
+    val match: FoodCandidate?
+        get() = matched?.takeIf { (query, _) -> query == nameQuery && missing.isNotEmpty() }?.second
+
+    /** Взятый вместо заведения похожий — свой исход съёмки, см. [outcome]. */
+    private var picked by mutableStateOf<FoodCandidate?>(null)
+
+    fun onPicked(candidate: FoodCandidate) {
+        picked = candidate
+    }
+
     /** Человек нажал «Сохранить». Нужно диагностике: см. [outcome]. */
     var saved by mutableStateOf(false)
         private set
@@ -436,7 +470,14 @@ internal class ScanState(
      * а без неё остаётся гадать, почему съёмку бросили.
      */
     fun outcome(saved: Boolean): String = buildString {
-        append(if (saved) "сохранено" else "закрыто без сохранения")
+        val taken = picked
+        append(
+            when {
+                saved -> "сохранено"
+                taken != null -> "взят похожий из справочника «${taken.displayName}»"
+                else -> "закрыто без сохранения"
+            }
+        )
         line("название", name)
         line("ккал", kcal)
         line("Б", prot)

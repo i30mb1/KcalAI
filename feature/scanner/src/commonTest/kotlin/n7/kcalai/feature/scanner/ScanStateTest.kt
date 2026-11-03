@@ -6,7 +6,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.Test
+import n7.kcalai.model.FoodCandidate
+import n7.kcalai.model.FoodRef
 import n7.kcalai.model.Mascot
+import n7.kcalai.model.Nutriments
 import n7.kcalai.model.ProductDraft
 import n7.kcalai.repositories.LabelReading
 
@@ -531,6 +534,80 @@ class ScanStateTest {
 
         assertEquals("", state.kcal.text)
         assertEquals("", state.prot.text)
+    }
+
+    // --- Похожий продукт из справочника ---------------------------------------------
+
+    private val curdReference = FoodCandidate(
+        ref = FoodRef.Generic(7),
+        displayName = "Творог 5%",
+        nutriments = Nutriments(kcal100 = 121, prot100 = 1_600, fat100 = 500, carb100 = 300),
+        servingG = null,
+    )
+
+    @Test
+    fun `справочник ищется по названию в поле — без массы нетто`() {
+        val state = ScanState(GTIN).apply { name.type("ТВОРОГ 5% Простоквашино 180 г") }
+
+        assertEquals("ТВОРОГ 5% Простоквашино", state.nameQuery)
+    }
+
+    /** Поле заполняется, только когда кадры сошлись в названии, а искать можно уже по лучшему кандидату. */
+    @Test
+    fun `пока поле названия пустое, ищется лучший кандидат с пачки`() {
+        val state = ScanState(GTIN)
+
+        state.onFrame(LabelFrame(LabelReading.EMPTY, 0, names = listOf("Масса нетто 180 г", "Творог 5% 180 г")))
+
+        assertEquals("Творог 5%", state.nameQuery)
+    }
+
+    @Test
+    fun `без названия справочник не ищется`() {
+        assertNull(ScanState(GTIN).nameQuery)
+    }
+
+    @Test
+    fun `похожий продукт предлагается, пока таблица не дочитана`() {
+        val state = ScanState(GTIN).apply { name.type("Творог 5%") }
+
+        state.onMatch("Творог 5%", curdReference)
+        assertSame(curdReference, state.match)
+
+        // Камера прочла таблицу — числа с пачки вернее справочных, и предлагать нечего.
+        state.onFrame(read(kcal = 121, prot = 1_600, fat = 500, carb = 300))
+        assertNull(state.match)
+    }
+
+    /** Название сменилось — ответ про прежнее уже не о той пачке. */
+    @Test
+    fun `ответ про прежнее название не предлагается`() {
+        val state = ScanState(GTIN).apply { name.type("Творог 5%") }
+        state.onMatch("Творог 5%", curdReference)
+
+        state.name.type("Кефир 1%")
+
+        assertNull(state.match)
+    }
+
+    @Test
+    fun `справочник ничего не нашёл — и предлагать нечего`() {
+        val state = ScanState(GTIN).apply { name.type("Творог 5%") }
+        state.onMatch("Творог 5%", curdReference)
+
+        state.onMatch("Творог 5%", null)
+
+        assertNull(state.match)
+    }
+
+    /** Взятый похожий — не сохранение и не отказ: в разметке съёмки это свой исход. */
+    @Test
+    fun `взятый из справочника продукт виден в итоге съёмки`() {
+        val state = ScanState(GTIN).apply { name.type("Творог 5% Простоквашино") }
+
+        state.onPicked(curdReference)
+
+        assertTrue(state.outcome(saved = false).startsWith("взят похожий из справочника «Творог 5%»"))
     }
 
     private companion object {
