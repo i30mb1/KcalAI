@@ -261,6 +261,58 @@ class LabelAnchorsTest {
         assertFalse(reading.confident, "подобранное перебором подтверждает человек")
     }
 
+    @Test
+    fun `между подписью и числом могут стоять единицы и «не менее»`() {
+        val lines = listOf(
+            line("Белки, г, не менее 2,8", y = 100f),
+            line("Жиры, г 3,2", y = 140f),
+            line("Углеводы, мг 4,7", y = 180f),
+            line("60 ккал", y = 220f),
+        )
+
+        val draft = LabelParser.parseLines(lines).draft
+
+        assertEquals(280, draft.prot100)
+        assertEquals(320, draft.fat100)
+        assertEquals(470, draft.carb100)
+    }
+
+    @Test
+    fun `«на 100 г продукта» между подписью и числом не мешает`() {
+        val lines = listOf(
+            line("Белки на 100 г продукта 17,2", y = 100f),
+            line("Жиры 5,0", y = 140f),
+            line("Углеводы 1,8", y = 180f),
+            line("121 ккал", y = 220f),
+        )
+
+        assertEquals(1720, LabelParser.parseLines(lines).draft.prot100)
+    }
+
+    @Test
+    fun `подпись «ккал кДж» перед парой чисел читает обе величины`() {
+        val lines = listOf(
+            line("Белки 2,5", y = 100f),
+            line("Жиры 1,0", y = 140f),
+            line("Углеводы 15,4", y = 180f),
+            line("Энергетическая ценность, ккал/кДж 80/340", y = 220f),
+        )
+
+        assertEquals(80, LabelParser.parseLines(lines).draft.kcal100)
+    }
+
+    @Test
+    fun `число вплотную перед подписью остаётся её числом`() {
+        val lines = listOf(
+            line("17,2 г белки", y = 100f),
+            line("5,0 г жиры", y = 140f),
+            line("1,8 г углеводы", y = 180f),
+            line("121 ккал", y = 220f),
+        )
+
+        assertEquals(1720, LabelParser.parseLines(lines).draft.prot100)
+    }
+
     private fun line(text: String, y: Float, x: Float = 100f, height: Float = 20f) =
         TextLine(text = text, centerX = x, centerY = y, width = 120f, height = height)
 }
