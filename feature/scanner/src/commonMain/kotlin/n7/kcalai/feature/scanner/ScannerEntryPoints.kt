@@ -1,6 +1,7 @@
 package n7.kcalai.feature.scanner
 
 import androidx.compose.runtime.Composable
+import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.Nutriments
 import n7.kcalai.repositories.LabelReading
 
@@ -22,6 +23,10 @@ import n7.kcalai.repositories.LabelReading
  *        карточка без кода. Окно в дневнике одно, и других дверей к этикетке нет.
  * @param onSave карточка заполнена и человек подтвердил её. Окно само ничего
  *        не сохраняет: куда класть продукт, решает дневник.
+ * @param findByName название с пачки → похожий продукт справочника, `null` — такого нет.
+ *        Карточка его только предлагает, числа в поля не подставляет.
+ * @param onPickMatch человек взял похожий из справочника вместо того, чтобы
+ *        заводить продукт. Окно после этого закрывают снаружи, как после [onSave].
  * @param frameStats над камерой — счётчик кадров и время разбора. Для
  *        разработчика: человеку из магазина приложений он ничего не говорит.
  */
@@ -31,6 +36,8 @@ expect fun ScannerDialog(
     onScanned: (String) -> Unit,
     onNoBarcode: () -> Unit,
     onSave: (gtin: String?, name: String, nutriments: Nutriments) -> Unit,
+    findByName: suspend (String) -> FoodCandidate?,
+    onPickMatch: (FoodCandidate) -> Unit,
     onDismiss: () -> Unit,
     frameStats: Boolean = false,
 )

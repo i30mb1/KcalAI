@@ -407,7 +407,7 @@ object LabelParser {
      * на экране, но другие кодовые точки, и список служебных слов, написанный
      * кириллицей, проходит мимо. Именно так «Масса» и попадала в название.
      */
-    private fun isServiceText(raw: String): Boolean =
+    fun isServiceText(raw: String): Boolean =
         NOT_A_NAME.containsMatchIn(foldHomoglyphs(raw))
 
     /**

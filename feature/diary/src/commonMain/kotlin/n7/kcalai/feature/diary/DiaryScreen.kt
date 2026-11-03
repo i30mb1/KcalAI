@@ -142,6 +142,8 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
             onScanned = viewModel::onScanned,
             onNoBarcode = viewModel::onNoBarcode,
             onSave = viewModel::onSaveNewProduct,
+            findByName = viewModel::matchLabelName,
+            onPickMatch = viewModel::onPickLabelMatch,
             onDismiss = viewModel::onDismissOverlay,
             // Счётчик кадров — инструмент разработчика, как и отладка разбора.
             frameStats = labelDebug,
