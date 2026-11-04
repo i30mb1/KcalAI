@@ -59,6 +59,13 @@ class AssistantTest {
         servingG = 300,
     )
 
+    private val kefir = FoodCandidate(
+        ref = FoodRef.Generic(303),
+        displayName = "Кефир",
+        nutriments = Nutriments(kcal100 = 40, prot100 = 300, fat100 = 100, carb100 = 400),
+        servingG = 250,
+    )
+
     private fun proposal(candidate: FoodCandidate, grams: Int, phrase: String) = ResolvedItem(
         sourceText = phrase,
         candidate = candidate,
@@ -273,13 +280,55 @@ class AssistantTest {
     }
 
     @Test
-    fun `без нейросети фраза кнопку не трогает`() = runTest(dispatcher) {
+    fun `без нейросети кнопка та же, но записывать нечего — она только прячет клавиатуру`() = runTest(dispatcher) {
         val vm = screen(withAssistant = false)
         vm.onInputChange("доел за ребёнком макароны")
         advanceUntilIdle()
 
-        assertEquals(ComposerAction.SCAN, vm.state.value.action)
+        assertEquals(ComposerAction.RECORD, vm.state.value.action)
         assertFalse(vm.onSubmit())
+    }
+
+    /** Кнопка не меняется, пока стоит ответ нейросети: чипсы записываются ею по одному. */
+    @Test
+    fun `ответ нейросети записывается по ✓ блюдо за блюдом`() = runTest(dispatcher) {
+        assistant.proposals = listOf(proposal(borscht, 300, "тарелка борща"), proposal(kefir, 200, "стакан кефира"))
+        val vm = screen()
+        vm.onInputChange("тарелка борща и стакан кефира")
+        advanceUntilIdle()
+        vm.onSubmit()
+        advanceUntilIdle()
+        assertEquals(ComposerAction.RECORD, vm.state.value.action)
+
+        assertTrue(vm.onSubmit())
+        advanceUntilIdle()
+        assertEquals(listOf("Борщ"), harness.diaryDao.day(harness.today).map { it.displayName })
+        assertEquals("тарелка борща и стакан кефира", vm.state.value.input)
+
+        assertTrue(vm.onSubmit())
+        advanceUntilIdle()
+        assertEquals(listOf("Борщ", "Кефир"), harness.diaryDao.day(harness.today).map { it.displayName })
+        assertEquals("", vm.state.value.input)
+        assertEquals(1, assistant.asked.size)
+    }
+
+    /** Нейросеть второй раз не спрашиваем, а выдача поиска никуда не делась. */
+    @Test
+    fun `нейросеть не разобрала — ✓ берёт первый вариант поиска`() = runTest(dispatcher) {
+        repeat(6) { i -> harness.userFoodDao.add(barcode = null, name = "Гречка $i", kcal100 = 110) }
+        val vm = screen()
+        vm.onInputChange("гречка 200")
+        advanceUntilIdle()
+        vm.onSubmit()
+        advanceUntilIdle()
+        assertEquals(listOf("гречка 200"), assistant.asked)
+        assertTrue(harness.diaryDao.day(harness.today).isEmpty())
+
+        assertTrue(vm.onSubmit())
+        advanceUntilIdle()
+
+        assertEquals(listOf(200), harness.diaryDao.day(harness.today).map { it.grams })
+        assertEquals(1, assistant.asked.size)
     }
 }
 

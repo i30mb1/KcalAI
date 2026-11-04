@@ -521,11 +521,16 @@ fun EmptyDayBubble(item: FeedItem.EmptyDay) {
  * превращается в ответ собеседника и называет все три выхода.
  */
 @Composable
-fun NotFoundBubble(item: FeedItem.NotFound, onAsk: () -> Unit) {
+fun NotFoundBubble(item: FeedItem.NotFound, onAsk: () -> Unit, onScan: () -> Unit) {
     val colors = KcalTheme.colors
 
     IncomingBubble(item) {
         BubbleText(notFoundText(item.query, item.assist))
+        // Реплика советует сканировать, а кнопка у строки сейчас — «отправить»:
+        // сканер живёт там, только пока строка пуста.
+        KcalChip(onClick = onScan, background = colors.bubble, modifier = Modifier.padding(top = 8.dp)) {
+            Text("Сканировать", style = KcalTheme.type.chip, color = colors.onBubble)
+        }
         // Нейросеть — четвёртый выход, и только по просьбе: разбор идёт секунды
         // и греет телефон, а запускать его на каждую паузу в наборе незачем.
         if (item.assist == Assist.OFFER || item.assist == Assist.THINKING) {

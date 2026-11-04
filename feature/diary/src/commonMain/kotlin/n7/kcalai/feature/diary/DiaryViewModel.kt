@@ -212,6 +212,9 @@ class DiaryViewModel(
 
     private val input = MutableStateFlow("")
     private val answer = MutableStateFlow<Answer?>(null)
+
+    /** Строка, которую отправили раньше, чем на неё ответил поиск. */
+    private var submitted: String? = null
     private val scanned = MutableStateFlow<ResolvedItem?>(null)
     private val overlay = MutableStateFlow<Overlay>(Overlay.None)
     private val personalState = MutableStateFlow(PersonalState())
@@ -341,7 +344,7 @@ class DiaryViewModel(
                 profile = profile,
             ),
             composer = row,
-            action = composerAction(row, typed.input, typed.assist.about(typed.input.trim())),
+            action = composerAction(typed.input),
             totals = loaded.day.totals,
             week = loaded.week,
             date = loaded.date,
@@ -548,7 +551,14 @@ class DiaryViewModel(
                         Answer(text, items)
                     }
                 }
-                .collect { answer.value = it }
+                .collect { found ->
+                    answer.value = found
+                    // Каждый ответ закрывает ожидание: строку могли переписать, и тогда
+                    // отправленного в ней уже нет.
+                    val waiting = submitted
+                    submitted = null
+                    if (found != null && found.query == waiting) recordFirst(found)
+                }
         }
 
         // Есть ли нейросеть, спрашивается один раз: модель не появляется
@@ -1164,20 +1174,25 @@ class DiaryViewModel(
     }
 
     /**
-     * ✓ на клавиатуре — то же, что тап по чипсу, когда чипс один и выбирать
-     * не из чего: вес из строки и отсканированный товар с дописанным весом.
+     * «Отправить» — кнопкой у строки ввода или ✓ на клавиатуре, это одно и то же.
      *
-     * Выдачу поиска ✓ сама не записывает: там выбор между вариантами, и делать
-     * его за человека значило бы добавлять первое попавшееся совпадение вслепую.
-     * Но где есть нейросеть, любая фраза уходит ей на разбор — как сообщение
-     * в мессенджере, — и разобранное встаёт чипсами. Тот же выбор делает
-     * кнопка у строки ввода: см. [composerAction].
+     * Вес и отсканированный товар записываются сразу. Где есть нейросеть, фраза уходит
+     * ей на разбор — как сообщение в мессенджере, — и разобранное встаёт чипсами.
+     * Что уже стоит чипсами, принимается с первого: выдача поиска отсортирована, и человек
+     * видит, что запишется, прямо над кнопкой, а другой вариант выбирает тапом. Блюда
+     * из ответа нейросети записываются по одному, как и тапом.
      *
-     * @return `true`, если что-то записано или отправлено; иначе ✓ просто прячет клавиатуру
+     * Поиск идёт с паузой, и в чипсах может стоять ответ на прошлую строку: «гречка 20»
+     * вместо «гречка 200». Такой ответ не годится — запись ждёт поиска, см. [submitted].
+     *
+     * @return `true`, если что-то записано или отправлено; иначе просто прячется клавиатура
      */
     fun onSubmit(): Boolean {
         val text = input.value
         val scan = scanned.value
+        val found = answer.value?.takeIf { it.query == text }
+        val answered = found?.items.orEmpty().any { it.source == EntrySource.LLM }
+        val canAsk = assist.value.about(text.trim()).let { it == Assist.OFFER || it == Assist.THINKING }
         return when {
             scan != null -> {
                 onPickScanned(scan.withTypedGrams(text))
@@ -1191,16 +1206,25 @@ class DiaryViewModel(
                 askDiary(text)
                 true
             }
-            composerAction(
-                ComposerRow.Results(answer.value?.items.orEmpty()),
-                text,
-                assist.value.about(text.trim()),
-            ) == ComposerAction.RECORD -> {
+            // «200» — начало «200 г гречки»: блюда ещё нет, и поиск по такой строке не идёт.
+            text.none(Char::isLetter) -> false
+            canAsk && !answered -> {
                 onAskAssistant(text.trim())
                 true
             }
-            else -> false
+            found != null -> recordFirst(found)
+            else -> {
+                submitted = text
+                true
+            }
         }
+    }
+
+    /** Принять то, что стоит первым чипсом. Записывать нечего — `false`. */
+    private fun recordFirst(found: Answer): Boolean {
+        val first = found.items.firstOrNull { it.candidate != null && it.grams > 0 } ?: return false
+        onPick(first)
+        return true
     }
 
     // --- Цель и вес -------------------------------------------------------------------

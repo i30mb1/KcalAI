@@ -15,6 +15,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import n7.kcalai.feature.scanner.ScanStep
 import n7.kcalai.model.EntrySource
@@ -216,18 +217,84 @@ class DiaryViewModelTest {
         assertEquals("", vm.state.value.input)
     }
 
-    /** Выдача поиска — это выбор, и делать его за человека ✓ не вправе. */
+    /** Шесть своих продуктов: выдача набирается ими, и поиск не идёт в справочник, которого здесь нет. */
+    private fun ownBuckwheat() = repeat(6) { i ->
+        harness.userFoodDao.add(barcode = null, name = "Гречка $i", kcal100 = 110)
+    }
+
+    /** Отправить — значит принять то, что стоит первым чипсом над кнопкой. */
     @Test
-    fun `✓ на клавиатуре не выбирает из выдачи поиска за человека`() = runTest(dispatcher) {
+    fun `✓ записывает первый вариант выдачи`() = runTest(dispatcher) {
+        ownBuckwheat()
         val vm = screen()
 
         vm.type("гречка 200")
         advanceUntilIdle()
-        vm.onSubmit()
+        val first = assertIs<ComposerRow.Results>(vm.state.value.composer).items.first()
+        assertTrue(vm.onSubmit())
+        advanceUntilIdle()
+
+        val added = harness.diaryDao.day(harness.today).single()
+        assertEquals(first.candidate?.displayName, added.displayName)
+        assertEquals(200, added.grams)
+        assertEquals("", vm.state.value.input)
+    }
+
+    /** Поиск идёт с паузой, и чипсы ещё про «гречка 20»: записать надо то, что набрано. */
+    @Test
+    fun `✓ раньше ответа поиска ждёт его, а не берёт чипсы прошлой строки`() = runTest(dispatcher) {
+        ownBuckwheat()
+        val vm = screen()
+
+        vm.type("гречка 20")
+        advanceUntilIdle()
+        vm.type("гречка 200")
+        assertTrue(vm.onSubmit())
+        advanceUntilIdle()
+
+        assertEquals(listOf(200), harness.diaryDao.day(harness.today).map { it.grams })
+        assertEquals("", vm.state.value.input)
+    }
+
+    @Test
+    fun `строка, изменённая после ✓, не записывается`() = runTest(dispatcher) {
+        ownBuckwheat()
+        val vm = screen()
+
+        vm.type("гречка 200")
+        assertTrue(vm.onSubmit())
+        vm.type("гречка 300")
         advanceUntilIdle()
 
         assertTrue(harness.diaryDao.day(harness.today).isEmpty())
-        assertEquals("гречка 200", vm.state.value.input)
+        assertEquals("гречка 300", vm.state.value.input)
+    }
+
+    /** «200» — начало «200 г гречки»: блюда в строке ещё нет. */
+    @Test
+    fun `✓ на строке без букв ничего не записывает`() = runTest(dispatcher) {
+        ownBuckwheat()
+        val vm = screen()
+
+        vm.type("200")
+        advanceUntilIdle()
+
+        assertFalse(vm.onSubmit())
+        advanceUntilIdle()
+        assertTrue(harness.diaryDao.day(harness.today).isEmpty())
+        assertEquals("200", vm.state.value.input)
+    }
+
+    @Test
+    fun `✓ на то, чего нет, ничего не записывает`() = runTest(dispatcher) {
+        val vm = screen()
+
+        vm.type("хрючево")
+        advanceUntilIdle()
+
+        assertFalse(vm.onSubmit())
+        assertTrue(harness.diaryDao.day(harness.today).isEmpty())
+        assertEquals("хрючево", vm.state.value.input)
     }
 
     // --- «Ничего не нашлось» ----------------------------------------------------------------

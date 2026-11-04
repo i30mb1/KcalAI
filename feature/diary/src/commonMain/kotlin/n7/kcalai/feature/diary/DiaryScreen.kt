@@ -311,6 +311,7 @@ fun DiaryScreen(
             onDismissGap = onDismissGap,
             onSendOutbox = onSendOutbox,
             onAskAssistant = onAskAssistant,
+            onOpenScan = onOpenScan,
             onPickPlan = onPickPlan,
             onOpenGoal = onOpenGoal,
             onAnswerAsk = onAnswerAsk,
@@ -413,6 +414,7 @@ private fun Feed(
     onSendOutbox: () -> Unit,
     /** «Разобрать» в реплике «не нашлось»: фразу разбирает нейросеть. */
     onAskAssistant: (String) -> Unit,
+    onOpenScan: () -> Unit,
     onPickPlan: (PlanOption) -> Unit,
     onOpenGoal: (GoalField) -> Unit,
     onAnswerAsk: (AskKind, Boolean) -> Unit,
@@ -549,7 +551,11 @@ private fun Feed(
 
                     is FeedItem.Over -> OverBubble(item)
 
-                    is FeedItem.NotFound -> NotFoundBubble(item, onAsk = { onAskAssistant(item.query) })
+                    is FeedItem.NotFound -> NotFoundBubble(
+                        item = item,
+                        onAsk = { onAskAssistant(item.query) },
+                        onScan = onOpenScan,
+                    )
 
                     is FeedItem.WeightLogged -> WeightBubble(item)
                     is FeedItem.Reply -> ReplyBubble(item)
