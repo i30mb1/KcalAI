@@ -26,6 +26,7 @@ local.properties
 *.jks
 *.keystore
 *.pepk
+play-service-account.json
 
 # Артефакты сборки базы
 /tools/builddb/.venv/

@@ -1,3 +1,4 @@
+import com.github.triplet.gradle.androidpublisher.ReleaseStatus
 import java.util.Properties
 
 plugins {
@@ -5,6 +6,7 @@ plugins {
     alias(libs.plugins.compose.compiler)
     // Схема AppFunctions — инструментов нейросети — генерируется из KDoc на сборке.
     alias(libs.plugins.ksp)
+    alias(libs.plugins.play.publisher)
 }
 
 // Адрес локального сервера — в local.properties (не в git): kcal.server=http://192.168.1.10:8080
@@ -24,8 +26,8 @@ android {
         applicationId = "n7.kcalai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.1"
+        versionCode = 4
+        versionName = "1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -114,6 +116,15 @@ android {
 
     // Модель поиска по смыслу: в AAB отдельным fast-follow паком, в APK её нет.
     assetPacks += ":assets:embedding"
+}
+
+// Публикация: :app:publishReleaseBundle выкладывает подписанный AAB в production на всех сразу.
+// Заметка к версии — в src/main/play/release-notes. Страницу в Play эта задача не трогает.
+play {
+    serviceAccountCredentials.set(rootProject.file("play-service-account.json"))
+    defaultToAppBundles.set(true)
+    track.set("production")
+    releaseStatus.set(ReleaseStatus.COMPLETED)
 }
 
 dependencies {

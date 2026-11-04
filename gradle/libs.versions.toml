@@ -147,3 +147,5 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 room = { id = "androidx.room", version.ref = "room" }
 # Начиная с Kotlin 2.0 AGP требует его явно при buildFeatures.compose = true.
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+# Публикация в Google Play: :app:publishReleaseBundle.
+play-publisher = { id = "com.github.triplet.play", version = "4.1.1" }
