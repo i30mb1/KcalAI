@@ -27,9 +27,9 @@ import n7.kcalai.repositories.NutrimentValidator
  * затирал бы следующий же кадр — ровно в тот момент, когда человек решил, что
  * камера ошибается, и взялся печатать сам.
  *
- * [rejected] — то, что человек снял крестиком. Помнить это обязательно: камера
- * продолжает видеть ту же пачку и через секунду предложит снятое значение снова,
- * и крестик без памяти не делал бы ничего.
+ * [rejected] — прочитанное камерой, которое человек поправил или стёр. Помнить это
+ * обязательно: камера продолжает видеть ту же пачку и через секунду предложит то же
+ * значение снова, и стирать его было бы бесполезно.
  */
 @Stable
 internal class ScanField(initial: String = "", manual: Boolean = false) {
@@ -41,28 +41,22 @@ internal class ScanField(initial: String = "", manual: Boolean = false) {
     var manual by mutableStateOf(manual)
         private set
 
-    /** Значение, снятое крестиком. Видно снаружи: это прямая разметка ошибки разбора. */
+    /** Значение камеры, которое человек отверг. Видно снаружи: это прямая разметка ошибки разбора. */
     var rejected by mutableStateOf<String?>(null)
         private set
 
-    /** Распознавание предлагает значение. Молча уступает человеку — и снятому. */
+    /** Распознавание предлагает значение. Молча уступает человеку — и отвергнутому. */
     fun offer(value: String?) {
         if (manual || value.isNullOrEmpty() || value == rejected) return
         text = value
     }
 
     fun type(input: String) {
+        if (!manual && text.isNotEmpty() && input != text) rejected = text
         text = input
         // Пустое поле снова отдаётся камере: стереть всё и уйти — это не «я ввёл
         // пустоту», а «я передумал вводить». Тупика из-за этого быть не должно.
         manual = input.isNotEmpty()
-    }
-
-    /** Крестик. Значение уходит и само собой не возвращается. */
-    fun clear() {
-        rejected = text.takeIf(String::isNotEmpty) ?: rejected
-        text = ""
-        manual = false
     }
 
     val filled: Boolean get() = text.isNotEmpty()
@@ -112,8 +106,8 @@ internal class ScanState(
         private set
 
     /**
-     * Поле, которое сейчас набирают: числа и код — цифровой панелью, название —
-     * клавиатурой. `null` — панели нет. Камера в это поле не пишет.
+     * Поле, которое сейчас набирают: в нём фокус и над ним клавиатура телефона.
+     * `null` — клавиатуры нет, читает камера. Камера в это поле не пишет.
      */
     var typing by mutableStateOf<ScanField?>(null)
         private set
@@ -134,10 +128,9 @@ internal class ScanState(
      */
     fun tick() {
         noteProgress()
-        // Человек сам что-то набирает — название, например: цифры посреди слова
-        // спрятали бы клавиатуру у него из-под пальцев.
+        // Человек сам что-то набирает — название, например: ему не до просьб.
         if (manual || typing != null) return
-        val first = firstMissingNumber() ?: return
+        firstMissingNumber() ?: return
         val now = clock()
         // Смотреть нейросети есть на что, только когда камера отдала хоть кадр.
         if (!visionAsked && seen > 0 && now - calmSince >= VISION_MS) {
@@ -146,10 +139,10 @@ internal class ScanState(
         }
         val stalled = now - calmSince >= STALL_MS
         val blurred = blurSince?.let { now - it >= BLUR_MS } ?: false
-        if (stalled || blurred) {
-            manual = true
-            typing = first
-        }
+        // Только просьба, и поле не занимается. Человек в этот момент целится в таблицу:
+        // клавиатура закрыла бы ему кадр, а в набираемое поле камера не пишет — то есть
+        // именно то число, которое она дочитывала, уже не встало бы никогда.
+        if (stalled || blurred) manual = true
     }
 
     /**
@@ -202,14 +195,14 @@ internal class ScanState(
         typing = firstMissingNumber()
     }
 
-    /** Тап по полю. Число — значит, человек взялся вписывать сам, и панель с цифрами встаёт. */
+    /** Поле в фокусе. Число — значит, человек взялся вписывать сам. */
     fun startTyping(field: ScanField) {
         typing = field
         if (field in numberFields) manual = true
     }
 
     /**
-     * Цифры спрятаны: человек хочет ещё раз камерой. Она получает свои двадцать
+     * Клавиатура убрана: человек хочет ещё раз камерой. Она получает свои двадцать
      * секунд заново — иначе просьба вернулась бы через мгновение.
      */
     fun stopTyping() {
@@ -219,35 +212,30 @@ internal class ScanState(
         blurSince = null
     }
 
-    /** Кнопка цифровой панели — в поле, которое набирают. */
-    fun press(key: PadKey) {
-        val field = typing ?: return
-        val number = padNumber(field) ?: return
-        field.type(field.text.press(key, number))
+    /** Ввод с клавиатуры. Числа держат свою форму, см. [clean]. */
+    fun input(field: ScanField, text: String) {
+        field.type(numberKind(field)?.clean(text) ?: text)
         noteProgress()
     }
 
     /**
-     * Число, которое камера распознала, но не разложила по полям, — тапом по нему
-     * в поле, которое набирают. Приложение не угадывает, куда его поставить, а
-     * показывает всё, что увидело, и отдаёт решение человеку.
+     * «Дальше» на клавиатуре: глаза идут по пачке сверху вниз, и фокус — за ними,
+     * к следующему пустому числу. Числа кончились — к названию: без него не сохранить.
+     * Заполнено всё — клавиатура уходит и открывает кнопку сохранения.
      */
-    fun put(value: String) {
-        val field = typing?.takeIf { padNumber(it) != null } ?: return
-        field.type(value)
-        noteProgress()
+    fun typeNext() {
+        val current = numberFields.indexOf(typing)
+        val ahead = numberFields.drop(current + 1) + numberFields.take(current + 1)
+        val next = ahead.firstOrNull { it !== typing && isMissing(it) }
+            ?: name.takeIf { it !== typing && it.text.isBlank() }
+        if (next != null) typing = next else stopTyping()
     }
 
-    /** Долгое «стереть»: поле пустеет, и камера снятое значение больше не предлагает. */
-    fun clearTyping() {
-        typing?.takeIf { padNumber(it) != null }?.clear()
-    }
-
-    /** Чем набирается поле. `null` — название: его набирают клавиатурой. */
-    fun padNumber(field: ScanField): PadNumber? = when (field) {
-        kcal -> PadNumber.KCAL
-        barcode -> PadNumber.CODE
-        prot, fat, carb -> PadNumber.GRAMS
+    /** Как вписывается поле. `null` — название: это текст, а не число. */
+    fun numberKind(field: ScanField): NumberKind? = when (field) {
+        kcal -> NumberKind.KCAL
+        barcode -> NumberKind.CODE
+        prot, fat, carb -> NumberKind.GRAMS
         else -> null
     }
 
@@ -352,9 +340,9 @@ internal class ScanState(
         // Прочитанное название так затиралось служебной надписью ровно в тот
         // момент, когда человек уводил камеру, чтобы дочитать КБЖУ.
         //
-        // Поэтому первое подтверждённое остаётся. Человек не заперт: крестик
-        // освобождает поле и помнит снятое, а чипсы под полем держат остальных
-        // кандидатов — включая тот, что камера видит прямо сейчас.
+        // Поэтому первое подтверждённое остаётся. Человек не заперт: поле можно
+        // переписать, а чипсы под ним держат остальных кандидатов — включая тот,
+        // что камера видит прямо сейчас.
         if (!name.filled) offer(name, next.name)
         noteProgress()
     }
@@ -387,9 +375,6 @@ internal class ScanState(
 
     /** Названия-кандидаты с пачки, уже отсортированные голосованием кадров. */
     val nameChoices: List<String> get() = frame.names
-
-    /** Числа, распознанные на этикетке, — чтобы не набирать «12,4» с клавиатуры. */
-    val numbers: List<String> get() = frame.reading.numbers
 
     val nutriments: Nutriments?
         get() = kcal.text.toIntOrNull()?.let {
@@ -497,7 +482,7 @@ internal class ScanState(
                 // и написал другое. Здесь виден и её ответ, и верный.
                 field.rejected != null && field.manual ->
                     " (руками, камера читала «${field.rejected}»)"
-                field.rejected != null -> " (снято крестиком, камера читала «${field.rejected}»)"
+                field.rejected != null -> " (стёрто, камера читала «${field.rejected}»)"
                 field.manual -> " (руками)"
                 else -> " (камера)"
             }

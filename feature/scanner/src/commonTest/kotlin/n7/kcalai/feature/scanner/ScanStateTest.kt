@@ -15,7 +15,7 @@ import n7.kcalai.repositories.LabelReading
 
 /**
  * Карточка нового продукта: что считается заполненным, когда персонажи просят
- * вписать числа руками, куда встают цифры с панели и кто из троих что говорит.
+ * вписать числа руками, куда встают вписанные цифры и кто из троих что говорит.
  */
 class ScanStateTest {
 
@@ -43,10 +43,6 @@ class ScanStateTest {
 
     private fun settled(value: Int?) =
         LabelConsensus.Field(value, votes = if (value != null) 3 else 0, needed = 3)
-
-    private fun ScanState.pressAll(keys: String) = keys.forEach { key ->
-        press(if (key == ',') PadKey.Comma else PadKey.Digit(key.digitToInt()))
-    }
 
     private fun ScanState.line(mascot: Mascot): MascotLine = mascotLines().single { it.mascot == mascot }
 
@@ -137,8 +133,9 @@ class ScanStateTest {
 
     // --- Камера не справилась — просят вписать руками ------------------------------------
 
+    /** Человек в этот момент целится в таблицу: клавиатура закрыла бы ему кадр. */
     @Test
-    fun `камера ничего не прочла за 20 секунд — просят вписать, цифры встают на белки`() {
+    fun `камера ничего не прочла за 20 секунд — просят вписать, но клавиатуру не открывают`() {
         var now = 0L
         val state = ScanState(GTIN) { now }
 
@@ -149,7 +146,20 @@ class ScanStateTest {
         now = 20_000
         state.tick()
         assertTrue(state.manual)
-        assertSame(state.prot, state.typing)
+        assertNull(state.typing)
+    }
+
+    /** В набираемое поле камера не пишет, и просьба вписать ни одно поле таким не делает. */
+    @Test
+    fun `после просьбы вписать камера продолжает заполнять поля`() {
+        var now = 0L
+        val state = ScanState(GTIN) { now }
+        now = 20_000
+        state.tick()
+
+        state.onFrame(read(prot = 1240))
+
+        assertEquals("12,4", state.prot.text)
     }
 
     /** Двадцать секунд — без нового числа, а не с открытия: медленную камеру не перебивают. */
@@ -169,8 +179,6 @@ class ScanStateTest {
         now = 35_000
         state.tick()
         assertTrue(state.manual)
-        // Белки уже прочитаны — цифры встают на следующую строку этикетки.
-        assertSame(state.fat, state.typing)
     }
 
     /** Мыльный кадр распознавание пропускает; шесть секунд одного мыла — ждать нечего. */
@@ -223,13 +231,13 @@ class ScanStateTest {
         withoutCarbs.tick()
         allRead.tick()
 
-        assertSame(withoutCarbs.carb, withoutCarbs.typing)
+        assertTrue(withoutCarbs.manual)
         assertFalse(allRead.manual)
     }
 
-    /** Спрятал цифры — значит, хочет ещё раз камерой. Она получает свои двадцать секунд. */
+    /** Убрал клавиатуру — значит, хочет ещё раз камерой. Она получает свои двадцать секунд. */
     @Test
-    fun `спрятанные цифры возвращают камере двадцать секунд`() {
+    fun `убранная клавиатура возвращает камере двадцать секунд`() {
         var now = 0L
         val state = ScanState(GTIN) { now }
         now = 20_000
@@ -248,7 +256,7 @@ class ScanStateTest {
         assertTrue(state.manual)
     }
 
-    /** Человек набирает название — цифры не выскакивают посреди слова и не прячут клавиатуру. */
+    /** Человек набирает название — поле чисел не перехватывает клавиатуру посреди слова. */
     @Test
     fun `пока набирают название, просьба вписать числа ждёт`() {
         var now = 0L
@@ -263,7 +271,7 @@ class ScanStateTest {
     }
 
     @Test
-    fun `без камеры цифры открываются сразу`() {
+    fun `без камеры клавиатура открывается сразу`() {
         val state = ScanState(GTIN)
 
         state.withoutCamera()
@@ -274,7 +282,7 @@ class ScanStateTest {
 
     /** Нативной библиотеки распознавания под этот процессор может не быть — ждать нечего. */
     @Test
-    fun `распознавание недоступно — цифры открываются с первым же кадром`() {
+    fun `распознавание недоступно — клавиатура открывается с первым же кадром`() {
         val state = ScanState(GTIN)
 
         state.onFrame(LabelFrame(LabelReading.EMPTY, elapsedMs = 0, available = false))
@@ -283,14 +291,14 @@ class ScanStateTest {
         assertSame(state.prot, state.typing)
     }
 
-    // --- Цифры с панели -----------------------------------------------------------------
+    // --- Цифры с клавиатуры ---------------------------------------------------------------
 
     @Test
     fun `цифры встают в выбранное поле, и камера их больше не трогает`() {
         val state = ScanState(GTIN)
 
         state.startTyping(state.carb)
-        state.pressAll("3,3")
+        state.input(state.carb, "3,3")
         state.onFrame(read(carb = 550))
 
         assertEquals("3,3", state.carb.text)
@@ -306,34 +314,97 @@ class ScanStateTest {
         state.onFrame(read(fat = 550))
 
         state.startTyping(state.fat)
-        repeat(3) { state.press(PadKey.Erase) }
+        state.input(state.fat, "")
         state.onFrame(read(fat = 550))
 
         assertEquals("", state.fat.text)
     }
 
-    /** Число распознано, но разбор не понял, чьё оно: тап по нему — в поле, которое набирают. */
+    /** Камера видит ту же пачку и через секунду предложила бы стёртое снова. */
     @Test
-    fun `распознанное число тапом встаёт в набираемое поле`() {
+    fun `стёртое значение камеры не возвращается и после ухода из поля`() {
         val state = ScanState(GTIN)
+        state.onFrame(read(fat = 550))
 
         state.startTyping(state.fat)
-        state.put("2,5")
+        state.input(state.fat, "5,")
+        state.input(state.fat, "")
+        state.stopTyping()
+        state.onFrame(read(fat = 550))
 
-        assertEquals("2,5", state.fat.text)
+        assertEquals("", state.fat.text)
+    }
+
+    /** Самая ценная строка диагностики: рядом и то, что прочла камера, и верное. */
+    @Test
+    fun `исправленное значение камеры видно в итоге съёмки`() {
+        val state = ScanState(GTIN)
+        state.onFrame(read(prot = 1_000))
+
+        state.startTyping(state.prot)
+        state.input(state.prot, "2,5")
+
+        assertTrue("Б: 2,5 (руками, камера читала «10»)" in state.outcome(saved = true), state.outcome(saved = true))
     }
 
     @Test
-    fun `калории набираются без запятой, а код — с ведущим нулём`() {
+    fun `калории вписываются без запятой, а код — с ведущим нулём`() {
         val state = ScanState(null)
 
-        state.startTyping(state.kcal)
-        state.pressAll("1,2")
-        state.startTyping(state.barcode)
-        state.pressAll("04")
+        state.input(state.kcal, "1,2")
+        state.input(state.barcode, "04")
 
         assertEquals("12", state.kcal.text)
         assertEquals("04", state.barcode.text)
+    }
+
+    /** Глаза идут по пачке сверху вниз, и «дальше» на клавиатуре — за ними. */
+    @Test
+    fun `дальше ведёт к следующему пустому числу`() {
+        val state = ScanState(GTIN)
+        state.input(state.fat, "5")
+
+        state.startTyping(state.prot)
+        state.typeNext()
+
+        assertSame(state.carb, state.typing)
+    }
+
+    @Test
+    fun `дальше с последнего числа возвращается к пропущенному`() {
+        val state = ScanState(GTIN)
+        state.input(state.fat, "5")
+        state.input(state.carb, "3")
+
+        state.startTyping(state.kcal)
+        state.typeNext()
+
+        assertSame(state.prot, state.typing)
+    }
+
+    /** Числа вписаны, а сохранить нельзя: без названия продукт потом не найти. */
+    @Test
+    fun `вписаны все числа — дальше ведёт к названию`() {
+        val state = ScanState(GTIN)
+        state.input(state.prot, "16")
+        state.input(state.fat, "5")
+        state.input(state.carb, "3")
+        state.input(state.kcal, "121")
+
+        state.startTyping(state.kcal)
+        state.typeNext()
+
+        assertSame(state.name, state.typing)
+    }
+
+    @Test
+    fun `заполнено всё — дальше убирает клавиатуру`() {
+        val state = filled()
+
+        state.startTyping(state.kcal)
+        state.typeNext()
+
+        assertNull(state.typing)
     }
 
     // --- Кто что говорит -----------------------------------------------------------------
@@ -513,7 +584,7 @@ class ScanStateTest {
         assertEquals("121", state.kcal.text)
         assertEquals("3", state.carb.text)
         assertEquals("Творог 5%", state.name.text)
-        // Камерой, а не руками: человек проверяет и при нужде снимает крестиком.
+        // Камерой, а не руками: человек проверяет и при нужде переписывает.
         assertFalse(state.kcal.manual)
     }
 

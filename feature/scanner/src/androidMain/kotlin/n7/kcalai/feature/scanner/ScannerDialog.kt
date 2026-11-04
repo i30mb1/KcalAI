@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -83,7 +84,7 @@ import androidx.compose.ui.util.lerp as lerpFloat
  * - новый продукт: камера плавно приближается к таблице и рамка вытягивается
  *   под неё, сверху выходят трое — каждый просит своё, — снизу выезжает карточка.
  *
- * Отказ в доступе к камере — не тупик, а вторая дверь: цифры набираются кнопками.
+ * Отказ в доступе к камере — не тупик, а вторая дверь: цифры вписываются с клавиатуры.
  */
 @Composable
 actual fun ScannerDialog(
@@ -155,7 +156,7 @@ actual fun ScannerDialog(
     val requestClose: () -> Unit = {
         if (card?.hasDraft == true) confirmClose = true else onDismiss()
     }
-    // «Назад» сначала прячет цифры — потом закрывает окно.
+    // «Назад» сначала убирает ввод — потом закрывает окно.
     val back: () -> Unit = {
         when {
             card?.typing != null -> card.stopTyping()
@@ -177,12 +178,21 @@ actual fun ScannerDialog(
                 val t = fit.value
                 val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                 val shelfTop = statusTop + TOP_BAR_HEIGHT
-                val window = viewfinderWindow(maxWidth, maxHeight, shelfTop, t)
+                // Рамка держится над панелью: обрезанная снизу, она читается как поломка.
+                val keyboard = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+                val window = viewfinderWindow(
+                    width = maxWidth,
+                    height = maxHeight,
+                    shelfTop = shelfTop,
+                    codePanel = if (typingCode) keyboard + CODE_PANEL_HEIGHT else 0.dp,
+                    cardPanel = maxOf(READING_PANEL_HEIGHT, keyboard + TYPING_PANEL_HEIGHT),
+                    fit = t,
+                )
 
                 if (granted) {
                     CameraFrames(
                         modifier = Modifier.pointerInput(Unit) {
-                            // Тап по камере прячет цифры: человек хочет ещё раз камерой.
+                            // Тап по камере убирает клавиатуру: человек хочет ещё раз камерой.
                             detectTapGestures {
                                 currentCard?.stopTyping()
                                 typingCode = false
@@ -364,16 +374,27 @@ private class Window(val top: Dp, val height: Dp)
 /**
  * Где окно видоискателя: полоса под штрих-код (fit = 0) или окно под таблицу (fit = 1).
  *
- * Полоса — чуть выше середины экрана: штрих-код узкий, а не таблица. Окно под
- * таблицу — от персонажей до низа кадра: кадр стоит по ширине от верха, и ниже
+ * Полоса — чуть выше середины свободного места: штрих-код узкий, а не таблица. Окно
+ * под таблицу — от персонажей до низа кадра: кадр стоит по ширине от верха, и ниже
  * него только карточка.
+ *
+ * @param codePanel что закрывает низ на шаге кода: ввод цифр с клавиатурой
+ * @param cardPanel что закрывает низ в карточке
  */
-private fun viewfinderWindow(width: Dp, height: Dp, shelfTop: Dp, fit: Float): Window {
-    val codeHeight = height * CODE_WINDOW_SHARE
-    val codeTop = (height - codeHeight) * 0.42f
+private fun viewfinderWindow(
+    width: Dp,
+    height: Dp,
+    shelfTop: Dp,
+    codePanel: Dp,
+    cardPanel: Dp,
+    fit: Float,
+): Window {
+    val free = height - codePanel
+    val codeHeight = minOf(height * CODE_WINDOW_SHARE, free - shelfTop - 12.dp).coerceAtLeast(MIN_WINDOW)
+    val codeTop = maxOf((free - codeHeight) * 0.42f, shelfTop)
 
     val tableTop = shelfTop + SHELF_HEIGHT + 10.dp
-    val tableBottom = minOf(width * 4f / 3f, height - READING_PANEL_HEIGHT) - 12.dp
+    val tableBottom = minOf(width * 4f / 3f, height - cardPanel) - 12.dp
     val tableHeight = (tableBottom - tableTop).coerceAtLeast(MIN_WINDOW)
 
     return Window(top = lerp(codeTop, tableTop, fit), height = lerp(codeHeight, tableHeight, fit))
@@ -490,6 +511,12 @@ private const val CODE_WINDOW_SHARE = 0.22f
 
 /** Сколько обычно занимает карточка, пока читает камера: окно под таблицу — выше неё. */
 private val READING_PANEL_HEIGHT = 300.dp
+
+/** Сколько занимает карточка над клавиатурой: название и окошки чисел. */
+private val TYPING_PANEL_HEIGHT = 176.dp
+
+/** Сколько занимает ввод штрих-кода над клавиатурой: заголовок, цифры и две кнопки. */
+private val CODE_PANEL_HEIGHT = 216.dp
 
 /** Меньше окно не бывает даже на самом низком экране: в него должна влезать строка. */
 private val MIN_WINDOW = 96.dp
