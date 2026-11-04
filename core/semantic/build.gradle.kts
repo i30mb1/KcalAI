@@ -23,7 +23,12 @@ android {
 
 dependencies {
     implementation(project(":core:repositories"))
-    implementation(libs.litertlm.android)
+    // kotlin-reflect нужен библиотеке только для инструментов чата (ReflectionTool), а мы берём
+    // из неё один EmbeddingEngine. Лежит он в сборке — R8 его не выкинет: kotlin.jvm.internal.Reflection
+    // ищет его фабрику через Class.forName. Это 1200 классов, каждая восьмая строка кода приложения.
+    implementation(libs.litertlm.android) {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-reflect")
+    }
     implementation(libs.play.asset.delivery.ktx)
     implementation(libs.kotlinx.coroutines.android)
     testImplementation(libs.kotlinx.coroutines.test)

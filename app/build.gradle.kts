@@ -43,6 +43,14 @@ android {
     }
 
     buildTypes {
+        // Material здесь только родитель стартовой темы. Его правила и правила CoordinatorLayout
+        // держат то, что читается по имени из XML-разметки и в AppCompatActivity, а ни того
+        // ни другого в приложении нет. Одно и то же правило приносят оба: указывать надо обоих.
+        val rulesForXmlLayouts = arrayOf(
+            "com.google.android.material:material",
+            "androidx.coordinatorlayout:coordinatorlayout",
+        )
+
         debug {
             buildConfigField("String", "KCAL_SERVER", "\"${localProperties.getProperty("kcal.server", "")}\"")
         }
@@ -56,6 +64,9 @@ android {
             // Что вызывается по имени (JNI распознавания), держат правила в src/main/keepRules.
             optimization {
                 enable = true
+                keepRules {
+                    ignoreFrom(*rulesForXmlLayouts)
+                }
             }
         }
         // Release, каким его получат люди, — для проверки на устройстве (:smoke).
@@ -67,6 +78,12 @@ android {
             initWith(getByName("release"))
             applicationIdSuffix = ".minified"
             signingConfig = signingConfigs.getByName("debug")
+            // keepRules через initWith не переходят, а эта сборка обязана совпадать с release.
+            optimization {
+                keepRules {
+                    ignoreFrom(*rulesForXmlLayouts)
+                }
+            }
             // :core:ocr — обычная Android-библиотека, у неё только debug и release.
             matchingFallbacks += "release"
         }
