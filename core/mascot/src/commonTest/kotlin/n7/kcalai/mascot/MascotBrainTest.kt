@@ -21,9 +21,11 @@ import n7.kcalai.database.MascotMessageEntity
 import n7.kcalai.database.MascotProfileEntity
 import n7.kcalai.database.WriteConsent
 import n7.kcalai.mascot.voice.Topic
+import n7.kcalai.model.BackgroundModel
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
+import n7.kcalai.model.ModelDelivery
 import n7.kcalai.personal.PersonalRepository
 
 /**
@@ -211,6 +213,82 @@ class MascotBrainTest {
     }
 
     // --- Имя и согласие -------------------------------------------------------------------
+
+    // --- Фоновая докачка ------------------------------------------------------------------
+
+    /** Сообщение попадает в ленту дня, а не в шторку: оно не тратит бюджет уведомлений. */
+    @Test
+    fun `докачку умного поиска Яйцо докладывает в ленту`() = runTest {
+        val said = brain().report(BackgroundModel.SEARCH, ModelDelivery.DOWNLOADING, now)
+
+        assertEquals(Topic.SEARCH_LOADING.name, said?.topic)
+        assertEquals(Mascot.EGG, said?.mascot)
+        assertEquals(Delivery.FEED, said?.delivery)
+        assertEquals(today, said?.dateEpochDay)
+    }
+
+    @Test
+    fun `кто о чём сообщает`() = runTest {
+        val brain = brain()
+
+        assertEquals(Mascot.BUTTER, brain.report(BackgroundModel.SEARCH, ModelDelivery.WAITING_FOR_WIFI, now)?.mascot)
+        assertEquals(Mascot.BUTTER, brain.report(BackgroundModel.SEARCH, ModelDelivery.FAILED, now)?.mascot)
+        assertEquals(Mascot.GRAIN, brain.report(BackgroundModel.SEARCH, ModelDelivery.READY, now)?.mascot)
+        assertEquals(
+            Topic.ASSISTANT_READY.name,
+            brain.report(BackgroundModel.ASSISTANT, ModelDelivery.READY, now)?.topic,
+        )
+    }
+
+    /** Статус приходит при каждом запуске, а рассказать надо один раз. */
+    @Test
+    fun `о начале докачки сообщают один раз, и после перезапуска тоже`() = runTest {
+        brain().report(BackgroundModel.SEARCH, ModelDelivery.DOWNLOADING, now)
+
+        assertNull(brain().report(BackgroundModel.SEARCH, ModelDelivery.DOWNLOADING, now + 2.days))
+    }
+
+    @Test
+    fun `о том, что докачалось, сообщают один раз`() = runTest {
+        brain().report(BackgroundModel.SEARCH, ModelDelivery.READY, now)
+
+        assertNull(brain().report(BackgroundModel.SEARCH, ModelDelivery.READY, now + 2.days))
+    }
+
+    /** Обновление приложения докачивает пак заново, но человек уже всё знает. */
+    @Test
+    fun `докачанное не начинает разговор заново`() = runTest {
+        brain().report(BackgroundModel.SEARCH, ModelDelivery.READY, now)
+
+        assertNull(brain().report(BackgroundModel.SEARCH, ModelDelivery.DOWNLOADING, now + 2.days))
+        assertNull(brain().report(BackgroundModel.SEARCH, ModelDelivery.WAITING_FOR_WIFI, now + 2.days))
+        assertNull(brain().report(BackgroundModel.SEARCH, ModelDelivery.FAILED, now + 2.days))
+    }
+
+    /** Сбой может повторяться часами, и каждый раз жаловаться незачем. */
+    @Test
+    fun `о сбое говорят не чаще раза в день`() = runTest {
+        brain().report(BackgroundModel.SEARCH, ModelDelivery.FAILED, now)
+
+        assertNull(brain().report(BackgroundModel.SEARCH, ModelDelivery.FAILED, now + 3.hours))
+        assertNotNull(brain().report(BackgroundModel.SEARCH, ModelDelivery.FAILED, now + 1.days))
+    }
+
+    @Test
+    fun `поиск и нейросеть докачиваются и обсуждаются порознь`() = runTest {
+        brain().report(BackgroundModel.SEARCH, ModelDelivery.READY, now)
+
+        assertEquals(
+            Topic.ASSISTANT_LOADING.name,
+            brain().report(BackgroundModel.ASSISTANT, ModelDelivery.DOWNLOADING, now)?.topic,
+        )
+    }
+
+    /** Нейросеть качает система, и ждать Wi-Fi там не о чем: своей такой темы у неё нет. */
+    @Test
+    fun `нейросеть про Wi-Fi не говорит`() = runTest {
+        assertNull(brain().report(BackgroundModel.ASSISTANT, ModelDelivery.WAITING_FOR_WIFI, now))
+    }
 
     @Test
     fun `ответ на имя — по имени и в ленту`() = runTest {

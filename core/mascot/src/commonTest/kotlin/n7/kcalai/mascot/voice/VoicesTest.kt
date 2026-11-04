@@ -40,6 +40,13 @@ class VoicesTest {
         put(Topic.WRITE_NO, setOf(GRAIN))
         put(Topic.WRITE_DENIED, setOf(GRAIN))
         put(Topic.GOAL_REACHED, setOf(EGG, BUTTER))
+        put(Topic.SEARCH_LOADING, setOf(EGG))
+        put(Topic.SEARCH_WAITING_WIFI, setOf(BUTTER))
+        put(Topic.SEARCH_FAILED, setOf(BUTTER))
+        put(Topic.SEARCH_READY, setOf(GRAIN))
+        put(Topic.ASSISTANT_LOADING, setOf(EGG))
+        put(Topic.ASSISTANT_FAILED, setOf(BUTTER))
+        put(Topic.ASSISTANT_READY, setOf(GRAIN))
     }
 
     /** Факты, при которых у каждой темы есть о чём сказать. */

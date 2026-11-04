@@ -55,6 +55,27 @@ enum class Topic(val kind: TopicKind) {
     /** Разрешил, а телефон — нет. */
     WRITE_DENIED(TopicKind.ANSWER),
 
+    /** Докачивается умный поиск: пока ищем только по словам. */
+    SEARCH_LOADING(TopicKind.ANSWER),
+
+    /** Умный поиск большой и ждёт Wi-Fi. */
+    SEARCH_WAITING_WIFI(TopicKind.ANSWER),
+
+    /** Умный поиск не докачался. */
+    SEARCH_FAILED(TopicKind.ANSWER),
+
+    /** Умный поиск на месте: опечатки и разговорные названия теперь находятся. */
+    SEARCH_READY(TopicKind.ANSWER),
+
+    /** Докачивается нейросеть. */
+    ASSISTANT_LOADING(TopicKind.ANSWER),
+
+    /** Нейросеть не докачалась. */
+    ASSISTANT_FAILED(TopicKind.ANSWER),
+
+    /** Нейросеть на месте: разбор фраз и вопросы к дневнику. */
+    ASSISTANT_READY(TopicKind.ANSWER),
+
     /** Третий тык подряд. */
     POKE(TopicKind.SPEECH),
 

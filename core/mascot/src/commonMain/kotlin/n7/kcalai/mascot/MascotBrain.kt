@@ -20,7 +20,9 @@ import n7.kcalai.mascot.voice.Topic
 import n7.kcalai.mascot.voice.Utterance
 import n7.kcalai.mascot.voice.Voices
 import n7.kcalai.mascot.voice.compose
+import n7.kcalai.model.BackgroundModel
 import n7.kcalai.model.Mascot
+import n7.kcalai.model.ModelDelivery
 import n7.kcalai.model.Sex
 import n7.kcalai.model.owner
 import n7.kcalai.model.parseFoodRef
@@ -150,6 +152,35 @@ class MascotBrain(
     /** Телефон разрешил уведомления или нет. */
     suspend fun notificationsResult(granted: Boolean, now: Instant): MascotMessageEntity? =
         answer(if (granted) Topic.WRITE_YES else Topic.WRITE_DENIED, Mascot.GRAIN, now)
+
+    // --- Рассказывает о фоновой работе -----------------------------------------------------
+
+    /**
+     * Фоновая докачка дошла до новой точки — сказать об этом в ленте дня.
+     *
+     * Иначе человек видит только последствия: вчера поиск не понимал «барщ», сегодня
+     * понимает, и ни то ни другое ничем не объяснено.
+     *
+     * Статус приходит при каждом запуске, поэтому о каждой точке говорят один раз за всю
+     * жизнь приложения, а о сбое — раз в день: докачка может падать часами. Докачанное
+     * закрывает разговор совсем: обновление приложения тянет пак заново, а человеку это
+     * уже не новость. Это ответ в ленте, а не первое слово в шторке: ни дневного
+     * бюджета, ни согласия писать первыми он не касается.
+     *
+     * @return сказанное; `null` — говорить не о чем
+     */
+    suspend fun report(model: BackgroundModel, delivery: ModelDelivery, now: Instant): MascotMessageEntity? {
+        val (topic, mascot) = news(model, delivery) ?: return null
+        val done = if (model == BackgroundModel.SEARCH) Topic.SEARCH_READY else Topic.ASSISTANT_READY
+        if (dao.lastSaid(done.name) != null) return null
+
+        val last = dao.lastSaid(topic.name)?.let(Instant::fromEpochMilliseconds)
+        val sameDay = last?.toLocalDateTime(zone)?.date == now.toLocalDateTime(zone).date
+        val repeats = delivery == ModelDelivery.FAILED && !sameDay
+        if (last != null && !repeats) return null
+
+        return answer(topic, mascot, now)
+    }
 
     // --- Отзывается -----------------------------------------------------------------------
 
@@ -293,6 +324,25 @@ class MascotBrain(
         const val REPEAT_RUN = 3
         const val FOOD_LOOKBACK_DAYS = 89
         val SHAKE_PAUSE = 10.seconds
+    }
+}
+
+/**
+ * Кто и на какую тему рассказывает о докачке: Яйцо докладывает, Масло утешает, когда
+ * застряло, Зёрнышко радуется. Нейросеть качает система, и ждать Wi-Fi ей не о чем.
+ */
+private fun news(model: BackgroundModel, delivery: ModelDelivery): Pair<Topic, Mascot>? = when (model) {
+    BackgroundModel.SEARCH -> when (delivery) {
+        ModelDelivery.DOWNLOADING -> Topic.SEARCH_LOADING to Mascot.EGG
+        ModelDelivery.WAITING_FOR_WIFI -> Topic.SEARCH_WAITING_WIFI to Mascot.BUTTER
+        ModelDelivery.FAILED -> Topic.SEARCH_FAILED to Mascot.BUTTER
+        ModelDelivery.READY -> Topic.SEARCH_READY to Mascot.GRAIN
+    }
+    BackgroundModel.ASSISTANT -> when (delivery) {
+        ModelDelivery.DOWNLOADING -> Topic.ASSISTANT_LOADING to Mascot.EGG
+        ModelDelivery.WAITING_FOR_WIFI -> null
+        ModelDelivery.FAILED -> Topic.ASSISTANT_FAILED to Mascot.BUTTER
+        ModelDelivery.READY -> Topic.ASSISTANT_READY to Mascot.GRAIN
     }
 }
 

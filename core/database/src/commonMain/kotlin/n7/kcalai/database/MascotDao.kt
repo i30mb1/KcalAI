@@ -24,6 +24,10 @@ interface MascotDao {
     @Query("SELECT * FROM mascot_message WHERE id = :id")
     suspend fun findById(id: Long): MascotMessageEntity?
 
+    /** Когда в последний раз говорили на тему; `null` — не говорили никогда. */
+    @Query("SELECT MAX(createdAt) FROM mascot_message WHERE topic = :topic")
+    suspend fun lastSaid(topic: String): Long?
+
     /** Первое прочтение не перезаписывается: важно, когда человек увидел сообщение впервые. */
     @Query("UPDATE mascot_message SET openedAt = :at WHERE id = :id AND openedAt IS NULL")
     suspend fun markOpened(id: Long, at: Long)

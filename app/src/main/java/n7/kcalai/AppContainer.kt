@@ -1,6 +1,7 @@
 package n7.kcalai
 
 import android.content.Context
+import android.util.Log
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.datetime.TimeZone
 import kotlinx.coroutines.CoroutineDispatcher
@@ -11,7 +12,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.datetime.todayIn
 import n7.kcalai.assistant.DiaryTools
 import n7.kcalai.assistant.FoodAssistant
@@ -25,6 +28,8 @@ import n7.kcalai.fooddb.FoodDbFactory
 import n7.kcalai.fooddb.SeedInstaller
 import n7.kcalai.mascot.FactsBuilder
 import n7.kcalai.mascot.MascotBrain
+import n7.kcalai.model.BackgroundModel
+import n7.kcalai.model.ModelDelivery
 import n7.kcalai.personal.PersonalRepository
 import n7.kcalai.remote.ChainedProductSource
 import n7.kcalai.remote.ContributionUploader
@@ -103,6 +108,9 @@ class AppContainer(context: Context) {
     /** Задан ли адрес сервера. Без него вклады и сессии копятся и ждут, справочник не докачивается. */
     val serverConfigured: Boolean get() = SERVER_BASE_URL.isNotBlank()
 
+    /** Модель поиска по смыслу: и отпечатки запросов, и докачка её пака. */
+    private val embedder: LiteRtQueryEmbedder by lazy { LiteRtQueryEmbedder(appContext) }
+
     val foodRepository: FoodRepository by lazy {
         FoodRepository(
             foodDb = foodDbSource,
@@ -111,7 +119,7 @@ class AppContainer(context: Context) {
             contributionDao = database.contributionDao(),
             remote = remoteProductSource,
             dispatcher = foodDbDispatcher,
-            embedder = LiteRtQueryEmbedder(appContext),
+            embedder = embedder,
             personal = PersonalSemantic(
                 dao = database.semanticDao(),
                 model = EmbeddingModelInfo.ID,
@@ -160,8 +168,10 @@ class AppContainer(context: Context) {
         )
     }
 
+    private val nano: NanoAssistant by lazy { NanoAssistant(appContext, diaryTools, appScope) }
+
     /** Gemini Nano: есть не на каждом телефоне, и экран спрашивает об этом сам. */
-    val assistant: FoodAssistant by lazy { NanoAssistant(appContext, diaryTools, appScope) }
+    val assistant: FoodAssistant get() = nano
 
     /** Gemini Nano по этикетке — когда камера с распознаванием застряли. */
     val labelVision: LabelVision by lazy {
@@ -183,7 +193,31 @@ class AppContainer(context: Context) {
         )
     }
 
+    /**
+     * Фоновая докачка — словами персонажей, в ленте дня. Слушает всю жизнь процесса:
+     * модель докачивается и без экрана, а сказанное лежит в базе и дождётся человека.
+     */
+    fun reportBackgroundWork() {
+        appScope.launch {
+            embedder.delivery.collect { report(BackgroundModel.SEARCH, it) }
+        }
+        appScope.launch {
+            nano.delivery.filterNotNull().collect { report(BackgroundModel.ASSISTANT, it) }
+        }
+    }
+
+    private suspend fun report(model: BackgroundModel, delivery: ModelDelivery) {
+        try {
+            mascotBrain.report(model, delivery, Clock.System.now())
+        } catch (error: Exception) {
+            // Реплика — надстройка: из-за неё нельзя ронять приложение на старте.
+            Log.w(TAG, "не удалось рассказать про $model: $delivery", error)
+        }
+    }
+
     private companion object {
+        const val TAG = "AppContainer"
+
         /** Из `local.properties` (`kcal.server=…`). Пустая строка означает «источника нет». */
         val SERVER_BASE_URL: String = BuildConfig.KCAL_SERVER
 

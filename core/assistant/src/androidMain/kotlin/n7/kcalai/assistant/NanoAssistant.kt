@@ -9,17 +9,22 @@ import com.google.mlkit.genai.agent.AgentRunner
 import com.google.mlkit.genai.agent.AgentTool
 import com.google.mlkit.genai.agent.AppFunctionAgentTools
 import com.google.mlkit.genai.agent.textTokens
+import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.content
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.launch
+import n7.kcalai.model.ModelDelivery
 import n7.kcalai.resolver.ResolvedItem
 
 /**
@@ -44,14 +49,28 @@ class NanoAssistant(
 
     private val model by lazy { Generation.getClient() }
     private val downloading = AtomicBoolean(false)
+    private val deliveryState = MutableStateFlow<ModelDelivery?>(null)
+
+    /**
+     * Докачка модели — для реплик персонажей. `null` — говорить не о чем: модели
+     * на этом телефоне нет или про неё ещё не спрашивали.
+     */
+    val delivery: StateFlow<ModelDelivery?> = deliveryState.asStateFlow()
 
     override suspend fun ready(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA) return false
         return when (model.checkStatus()) {
-            FeatureStatus.AVAILABLE -> true
+            FeatureStatus.AVAILABLE -> {
+                deliveryState.value = ModelDelivery.READY
+                true
+            }
             FeatureStatus.DOWNLOADABLE -> {
                 // Сейчас — нет, но к следующему открытию экрана будет.
                 download()
+                false
+            }
+            FeatureStatus.DOWNLOADING -> {
+                deliveryState.value = ModelDelivery.DOWNLOADING
                 false
             }
             else -> false
@@ -60,11 +79,20 @@ class NanoAssistant(
 
     private fun download() {
         if (!downloading.compareAndSet(false, true)) return
+        deliveryState.value = ModelDelivery.DOWNLOADING
         scope.launch {
             try {
-                model.download().collect { status -> Log.i(TAG, "Gemini Nano: $status") }
+                model.download().collect { status ->
+                    Log.i(TAG, "Gemini Nano: $status")
+                    when (status) {
+                        is DownloadStatus.DownloadCompleted -> deliveryState.value = ModelDelivery.READY
+                        is DownloadStatus.DownloadFailed -> deliveryState.value = ModelDelivery.FAILED
+                        else -> Unit
+                    }
+                }
             } catch (error: Exception) {
                 Log.w(TAG, "Gemini Nano не скачалась", error)
+                deliveryState.value = ModelDelivery.FAILED
             } finally {
                 downloading.set(false)
             }

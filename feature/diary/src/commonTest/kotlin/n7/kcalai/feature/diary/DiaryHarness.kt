@@ -357,6 +357,10 @@ private class FakePersonalDao : PersonalDao {
 
 /** Сообщения и профиль персонажей в памяти. */
 internal class FakeMascotDao : MascotDao {
+
+    override suspend fun lastSaid(topic: String): Long? =
+        messages.value.filter { it.topic == topic }.maxOfOrNull { it.createdAt }
+
     val messages = MutableStateFlow<List<MascotMessageEntity>>(emptyList())
     val profileRow = MutableStateFlow<MascotProfileEntity?>(null)
     private var nextId = 1L

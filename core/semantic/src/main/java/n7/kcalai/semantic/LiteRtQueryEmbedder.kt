@@ -10,7 +10,9 @@ import com.google.ai.edge.litertlm.InputData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import n7.kcalai.model.ModelDelivery
 import n7.kcalai.repositories.QueryEmbedder
 
 /**
@@ -29,6 +31,9 @@ class LiteRtQueryEmbedder(context: Context) : QueryEmbedder {
     private val dispatcher = Dispatchers.IO.limitedParallelism(1)
     private val engine = IdleHolder(CoroutineScope(SupervisorJob() + dispatcher), IDLE_MILLIS, ::open)
     private var broken = false
+
+    /** Докачка модели — для реплик персонажей. Подписка заодно просит пак у Play. */
+    val delivery: Flow<ModelDelivery> get() = model.delivery()
 
     override suspend fun embed(text: String): FloatArray? = compute(QUERY_PREFIX + text)
 
