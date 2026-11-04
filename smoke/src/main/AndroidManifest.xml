@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ForegroundServicesTest читает манифест приложения: без этого Android 11+ его не покажет. -->
+    <queries>
+        <package android:name="n7.kcalai.minified" />
+    </queries>
+
+</manifest>

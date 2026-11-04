@@ -1,0 +1,14 @@
+# Foreground-сервисов в приложении нет: разрешений на них мы не объявляем, потому что Google Play
+# требует за них декларацию с видео (см. манифест).
+#
+# Но Play Asset Delivery сам включает свой ExtractionForegroundService при старте, и когда Play
+# просит приложение распаковать пак, библиотека зовёт startForeground без try/catch. Без разрешения
+# это SecurityException в главном потоке, у людей и только в версии из Play: локальный bundletool
+# этот путь не проходит. Сервис убрать нельзя, без него падает сама библиотека, поэтому уходит
+# только вызов: сервис остаётся обычным, привязка и ответы Play идут своим порядком.
+#
+# Проверяет ForegroundServicesTest в :smoke.
+-assumenosideeffects class android.app.Service {
+    public final void startForeground(int, android.app.Notification);
+    public final void startForeground(int, android.app.Notification, int);
+}

@@ -16,10 +16,11 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--
-        WorkManager объявляет foreground-сервис «на всякий случай», а Google Play
-        за каждое такое разрешение требует декларацию с видео. Отправка вкладов
-        идёт обычной фоновой работой и в передний план не выходит никогда.
-        Понадобится setForeground — убрать эти три строки и заполнить декларацию.
+        WorkManager и Play Asset Delivery объявляют foreground-сервисы «на всякий случай»,
+        а Google Play за каждое такое разрешение требует декларацию с видео. Отправка вкладов
+        и распаковка пака идут обычной фоновой работой и в передний план не выходят.
+        Понадобится setForeground — вернуть разрешения и сервисы ниже, убрать правило
+        keepRules/foreground.keep и заполнить декларацию.
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" tools:node="remove" />
@@ -55,6 +56,15 @@
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             tools:node="remove" />
+
+        <!--
+            Распаковка пака с моделью. Сам сервис убрать нельзя: библиотека включает его при
+            старте и упала бы, не найдя. Остаётся обычным сервисом, без типа foreground, а
+            вызов startForeground вырезает keepRules/foreground.keep.
+        -->
+        <service
+            android:name="com.google.android.play.core.assetpacks.ExtractionForegroundService"
+            tools:remove="android:foregroundServiceType" />
 
         <!--
             Инструменты нейросети на телефоне (AppFunctions, Android 16+). Экспортирована,
