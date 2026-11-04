@@ -9,6 +9,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.TextRange
 import kotlin.math.roundToInt
 import kotlin.time.TimeSource
 import n7.kcalai.model.FoodCandidate
@@ -60,6 +61,14 @@ internal class ScanField(initial: String = "", manual: Boolean = false) {
     }
 
     val filled: Boolean get() = text.isNotEmpty()
+
+    /**
+     * Что выделить при входе в поле. Значение камеры чаще всего правят целиком — оно
+     * выделяется, и первая же цифра его заменяет. Своё дописывают — курсор в конец.
+     * Без этого курсор вставал в начало: «стереть» не стирало, а цифры уходили вперёд числа.
+     */
+    val focusSelection: TextRange
+        get() = if (manual) TextRange(text.length) else TextRange(0, text.length)
 }
 
 /**
@@ -419,6 +428,15 @@ internal class ScanState(
 
     /** Название нельзя ни вычислить, ни проверить, числа — только прочесть или вписать. */
     val canSave: Boolean get() = name.text.isNotBlank() && missing.isEmpty() && check?.valid == true
+
+    /**
+     * Что написано на кнопке сохранения.
+     *
+     * С упаковкой мы не спорим: у водки и правда нули при двухстах калориях. Но и «всё
+     * верно» там, где калории не бьются с БЖУ, не говорим — решает человек, глядя на пачку.
+     */
+    val saveTitle: String
+        get() = if (warning == null) "Всё верно — сохранить" else "Числа не сходятся — всё равно сохранить"
 
     /**
      * Сколько из пяти полей заполнено: название и четыре числа с этикетки.

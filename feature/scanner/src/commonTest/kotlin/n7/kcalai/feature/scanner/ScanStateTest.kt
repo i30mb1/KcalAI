@@ -6,6 +6,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.Test
+import androidx.compose.ui.text.TextRange
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.FoodRef
 import n7.kcalai.model.Mascot
@@ -405,6 +406,57 @@ class ScanStateTest {
         state.typeNext()
 
         assertNull(state.typing)
+    }
+
+    // --- Сверка с БЖУ ---------------------------------------------------------------------
+
+    /** 201 ккал при нулях: так не бывает, и хвалить такую карточку — врать человеку. */
+    private fun unbalanced() = ScanState(GTIN).apply {
+        name.type("Уксус")
+        kcal.type("201")
+        prot.type("0")
+        fat.type("0")
+        carb.type("0")
+    }
+
+    @Test
+    fun `числа не сходятся — сохранить можно, но кнопка говорит об этом прямо`() {
+        val state = unbalanced()
+
+        assertTrue(state.canSave)
+        assertEquals("Числа не сходятся — всё равно сохранить", state.saveTitle)
+        assertEquals("Всё верно — сохранить", filled().saveTitle)
+    }
+
+    @Test
+    fun `числа не сходятся — персонажи не говорят, что всё сошлось`() {
+        val state = unbalanced()
+
+        assertEquals(MascotMood.ASKING, state.line(Mascot.EGG).mood)
+        assertEquals("Цифры не сходятся. Проверь, пожалуйста", state.line(Mascot.EGG).text)
+        assertTrue(state.mascotLines().none { it.mood == MascotMood.DONE })
+    }
+
+    // --- Курсор при входе в поле ------------------------------------------------------------
+
+    /**
+     * Значение камеры чаще всего правят целиком. Без выделения курсор вставал в начало
+     * поля: «стереть» ничего не стирало, а цифры уходили перед числом.
+     */
+    @Test
+    fun `значение камеры при входе выделяется целиком`() {
+        val state = ScanState(GTIN)
+        state.onFrame(read(kcal = 250))
+
+        assertEquals(TextRange(0, 3), state.kcal.focusSelection)
+    }
+
+    @Test
+    fun `своё значение при входе дописывается с конца`() {
+        val state = ScanState(GTIN)
+        state.input(state.kcal, "25")
+
+        assertEquals(TextRange(2), state.kcal.focusSelection)
     }
 
     // --- Кто что говорит -----------------------------------------------------------------

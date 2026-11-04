@@ -281,7 +281,7 @@ object LabelParser {
      */
     fun nameCandidates(lines: List<TextLine>, limit: Int = NAME_LIMIT): List<String> {
         val tallest = lines.maxOfOrNull { it.height }?.takeIf { it > 0f } ?: return emptyList()
-        return lines.asSequence()
+        val scored = lines.asSequence()
             .filterNot { isServiceText(it.text) }
             // Строка, в которой не уверен сам распознаватель, не может быть
             // названием: ошибку в подписи «Белки» ловит арифметика, а ошибку
@@ -290,12 +290,22 @@ object LabelParser {
             .mapNotNull { line ->
                 humanizeName(line.text)?.let { it to line.confidence * (line.height / tallest) }
             }
-            .sortedByDescending { it.second }
+            .toList()
+
+        // На русской пачке латиница — бренд или рисованный вензель: «Соус» логотипом
+        // читается как «Coye» и по строению проходит за слово. Название напечатано
+        // по-русски, а бренд остаётся в кандидатах, просто не первым.
+        val russian = scored.any { (name, _) -> name.hasCyrillic() }
+        return scored
+            .sortedByDescending { (name, score) ->
+                if (russian && !name.hasCyrillic()) score * LATIN_ON_RUSSIAN_PACK else score
+            }
             .map { it.first }
             .distinct()
             .take(limit)
-            .toList()
     }
+
+    private fun String.hasCyrillic(): Boolean = any { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' || it == 'Ё' }
 
     /**
      * Распознанная строка в человеческое название — или `null`, если это не оно.
@@ -310,6 +320,9 @@ object LabelParser {
             .trim()
             .trim('"', '«', '»', '\'', '-', '·', ',', '.', ':', ';')
             .trim()
+            .replace(LANGUAGE_MARK, "")
+            // Обрезка снимает кавычку с конца, а открывающая посреди строки остаётся.
+            .let { if ('«' in it && '»' !in it) "$it»" else it }
 
         if (cleaned.length < NAME_MIN_LENGTH) return null
 
@@ -449,6 +462,8 @@ object LabelParser {
         // Таблица пищевой ценности.
         "ккал", "кдж", "kcal", "белк", "белок", "жир", "углевод", "энергет",
         "пищев", "ценност", "клетчатк", "насыщенн", "витамин",
+        // Заголовок колонки таблицы: с него продукт уехал в дневник как «100 г продукта».
+        "\\d+\\s*г\\s+продукт",
         // Сколько его тут.
         "масс", "нетто", "брутто", "объ[её]м", "порци", "суточн", "потребност",
         // Состав, хранение, обращение.
@@ -467,6 +482,12 @@ object LabelParser {
     )
 
     private val NOT_A_NAME = Regex(NOT_A_NAME_ROOTS.joinToString("|"), RegexOption.IGNORE_CASE)
+
+    /** Метка языка перед абзацем для этой страны: «RU СОУС «КАРРИ»». Частью имени она не бывает. */
+    private val LANGUAGE_MARK = Regex("""^(?:RU|BY|KZ|KG|AM|UZ)\s+""")
+
+    /** Во сколько раз латиница уступает кириллице на русской пачке. */
+    private const val LATIN_ON_RUSSIAN_PACK = 0.3f
 
     /** Что распознаватель дописывает от себя: одиночные скобки, палки, решётки. */
     private val NAME_NOISE = Regex("""[|\\/_~^*#<>\[\]{}()]+""")
@@ -684,7 +705,7 @@ object LabelParser {
             // Калории прочитаны дважды, килокалориями и килоджоулями. Побеждает
             // то прочтение, которое макросы признают; не признан ни один —
             // значит, оба прочитаны неверно, и считать надо самим.
-            anchored.kcalCandidates.firstOrNull { it.balancesWith(fromMacros) }
+            anchored.kcalCandidates.firstOrNull { NutrimentValidator.balances(it, fromMacros) }
                 ?.let { return Filled(it, prot, fat, carb) }
 
             if (anchored.zeroedLabels.isEmpty()) {
@@ -736,22 +757,6 @@ object LabelParser {
 
     /** Полграмма запаса: клетчатка и округление на пачке дают остаток чуть мимо нуля. */
     private const val DERIVE_SLACK_CG = 50
-
-    /**
-     * Сходятся ли эти калории с тем, что дают макросы.
-     *
-     * Допуск — тот же, которым форма помечает подозрительным ручной ввод:
-     * клетчатка и многоатомные спирты дают законный разбег, и придираться
-     * к нему незачем. Совсем малые калории не проверяются вовсе — у зелени
-     * и напитков макросы околонулевые, и относительная погрешность там
-     * не значит ничего.
-     */
-    private fun Int.balancesWith(fromMacros: Double): Boolean =
-        this <= BALANCE_MIN_KCAL ||
-            abs(this - fromMacros) <= this * NutrimentValidator.BALANCE_TOLERANCE
-
-    /** Ниже этого порога сверка энергобаланса бессмысленна. */
-    private const val BALANCE_MIN_KCAL = 20
 
     private fun Macros.toNutriments(kcal: Int) =
         Nutriments(kcal100 = kcal, prot100 = prot100, fat100 = fat100, carb100 = carb100)

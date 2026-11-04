@@ -3,6 +3,7 @@ package n7.kcalai.repositories
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
+import n7.kcalai.model.Nutriments
 import n7.kcalai.model.TextLine
 
 /**
@@ -143,6 +144,8 @@ internal object LabelAnchors {
         private val kcalDeclared: Int?,
         /** Те же калории, пересчитанные из килоджоулей. */
         private val kcalFromKj: Int?,
+        /** Число у подписи килоджоулей как есть, если оно годится в калории. */
+        private val kjPrinted: Int?,
     ) {
 
         val kcal100: Int? get() = kcalDeclared ?: kcalFromKj
@@ -154,8 +157,19 @@ internal object LabelAnchors {
          * распознавания: разойдясь больше, чем на округление, две величины
          * означают, что одну из них прочитали неверно. Какую именно — решать
          * не здесь: у подписей на это данных нет, а у макросов есть.
+         *
+         * Подпись могла дотянуться и до чужой величины. На стакане «ккал» прочиталась
+         * как «кал», и калориям досталось 250 из «60 ккал / 250 кДж»; на соусе строка
+         * разорвалась на «580 | кДж/140 | ккал», и килоджоулям досталось 140. Поэтому
+         * те же числа пробуются и наоборот, в конце очереди: рассудят макросы.
          */
-        val kcalCandidates: List<Int> get() = listOfNotNull(kcalDeclared, kcalFromKj).distinct()
+        val kcalCandidates: List<Int>
+            get() = listOfNotNull(
+                kcalDeclared,
+                kcalFromKj,
+                kcalDeclared?.div(KJ_PER_KCAL).toKcal(),
+                kjPrinted,
+            ).distinct()
 
         /**
          * Обе величины энергии прочитаны и сходятся по константе 4.184.
@@ -200,14 +214,34 @@ internal object LabelAnchors {
 
         /** Подписи, которых на этикетке нет, — их значения приняты за ноль. */
         val zeroedLabels: List<String>
-            get() = if (!tableFound) emptyList()
+            get() = if (!absentMeansZero) emptyList()
             else MACROS.filter { it !in seen }.map { it.title }
+
+        /**
+         * Подписи нет — и это значит ноль, а не «не влезла в кадр».
+         *
+         * Отличить одно от другого можно только сверкой: прочитанные макросы обязаны
+         * дать те же калории и без недостающего. У сахара так и есть. А у уксуса
+         * белки с жирами дают шесть килокалорий при двухстах на пачке — значит,
+         * углеводы есть, просто подпись за краем кадра, и ноль был бы выдумкой.
+         */
+        private val absentMeansZero: Boolean
+            get() {
+                if (!tableFound) return false
+                val fromMacros = NutrimentValidator.atwaterKcal(
+                    Nutriments(
+                        kcal100 = 0,
+                        prot100 = values[Anchor.PROT] ?: 0,
+                        fat100 = values[Anchor.FAT] ?: 0,
+                        carb100 = values[Anchor.CARB] ?: 0,
+                    )
+                )
+                return kcalCandidates.any { NutrimentValidator.balances(it, fromMacros) }
+            }
 
         private fun resolve(anchor: Anchor): Int? = when {
             values[anchor] != null -> values[anchor]
-            // Подписи нет на этикетке, а таблица прочитана — значит, макроса
-            // в продукте нет. Ноль здесь не догадка, а то, что написано.
-            tableFound && anchor !in seen -> 0
+            anchor !in seen && absentMeansZero -> 0
             else -> null
         }
 
@@ -311,6 +345,7 @@ internal object LabelAnchors {
             kcalDeclared = values[Anchor.KCAL].toKcal(),
             // Калории могли быть напечатаны только в килоджоулях.
             kcalFromKj = values[Anchor.KJ]?.div(KJ_PER_KCAL).toKcal(),
+            kjPrinted = values[Anchor.KJ].toKcal(),
         )
     }
 

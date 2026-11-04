@@ -36,6 +36,55 @@ class LabelConsensusTest {
         trace = LabelTrace(route = route),
     )
 
+    /** Кадр, в котором макрос прочитан, не прочитан вовсе или досчитан из остальных. */
+    private fun traced(carb: Int?, read: Boolean = false, zeroed: Boolean = false, derived: Boolean = false) =
+        frame(carb = carb).let { reading ->
+            reading.copy(
+                trace = reading.trace.copy(
+                    readLabels = if (read) listOf("У") else emptyList(),
+                    zeroedLabels = if (zeroed) listOf("У") else emptyList(),
+                    derivedLabels = if (derived) listOf("У") else emptyList(),
+                ),
+            )
+        }
+
+    /**
+     * Балтика: на банке 6,5 г, а досчитано из калорий 8,7. Такого числа на пачке нет,
+     * и голосовать за него нельзя: кадры повторяют одну и ту же арифметику, а не правду.
+     */
+    @Test
+    fun `досчитанное число не голосует`() {
+        val consensus = LabelConsensus()
+
+        val verdict = List(4) { consensus.add(traced(carb = 870, derived = true)) }.last()
+
+        assertEquals(null, verdict.carb.settledValue)
+    }
+
+    /**
+     * Уксус: подпись то влезает в кадр, то нет. «Подписи не видно» — не прочтение, и пока
+     * хоть один кадр её прочитал, такие кадры голоса не имеют: нули поля уже не занимают.
+     */
+    @Test
+    fun `прочитанное значение важнее кадров без подписи`() {
+        val consensus = LabelConsensus()
+
+        repeat(4) { consensus.add(traced(carb = 0, zeroed = true)) }
+        val verdict = List(3) { consensus.add(traced(carb = 4_800, read = true)) }.last()
+
+        assertEquals(4_800, verdict.carb.settledValue)
+    }
+
+    /** Подпись не прочитана ни разу, и кадры сходятся на нуле: у сахара белка и правда нет. */
+    @Test
+    fun `ноль без подписи голосует, пока никто её не прочитал`() {
+        val consensus = LabelConsensus()
+
+        val verdict = List(3) { consensus.add(traced(carb = 0, zeroed = true)) }.last()
+
+        assertEquals(0, verdict.carb.settledValue)
+    }
+
     /**
      * Пастила, строки с живой съёмки: три кадра подряд читают один и тот же абзац,
      * а в двух над таблицей лежит чужое число — обрезок «НА 10» и «96поки».

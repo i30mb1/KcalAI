@@ -33,7 +33,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,10 +46,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -125,7 +129,7 @@ internal fun ProductCard(
             exit = shrinkVertically() + fadeOut(),
         ) {
             WideButton(
-                text = "Всё верно — сохранить",
+                text = state.saveTitle,
                 enabled = true,
                 onClick = { state.nutriments?.let(onSave) },
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
@@ -157,13 +161,23 @@ private fun FieldInput(
 ) {
     val requester = remember { FocusRequester() }
     val typing = state.typing === field
+    var edit by remember(field) { mutableStateOf(TextFieldValue(field.text)) }
+    // Позже тапа, поставившего курсор: иначе он перебил бы выделение.
     LaunchedEffect(typing) {
-        if (typing) requester.requestFocus()
+        if (typing) {
+            requester.requestFocus()
+            edit = TextFieldValue(field.text, field.focusSelection)
+        }
     }
 
     BasicTextField(
-        value = field.text,
-        onValueChange = { state.input(field, it) },
+        // Текст меняет не только клавиатура: пишет камера, нейросеть, чипс с названием.
+        value = if (edit.text == field.text) edit else TextFieldValue(field.text, TextRange(field.text.length)),
+        onValueChange = { next ->
+            state.input(field, next.text)
+            // Лишний знак отброшен — курсор остаётся в конце, а не посреди числа.
+            edit = if (field.text == next.text) next else TextFieldValue(field.text, TextRange(field.text.length))
+        },
         textStyle = style,
         cursorBrush = SolidColor(cursor),
         singleLine = true,

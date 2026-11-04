@@ -63,6 +63,14 @@ object NutrimentValidator {
         // Макросы в сотых грамма, поэтому делим на сто: (сг * 4) / 100 = г * 4.
         (n.prot100 * 4 + n.fat100 * 9 + n.carb100 * 4) / 100.0
 
+    /**
+     * Сходятся ли калории с тем, что дают макросы. Единственная сверка на всё приложение:
+     * ею форма помечает странное, разбор выбирает, какое из чисел калории, а голосование
+     * кадров решает, верить ли набранному.
+     */
+    fun balances(kcal: Int, fromMacros: Double): Boolean =
+        kcal <= BALANCE_MIN_KCAL || abs(kcal - fromMacros) <= kcal * BALANCE_TOLERANCE
+
     fun check(n: Nutriments): NutrimentCheck {
         val error = firstError(n)
         if (error != null) return NutrimentCheck(error = error)
@@ -95,10 +103,8 @@ object NutrimentValidator {
      * Перепутанные местами жиры и углеводы она тоже обычно ловит.
      */
     private fun balanceWarning(n: Nutriments): String? {
-        if (n.kcal100 <= BALANCE_MIN_KCAL) return null
-
         val fromMacros = atwaterKcal(n)
-        if (abs(n.kcal100 - fromMacros) <= n.kcal100 * BALANCE_TOLERANCE) return null
+        if (balances(n.kcal100, fromMacros)) return null
 
         return "По белкам, жирам и углеводам выходит ${fromMacros.toInt()} ккал, " +
             "а указано ${n.kcal100}. Проверьте цифры на упаковке."

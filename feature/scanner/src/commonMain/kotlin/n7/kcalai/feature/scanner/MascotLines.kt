@@ -32,7 +32,8 @@ internal data class MascotLine(val mascot: Mascot, val mood: MascotMood, val tex
  * выдуманной цифры: числа в репликах — ровно те, что стоят в полях.
  */
 internal fun ScanState.mascotLines(): List<MascotLine> {
-    val complete = canSave
+    // Числа не бьются с БЖУ — хвалить рано, даже если сохранить уже можно.
+    val complete = canSave && warning == null
     return listOf(
         eggLine(complete),
         macroLine(Mascot.BUTTER, fat, BUTTER, complete),

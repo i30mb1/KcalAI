@@ -120,10 +120,10 @@ internal class LabelConsensus(
         // придало бы этой лотерее вид согласия — см. LabelParser.
         val voting = readings.filter { it.trace.route in LABELLED }
 
-        var kcal = voting.vote(KCAL_TOLERANCE) { it.draft.kcal100 }
-        var prot = voting.vote(MACRO_TOLERANCE) { it.draft.prot100 }
-        var fat = voting.vote(MACRO_TOLERANCE) { it.draft.fat100 }
-        var carb = voting.vote(MACRO_TOLERANCE) { it.draft.carb100 }
+        val kcal = voting.vote(KCAL_TOLERANCE) { it.draft.kcal100 }
+        val prot = voting.about("Б").vote(MACRO_TOLERANCE) { it.draft.prot100 }
+        val fat = voting.about("Ж").vote(MACRO_TOLERANCE) { it.draft.fat100 }
+        val carb = voting.about("У").vote(MACRO_TOLERANCE) { it.draft.carb100 }
 
         val agreed = kcal.settled && prot.settled && fat.settled && carb.settled &&
             balances(kcal.value!!, prot.value!!, fat.value!!, carb.value!!)
@@ -154,6 +154,23 @@ internal class LabelConsensus(
             names = voteNames(nameVotes),
             name = confirmedName(nameVotes),
         )
+    }
+
+    /**
+     * Кадры, которым есть что сказать о макросе.
+     *
+     * Досчитанное из калорий на пачке не напечатано: на банке пива 6,5 г углеводов, а из
+     * тридцати пяти калорий выходит 8,7, и кадры лишь повторяли бы одну и ту же арифметику.
+     * Такое в поле не попадает вовсе — лучше пустое окошко, чем выдуманное число.
+     *
+     * «Подписи не видно» — тоже не прочтение. Пока хоть один кадр подпись прочитал,
+     * кадры без неё голоса не имеют: подпись просто уезжает за край, и нули занимали
+     * поле раньше настоящего числа.
+     */
+    private fun List<LabelReading>.about(macro: String): List<LabelReading> {
+        val honest = filterNot { macro in it.trace.derivedLabels }
+        val read = honest.filter { macro in it.trace.readLabels }
+        return if (read.isEmpty()) honest else honest.filterNot { macro in it.trace.zeroedLabels }
     }
 
     /**
@@ -253,13 +270,11 @@ internal class LabelConsensus(
     }
 
     /** Та же сверка по Этуотеру, что у формы: набранное голосами обязано сходиться. */
-    private fun balances(kcal: Int, prot: Int, fat: Int, carb: Int): Boolean {
-        if (kcal <= BALANCE_MIN_KCAL) return true
-        val fromMacros = NutrimentValidator.atwaterKcal(
-            Nutriments(kcal100 = kcal, prot100 = prot, fat100 = fat, carb100 = carb)
+    private fun balances(kcal: Int, prot: Int, fat: Int, carb: Int): Boolean =
+        NutrimentValidator.balances(
+            kcal,
+            NutrimentValidator.atwaterKcal(Nutriments(kcal100 = kcal, prot100 = prot, fat100 = fat, carb100 = carb)),
         )
-        return abs(kcal - fromMacros) <= kcal * NutrimentValidator.BALANCE_TOLERANCE
-    }
 
     private companion object {
         /**
@@ -288,8 +303,6 @@ internal class LabelConsensus(
          */
         const val KCAL_TOLERANCE = 0.02
         const val MACRO_TOLERANCE = 0.02
-
-        const val BALANCE_MIN_KCAL = 20
 
         /** Сколько названий показывать. Больше — уже не выбор, а список. */
         const val NAME_LIMIT = 4
