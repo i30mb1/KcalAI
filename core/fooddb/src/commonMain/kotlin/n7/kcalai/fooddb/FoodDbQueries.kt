@@ -28,7 +28,7 @@ internal class FoodDbQueries(hasFullDb: Boolean) {
 
     companion object {
         private const val GENERIC_COLUMNS =
-            "g.id, g.name_key, g.name_ru, g.kcal100, g.prot100, g.fat100, g.carb100, g.default_portion_g"
+            "g.id, g.name_key, g.name_ru, g.kcal100, g.prot100, g.fat100, g.carb100, g.default_portion_g, g.fiber100"
 
         /**
          * Совпадение алиаса целиком. «гречка» -> ровно гречка отварная, без конкуренции

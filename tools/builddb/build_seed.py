@@ -27,6 +27,7 @@ ASSETS = HERE.parent.parent / "app" / "src" / "main" / "assets"
 
 KCAL_MAX = 900          # ккал на 100 г; выше физически невозможно
 MACRO_MAX_CG = 10_000   # 100.00 г на 100 г
+MASS_SLACK_CG = 100     # грамм на округление табличных чисел
 
 # У этих позиций калории приходят не только из Б/Ж/У: этанол даёт 7 ккал/г,
 # но макросом не является и в таблицу не попадает. Сверка энергобаланса для них
@@ -102,7 +103,7 @@ def _rows(path: Path) -> list[dict[str, str]]:
 def _load_generic(conn: sqlite3.Connection, path: Path) -> None:
     conn.executemany(
         "INSERT INTO generic (id, name_key, name_ru, kcal100, prot100, fat100, carb100, "
-        "default_portion_g) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "fiber100, default_portion_g) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 int(r["id"]),
@@ -112,6 +113,7 @@ def _load_generic(conn: sqlite3.Connection, path: Path) -> None:
                 int(r["prot100"]),
                 int(r["fat100"]),
                 int(r["carb100"]),
+                int(r["fiber100"]),
                 int(r["default_portion_g"]),
             )
             for r in _rows(path)
@@ -198,13 +200,25 @@ def verify_seed(db_path: Path) -> list[str]:
         if bad_kcal:
             problems.append(f"generic.kcal100: {bad_kcal} значений вне диапазона 0..{KCAL_MAX}")
 
-        for column in ("prot100", "fat100", "carb100"):
+        for column in ("prot100", "fat100", "carb100", "fiber100"):
             bad = conn.execute(
                 f"SELECT count(*) FROM generic WHERE {column} < 0 OR {column} > ?",
                 (MACRO_MAX_CG,),
             ).fetchone()[0]
             if bad:
                 problems.append(f"generic.{column}: {bad} значений вне диапазона 0..{MACRO_MAX_CG}")
+
+        # Клетчатка не помещается туда, где уже лежат белок и жир. Углеводы в сверке
+        # не участвуют: в справочнике смешаны две записи — русская, где клетчатка идёт
+        # отдельно от углеводов, и американская, где она внутри них, — а эта граница
+        # верна для обеих.
+        overfull = conn.execute(
+            "SELECT name_ru FROM generic WHERE prot100 + fat100 + fiber100 > ?",
+            (MACRO_MAX_CG + MASS_SLACK_CG,),
+        ).fetchall()
+        if overfull:
+            names = ", ".join(n for (n,) in overfull[:5])
+            problems.append(f"generic.fiber100: {len(overfull)} позиций, где белок, жир и клетчатка больше 100 г: {names}")
 
         bad_portion = conn.execute(
             "SELECT count(*) FROM generic WHERE default_portion_g < 1 OR default_portion_g > 2000"

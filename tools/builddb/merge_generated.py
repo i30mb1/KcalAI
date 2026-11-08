@@ -1,7 +1,7 @@
 """Слияние сгенерированных позиций в CSV генерик-таблицы.
 
 Вход — JSON-массив объектов вида
-    {id, name_key, name_ru, kcal100, prot100, fat100, carb100,
+    {id, name_key, name_ru, kcal100, prot100, fat100, carb100, fiber100,
      default_portion_g, aliases_ru[], aliases_en[], portion_units[{unit, grams}]}
 
 Отбраковка идёт здесь, а не на сборке, потому что здесь ещё известно, какую именно
@@ -78,7 +78,7 @@ def merge(items: list[dict], dry_run: bool = False) -> dict[str, int]:
     for item in items:
         try:
             item_id = int(item["id"])
-            for field in ("kcal100", "prot100", "fat100", "carb100", "default_portion_g"):
+            for field in ("kcal100", "prot100", "fat100", "carb100", "fiber100", "default_portion_g"):
                 item[field] = int(item[field])
         except (KeyError, TypeError, ValueError):
             stats["битые_числа"] += 1
@@ -101,7 +101,7 @@ def merge(items: list[dict], dry_run: bool = False) -> dict[str, int]:
             stats["битые_числа"] += 1
             rejected.append(f"{item['name_ru']}: ккал {item['kcal100']}")
             continue
-        if any(not (0 <= item[m] <= MACRO_MAX_CG) for m in ("prot100", "fat100", "carb100")):
+        if any(not (0 <= item[m] <= MACRO_MAX_CG) for m in ("prot100", "fat100", "carb100", "fiber100")):
             stats["битые_числа"] += 1
             rejected.append(f"{item['name_ru']}: макрос вне диапазона")
             continue
@@ -147,6 +147,7 @@ def merge(items: list[dict], dry_run: bool = False) -> dict[str, int]:
             "prot100": str(item["prot100"]),
             "fat100": str(item["fat100"]),
             "carb100": str(item["carb100"]),
+            "fiber100": str(item["fiber100"]),
             "default_portion_g": str(item["default_portion_g"]),
         })
         for alias, lang in fresh:
@@ -176,7 +177,7 @@ def merge(items: list[dict], dry_run: bool = False) -> dict[str, int]:
 
     if not dry_run:
         _write("generic.csv", generic, ["id", "name_key", "name_ru", "kcal100",
-                                       "prot100", "fat100", "carb100", "default_portion_g"])
+                                       "prot100", "fat100", "carb100", "fiber100", "default_portion_g"])
         _write("generic_alias.csv", aliases, ["generic_id", "alias", "lang"])
         _write("portion_unit.csv", units, ["generic_id", "unit", "grams"])
 

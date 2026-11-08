@@ -6,6 +6,7 @@ CREATE TABLE generic (
     prot100           INTEGER NOT NULL,
     fat100            INTEGER NOT NULL,
     carb100           INTEGER NOT NULL,
+    fiber100          INTEGER NOT NULL,  -- клетчатка, сотые грамма; отдельно от углеводов
     default_portion_g INTEGER NOT NULL          -- типичная разовая порция, граммы
 );
 

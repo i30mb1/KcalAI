@@ -14,5 +14,9 @@ kotlin {
             // FTS5 не гарантирован системным SQLite на minSdk 26 — нужен свой.
             implementation(libs.androidx.sqlite.bundled)
         }
+        // Собранный справочник проверяется без телефона: настоящий SQLite под компьютер.
+        getByName("androidHostTest").dependencies {
+            implementation(libs.androidx.sqlite.bundled.jvm)
+        }
     }
 }

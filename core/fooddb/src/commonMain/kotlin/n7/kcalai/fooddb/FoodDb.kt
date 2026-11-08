@@ -130,6 +130,7 @@ private fun SQLiteStatement.readGeneric(exactMatch: Boolean): GenericRow =
             prot100 = getInt(4),
             fat100 = getInt(5),
             carb100 = getInt(6),
+            fiber100 = getInt(8),
         ),
         defaultPortionG = getInt(7),
         exactMatch = exactMatch,
