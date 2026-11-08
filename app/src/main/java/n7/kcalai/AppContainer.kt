@@ -12,6 +12,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -196,19 +198,26 @@ class AppContainer(context: Context) {
     /**
      * Фоновая докачка — словами персонажей, в ленте дня. Слушает всю жизнь процесса:
      * модель докачивается и без экрана, а сказанное лежит в базе и дождётся человека.
+     *
+     * Новость ждёт своей очереди — персонажи говорят по одному, см. [MascotBrain.report].
+     * Поэтому `collectLatest`: новый статус отменяет ожидание прошлого, и «докачиваю»
+     * не прозвучит, когда уже докачалось.
      */
     fun reportBackgroundWork() {
         appScope.launch {
-            embedder.delivery.collect { report(BackgroundModel.SEARCH, it) }
+            embedder.delivery.collectLatest { report(BackgroundModel.SEARCH, it) }
         }
         appScope.launch {
-            nano.delivery.filterNotNull().collect { report(BackgroundModel.ASSISTANT, it) }
+            nano.delivery.filterNotNull().collectLatest { report(BackgroundModel.ASSISTANT, it) }
         }
     }
 
     private suspend fun report(model: BackgroundModel, delivery: ModelDelivery) {
         try {
-            mascotBrain.report(model, delivery, Clock.System.now())
+            mascotBrain.report(model, delivery)
+        } catch (cancellation: CancellationException) {
+            // Пришёл новый статус — ожидание прошлого отменено, и это не сбой.
+            throw cancellation
         } catch (error: Exception) {
             // Реплика — надстройка: из-за неё нельзя ронять приложение на старте.
             Log.w(TAG, "не удалось рассказать про $model: $delivery", error)

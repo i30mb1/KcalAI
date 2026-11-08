@@ -54,10 +54,10 @@ import n7.kcalai.repositories.LabelReading
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.resolver.TextFoodResolver
 import n7.kcalai.model.Sex
-import n7.kcalai.mascot.asksToWrite
 import n7.kcalai.mascot.MascotBrain
 import n7.kcalai.mascot.MascotEvent
-import n7.kcalai.database.MascotProfileEntity
+import n7.kcalai.mascot.awaitsAnswer
+import n7.kcalai.mascot.question
 import n7.kcalai.database.MascotMessageEntity
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.Flow
@@ -234,9 +234,9 @@ class DiaryViewModel(
     /**
      * Номер следующей реплики сессии — сквозной, а не размер списка.
      *
-     * Реплики уходят из ленты («Удалил…» — после «Вернуть»), и номер по размеру
-     * списка повторил бы ключ реплики, которая всё ещё стоит: `LazyColumn`
-     * на повторном ключе падает.
+     * Номер по размеру списка повторил бы ключ реплики, которая уже стоит:
+     * у ответов на вопрос и очереди отправки свои номера из того же счёта,
+     * а `LazyColumn` на повторном ключе падает.
      */
     private var replyCount = 0
 
@@ -323,7 +323,7 @@ class DiaryViewModel(
     /** Облачки и сигнал сцене — одним потоком: у [combine] потолок в пять. */
     private val stage = combine(speech, cue) { lines, signal -> lines to signal }
 
-    val state = combine(typingAndReplies, data, personalState, brain.profile, stage) { session, loaded, models, profile, scene ->
+    val state = combine(typingAndReplies, data, personalState, stage) { session, loaded, models, scene ->
         val (typed, replies, pending, meal) = session
         if (loaded == null) {
             return@combine DiaryUiState(input = typed.input, overlay = typed.overlay)
@@ -341,7 +341,6 @@ class DiaryViewModel(
                 // Очередь отправки — разговор о сегодняшнем, во вчерашней переписке ей не место.
                 pending = pending.takeIf { pastMeal == null },
                 pastMeal = pastMeal,
-                profile = profile,
             ),
             composer = row,
             action = composerAction(typed.input),
@@ -602,6 +601,10 @@ class DiaryViewModel(
      * Прошлый день — та же переписка, но без вопросов «про сейчас»: пропущенный
      * обед, остаток и утренняя сводка про вчера звучат поздно и неправдой.
      *
+     * Персонажи говорят по одному: пока вопрос ждёт ответа (см. [awaitsAnswer]),
+     * пропущенный приём, остаток и перебор ждут вместе с ним — вопрос не тонет
+     * среди подсказок.
+     *
      * @param pastMeal приём, в который пишется прошлый день; `null` — открыт сегодняшний
      */
     private fun buildFeed(
@@ -611,7 +614,6 @@ class DiaryViewModel(
         replies: List<FeedItem>,
         pending: FeedItem.Outbox?,
         pastMeal: MealType?,
-        profile: MascotProfileEntity,
     ): List<FeedItem> {
         val now = nowMillis()
         val hour = hourNow()
@@ -628,24 +630,31 @@ class DiaryViewModel(
             }
         }
 
+        val waiting = isToday && awaitsAnswer(loaded.said, dayTotals.entries.maxOfOrNull { it.createdAt })
         val bubbles = groupIntoBubbles(dayTotals.entries, zone, now, activeMeal = pastMeal)
         val body = interleave(bubbles, loaded.said.map { it.toFeedItem() }, zone).toMutableList()
-        models.mealGap?.takeIf { isToday }?.let { gap ->
-            body.add(gapPosition(body, gap, zone), FeedItem.Gap(gap))
+        // Отвеченный «Обед был?» стоит там же, где был задан; новый — только когда слово свободно.
+        val answered = replies.filterIsInstance<FeedItem.Gap>()
+        val live = models.mealGap
+            ?.takeIf { gap -> isToday && !waiting && answered.none { it.gap.meal == gap.meal } }
+            ?.let { FeedItem.Gap(it) }
+        // Позже других — первым: место считается по пузырькам, и порядок вопросов не путается.
+        (answered + listOfNotNull(live)).sortedByDescending { it.gap.typicalHour }.forEach { gap ->
+            body.add(gapPosition(body, gap.gap, zone), gap)
         }
         feed += body
-        feed += replies
+        feed += replies.filterNot { it is FeedItem.Gap }
         pending?.let { feed += it }
-        // Вопрос — последняя реплика: на него отвечают сейчас, а не листая вверх.
-        if (isToday) ask(profile, dayTotals.entries.size, now)?.let { feed += FeedItem.Ask(it) }
 
         // Перебор вытесняет остаток, а не дополняет его: это один и тот же ответ
         // на один и тот же вопрос, и показывать оба значило бы спорить с собой.
         val target = goal?.kcal?.takeIf { it > 0 }
-        if (target != null && dayTotals.totals.kcal > target) {
-            feed += FeedItem.Over(dayTotals.totals.kcal - target, past = !isToday)
-        } else if (isToday) {
-            models.dayPlan?.let { feed += FeedItem.Remaining(it, nextMealTitle(hour)) }
+        when {
+            // Подсказки и итоги ждут ответа на вопрос.
+            waiting -> Unit
+            target != null && dayTotals.totals.kcal > target ->
+                feed += FeedItem.Over(dayTotals.totals.kcal - target, past = !isToday)
+            isToday -> models.dayPlan?.let { feed += FeedItem.Remaining(it, nextMealTitle(hour)) }
         }
 
         typed.notFound?.let {
@@ -1155,20 +1164,22 @@ class DiaryViewModel(
     /**
      * «Вернуть»: запись встаёт обратно той же — с прежним id, приёмом и временем.
      *
-     * Реплика снимается сразу, до записи в базу: второй тап по той же кнопке
-     * вставил бы запись с тем же ключом ещё раз.
+     * Реплика остаётся в переписке, а кнопка гаснет сразу, до записи в базу: второй
+     * тап по ней вставил бы запись с тем же ключом ещё раз.
      */
     fun onUndoDelete(item: FeedItem.Deleted) {
-        if (sessionReplies.value.none { it.item == item }) return
-        sessionReplies.value = sessionReplies.value.filterNot { it.item == item }
+        val reply = sessionReplies.value.firstOrNull { (it.item as? FeedItem.Deleted)?.id == item.id } ?: return
+        val deleted = reply.item as FeedItem.Deleted
+        if (deleted.restored) return
+        sessionReplies.value = sessionReplies.value.map { if (it === reply) it.copy(item = deleted.copy(restored = true)) else it }
 
         viewModelScope.launch {
             try {
-                diary.restore(item.entry)
+                diary.restore(deleted.entry)
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {
-                Log.e(TAG, "не удалось вернуть запись ${item.entry.id}", error)
+                Log.e(TAG, "не удалось вернуть запись ${deleted.entry.id}", error)
             }
         }
     }
@@ -1272,20 +1283,32 @@ class DiaryViewModel(
                 null
             }
             // Идущую отправку не перебиваем: её итог придёт ответом в ленте.
-            if (outboxItem.value?.sending == true) return@launch
-            outboxItem.value = shown?.let { FeedItem.Outbox(it, sending = false) }
+            if (outboxSending) return@launch
+            // Номер держится, пока пузырёк на месте: новый ключ — новая реплика с пружиной.
+            outboxItem.value = shown?.let { FeedItem.Outbox(it, sending = false, id = outboxItem.value?.id ?: nextReplyId()) }
         }
     }
 
     /** Последний пересчёт очереди: новый отменяет прошлый, ждущий ответа сервера. */
     private var outboxRefresh: Job? = null
 
-    /** Тап по «Отправить»: та же отправка, что у воркеров, только с ответом в ленте. */
+    /** Идёт отправка по кнопке: второй тап и пересчёт очереди её не перебивают. */
+    private var outboxSending = false
+
+    /**
+     * Тап по «Отправить»: та же отправка, что у воркеров, только с ответом в ленте.
+     *
+     * Пузырёк уходит в переписку сессии и остаётся там с погасшей кнопкой, ответ
+     * встаёт под ним. Ключ тот же, так что на месте ничего не мигает.
+     */
     fun onSendOutbox() {
         val source = outbox ?: return
         val current = outboxItem.value ?: return
-        if (current.sending) return
-        outboxItem.value = current.copy(sending = true)
+        if (outboxSending) return
+        outboxSending = true
+        val sending = current.copy(sending = true)
+        outboxItem.value = null
+        sessionReplies.value += DayReply(today, sending)
 
         viewModelScope.launch {
             val result = try {
@@ -1295,6 +1318,9 @@ class DiaryViewModel(
             } catch (error: Exception) {
                 Log.e(TAG, "отправка не удалась", error)
                 OutboxResult.Unreachable
+            }
+            sessionReplies.value = sessionReplies.value.map { reply ->
+                if (reply.item == sending) reply.copy(item = sending.copy(sending = false, done = true)) else reply
             }
             reply(
                 when {
@@ -1306,7 +1332,7 @@ class DiaryViewModel(
                     else -> "Сервер не ответил — отправлю позже сам"
                 }
             )
-            outboxItem.value = null
+            outboxSending = false
             refreshOutbox()
         }
     }
@@ -1325,23 +1351,17 @@ class DiaryViewModel(
 
     // --- Персонажи: имя и разрешение писать ---------------------------------------------
 
-    /**
-     * О чём спросить человека.
-     *
-     * Не с порога: имя — после первой записи дня, когда человек уже начал.
-     * Разрешение писать — после имени и второй записи: сначала знакомство,
-     * потом просьба. «Не надо» переспрашивается через месяц, см. [asksToWrite].
-     */
-    private fun ask(profile: MascotProfileEntity, entries: Int, now: Long): AskKind? = when {
-        entries == 0 -> null
-        profile.name == null && !profile.nameAsked -> AskKind.NAME
-        entries >= 2 && profile.asksToWrite(Instant.fromEpochMilliseconds(now)) -> AskKind.WRITE
-        else -> null
-    }
-
-    private fun MascotMessageEntity.toFeedItem(): FeedItem.Said {
+    /** Сообщение персонажа в переписке: вопрос — с кнопками ответа, остальное — словами. */
+    private fun MascotMessageEntity.toFeedItem(): FeedItem.Message {
         val local = Instant.fromEpochMilliseconds(createdAt).toLocalDateTime(zone)
-        return FeedItem.Said(id, mascot, text, formatTime(createdAt, zone), local.hour * 60 + local.minute, at = createdAt)
+        val minute = local.hour * 60 + local.minute
+        val time = formatTime(createdAt, zone)
+        val asked = question
+        return if (asked != null) {
+            FeedItem.Ask(id, asked, text, time, minute, at = createdAt, choice = choice)
+        } else {
+            FeedItem.Said(id, mascot, text, time, minute, at = createdAt)
+        }
     }
 
     /**
@@ -1363,11 +1383,13 @@ class DiaryViewModel(
         viewModelScope.launch { brain.answerName(name?.let(::cleanName), clock.now()) }
     }
 
-    /** «Пишите» или «Не надо». На «Пишите» сначала спрашивается телефон. */
+    /**
+     * «Пишите» или «Не надо». На «Пишите» сначала спрашивается телефон — один раз:
+     * на отвеченный вопрос второй ответ не принимается, и повторный тап ничего не запускает.
+     */
     fun onAnswerWrite(allow: Boolean) {
         viewModelScope.launch {
-            brain.answerWrite(allow, clock.now())
-            if (allow) notificationAsks.send(Unit)
+            if (brain.answerWrite(allow, clock.now()) && allow) notificationAsks.send(Unit)
         }
     }
 
@@ -1415,6 +1437,22 @@ class DiaryViewModel(
             )
             recompute(shownEntries)
         }
+    }
+
+    /**
+     * Ответ на «Обед был?» — тап по чипсу: еда ложится в тот приём, о котором спрашивали.
+     *
+     * Вопрос не пропадает: остаётся в переписке с отмеченным выбором и погасшими чипсами.
+     * Повторный тап по отвеченному ничего не записывает.
+     */
+    fun onPickGap(item: FeedItem.Gap, candidate: FoodCandidate) {
+        val day = today
+        val answered = sessionReplies.value.any { reply ->
+            reply.day == day && (reply.item as? FeedItem.Gap)?.gap?.meal == item.gap.meal
+        }
+        if (item.picked != null || answered) return
+        sessionReplies.value += DayReply(day, item.copy(picked = candidate))
+        onPickPrediction(candidate, item.gap.meal)
     }
 
     fun onDismissMealGap(meal: MealType) {

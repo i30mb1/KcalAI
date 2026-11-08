@@ -8,6 +8,7 @@ import n7.kcalai.personal.DayPlan
 import n7.kcalai.personal.MealGap
 import n7.kcalai.ui.Macro
 import n7.kcalai.model.Mascot
+import n7.kcalai.mascot.MascotQuestion
 import n7.kcalai.ui.mascot.mascot
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -83,7 +84,9 @@ class SpeakerTest {
 
     @Test
     fun `имя спрашивает Яйцо, разрешение писать — Зёрнышко`() {
-        assertEquals(Mascot.EGG, speakerOf(FeedItem.Ask(AskKind.NAME)))
-        assertEquals(Mascot.GRAIN, speakerOf(FeedItem.Ask(AskKind.WRITE)))
+        fun ask(question: MascotQuestion) = FeedItem.Ask(id = 1, question = question, text = question.text, time = "10:00", minute = 600)
+
+        assertEquals(Mascot.EGG, speakerOf(ask(MascotQuestion.NAME)))
+        assertEquals(Mascot.GRAIN, speakerOf(ask(MascotQuestion.WRITE)))
     }
 }

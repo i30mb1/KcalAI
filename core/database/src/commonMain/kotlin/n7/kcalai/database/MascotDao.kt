@@ -35,6 +35,15 @@ interface MascotDao {
     @Query("UPDATE mascot_message SET openedAt = :at WHERE openedAt IS NULL")
     suspend fun markAllOpened(at: Long)
 
+    /**
+     * Ответ на вопрос — во все его копии, что ещё ждут: неотвеченный вопрос задаётся
+     * заново в новый день, и вчерашний ответ тот же, что сегодняшний.
+     *
+     * @return сколько вопросов получили ответ; ноль — ответ уже дан, второй не принимается
+     */
+    @Query("UPDATE mascot_message SET choice = :choice WHERE topic = :topic AND choice IS NULL")
+    suspend fun answer(topic: String, choice: Choice): Int
+
     @Query("SELECT * FROM mascot_profile WHERE id = 0")
     fun observeProfile(): Flow<MascotProfileEntity?>
 

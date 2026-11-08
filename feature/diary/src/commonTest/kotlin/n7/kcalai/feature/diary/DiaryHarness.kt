@@ -14,6 +14,7 @@ import kotlinx.datetime.toLocalDateTime
 import n7.kcalai.assistant.FoodAssistant
 import n7.kcalai.database.BodyMetricDao
 import n7.kcalai.database.BodyMetricEntity
+import n7.kcalai.database.Choice
 import n7.kcalai.database.CachedProductDao
 import n7.kcalai.database.CachedProductEntity
 import n7.kcalai.database.ContributionDao
@@ -159,11 +160,19 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
     }
 }
 
-/** Очередь отправки, у которой сервер то отвечает, то нет. */
+/** Очередь отправки, у которой сервер то отвечает, то нет. Отправленное из очереди уходит. */
 internal class FakeOutbox(var count: OutboxCount, var serverUp: Boolean) : DiaryOutbox {
+    /** Сколько раз отправляли. */
+    var sends = 0
+
     override suspend fun pending(): OutboxCount = count
     override suspend fun reachable(): Boolean = serverUp
-    override suspend fun send(): OutboxResult = OutboxResult.Sent(count.scans, count.products)
+    override suspend fun send(): OutboxResult {
+        sends++
+        val sent = count
+        count = OutboxCount(scans = 0, products = 0)
+        return OutboxResult.Sent(sent.scans, sent.products)
+    }
 }
 
 internal class MutableClock(var instant: Instant) : Clock {
@@ -385,6 +394,12 @@ internal class FakeMascotDao : MascotDao {
 
     override suspend fun markAllOpened(at: Long) {
         messages.value = messages.value.map { if (it.openedAt == null) it.copy(openedAt = at) else it }
+    }
+
+    override suspend fun answer(topic: String, choice: Choice): Int {
+        val waiting = messages.value.count { it.topic == topic && it.choice == null }
+        messages.value = messages.value.map { if (it.topic == topic && it.choice == null) it.copy(choice = choice) else it }
+        return waiting
     }
 
     override fun observeProfile(): Flow<MascotProfileEntity?> = profileRow

@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.mascot.MascotEvent
+import n7.kcalai.mascot.MascotQuestion
 import n7.kcalai.feature.scanner.LabelDebugDialog
 import n7.kcalai.feature.scanner.ScannerDialog
 import n7.kcalai.model.FoodCandidate
@@ -91,7 +92,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         onPick = { item -> viewModel.onPick(item) },
         onPickScanned = viewModel::onPickScanned,
         onPickCandidate = { candidate -> viewModel.onPickPrediction(candidate) },
-        onPickForMeal = viewModel::onPickPrediction,
+        onPickGap = viewModel::onPickGap,
         onPickPlan = { option -> option.items.forEach { viewModel.onPickPrediction(it) } },
         onDismissGap = viewModel::onDismissMealGap,
         onSendOutbox = viewModel::onSendOutbox,
@@ -104,10 +105,10 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         onOpenScan = viewModel::onOpenScan,
         onOpenLabelDebug = if (labelDebug) viewModel::onOpenLabelDebug else null,
         onMascotEvent = viewModel::onMascotEvent,
-        onAnswerAsk = { kind, yes ->
-            when (kind) {
-                AskKind.NAME -> if (yes) viewModel.onAskName() else viewModel.onAnswerName(null)
-                AskKind.WRITE -> viewModel.onAnswerWrite(yes)
+        onAnswerAsk = { question, yes ->
+            when (question) {
+                MascotQuestion.NAME -> if (yes) viewModel.onAskName() else viewModel.onAnswerName(null)
+                MascotQuestion.WRITE -> viewModel.onAnswerWrite(yes)
             }
         },
     )
@@ -178,7 +179,8 @@ fun DiaryScreen(
     onPick: (ResolvedItem) -> Unit,
     onPickScanned: (ResolvedItem) -> Unit,
     onPickCandidate: (FoodCandidate) -> Unit,
-    onPickForMeal: (FoodCandidate, MealType) -> Unit,
+    /** Ответ на «Обед был?»: еда ложится в тот приём, о котором спрашивали. */
+    onPickGap: (FeedItem.Gap, FoodCandidate) -> Unit,
     onPickPlan: (PlanOption) -> Unit,
     onDismissGap: (MealType) -> Unit,
     onSendOutbox: () -> Unit,
@@ -192,7 +194,7 @@ fun DiaryScreen(
     onOpenScan: () -> Unit,
     onOpenLabelDebug: (() -> Unit)?,
     /** Ответ на вопрос персонажа: `true` — «Сказать» / «Пишите», `false` — «Не скажу» / «Не надо». */
-    onAnswerAsk: (AskKind, Boolean) -> Unit,
+    onAnswerAsk: (MascotQuestion, Boolean) -> Unit,
     /** С персонажем что-то сделали: ткнули, взяли в руку, погладили, разбудили. */
     onMascotEvent: (MascotEvent) -> Unit,
 ) {
@@ -307,7 +309,7 @@ fun DiaryScreen(
             bottomInset = with(density) { composerHeight.toDp() },
             onEditEntry = onEditEntry,
             onUndoDelete = onUndoDelete,
-            onPickForMeal = onPickForMeal,
+            onPickGap = onPickGap,
             onDismissGap = onDismissGap,
             onSendOutbox = onSendOutbox,
             onAskAssistant = onAskAssistant,
@@ -409,7 +411,7 @@ private fun Feed(
     bottomInset: Dp,
     onEditEntry: (DiaryEntryEntity) -> Unit,
     onUndoDelete: (FeedItem.Deleted) -> Unit,
-    onPickForMeal: (FoodCandidate, MealType) -> Unit,
+    onPickGap: (FeedItem.Gap, FoodCandidate) -> Unit,
     onDismissGap: (MealType) -> Unit,
     onSendOutbox: () -> Unit,
     /** «Разобрать» в реплике «не нашлось»: фразу разбирает нейросеть. */
@@ -417,7 +419,7 @@ private fun Feed(
     onOpenScan: () -> Unit,
     onPickPlan: (PlanOption) -> Unit,
     onOpenGoal: (GoalField) -> Unit,
-    onAnswerAsk: (AskKind, Boolean) -> Unit,
+    onAnswerAsk: (MascotQuestion, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     /*
@@ -543,7 +545,7 @@ private fun Feed(
 
                     is FeedItem.Gap -> GapBubble(
                         item = item,
-                        onPick = { candidate -> onPickForMeal(candidate, item.gap.meal) },
+                        onPick = { candidate -> onPickGap(item, candidate) },
                         onDismiss = { onDismissGap(item.gap.meal) },
                     )
 
@@ -566,8 +568,8 @@ private fun Feed(
                     is FeedItem.Said -> SaidBubble(item)
                     is FeedItem.Ask -> AskBubble(
                         item = item,
-                        onYes = { onAnswerAsk(item.kind, true) },
-                        onNo = { onAnswerAsk(item.kind, false) },
+                        onYes = { onAnswerAsk(item.question, true) },
+                        onNo = { onAnswerAsk(item.question, false) },
                     )
                 }
             }

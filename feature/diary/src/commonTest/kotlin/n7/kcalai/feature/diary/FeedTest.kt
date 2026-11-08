@@ -10,6 +10,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.Test
 import n7.kcalai.model.Mascot
+import n7.kcalai.mascot.MascotQuestion
+import n7.kcalai.database.Choice
 
 /**
  * Лента дня: какой приём пищи у записи и как записи собираются в пузырьки.
@@ -238,6 +240,27 @@ class FeedTest {
         val answered = FeedItem.Said(id = 8, mascot = Mascot.GRAIN, text = "Записал!", time = "08:00", minute = 8 * 60, at = at(8) + 2_000)
 
         assertEquals(listOf(asked, bubbles[0], answered), interleave(bubbles, listOf(asked, answered), zone))
+    }
+
+    /** Вопрос персонажа — такое же сообщение переписки: стоит там, когда задан, и с ответом там же. */
+    @Test
+    fun `вопрос встаёт между пузырьками по времени, как сообщение`() {
+        val bubbles = groupIntoBubbles(
+            listOf(entry(1, hour = 8, meal = MealType.BREAKFAST), entry(2, hour = 13, meal = MealType.LUNCH)),
+            zone,
+            nowMillis = at(14),
+        )
+        val asked = FeedItem.Ask(
+            id = 7,
+            question = MascotQuestion.NAME,
+            text = MascotQuestion.NAME.text,
+            time = "08:00",
+            minute = 8 * 60,
+            at = at(8) + 1_000,
+            choice = Choice.NO,
+        )
+
+        assertEquals(listOf(bubbles[0], asked, bubbles[1]), interleave(bubbles, listOf(asked), zone))
     }
 
     @Test

@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import n7.kcalai.database.BodyMetricDao
 import n7.kcalai.database.BodyMetricEntity
+import n7.kcalai.database.Choice
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryDao
 import n7.kcalai.database.DiaryEntryEntity
@@ -134,6 +135,12 @@ internal class FakeMascotDao : MascotDao {
 
     override suspend fun markAllOpened(at: Long) {
         messages.value = messages.value.map { if (it.openedAt == null) it.copy(openedAt = at) else it }
+    }
+
+    override suspend fun answer(topic: String, choice: Choice): Int {
+        val waiting = messages.value.count { it.topic == topic && it.choice == null }
+        messages.value = messages.value.map { if (it.topic == topic && it.choice == null) it.copy(choice = choice) else it }
+        return waiting
     }
 
     override fun observeProfile(): Flow<MascotProfileEntity?> = profileRow

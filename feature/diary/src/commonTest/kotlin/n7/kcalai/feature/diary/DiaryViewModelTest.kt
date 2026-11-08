@@ -16,7 +16,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 import n7.kcalai.feature.scanner.ScanStep
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.MealType
@@ -26,6 +28,8 @@ import n7.kcalai.database.MascotProfileEntity
 import n7.kcalai.mascot.MascotEvent
 import n7.kcalai.mascot.CueKind
 import n7.kcalai.database.DailyGoalEntity
+import n7.kcalai.database.Choice
+import n7.kcalai.mascot.MascotQuestion
 import kotlinx.coroutines.test.runCurrent
 
 /**
@@ -108,6 +112,48 @@ class DiaryViewModelTest {
         assertTrue(vm.state.value.feed.any { it is FeedItem.Outbox })
     }
 
+    /** Лента — переписка: пузырёк с «Отправить» не пропадает, кнопка гаснет, ответ встаёт под ним. */
+    @Test
+    fun `после «Отправить» пузырёк остаётся с погасшей кнопкой, а ответ — под ним`() = runTest(dispatcher) {
+        val outbox = FakeOutbox(OutboxCount(scans = 2, products = 1), serverUp = true)
+        val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
+        vm.onResume()
+        advanceUntilIdle()
+
+        vm.onSendOutbox()
+        vm.onSendOutbox()
+        advanceUntilIdle()
+
+        val feed = vm.state.value.feed
+        val sent = feed.filterIsInstance<FeedItem.Outbox>().single()
+        assertTrue(sent.done)
+        val reply = feed.filterIsInstance<FeedItem.Reply>().single()
+        assertTrue(feed.indexOf(sent) < feed.indexOf(reply))
+        assertEquals(1, outbox.sends, "второй тап второй раз не отправляет")
+    }
+
+    // --- «Обед был?» ----------------------------------------------------------------------
+
+    /** Вопрос про пропущенный обед — тоже реплика переписки: ответ его не стирает. */
+    @Test
+    fun `ответ на пропущенный обед остаётся в ленте отмеченным, второй тап ничего не пишет`() = runTest(dispatcher) {
+        val afternoon = DiaryHarness(now = "2026-10-31T16:00:00Z")
+        repeat(6) { day -> afternoon.addEntry("Гречка", 200, MealType.LUNCH, minutesAgo = 180, daysAgo = day + 1) }
+        afternoon.mascotDao.upsertProfile(MascotProfileEntity(name = "Женя", nameAsked = true, consent = WriteConsent.ALLOWED))
+        val vm = afternoon.viewModel(dispatcher).also { backgroundScope.launch { it.state.collect {} } }
+        advanceUntilIdle()
+        val gap = vm.state.value.feed.filterIsInstance<FeedItem.Gap>().single()
+        val candidate = gap.gap.suggestions.first()
+
+        vm.onPickGap(gap, candidate)
+        vm.onPickGap(gap, candidate)
+        advanceUntilIdle()
+
+        val answered = vm.state.value.feed.filterIsInstance<FeedItem.Gap>().single()
+        assertEquals(candidate, answered.picked)
+        assertEquals(listOf(MealType.LUNCH), afternoon.diaryDao.day(afternoon.today).map { it.meal })
+    }
+
     // --- Холодный старт ------------------------------------------------------------------
 
     /**
@@ -150,18 +196,34 @@ class DiaryViewModelTest {
         assertTrue(harness.diaryDao.day(harness.today).isEmpty())
         val deleted = vm.state.value.feed.filterIsInstance<FeedItem.Deleted>().single()
         assertEquals(entry, deleted.entry)
+        assertFalse(deleted.restored)
 
         vm.onUndoDelete(deleted)
         advanceUntilIdle()
 
         assertEquals(listOf(entry), harness.diaryDao.day(harness.today))
-        assertTrue(vm.state.value.feed.none { it is FeedItem.Deleted })
+    }
+
+    /** Лента — переписка: «Удалил…» остаётся в ней, а «Вернуть» гаснет и второй раз не срабатывает. */
+    @Test
+    fun `после «Вернуть» реплика остаётся с погасшей кнопкой, и второй тап запись не дублирует`() = runTest(dispatcher) {
+        val entry = harness.addEntry("Гречка отварная", grams = 200, meal = n7.kcalai.model.MealType.LUNCH)
+        val vm = screen()
+        vm.onDeleteEntry(entry)
+        advanceUntilIdle()
+        val deleted = vm.state.value.feed.filterIsInstance<FeedItem.Deleted>().single()
+
+        vm.onUndoDelete(deleted)
+        vm.onUndoDelete(deleted)
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.feed.filterIsInstance<FeedItem.Deleted>().single().restored)
+        assertEquals(listOf(entry), harness.diaryDao.day(harness.today))
     }
 
     /**
-     * Реплика «Удалил…» уходит из ленты после отмены. Номер следующей реплики
-     * не вправе совпасть с номером уже стоящей: `LazyColumn` на повторном
-     * ключе падает.
+     * Номер следующей реплики не вправе совпасть с номером уже стоящей:
+     * `LazyColumn` на повторном ключе падает.
      */
     @Test
     fun `ключи реплик не повторяются после отмены удаления`() = runTest(dispatcher) {
@@ -477,66 +539,83 @@ class DiaryViewModelTest {
         assertTrue(vm.state.value.feed.none { it is FeedItem.Ask })
     }
 
+    /** Персонажи говорят по одному: на запись — вопрос, и облачко поверх него молчит. */
     @Test
-    fun `после первой записи Яйцо спрашивает имя`() = runTest(dispatcher) {
-        harness.addEntry("Гречка", 200, MealType.BREAKFAST)
+    fun `на первую запись Яйцо спрашивает имя — и облачка поверх нет`() = runTest(dispatcher) {
         val vm = screen()
 
-        assertEquals(listOf(FeedItem.Ask(AskKind.NAME)), vm.state.value.feed.filterIsInstance<FeedItem.Ask>())
+        vm.onPickPrediction(harness.kefir)
+        runCurrent()
+
+        val ask = vm.state.value.feed.filterIsInstance<FeedItem.Ask>().single()
+        assertEquals(MascotQuestion.NAME, ask.question)
+        assertNull(ask.choice)
+        assertTrue(vm.state.value.speech.isEmpty(), "облачко молчит, пока звучит вопрос")
+        assertEquals(CueKind.PROUD, vm.state.value.cue?.kind)
     }
 
+    /** Лента — переписка: отвеченный вопрос остаётся в ней, кнопки только гаснут. */
     @Test
-    fun `«Не скажу» убирает вопрос насовсем`() = runTest(dispatcher) {
-        harness.addEntry("Гречка", 200, MealType.BREAKFAST)
+    fun `«Не скажу» — вопрос остаётся в ленте с ответом`() = runTest(dispatcher) {
         val vm = screen()
+        vm.onPickPrediction(harness.kefir)
+        advanceUntilIdle()
 
         vm.onAnswerName(null)
         advanceUntilIdle()
 
-        assertTrue(vm.state.value.feed.none { it == FeedItem.Ask(AskKind.NAME) })
+        assertEquals(Choice.NO, vm.state.value.feed.filterIsInstance<FeedItem.Ask>().single().choice)
         assertEquals(true, harness.mascotDao.profileRow.value?.nameAsked)
     }
 
     @Test
-    fun `имя сохраняется, и Яйцо отвечает в ленте`() = runTest(dispatcher) {
-        harness.addEntry("Гречка", 200, MealType.BREAKFAST)
+    fun `имя сохраняется, вопрос остаётся, и Яйцо отвечает под ним`() = runTest(dispatcher) {
         val vm = screen()
+        vm.onPickPrediction(harness.kefir)
+        advanceUntilIdle()
 
         vm.onAnswerName("  Женя ")
         advanceUntilIdle()
 
         assertEquals("Женя", harness.mascotDao.profileRow.value?.name)
-        val thanks = vm.state.value.feed.filterIsInstance<FeedItem.Said>().single()
+        val feed = vm.state.value.feed
+        val ask = feed.filterIsInstance<FeedItem.Ask>().single()
+        assertEquals(Choice.YES, ask.choice)
+        val thanks = feed.filterIsInstance<FeedItem.Said>().single()
         assertEquals(Mascot.EGG, thanks.mascot)
         assertTrue("Женя" in thanks.text, thanks.text)
+        assertTrue(feed.indexOf(ask) < feed.indexOf(thanks), "ответ Яйца — под вопросом")
     }
 
     @Test
-    fun `после имени и двух записей Зёрнышко спрашивает, можно ли писать`() = runTest(dispatcher) {
+    fun `разрешение писать Зёрнышко спрашивает со второй записи, когда имя уже знает`() = runTest(dispatcher) {
         harness.mascotDao.upsertProfile(MascotProfileEntity(name = "Женя", nameAsked = true))
-        harness.addEntry("Гречка", 200, MealType.BREAKFAST, minutesAgo = 60)
         val vm = screen()
+
+        vm.onPickPrediction(harness.kefir)
+        advanceUntilIdle()
         assertTrue(vm.state.value.feed.none { it is FeedItem.Ask }, "одна запись — ещё рано")
 
-        harness.addEntry("Кефир", 250, MealType.BREAKFAST, minutesAgo = 10)
+        vm.onPickPrediction(harness.kefir)
         advanceUntilIdle()
 
-        assertEquals(listOf(FeedItem.Ask(AskKind.WRITE)), vm.state.value.feed.filterIsInstance<FeedItem.Ask>())
+        assertEquals(MascotQuestion.WRITE, vm.state.value.feed.filterIsInstance<FeedItem.Ask>().single().question)
     }
 
+    /** Кнопка погасла не только на экране: второй тап, успевший раньше, телефон не спрашивает. */
     @Test
-    fun `«Пишите» спрашивает разрешение телефона и отвечает по итогу`() = runTest(dispatcher) {
-        readyToAskWrite()
-        val vm = screen()
+    fun `«Пишите» спрашивает телефон один раз, даже если тапнуть дважды`() = runTest(dispatcher) {
+        val vm = askedToWrite()
         val requests = mutableListOf<Unit>()
         backgroundScope.launch { vm.notificationRequests.collect { requests += it } }
 
+        vm.onAnswerWrite(allow = true)
         vm.onAnswerWrite(allow = true)
         advanceUntilIdle()
 
         assertEquals(1, requests.size)
         assertEquals(WriteConsent.ALLOWED, harness.mascotDao.profileRow.value?.consent)
-        assertTrue(vm.state.value.feed.none { it is FeedItem.Ask })
+        assertEquals(Choice.YES, vm.state.value.feed.filterIsInstance<FeedItem.Ask>().single().choice)
 
         vm.onNotificationsResult(granted = true)
         advanceUntilIdle()
@@ -545,16 +624,52 @@ class DiaryViewModelTest {
     }
 
     @Test
-    fun `«Не надо» — согласие отозвано, вопрос не возвращается`() = runTest(dispatcher) {
-        readyToAskWrite()
-        val vm = screen()
+    fun `«Не надо» — вопрос остаётся с ответом и больше не задаётся`() = runTest(dispatcher) {
+        val vm = askedToWrite()
 
         vm.onAnswerWrite(allow = false)
         advanceUntilIdle()
 
         assertEquals(WriteConsent.DECLINED, harness.mascotDao.profileRow.value?.consent)
-        assertTrue(vm.state.value.feed.none { it is FeedItem.Ask })
+        assertEquals(Choice.NO, vm.state.value.feed.filterIsInstance<FeedItem.Ask>().single().choice)
         assertEquals(Mascot.GRAIN, vm.state.value.feed.filterIsInstance<FeedItem.Said>().single().mascot)
+
+        vm.onPickPrediction(harness.kefir)
+        advanceUntilIdle()
+        assertEquals(1, vm.state.value.feed.count { it is FeedItem.Ask })
+    }
+
+    /** Вопрос не тонет среди подсказок: перебор и остаток подождут ответа. */
+    @Test
+    fun `пока вопрос ждёт ответа, перебор ждёт тоже — а после ответа встаёт`() = runTest(dispatcher) {
+        harness.goalDao.upsert(DailyGoalEntity(harness.today, kcal = 50, prot = 0, fat = 0, carb = 0))
+        val vm = screen()
+
+        vm.onPickPrediction(harness.kefir)
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.feed.any { it is FeedItem.Ask })
+        assertTrue(vm.state.value.feed.none { it is FeedItem.Over })
+
+        vm.onAnswerName(null)
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.feed.any { it is FeedItem.Over })
+    }
+
+    @Test
+    fun `записал дальше, не ответив, — вопрос остаётся, но ленту больше не держит`() = runTest(dispatcher) {
+        harness.goalDao.upsert(DailyGoalEntity(harness.today, kcal = 50, prot = 0, fat = 0, carb = 0))
+        val vm = screen()
+        vm.onPickPrediction(harness.kefir)
+        advanceUntilIdle()
+
+        harness.clock.instant += 1.minutes
+        vm.onPickPrediction(harness.kefir)
+        advanceUntilIdle()
+
+        assertNull(vm.state.value.feed.filterIsInstance<FeedItem.Ask>().single().choice)
+        assertTrue(vm.state.value.feed.any { it is FeedItem.Over })
     }
 
     /** Вернулся в приложение — всё, что персонажи писали, прочитано: ленту он видит. */
@@ -581,10 +696,15 @@ class DiaryViewModelTest {
         assertEquals(harness.clock.now().toEpochMilliseconds(), harness.mascotDao.findById(id)?.openedAt)
     }
 
-    private suspend fun readyToAskWrite() {
+    /** Имя уже знают, и на вторую запись дня Зёрнышко спросило, можно ли писать. */
+    private suspend fun TestScope.askedToWrite(): DiaryViewModel {
         harness.mascotDao.upsertProfile(MascotProfileEntity(name = "Женя", nameAsked = true))
         harness.addEntry("Гречка", 200, MealType.BREAKFAST, minutesAgo = 60)
-        harness.addEntry("Кефир", 250, MealType.BREAKFAST, minutesAgo = 10)
+        val vm = screen()
+        vm.onPickPrediction(harness.kefir)
+        advanceUntilIdle()
+        assertEquals(MascotQuestion.WRITE, vm.state.value.feed.filterIsInstance<FeedItem.Ask>().single().question)
+        return vm
     }
 
     // --- Сцена: облачка и сигналы -------------------------------------------------------

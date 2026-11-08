@@ -33,6 +33,8 @@ import kotlinx.coroutines.IO
         AutoMigration(from = 4, to = 5),
         // Кэш отпечатков для поиска по смыслу — новая таблица, остальное не трогается.
         AutoMigration(from = 5, to = 6),
+        // Ответ на вопрос персонажа — новый столбец, у сказанного раньше он пуст.
+        AutoMigration(from = 6, to = 7),
     ],
 )
 @ConstructedBy(KcalDatabaseConstructor::class)
@@ -49,7 +51,7 @@ abstract class KcalDatabase : RoomDatabase() {
 }
 
 /** Версия схемы базы. Константой — её читают тесты обновления и выгрузки схемы. */
-const val KCAL_DB_VERSION = 6
+const val KCAL_DB_VERSION = 7
 
 /** Реализацию для каждой платформы генерирует Room. */
 @Suppress("KotlinNoActualForExpect")

@@ -57,6 +57,8 @@ import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.model.genitive
 import n7.kcalai.model.title
+import n7.kcalai.database.Choice
+import n7.kcalai.mascot.MascotQuestion
 
 /** Доля ширины, которую пузырёк не переступает: лента должна читаться как диалог. */
 private const val BUBBLE_WIDTH = 0.88f
@@ -411,6 +413,9 @@ private val OUTLINE_ALPHA = floatArrayOf(0.85f, 0.6f, 0.4f, 0.25f)
  * Формулировка намеренно нейтральная. «Ты не обедал» — упрёк, повод удалить
  * приложение, да ещё и с родом, который приложению неизвестен; «Обед был?» —
  * вопрос, на который есть три ответа в один тап и четвёртый, закрывающий его до завтра.
+ *
+ * Ответ тапом вопрос не убирает: чипсы гаснут, выбранный отмечен. Крестик — другое
+ * дело: это просьба скрыть, и вопрос уходит.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -420,8 +425,9 @@ fun GapBubble(
     onDismiss: () -> Unit,
 ) {
     val gap: MealGap = item.gap
+    val picked = item.picked
 
-    IncomingBubble(item, onDismiss = onDismiss) {
+    IncomingBubble(item, onDismiss = onDismiss.takeIf { picked == null }) {
         BubbleTitle("${gap.meal.title} был?")
         BubbleText(
             "Обычно ты ${mealVerb(gap.meal)} около ${formatHour(gap.typicalHour)}, " +
@@ -435,7 +441,7 @@ fun GapBubble(
             verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             gap.suggestions.forEach { candidate ->
-                CandidateChip(candidate) { onPick(candidate) }
+                CandidateChip(candidate, chosen = picked?.let { it == candidate }) { onPick(candidate) }
             }
         }
     }
@@ -617,7 +623,8 @@ fun ReplyBubble(item: FeedItem.Reply) {
  * Запись удалена — и её можно вернуть.
  *
  * Удаление в шите идёт без вопроса «вы уверены?», а значит, отмена обязана
- * быть под рукой: случайный тап не должен стирать завтрак насовсем.
+ * быть под рукой: случайный тап не должен стирать завтрак насовсем. Вернули —
+ * реплика остаётся, а «Вернуть» гаснет с галочкой.
  */
 @Composable
 fun DeletedBubble(item: FeedItem.Deleted, onUndo: () -> Unit) {
@@ -628,9 +635,7 @@ fun DeletedBubble(item: FeedItem.Deleted, onUndo: () -> Unit) {
         Column(Modifier.width(IntrinsicSize.Max)) {
             BubbleText("Удалил «${item.entry.displayName} · ${formatGrams(item.entry.grams)}»")
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.Bottom) {
-                KcalChip(onClick = onUndo, background = colors.bubble) {
-                    Text("Вернуть", style = KcalTheme.type.chip, color = colors.onBubble)
-                }
+                AnswerChip("Вернуть", chosen = if (item.restored) true else null, primary = true, onClick = onUndo)
                 Spacer(Modifier.weight(1f).widthIn(min = TIME_GAP))
                 Text(item.time, style = KcalTheme.type.time, color = colors.text3)
             }
@@ -656,35 +661,57 @@ fun SaidBubble(item: FeedItem.Said) {
  *
  * Оба ответа равноправны: «Не скажу» и «Не надо» — такие же кнопки, а не мелкий
  * текст снизу. Вопрос, от которого неудобно отказаться, перестаёт быть вопросом.
+ *
+ * Ответили — вопрос остаётся в переписке: кнопки гаснут, выбранная с галочкой.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit) {
-    val colors = KcalTheme.colors
-    val (question, yes, no) = when (item.kind) {
-        AskKind.NAME -> Triple("Кстати, как тебя зовут? Буду знать, к кому обращаться.", "Сказать", "Не скажу")
-        AskKind.WRITE -> Triple(
-            "Можно мы будем иногда писать тебе сами? Если пропадёшь или забудешь поесть. " +
-                "Не чаще пары раз в день — честно.",
-            "Пишите",
-            "Не надо",
-        )
+    val (yes, no) = when (item.question) {
+        MascotQuestion.NAME -> "Сказать" to "Не скажу"
+        MascotQuestion.WRITE -> "Пишите" to "Не надо"
     }
+    val answered = item.choice
 
     IncomingBubble(item) {
-        BubbleText(question)
+        BubbleText(item.text, time = item.time)
         FlowRow(
             modifier = Modifier.padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
-            KcalChip(onClick = onYes, background = colors.bubble) {
-                Text(yes, style = KcalTheme.type.chip, color = colors.onBubble)
-            }
-            KcalChip(onClick = onNo, background = colors.chip) {
-                Text(no, style = KcalTheme.type.chip, color = colors.text)
-            }
+            AnswerChip(yes, chosen = answered?.let { it == Choice.YES }, primary = true, onClick = onYes)
+            AnswerChip(no, chosen = answered?.let { it == Choice.NO }, primary = false, onClick = onNo)
         }
+    }
+}
+
+/**
+ * Кнопка ответа в реплике.
+ *
+ * Пока ответа нет — живая. Ответили — гаснут все, а выбранная отмечена галочкой:
+ * лента — переписка, отвеченное в ней остаётся видно, но второй раз событие
+ * не запускает.
+ *
+ * @param chosen `null` — ответа ещё нет; `true` — выбрали эту; `false` — другую
+ * @param primary главный ответ: пока живой, он тёмный, как реплика человека
+ */
+@Composable
+private fun AnswerChip(text: String, chosen: Boolean?, primary: Boolean, onClick: () -> Unit) {
+    val colors = KcalTheme.colors
+    val open = chosen == null
+
+    KcalChip(onClick = if (open) onClick else null, background = if (open && primary) colors.bubble else colors.chip) {
+        Text(
+            if (chosen == true) "✓ $text" else text,
+            style = KcalTheme.type.chip,
+            color = when {
+                open && primary -> colors.onBubble
+                open -> colors.text
+                chosen == true -> colors.text2
+                else -> colors.text3
+            },
+        )
     }
 }
 
@@ -692,41 +719,49 @@ fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit) {
  * Очередь отправки: что скопилось и кнопка.
  *
  * Воркеры уносят это сами, когда есть сеть, — но молча, и человек не знает,
- * ушло ли. Кнопка делает то же самое сейчас и отвечает репликой.
+ * ушло ли. Кнопка делает то же самое сейчас и отвечает репликой. Пузырёк после
+ * этого остаётся в переписке, а кнопка гаснет с галочкой.
  */
 @Composable
 fun OutboxBubble(item: FeedItem.Outbox, onSend: () -> Unit) {
-    val colors = KcalTheme.colors
-
     IncomingBubble(item) {
         BubbleText("Не отправлено на сервер: ${describeOutbox(item.count.scans, item.count.products)}")
-        KcalChip(
-            onClick = if (item.sending) null else onSend,
-            background = if (item.sending) colors.chip else colors.bubble,
-            modifier = Modifier.padding(top = 8.dp),
-        ) {
-            Text(
-                if (item.sending) "Отправляю…" else "Отправить",
-                style = KcalTheme.type.chip,
-                color = if (item.sending) colors.text3 else colors.onBubble,
+        Box(Modifier.padding(top = 8.dp)) {
+            AnswerChip(
+                text = if (item.sending) "Отправляю…" else "Отправить",
+                chosen = if (item.sending || item.done) item.done else null,
+                primary = true,
+                onClick = onSend,
             )
         }
     }
 }
 
-/** Предсказанный продукт: тап добавляет его целиком, вместе с типичной порцией. */
+/**
+ * Предсказанный продукт: тап добавляет его целиком, вместе с типичной порцией.
+ *
+ * @param chosen `null` — ответа ещё нет; иначе чипс погас, а выбранный отмечен галочкой
+ */
 @Composable
-fun CandidateChip(candidate: FoodCandidate, onClick: () -> Unit) {
+fun CandidateChip(candidate: FoodCandidate, chosen: Boolean? = null, onClick: () -> Unit) {
     val colors = KcalTheme.colors
     val grams = candidate.servingG ?: 0
     val macro = dominantMacro(candidate.nutriments)
 
-    KcalChip(onClick = onClick, background = colors.chip) {
-        MacroDot(macro.colors().fill)
+    KcalChip(onClick = if (chosen == null) onClick else null, background = colors.chip) {
+        if (chosen == true) {
+            Text("✓", style = KcalTheme.type.chip, color = colors.text2)
+        } else {
+            MacroDot(if (chosen == null) macro.colors().fill else colors.text3)
+        }
         Text(
             candidate.displayName,
             style = KcalTheme.type.chip,
-            color = colors.text,
+            color = when (chosen) {
+                null -> colors.text
+                true -> colors.text2
+                false -> colors.text3
+            },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 7.dp),

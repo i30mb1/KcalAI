@@ -19,6 +19,9 @@ import n7.kcalai.personal.MealGap
 import n7.kcalai.personal.mealForHour
 import n7.kcalai.repositories.DaySummary
 import n7.kcalai.model.Mascot
+import n7.kcalai.model.FoodCandidate
+import n7.kcalai.database.Choice
+import n7.kcalai.mascot.MascotQuestion
 
 /**
  * Готовая лента дня.
@@ -74,8 +77,13 @@ sealed interface FeedItem {
         override val key get() = "summary"
     }
 
-    /** Идея 4: приём пищи, который человек, похоже, забыл записать. */
-    data class Gap(val gap: MealGap) : FeedItem {
+    /**
+     * Идея 4: приём пищи, который человек, похоже, забыл записать.
+     *
+     * @param picked что человек выбрал в ответ. Вопрос после этого не пропадает: лента —
+     *        переписка, и он остаётся с отмеченным выбором и погасшими чипсами
+     */
+    data class Gap(val gap: MealGap, val picked: FoodCandidate? = null) : FeedItem {
         override val key get() = "gap-${gap.meal}"
     }
 
@@ -146,10 +154,15 @@ sealed interface FeedItem {
      * Очередь отправки на сервер: что скопилось и кнопка «отправить».
      *
      * Воркеры шлют сами, но молча — а человеку надо видеть, что ушло.
-     * Пузырёк есть, только пока очередь не пуста.
+     * Пузырёк появляется, только пока очередь не пуста. Отправленный остаётся
+     * в переписке с погасшей кнопкой, и ответ встаёт под ним.
+     *
+     * @param id номер реплики сессии: отправленный пузырёк остаётся, и новая очередь
+     *        встаёт отдельным — со своим ключом
+     * @param done отправка кончилась, кнопка погасла
      */
-    data class Outbox(val count: OutboxCount, val sending: Boolean) : FeedItem {
-        override val key get() = "outbox"
+    data class Outbox(val count: OutboxCount, val sending: Boolean, val id: Int = 0, val done: Boolean = false) : FeedItem {
+        override val key get() = "outbox-$id"
     }
 
     /** Ответ на действие: «Отправлено: 2 сессии». Живёт до конца сессии экрана, как [WeightLogged]. */
@@ -163,47 +176,62 @@ sealed interface FeedItem {
      * Удаление идёт без вопроса «вы уверены?»: на десятой записи за день он
      * дороже самой опечатки. Но без отмены случайный тап стирал запись насовсем,
      * поэтому ответ на удаление несёт кнопку «Вернуть». После возврата реплика
-     * уходит из ленты: запись снова стоит в своём пузырьке, и говорить больше не о чем.
+     * остаётся в переписке, а кнопка гаснет: второй тап вставил бы запись ещё раз.
      *
      * [entry] — снимок записи целиком: вернуть надо ту же запись, а не похожую.
+     *
+     * @param restored запись вернули — кнопка погасла
      */
-    data class Deleted(val id: Int, val entry: DiaryEntryEntity, val time: String) : FeedItem {
+    data class Deleted(val id: Int, val entry: DiaryEntryEntity, val time: String, val restored: Boolean = false) : FeedItem {
         override val key get() = "deleted-$id"
     }
 
     /**
-     * Сообщение персонажа: написанное первым в шторку или ответ в ленте.
+     * Сообщение персонажа из базы — сказанное или спрошенное.
      *
      * Хранится в базе, а не в сессии, — и поэтому стоит в переписке дня, когда
      * человек откроет приложение по уведомлению: персонаж действительно ему писал.
-     *
-     * @param minute минута суток, когда оно написано: по ней встаёт между пузырьками
-     * @param at когда написано, мс: в одну минуту с записью решает, кто был раньше
+     * Встаёт между пузырьками по времени, когда сказано, см. [interleave].
      */
+    sealed interface Message : FeedItem {
+        /** Минута суток, когда оно написано: по ней встаёт между пузырьками. */
+        val minute: Int
+
+        /** Когда написано, мс: в одну минуту с записью решает, кто был раньше. */
+        val at: Long
+    }
+
+    /** Сообщение персонажа: написанное первым в шторку или ответ в ленте. */
     data class Said(
         val id: Long,
         val mascot: Mascot,
         val text: String,
         val time: String,
-        val minute: Int,
-        val at: Long = Long.MAX_VALUE,
-    ) : FeedItem {
+        override val minute: Int,
+        override val at: Long = Long.MAX_VALUE,
+    ) : Message {
         override val key get() = "said-$id"
     }
 
-    /** Персонаж о чём-то спрашивает, и ответить можно одним тапом. */
-    data class Ask(val kind: AskKind) : FeedItem {
-        override val key get() = "ask-$kind"
+    /**
+     * Персонаж спрашивает, и ответить можно одним тапом.
+     *
+     * Ответ вопрос не убирает: лента — переписка, поэтому кнопки гаснут, а выбранная
+     * отмечена. Повторный тап по отвеченному ничего не запускает.
+     *
+     * @param choice что человек ответил; `null` — ответа ещё нет, и кнопки живые
+     */
+    data class Ask(
+        val id: Long,
+        val question: MascotQuestion,
+        val text: String,
+        val time: String,
+        override val minute: Int,
+        override val at: Long = Long.MAX_VALUE,
+        val choice: Choice? = null,
+    ) : Message {
+        override val key get() = "ask-$id"
     }
-}
-
-/** О чём спрашивают персонажи. */
-enum class AskKind {
-    /** Яйцо: как тебя зовут. */
-    NAME,
-
-    /** Зёрнышко: можно ли писать первыми. */
-    WRITE,
 }
 
 /**
@@ -277,10 +305,7 @@ enum class Assist {
 fun speakerOf(item: FeedItem): Mascot? = when (item) {
     is FeedItem.DaySeparator, is FeedItem.Meal, is FeedItem.Question -> null
     is FeedItem.Said -> item.mascot
-    is FeedItem.Ask -> when (item.kind) {
-        AskKind.NAME -> Mascot.EGG
-        AskKind.WRITE -> Mascot.GRAIN
-    }
+    is FeedItem.Ask -> item.question.mascot
     is FeedItem.Over -> Mascot.BUTTER
     is FeedItem.Gap -> Mascot.GRAIN
     is FeedItem.Remaining -> if (item.plan.remainingProtCg > 0) Mascot.EGG else Mascot.GRAIN
@@ -398,7 +423,7 @@ fun gapPosition(body: List<FeedItem>, gap: MealGap, zone: TimeZone): Int =
  * еды» в 15:30 стоит после обеда. В одну минуту с записью решают секунды: вопрос
  * из шторки — выше записи, которой на него ответили, а ответ персонажа — ниже.
  */
-fun interleave(bubbles: List<FeedItem.Meal>, said: List<FeedItem.Said>, zone: TimeZone): List<FeedItem> {
+fun interleave(bubbles: List<FeedItem.Meal>, said: List<FeedItem.Message>, zone: TimeZone): List<FeedItem> {
     val body = mutableListOf<FeedItem>()
     var next = 0
     for (bubble in bubbles) {

@@ -1,13 +1,20 @@
 package n7.kcalai.mascot
 
 import kotlin.random.Random
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import n7.kcalai.database.Choice
 import n7.kcalai.database.Delivery
 import n7.kcalai.database.DiaryDao
 import n7.kcalai.database.DiaryEntryEntity
@@ -123,12 +130,18 @@ class MascotBrain(
     /**
      * Имя названо — или «Не скажу». Второй раз не спрашивают ни в том, ни в другом случае.
      *
-     * @return ответ Яйца по имени; `null`, если имя не назвали — благодарить не за что
+     * Ответ ложится в сам вопрос: он остаётся в переписке, а кнопки под ним гаснут.
+     * На отвеченный вопрос второй раз не отвечают — повторный тап ничего не запускает.
+     * На имя Яйцо отвечает по имени; на «Не скажу» благодарить не за что.
+     *
+     * @return принят ли ответ
      */
-    suspend fun answerName(name: String?, now: Instant): MascotMessageEntity? {
+    suspend fun answerName(name: String?, now: Instant): Boolean {
+        if (dao.answer(MascotQuestion.NAME.topic, if (name != null) Choice.YES else Choice.NO) == 0) return false
         val profile = dao.profile() ?: MascotProfileEntity()
         dao.upsertProfile(profile.copy(name = name ?: profile.name, nameAsked = true))
-        return name?.let { answer(Topic.NAME_THANKS, Mascot.EGG, now) }
+        if (name != null) answer(Topic.NAME_THANKS, Mascot.EGG, now)
+        return true
     }
 
     /** Пол из помощника цели: с ним персонажи говорят «ты ел» и «ты ела» правильно. */
@@ -138,15 +151,20 @@ class MascotBrain(
     }
 
     /**
-     * «Пишите» или «Не надо».
+     * «Пишите» или «Не надо». Ответ ложится в вопрос, как у имени, и второй раз не принимается:
+     * повторный тап по «Пишите» не спрашивает телефон заново.
      *
-     * @return ответ на «Не надо»; на «Пишите» отвечают после ответа телефона — [notificationsResult]
+     * На «Не надо» Зёрнышко отвечает сразу, на «Пишите» — после ответа телефона, см. [notificationsResult].
+     *
+     * @return принят ли ответ
      */
-    suspend fun answerWrite(allow: Boolean, now: Instant): MascotMessageEntity? {
+    suspend fun answerWrite(allow: Boolean, now: Instant): Boolean {
+        if (dao.answer(MascotQuestion.WRITE.topic, if (allow) Choice.YES else Choice.NO) == 0) return false
         val profile = dao.profile() ?: MascotProfileEntity()
         val consent = if (allow) WriteConsent.ALLOWED else WriteConsent.DECLINED
         dao.upsertProfile(profile.copy(consent = consent, consentAt = now.toEpochMilliseconds()))
-        return if (allow) null else answer(Topic.WRITE_NO, Mascot.GRAIN, now)
+        if (!allow) answer(Topic.WRITE_NO, Mascot.GRAIN, now)
+        return true
     }
 
     /** Телефон разрешил уведомления или нет. */
@@ -167,19 +185,60 @@ class MascotBrain(
      * уже не новость. Это ответ в ленте, а не первое слово в шторке: ни дневного
      * бюджета, ни согласия писать первыми он не касается.
      *
+     * Персонажи говорят по одному, и новость ждёт своей очереди — см. [awaitTurn]. Ждать
+     * бывает долго, поэтому статусы собирают через `collectLatest`: новый статус отменяет
+     * ожидание старого, и «докачиваю» не прозвучит, когда уже докачалось.
+     *
      * @return сказанное; `null` — говорить не о чем
      */
-    suspend fun report(model: BackgroundModel, delivery: ModelDelivery, now: Instant): MascotMessageEntity? {
-        val (topic, mascot) = news(model, delivery) ?: return null
+    suspend fun report(model: BackgroundModel, delivery: ModelDelivery, clock: Clock = Clock.System): MascotMessageEntity? {
+        untold(model, delivery, clock.now()) ?: return null
+        awaitTurn(clock)
+        val now = clock.now()
+        // Пока ждали очереди, об этом могли рассказать — сверяемся заново.
+        val (topic, mascot) = untold(model, delivery, now) ?: return null
+        return answer(topic, mascot, now)
+    }
+
+    /** Новость о докачке, если о ней ещё не рассказывали; `null` — говорить не о чем. */
+    private suspend fun untold(model: BackgroundModel, delivery: ModelDelivery, now: Instant): Pair<Topic, Mascot>? {
+        val news = news(model, delivery) ?: return null
         val done = if (model == BackgroundModel.SEARCH) Topic.SEARCH_READY else Topic.ASSISTANT_READY
         if (dao.lastSaid(done.name) != null) return null
 
-        val last = dao.lastSaid(topic.name)?.let(Instant::fromEpochMilliseconds)
+        val last = dao.lastSaid(news.first.name)?.let(Instant::fromEpochMilliseconds)
         val sameDay = last?.toLocalDateTime(zone)?.date == now.toLocalDateTime(zone).date
         val repeats = delivery == ModelDelivery.FAILED && !sameDay
         if (last != null && !repeats) return null
+        return news
+    }
 
-        return answer(topic, mascot, now)
+    /**
+     * Дождаться очереди заговорить о новом.
+     *
+     * Персонажи говорят по одному. Пока человек ничего не записал, на экране знакомство,
+     * и новость его не перебивает. Вопрос держит слово, пока ждёт ответа, — см. [awaitsAnswer].
+     * И не вслед за другим: после сообщения, записи или открытия приложения выдерживается
+     * пауза, чтобы два сообщения не пришли разом.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private suspend fun awaitTurn(clock: Clock) {
+        val today = clock.now().toLocalDateTime(zone).date.toEpochDays()
+        combine(
+            dao.observeDay(today),
+            // Знакомство — пока за неделю ни одной записи: так же решает сводка дня.
+            diaryDao.observeSince(today - INTRO_DAYS + 1),
+            profile,
+        ) { said, eaten, profile -> Triple(said, eaten, profile) }
+            .mapLatest { (said, eaten, profile) ->
+                val lastEntryAt = eaten.maxOfOrNull { it.createdAt } ?: return@mapLatest false
+                if (awaitsAnswer(said, lastEntryAt)) return@mapLatest false
+                val lastActivity = maxOf(lastEntryAt, said.maxOfOrNull { it.createdAt } ?: 0L, profile.lastOpenAt ?: 0L)
+                val wait = lastActivity + PAUSE_MS - clock.now().toEpochMilliseconds()
+                if (wait > 0) delay(wait)
+                true
+            }
+            .first { it }
     }
 
     // --- Отзывается -----------------------------------------------------------------------
@@ -230,13 +289,18 @@ class MascotBrain(
     }
 
     /**
-     * Еда записана: гордится хозяин макроса. Говорит — когда есть что сказать:
-     * новинка, третий день подряд, ночь, первая запись дня; иначе — изредка.
+     * Еда записана: гордится хозяин макроса. Ответ один — персонажи говорят по одному:
+     * пришёл черёд вопроса — звучит он, а хозяин только подпрыгивает. Иначе хозяин
+     * говорит, когда есть что сказать: новинка, третий день подряд, ночь, первая запись
+     * дня; иначе — изредка.
      */
     private suspend fun ate(entry: DiaryEntryEntity, now: Instant): Reaction {
         val owner = entry.nutriments().owner()
         val day = entry.dateEpochDay
         val history = diaryDao.since(day - FOOD_LOOKBACK_DAYS).filter { it.id != entry.id }
+        if (askIfDue(day, entriesToday = history.count { it.dateEpochDay == day } + 1, now)) {
+            return Reaction(Cue(CueKind.PROUD, owner), null)
+        }
         val key = entry.foodKey()
         val same = history.filter { it.foodKey() == key }
         val sameDays = same.mapTo(HashSet()) { it.dateEpochDay } + day
@@ -253,6 +317,39 @@ class MascotBrain(
         }
         val speech = topic?.let { speak(owner, it, now) { facts -> facts.copy(food = entry.displayName, foodDaysInRow = run) } }
         return Reaction(Cue(CueKind.PROUD, owner), speech)
+    }
+
+    /**
+     * Спросить, если пришёл черёд: имя — на первую запись дня, разрешение писать — после
+     * имени и со второй записи. Только про сегодня и по вопросу за раз: заданный сегодня
+     * второй раз в тот же день не задаётся, а следующий ждёт ответа на него.
+     *
+     * @return задан ли вопрос
+     */
+    private suspend fun askIfDue(day: Long, entriesToday: Int, now: Instant): Boolean {
+        if (day != now.toLocalDateTime(zone).date.toEpochDays()) return false
+        val profile = dao.profile() ?: MascotProfileEntity()
+        val question = when {
+            profile.name == null && !profile.nameAsked -> MascotQuestion.NAME
+            entriesToday >= 2 && profile.asksToWrite(now) -> MascotQuestion.WRITE
+            else -> return false
+        }
+        if (dao.observeDay(day).first().any { it.question == question }) return false
+        val at = now.toEpochMilliseconds()
+        dao.insert(
+            MascotMessageEntity(
+                mascot = question.mascot,
+                topic = question.topic,
+                text = question.text,
+                lineIds = "",
+                delivery = Delivery.FEED,
+                dateEpochDay = day,
+                createdAt = at,
+                // Задан на глазах у человека, в ответ на его запись: в переписку шторки не просится.
+                openedAt = at,
+            )
+        )
+        return true
     }
 
     private suspend fun opened(messageId: Long, now: Instant): Reaction? {
@@ -324,6 +421,12 @@ class MascotBrain(
         const val REPEAT_RUN = 3
         const val FOOD_LOOKBACK_DAYS = 89
         val SHAKE_PAUSE = 10.seconds
+
+        /** Окно знакомства: за столько дней ни одной записи — сводка дня снова представляет троих. */
+        const val INTRO_DAYS = 7
+
+        /** Тишина в переписке перед новостью: сообщение не приходит вслед за другим. */
+        const val PAUSE_MS = 60_000L
     }
 }
 
