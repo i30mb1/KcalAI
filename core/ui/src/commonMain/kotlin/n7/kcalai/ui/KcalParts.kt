@@ -1,5 +1,6 @@
 package n7.kcalai.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -17,7 +18,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -165,5 +169,31 @@ fun WideButton(
             },
             modifier = Modifier.padding(horizontal = 16.dp),
         )
+    }
+}
+
+/**
+ * Росток — знак клетчатки.
+ *
+ * Это хохолок Зёрнышка: клетчатка — его тема, и знак узнаётся по нему без слова,
+ * как плитки узнаются по персонажам.
+ */
+@Composable
+fun SproutIcon(color: Color, modifier: Modifier = Modifier, size: Dp = 11.dp) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        drawLine(color, Offset(w * 0.5f, h * 0.96f), Offset(w * 0.5f, h * 0.5f), strokeWidth = w * 0.13f, cap = StrokeCap.Round)
+        val leaves = Path().apply {
+            moveTo(w * 0.5f, h * 0.5f)
+            quadraticTo(w * 0.08f, h * 0.52f, w * 0.08f, h * 0.14f)
+            quadraticTo(w * 0.46f, h * 0.12f, w * 0.5f, h * 0.5f)
+            close()
+            moveTo(w * 0.5f, h * 0.5f)
+            quadraticTo(w * 0.92f, h * 0.46f, w * 0.92f, h * 0.08f)
+            quadraticTo(w * 0.54f, h * 0.06f, w * 0.5f, h * 0.5f)
+            close()
+        }
+        drawPath(leaves, color)
     }
 }

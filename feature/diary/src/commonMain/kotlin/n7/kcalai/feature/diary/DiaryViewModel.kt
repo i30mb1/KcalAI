@@ -27,11 +27,13 @@ import kotlinx.datetime.todayIn
 import n7.kcalai.assistant.FoodAssistant
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryEntryEntity
+import n7.kcalai.database.fiber
 import n7.kcalai.feature.scanner.ScanStep
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.Log
 import n7.kcalai.model.MealType
+import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.model.Nutriments
 import n7.kcalai.model.parseFoodRef
@@ -148,6 +150,8 @@ data class DiaryUiState(
     /** Чем сейчас стала кнопка у строки ввода. См. [composerAction]. */
     val action: ComposerAction = ComposerAction.SCAN,
     val totals: NutrimentTotals = NutrimentTotals.ZERO,
+    /** Клетчатка открытого дня: известная часть и сколько продуктов без данных. */
+    val fiber: FiberTotal = FiberTotal.ZERO,
     /** Калории по дням за неделю, последний элемент — сегодня. Всегда семь элементов. */
     val week: List<DaySummary> = emptyList(),
     /** Открытый день: его переписка в ленте, его итоги в шапке. */
@@ -345,6 +349,7 @@ class DiaryViewModel(
             composer = row,
             action = composerAction(typed.input),
             totals = loaded.day.totals,
+            fiber = loaded.day.entries.fiber(),
             week = loaded.week,
             date = loaded.date,
             today = loaded.today,

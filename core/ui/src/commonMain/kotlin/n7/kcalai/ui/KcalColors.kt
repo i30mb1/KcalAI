@@ -48,6 +48,8 @@ data class KcalColors(
     val protein: MacroColors,
     val fat: MacroColors,
     val carb: MacroColors,
+    /** Клетчатка — тема Зёрнышка: тот же зелёный, только темнее, цвета его хохолка. */
+    val fiber: MacroColors,
     val isDark: Boolean,
 )
 
@@ -82,6 +84,12 @@ val LightKcalColors = KcalColors(
         text = Color(0xFF2F5E36),
         onBubble = Color(0xFF93CCA0),
     ),
+    fiber = MacroColors(
+        fill = Color(0xFF2E6B3A),
+        tile = Color(0xFFDDEBD8),
+        text = Color(0xFF24502C),
+        onBubble = Color(0xFFCFE6A8),
+    ),
     isDark = false,
 )
 
@@ -115,6 +123,12 @@ val DarkKcalColors = KcalColors(
         tile = Color(0xFF22331F),
         text = Color(0xFF93CCA0),
         onBubble = Color(0xFF2F5E36),
+    ),
+    fiber = MacroColors(
+        fill = Color(0xFFA9D88A),
+        tile = Color(0xFF22331F),
+        text = Color(0xFFBFE3A3),
+        onBubble = Color(0xFF3A5F22),
     ),
     isDark = true,
 )

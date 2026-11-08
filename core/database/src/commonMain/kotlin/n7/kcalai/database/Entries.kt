@@ -1,7 +1,9 @@
 package n7.kcalai.database
 
+import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.model.Nutriments
+import n7.kcalai.model.fiberFor
 import n7.kcalai.model.forGrams
 
 /**
@@ -16,3 +18,9 @@ fun DiaryEntryEntity.nutriments(): Nutriments =
 
 /** КБЖУ записи для её веса — для строки списка и для сумм за день. */
 fun DiaryEntryEntity.totals(): NutrimentTotals = nutriments().forGrams(grams)
+
+/** Клетчатка записи для её веса; без данных о клетчатке — пробел в сумме, а не ноль. */
+fun DiaryEntryEntity.fiber(): FiberTotal = nutriments().fiberFor(grams)
+
+/** Клетчатка нескольких записей: приёма в ленте или дня в шапке. */
+fun List<DiaryEntryEntity>.fiber(): FiberTotal = fold(FiberTotal.ZERO) { acc, entry -> acc + entry.fiber() }

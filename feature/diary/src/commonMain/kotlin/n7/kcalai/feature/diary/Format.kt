@@ -4,6 +4,7 @@ import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.MealType
 import n7.kcalai.model.title
 import n7.kcalai.personal.DayOutline
@@ -29,6 +30,23 @@ fun formatCentigrams(cg: Int): String {
     val tenths = (cg % 100) / 10
     return if (tenths == 0) whole.toString() else "$whole,$tenths"
 }
+
+/**
+ * Клетчатка целыми граммами — как числа плиток.
+ *
+ * Если у части продуктов клетчатка неизвестна, известное — нижняя граница: «≥8».
+ * Неизвестна у всех — показывать нечего, и `null`: «0» было бы неправдой.
+ */
+fun formatFiber(fiber: FiberTotal): String? {
+    val grams = fiber.cg / CENTIGRAMS_IN_GRAM
+    return when {
+        fiber.complete -> "$grams"
+        fiber.cg > 0 -> "≥$grams"
+        else -> null
+    }
+}
+
+private const val CENTIGRAMS_IN_GRAM = 100
 
 /** «200 г» / «1,2 кг» — вес записи. */
 fun formatGrams(grams: Int): String =

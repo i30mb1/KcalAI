@@ -1,6 +1,7 @@
 package n7.kcalai.feature.diary
 
 import kotlin.math.roundToInt
+import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.model.Sex
 
 /*
@@ -89,9 +90,23 @@ fun bodyOrNull(
     return Body(sex ?: return null, years, cm, kg, activity, aim)
 }
 
+/**
+ * Клетчатка по калориям цели: 14 г на каждую 1000 ккал, но не меньше 25 г.
+ *
+ * Нижняя граница — норма ВОЗ и EFSA для взрослых. Она же и без цели калорий:
+ * клетчатка нужна и тому, кто худеет, — ему, при меньших калориях, особенно.
+ */
+fun suggestedFiber(kcal: Int?): Int =
+    maxOf(FIBER_MIN_G, ((kcal ?: 0) * FIBER_PER_1000_KCAL / 1000.0).roundToInt())
+
+/** Цель клетчатки дня: заданная руками, а без неё — посчитанная по калориям. */
+fun fiberGoal(goal: DailyGoalEntity?): Int = goal?.fiber ?: suggestedFiber(goal?.kcal)
+
 private fun roundToTen(kcal: Double): Int = (kcal / 10).roundToInt() * 10
 
 private const val MIN_KCAL = 1200
+private const val FIBER_MIN_G = 25
+private const val FIBER_PER_1000_KCAL = 14
 private const val PROT_KEEP = 1.6
 private const val PROT_CHANGE = 1.8
 private const val FAT_SHARE = 0.3

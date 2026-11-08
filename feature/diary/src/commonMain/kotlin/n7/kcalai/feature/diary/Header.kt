@@ -8,6 +8,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.datetime.LocalDate
 import kotlin.math.abs
 import n7.kcalai.database.DailyGoalEntity
+import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.repositories.DaySummary
@@ -39,6 +43,7 @@ import n7.kcalai.ui.CapsLabel
 import n7.kcalai.ui.KcalChip
 import n7.kcalai.ui.Macro
 import n7.kcalai.ui.MiniBar
+import n7.kcalai.ui.SproutIcon
 import n7.kcalai.ui.colors
 import n7.kcalai.ui.tileLabel
 import n7.kcalai.ui.KcalShapes
@@ -64,6 +69,8 @@ fun Header(
     today: LocalDate,
     onSelectDay: (Long) -> Unit,
     totals: NutrimentTotals,
+    fiber: FiberTotal,
+    fiberGoal: Int,
     goal: DailyGoalEntity?,
     week: List<DaySummary>,
     collapsed: Boolean,
@@ -88,7 +95,7 @@ fun Header(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 RemainingRow(date, past, totals, goal, onOpenGoal, toToday)
-                MacroTiles(totals, goal, emptyHomes, onOpenGoal)
+                MacroTiles(totals, goal, fiber, fiberGoal, emptyHomes, onOpenGoal)
                 // Один день — одна переписка: тап по столбику открывает его ленту.
                 WeekChart(week, selected = date.toEpochDays(), onSelectDay = onSelectDay)
             }
@@ -99,7 +106,7 @@ fun Header(
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut(),
         ) {
-            CompactRow(date, past, totals, goal, toToday)
+            CompactRow(date, past, totals, goal, fiber, fiberGoal, toToday)
         }
 
         HorizontalDivider(color = colors.line)
@@ -187,16 +194,24 @@ private fun RemainingRow(
  * попасть, кроме тапа по остатку. Кнопки цели в шапке больше нет: она открывала
  * ровно то же, но занимала место и не говорила, что покажет.
  *
+ * У Зёрнышка в плитке, кроме углеводов, клетчатка — своя полоса под ним. Плитки
+ * одной высоты: числа стоят на одной линии вверху, полосы БЖУ — на одной внизу.
+ *
  * @param emptyHomes чьи персонажи ушли из плитки: у них на пустом месте подпись
  */
 @Composable
 private fun MacroTiles(
     totals: NutrimentTotals,
     goal: DailyGoalEntity?,
+    fiber: FiberTotal,
+    fiberGoal: Int,
     emptyHomes: Set<Mascot>,
     onOpenGoal: (GoalField) -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+    Row(
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
         listOf(
             Triple(Macro.PROTEIN, totals.protCg, goal?.prot) to GoalField.PROT,
             Triple(Macro.FAT, totals.fatCg, goal?.fat) to GoalField.FAT,
@@ -210,7 +225,8 @@ private fun MacroTiles(
                 labelShown = macro.mascot in emptyHomes,
                 field = field,
                 onOpenGoal = onOpenGoal,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                extra = if (macro == Macro.CARB) FiberExtra(fiber, fiberGoal) else null,
             )
         }
     }
@@ -231,6 +247,7 @@ private fun MacroTile(
     field: GoalField,
     onOpenGoal: (GoalField) -> Unit,
     modifier: Modifier = Modifier,
+    extra: FiberExtra? = null,
 ) {
     val type = KcalTheme.type
     val palette = macro.colors()
@@ -252,10 +269,14 @@ private fun MacroTile(
                     append(" $eaten")
                     if (target != null) append(" из $target")
                     append(" грамм")
+                    extra?.let { append(", ").append(it.description) }
                 }
             },
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        // Верх плитки растягивается: в плитке без клетчатки полоса всё равно встаёт
+        // вниз, на одну линию с соседними.
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
                 Text("$eaten", style = type.number, color = KcalTheme.colors.text)
@@ -293,10 +314,40 @@ private fun MacroTile(
                 }
             }
         }
+        extra?.let { FiberRow(it) }
+        }
 
         if (target != null) {
             MiniBar(fraction = eaten.toFloat() / target, fill = palette.fill)
         }
+    }
+}
+
+/** Клетчатка дня для плитки Зёрнышка: сколько есть и сколько надо. */
+private class FiberExtra(val fiber: FiberTotal, val goalGrams: Int) {
+    val shown: String = formatFiber(fiber) ?: "–"
+    val description: String get() = "клетчатка $shown из $goalGrams грамм"
+}
+
+/**
+ * Клетчатка под Зёрнышком: росток, полоса и «9/29».
+ *
+ * Полоса толще и темнее полос БЖУ — это то, на что приложение обращает внимание.
+ * И она только растёт: клетчатка — минимум, а не потолок, перебора у неё нет.
+ */
+@Composable
+private fun FiberRow(extra: FiberExtra) {
+    val palette = KcalTheme.colors.fiber
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        SproutIcon(palette.fill, size = 12.dp)
+        MiniBar(
+            fraction = extra.fiber.cg / CENTIGRAMS_PER_GRAM.toFloat() / extra.goalGrams,
+            fill = palette.fill,
+            height = 6.dp,
+            modifier = Modifier.weight(1f).padding(horizontal = 5.dp),
+        )
+        Text(extra.shown, style = KcalTheme.type.macro.copy(fontWeight = FontWeight.W700), color = palette.text)
+        Text("/${extra.goalGrams}", style = KcalTheme.type.macro, color = palette.text)
     }
 }
 
@@ -307,6 +358,8 @@ private fun CompactRow(
     past: Boolean,
     totals: NutrimentTotals,
     goal: DailyGoalEntity?,
+    fiber: FiberTotal,
+    fiberGoal: Int,
     onToToday: () -> Unit,
 ) {
     val colors = KcalTheme.colors
@@ -334,6 +387,14 @@ private fun CompactRow(
             )
         }
         Spacer(Modifier.weight(1f))
+        // Клетчатка остаётся и в сжатой шапке: это то, ради чего её считают.
+        SproutIcon(colors.fiber.fill, size = 11.dp)
+        Text(
+            "${formatFiber(fiber) ?: "–"}/$fiberGoal",
+            style = type.label,
+            color = colors.fiber.text,
+            modifier = Modifier.padding(start = 3.dp, end = 12.dp),
+        )
         Text(
             text = head.number.toString(),
             style = type.number,

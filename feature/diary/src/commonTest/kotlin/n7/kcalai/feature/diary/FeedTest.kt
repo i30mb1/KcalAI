@@ -3,6 +3,7 @@ package n7.kcalai.feature.diary
 import kotlinx.datetime.TimeZone
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.model.EntrySource
+import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.MealType
 import n7.kcalai.personal.MealGap
 import kotlin.test.assertEquals
@@ -58,6 +59,18 @@ class FeedTest {
         assertEquals(2, bubbles.single().entries.size)
         assertEquals("08:00", bubbles.single().time)
         assertEquals(200, bubbles.single().totals.kcal)
+    }
+
+    /** Клетчатка пузырька — сумма его записей; неизвестная у котлеты не превращается в ноль. */
+    @Test
+    fun `клетчатка приёма — сумма записей, неизвестная остаётся пробелом`() {
+        val buckwheat = entry(1, hour = 13, meal = MealType.LUNCH).copy(grams = 200, fiber100 = 270)
+        val salad = entry(2, hour = 13, minute = 5, meal = MealType.LUNCH).copy(grams = 150, fiber100 = 150)
+        val cutlet = entry(3, hour = 13, minute = 6, meal = MealType.LUNCH)
+
+        val lunch = groupIntoBubbles(listOf(buckwheat, salad, cutlet), zone, nowMillis = at(14)).single()
+
+        assertEquals(FiberTotal(cg = 540 + 225, unknown = 1), lunch.fiber)
     }
 
     @Test

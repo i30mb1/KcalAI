@@ -334,6 +334,8 @@ fun DiaryScreen(
             today = state.today,
             onSelectDay = onSelectDay,
             totals = state.totals,
+            fiber = state.fiber,
+            fiberGoal = fiberGoal(state.goal),
             goal = state.goal,
             week = state.week,
             collapsed = collapsed,

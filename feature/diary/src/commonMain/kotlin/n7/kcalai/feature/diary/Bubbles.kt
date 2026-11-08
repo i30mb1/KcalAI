@@ -38,7 +38,9 @@ import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
 import kotlin.math.ceil
+import androidx.compose.ui.text.font.FontWeight
 import n7.kcalai.database.DiaryEntryEntity
+import n7.kcalai.database.fiber
 import n7.kcalai.database.totals
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.MealType
@@ -50,6 +52,7 @@ import n7.kcalai.ui.ChipNumbers
 import n7.kcalai.ui.KcalChip
 import n7.kcalai.ui.Macro
 import n7.kcalai.ui.MacroDot
+import n7.kcalai.ui.SproutIcon
 import n7.kcalai.model.Mascot
 import n7.kcalai.ui.colors
 import n7.kcalai.ui.letter
@@ -146,6 +149,12 @@ fun MealBubble(item: FeedItem.Meal, onEntry: (DiaryEntryEntity) -> Unit) {
                 Spacer(Modifier.width(12.dp))
                 MacroValue(Macro.CARB, item.totals.carbCg, onBubble = true)
                 Spacer(Modifier.width(12.dp))
+                // Клетчатка — следом за углеводами, цветом хохолка Зёрнышка. Неизвестная
+                // у всех продуктов приёма не показывается: «Кл 0» было бы неправдой.
+                formatFiber(item.fiber)?.let { fiber ->
+                    Text("Кл $fiber", style = type.macro.copy(fontWeight = FontWeight.W700), color = colors.fiber.onBubble)
+                    Spacer(Modifier.width(12.dp))
+                }
                 Text(item.time, style = type.time, color = colors.onBubble2)
             }
         }
@@ -178,8 +187,15 @@ private fun EntryChip(entry: DiaryEntryEntity, onClick: () -> Unit) {
             modifier = Modifier.padding(start = 7.dp),
         )
         ChipNumbers("· ${formatGrams(entry.grams)}", colors.onBubble2)
+        // Росток у порции, которая всерьёз добавила клетчатки: видно, что сработало.
+        if (entry.fiber().cg >= FIBER_RICH_PORTION_CG) {
+            SproutIcon(colors.fiber.onBubble, Modifier.padding(start = 5.dp), size = 10.dp)
+        }
     }
 }
+
+/** От трёх грамм клетчатки порция отмечается ростком — столько даёт тарелка гречки. */
+private const val FIBER_RICH_PORTION_CG = 300
 
 /** «Б 65» — буква и граммы одним цветом: подпись и значение здесь неразделимы. */
 @Composable

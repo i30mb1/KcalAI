@@ -7,7 +7,9 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import n7.kcalai.database.DiaryEntryEntity
+import n7.kcalai.database.fiber
 import n7.kcalai.database.totals
+import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.model.plus
@@ -59,6 +61,7 @@ sealed interface FeedItem {
         val totals: NutrimentTotals,
         val time: String,
         val active: Boolean,
+        val fiber: FiberTotal = FiberTotal.ZERO,
     ) : FeedItem
 
     /**
@@ -400,6 +403,7 @@ fun groupIntoBubbles(
             totals = group.fold(NutrimentTotals.ZERO) { acc, entry -> acc + entry.totals() },
             time = formatTime(group.first().createdAt, zone),
             active = group === activeGroup,
+            fiber = group.fiber(),
         )
     }
 }

@@ -3,6 +3,7 @@ package n7.kcalai.feature.diary
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.Test
+import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.model.Sex
 
 /**
@@ -44,6 +45,26 @@ class GoalHelperTest {
             Body(Sex.MALE, age = 30, heightCm = 180, weightKg = 82.4, Activity.LOW, Aim.KEEP),
             bodyOrNull(Sex.MALE, age = " 30", height = "180", weight = "82,4", Activity.LOW, Aim.KEEP),
         )
+    }
+
+    /**
+     * Клетчатка — минимум: 14 г на каждую 1000 ккал цели, но не меньше 25 г (ВОЗ, EFSA).
+     * Без цели калорий — те же 25: норма клетчатки от похудения не зависит.
+     */
+    @Test
+    fun `клетчатка по калориям цели, но не меньше 25 г`() {
+        assertEquals(29, suggestedFiber(2100))
+        assertEquals(39, suggestedFiber(2800))
+        assertEquals(25, suggestedFiber(1500))
+        assertEquals(25, suggestedFiber(null))
+    }
+
+    /** Заданная руками цель важнее посчитанной. */
+    @Test
+    fun `своя цель клетчатки важнее посчитанной`() {
+        assertEquals(35, fiberGoal(DailyGoalEntity(0, kcal = 2100, prot = 120, fat = 70, carb = 240, fiber = 35)))
+        assertEquals(29, fiberGoal(DailyGoalEntity(0, kcal = 2100, prot = 120, fat = 70, carb = 240)))
+        assertEquals(25, fiberGoal(null))
     }
 
     /** Опечатка в росте даёт цель, по которой нельзя жить. Кнопка ждёт правдоподобного. */
