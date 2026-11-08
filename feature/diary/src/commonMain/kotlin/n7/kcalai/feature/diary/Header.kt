@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.datetime.LocalDate
 import kotlin.math.abs
 import n7.kcalai.database.DailyGoalEntity
+import n7.kcalai.model.Mascot
 import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.repositories.DaySummary
 import n7.kcalai.ui.CapsLabel
@@ -65,6 +67,7 @@ fun Header(
     goal: DailyGoalEntity?,
     week: List<DaySummary>,
     collapsed: Boolean,
+    emptyHomes: Set<Mascot>,
     onOpenGoal: (GoalField) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -85,7 +88,7 @@ fun Header(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 RemainingRow(date, past, totals, goal, onOpenGoal, toToday)
-                MacroTiles(totals, goal, onOpenGoal)
+                MacroTiles(totals, goal, emptyHomes, onOpenGoal)
                 // Один день — одна переписка: тап по столбику открывает его ленту.
                 WeekChart(week, selected = date.toEpochDays(), onSelectDay = onSelectDay)
             }
@@ -104,11 +107,14 @@ fun Header(
 }
 
 /**
- * Дата, заголовок и остаток.
+ * Дата и остаток.
  *
  * Крупным числом стоит остаток, а не съеденное, и это главное решение экрана:
  * трекер открывают с вопросом «сколько мне ещё можно», а не «сколько я уже съел».
  * Второе выводится из первого, обратное — нет.
+ *
+ * Заголовка «Дневник» нет: что это дневник, видно и так. Дата стоит на одной
+ * линии с крупным числом.
  */
 @Composable
 private fun RemainingRow(
@@ -123,17 +129,15 @@ private fun RemainingRow(
     val type = KcalTheme.type
     val head = headline(totals.kcal, goal?.kcal?.takeIf { it > 0 }, past)
 
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    Row(Modifier.fillMaxWidth()) {
+        Column(Modifier.weight(1f).alignByBaseline(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             CapsLabel(formatDateCaps(date))
             if (past) {
-                // Вместо заголовка — дорога назад: из вчерашней переписки
+                // Под датой прошлого дня — дорога назад: из вчерашней переписки
                 // человек вернётся к сегодняшней, не ища для этого столбик.
                 KcalChip(onClick = onToToday, background = colors.bubble) {
                     Text("← Сегодня", style = KcalTheme.type.chip, color = colors.onBubble)
                 }
-            } else {
-                Text("Дневник", style = type.title, color = colors.text)
             }
         }
 
@@ -143,6 +147,7 @@ private fun RemainingRow(
         Column(
             horizontalAlignment = Alignment.End,
             modifier = Modifier
+                .alignByBaseline()
                 .clip(RoundedCornerShape(KcalShapes.tile))
                 .clickable { onOpenGoal(GoalField.KCAL) }
                 .padding(start = 8.dp, top = 2.dp, bottom = 2.dp, end = 2.dp),
@@ -163,12 +168,14 @@ private fun RemainingRow(
                 )
             }
 
-            Text(
-                text = head.line,
-                style = type.macro,
-                color = colors.text3,
-                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
-            )
+            head.line?.let { line ->
+                Text(
+                    text = line,
+                    style = type.macro,
+                    color = colors.text3,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                )
+            }
         }
     }
 }
@@ -179,25 +186,48 @@ private fun RemainingRow(
  * Тап открывает шит цели курсором в этом поле — и это единственный способ туда
  * попасть, кроме тапа по остатку. Кнопки цели в шапке больше нет: она открывала
  * ровно то же, но занимала место и не говорила, что покажет.
+ *
+ * @param emptyHomes чьи персонажи ушли из плитки: у них на пустом месте подпись
  */
 @Composable
 private fun MacroTiles(
     totals: NutrimentTotals,
     goal: DailyGoalEntity?,
+    emptyHomes: Set<Mascot>,
     onOpenGoal: (GoalField) -> Unit,
 ) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-        MacroTile(Macro.PROTEIN, totals.protCg, goal?.prot, GoalField.PROT, onOpenGoal, Modifier.weight(1f))
-        MacroTile(Macro.FAT, totals.fatCg, goal?.fat, GoalField.FAT, onOpenGoal, Modifier.weight(1f))
-        MacroTile(Macro.CARB, totals.carbCg, goal?.carb, GoalField.CARB, onOpenGoal, Modifier.weight(1f))
+        listOf(
+            Triple(Macro.PROTEIN, totals.protCg, goal?.prot) to GoalField.PROT,
+            Triple(Macro.FAT, totals.fatCg, goal?.fat) to GoalField.FAT,
+            Triple(Macro.CARB, totals.carbCg, goal?.carb) to GoalField.CARB,
+        ).forEach { (values, field) ->
+            val (macro, eatenCg, goalGrams) = values
+            MacroTile(
+                macro = macro,
+                eatenCg = eatenCg,
+                goalGrams = goalGrams,
+                labelShown = macro.mascot in emptyHomes,
+                field = field,
+                onOpenGoal = onOpenGoal,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
+/**
+ * Плитка макроса: число, домик персонажа и полоса.
+ *
+ * Подписи «БЕЛКИ» над числом нет: персонаж дома сам себе подпись, он узнаётся
+ * быстрее слова. Слово встаёт на его место, только когда домик пустует.
+ */
 @Composable
 private fun MacroTile(
     macro: Macro,
     eatenCg: Int,
     goalGrams: Int?,
+    labelShown: Boolean,
     field: GoalField,
     onOpenGoal: (GoalField) -> Unit,
     modifier: Modifier = Modifier,
@@ -227,26 +257,41 @@ private fun MacroTile(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(macro.tileLabel, style = type.capsTile, color = palette.text)
-
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text("$eaten", style = type.number, color = KcalTheme.colors.text)
-                    // Без цели знаменателя нет вовсе: «96/0» читалось бы как перебор,
-                    // а «96» — как то, что и есть, съеденные граммы.
-                    if (target != null) {
-                        Text(
-                            "/$target",
-                            style = type.number.copy(fontWeight = FontWeight.W500),
-                            color = palette.text,
-                        )
-                    }
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
+                Text("$eaten", style = type.number, color = KcalTheme.colors.text)
+                // Без цели знаменателя нет вовсе: «96/0» читалось бы как перебор,
+                // а «96» — как то, что и есть, съеденные граммы.
+                if (target != null) {
+                    Text(
+                        "/$target",
+                        style = type.number.copy(fontWeight = FontWeight.W500),
+                        color = palette.text,
+                    )
                 }
             }
             // Дом персонажа, который говорит об этом макросе в ленте: по плитке
             // человек и узнаёт, кто есть кто. Сам персонаж — слоем сверху,
-            // и пока он в ленте, домик пустует.
-            Box(Modifier.size(width = 38.dp, height = 32.dp).mascotAnchor(homeAnchor(macro.mascot)))
+            // и пока он в ленте, на пустом месте стоит слово.
+            Box(
+                modifier = Modifier.size(width = 38.dp, height = 32.dp).mascotAnchor(homeAnchor(macro.mascot)),
+                contentAlignment = Alignment.BottomEnd,
+            ) {
+                // Полное имя — чтобы не взялась версия для Row снаружи: она здесь недоступна.
+                androidx.compose.animation.AnimatedVisibility(visible = labelShown, enter = fadeIn(), exit = fadeOut()) {
+                    Text(
+                        text = macro.tileLabel,
+                        style = type.capsTile,
+                        color = palette.text,
+                        maxLines = 1,
+                        softWrap = false,
+                        // «УГЛЕВ.» чуть шире домика: слово выходит влево, в зазор у числа,
+                        // а не переносится и не режется.
+                        modifier = Modifier
+                            .wrapContentWidth(align = Alignment.End, unbounded = true)
+                            .padding(bottom = 3.dp),
+                    )
+                }
+            }
         }
 
         if (target != null) {
@@ -303,8 +348,8 @@ private fun CompactRow(
     }
 }
 
-/** Что крупно в шапке: число, подпись к нему и строка под ним. */
-data class Headline(val number: Int, val label: String, val line: String, val over: Boolean)
+/** Что крупно в шапке: число, подпись к нему и строка под ним; без цели строки нет. */
+data class Headline(val number: Int, val label: String, val line: String?, val over: Boolean)
 
 /**
  * Крупное число шапки.
@@ -314,7 +359,8 @@ data class Headline(val number: Int, val label: String, val line: String, val ov
  * а под ним — как это вышло относительно цели того дня.
  */
 fun headline(eatenKcal: Int, targetKcal: Int?, past: Boolean): Headline {
-    if (targetKcal == null) return Headline(eatenKcal, "съедено", "задать цель ›", over = false)
+    // Без цели под числом пусто: цель задаётся тапом по самому числу.
+    if (targetKcal == null) return Headline(eatenKcal, "съедено", line = null, over = false)
     val over = eatenKcal > targetKcal
     return if (past) {
         Headline(

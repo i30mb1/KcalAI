@@ -126,4 +126,24 @@ class MascotPlacementTest {
         val rects = mapOf(CHIP_ANCHOR to Rect(left = 16f, top = 2050f, right = 60f, bottom = 2090f))
         assertEquals(setOf(CHIP_ANCHOR), shownAnchors(rects, coverBottom = 300f, floorTop = 2000f))
     }
+
+    /** Персонаж дома — сам себе подпись плитки. Ушёл к реплике или на чипс — подпись встаёт на его место. */
+    @Test
+    fun `подпись плитки видна только у пустого домика`() {
+        val places = mapOf(
+            Mascot.EGG to MascotPlace.Reply(over.key),
+            Mascot.BUTTER to MascotPlace.Home,
+            Mascot.GRAIN to MascotPlace.Chip,
+        )
+
+        assertEquals(setOf(Mascot.EGG, Mascot.GRAIN), emptyHomes(places))
+    }
+
+    /** Знакомство: все трое в ленте, и плитки подписаны словами, пока персонажи не вернутся. */
+    @Test
+    fun `на сцене пустуют все три домика`() {
+        val places = mascotPlaces(listOf(intro), shownKeys = setOf(intro.key), chipOwner = null)
+
+        assertEquals(Mascot.entries.toSet(), emptyHomes(places))
+    }
 }

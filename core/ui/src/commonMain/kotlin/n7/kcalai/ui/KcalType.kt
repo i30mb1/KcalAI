@@ -88,7 +88,7 @@ class KcalTypography(
         letterSpacing = 0.1.em,
     )
 
-    /** «Дневник». */
+    /** Заголовок шита: «Цель на день», «Как тебя зовут?». */
     val title = TextStyle(
         fontFamily = text,
         fontWeight = FontWeight.W600,

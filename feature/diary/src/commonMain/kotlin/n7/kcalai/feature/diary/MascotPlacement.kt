@@ -66,6 +66,15 @@ fun mascotPlaces(feed: List<FeedItem>, shownKeys: Set<String>, chipOwner: Mascot
     }
 }
 
+/**
+ * Чьи домики в шапке пустуют: персонаж у реплики, на чипсе или на сцене.
+ *
+ * Дома персонаж сам и есть подпись плитки: яйцо узнаётся быстрее слова «белки».
+ * На месте ушедшего встаёт слово, иначе плитка осталась бы двумя безымянными числами.
+ */
+fun emptyHomes(places: Map<Mascot, MascotPlace>): Set<Mascot> =
+    places.filterValues { it != MascotPlace.Home }.keys
+
 /** Чей макрос у первой подсказки. У веса и пустого ряда хозяина нет. */
 fun chipOwner(row: ComposerRow): Mascot? {
     val nutriments = when (row) {

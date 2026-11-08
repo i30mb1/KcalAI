@@ -50,10 +50,14 @@ class HeaderTest {
         assertEquals(Headline(2410, "съедено", "перебор 310 ›", over = true), headline(2410, 2100, past = true))
     }
 
+    /**
+     * Без цели под числом пусто. Цель задаётся тапом по самому числу, как и правится,
+     * а строка «задать цель» только повторяла это словами.
+     */
     @Test
-    fun `без цели — съеденное и приглашение её задать`() {
-        assertEquals(Headline(900, "съедено", "задать цель ›", over = false), headline(900, null, past = false))
-        assertEquals(Headline(900, "съедено", "задать цель ›", over = false), headline(900, null, past = true))
+    fun `без цели — только съеденное`() {
+        assertEquals(Headline(900, "съедено", line = null, over = false), headline(900, null, past = false))
+        assertEquals(Headline(900, "съедено", line = null, over = false), headline(900, null, past = true))
     }
 
     // --- Фон шапки и строки ввода ------------------------------------------------------

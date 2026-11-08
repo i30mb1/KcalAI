@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -290,6 +291,13 @@ fun DiaryScreen(
     // Персонажи — один слой поверх всего экрана: плитки, реплики и чипс только
     // сообщают, где у них место, а кто где стоит, решает [mascotPlaces].
     val anchors = remember { MascotAnchors() }
+    // Расстановка через derivedStateOf: прокрутка двигает места каждый кадр, а кто
+    // где стоит, меняется редко — экран перекомпонуется только тогда.
+    val feed by rememberUpdatedState(state.feed)
+    val owner by rememberUpdatedState(chipOwner(state.composer))
+    val places by remember(anchors) {
+        derivedStateOf { mascotPlaces(feed, shownAnchors(anchors.rects, anchors.coverBottom, anchors.floorTop), owner) }
+    }
     // Палец на экране — для взглядов персонажей; касаний наблюдатель не забирает.
     val pointer = remember { StagePointer() }
     Box(Modifier.fillMaxSize().observeTouches(pointer)) {
@@ -329,6 +337,7 @@ fun DiaryScreen(
             goal = state.goal,
             week = state.week,
             collapsed = collapsed,
+            emptyHomes = emptyHomes(places),
             onOpenGoal = onOpenGoal,
             modifier = Modifier
                 .onSizeChanged { size ->
@@ -364,8 +373,7 @@ fun DiaryScreen(
     }
     }
         MascotStage(
-            feed = state.feed,
-            chipOwner = chipOwner(state.composer),
+            places = places,
             anchors = anchors,
             pointer = pointer,
             input = state.input,

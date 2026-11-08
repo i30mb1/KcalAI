@@ -226,11 +226,13 @@ private class Actor(val mascot: Mascot, val puppet: MascotPuppet) {
  * тишина — зевок и сон, ночь — сон сразу, сигналы экранной модели — прыжки
  * и праздники, реплики — облачка. Все движения конечны: без человека сцена
  * засыпает и замирает.
+ *
+ * @param places кто где стоит. Считается снаружи, потому что по той же расстановке
+ *        шапка подписывает плитки, из которых персонаж ушёл.
  */
 @Composable
 fun MascotStage(
-    feed: List<FeedItem>,
-    chipOwner: Mascot?,
+    places: Map<Mascot, MascotPlace>,
     anchors: MascotAnchors,
     pointer: StagePointer,
     input: String,
@@ -241,7 +243,6 @@ fun MascotStage(
     modifier: Modifier = Modifier,
 ) {
     var origin by remember { mutableStateOf(Offset.Zero) }
-    val places = mascotPlaces(feed, shownAnchors(anchors.rects, anchors.coverBottom, anchors.floorTop), chipOwner)
     val puppets = Mascot.entries.map { rememberMascotPuppet(it) }
     val actors = remember(puppets) { puppets.associate { it.mascot to Actor(it.mascot, it) } }
     val event by rememberUpdatedState(onEvent)
