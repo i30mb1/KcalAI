@@ -100,6 +100,9 @@ internal fun JsonObject.toNutriments(): Nutriments? {
         prot100 = centigrams("proteins_100g"),
         fat100 = centigrams("fat_100g"),
         carb100 = centigrams("carbohydrates_100g"),
+        // Клетчатку, в отличие от БЖУ, нулём не заменяем: строку «пищевые волокна»
+        // на пачке печатают не всегда, и её нет — значит, неизвестна.
+        fiber100 = double("fiber_100g")?.takeIf { it in 0.0..100.0 }?.let { (it * 100).roundToInt() },
     )
 }
 

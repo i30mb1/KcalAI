@@ -277,7 +277,7 @@ private fun UserFoodEntity.toCandidate(): FoodCandidate =
     )
 
 private fun UserFoodEntity.toNutriments(): Nutriments =
-    Nutriments(kcal100 = kcal100, prot100 = prot100, fat100 = fat100, carb100 = carb100)
+    Nutriments(kcal100 = kcal100, prot100 = prot100, fat100 = fat100, carb100 = carb100, fiber100 = fiber100)
 
 /**
  * Бренд перед названием: «Активиа» и «Danone Активиа» человек ищет одинаково.
@@ -299,7 +299,7 @@ private fun CachedProductEntity.toCandidate(): FoodCandidate =
     )
 
 private fun CachedProductEntity.toNutriments(): Nutriments =
-    Nutriments(kcal100 = kcal100, prot100 = prot100, fat100 = fat100, carb100 = carb100)
+    Nutriments(kcal100 = kcal100, prot100 = prot100, fat100 = fat100, carb100 = carb100, fiber100 = fiber100)
 
 private fun RemoteProduct.toCandidate(): FoodCandidate =
     FoodCandidate(
@@ -321,6 +321,7 @@ private fun RemoteProduct.toEntity(fetchedAt: Long): CachedProductEntity =
         servingG = servingG,
         origin = origin,
         fetchedAt = fetchedAt,
+        fiber100 = nutriments.fiber100,
     )
 
 private fun currentTimeMillis(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()

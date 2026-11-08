@@ -12,7 +12,7 @@ import n7.kcalai.model.forGrams
  * в разных слоях разъехались бы при первой же правке.
  */
 fun DiaryEntryEntity.nutriments(): Nutriments =
-    Nutriments(kcal100 = kcal100, prot100 = prot100, fat100 = fat100, carb100 = carb100)
+    Nutriments(kcal100 = kcal100, prot100 = prot100, fat100 = fat100, carb100 = carb100, fiber100 = fiber100)
 
 /** КБЖУ записи для её веса — для строки списка и для сумм за день. */
 fun DiaryEntryEntity.totals(): NutrimentTotals = nutriments().forGrams(grams)

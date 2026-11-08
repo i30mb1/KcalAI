@@ -9,6 +9,7 @@ import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryDao
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.GoalDao
+import n7.kcalai.database.nutriments
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.FoodRef
@@ -96,6 +97,19 @@ class DiaryRepositoryTest {
         assertEquals(100, entry.kcal100)
         assertEquals("generic:1", entry.foodRef)
         assertEquals(200, entry.grams)
+    }
+
+    /** Клетчатка ложится в снимок вместе с БЖУ, а неизвестная так и остаётся неизвестной. */
+    @Test
+    fun `клетчатка в снимке записи, неизвестная — null`() = runBlocking {
+        val bran = oatmeal.copy(nutriments = oatmeal.nutriments.copy(fiber100 = 1540))
+        repository.add(bran, grams = 30, meal = MealType.BREAKFAST, date = TODAY, source = EntrySource.TEXT, now = 1)
+        add(grams = 200, date = TODAY, now = 2)
+
+        val entries = repository.observeDay(TODAY).first().entries
+
+        assertEquals(listOf(1540, null), entries.map { it.fiber100 })
+        assertEquals(1540, entries.first().nutriments().fiber100)
     }
 
     /**

@@ -32,6 +32,19 @@ class JsonParsingTest {
         assertEquals(ProductOrigin.OFF, product.origin)
     }
 
+    /** Клетчатка в OFF приходит тем же блоком; нет поля — не ноль, а неизвестно. */
+    @Test
+    fun `клетчатка из OFF, а без поля — неизвестна`() {
+        fun body(fiber: String) = """
+            {"status":1,"product":{"product_name":"Хлебцы ржаные",
+              "nutriments":{"energy-kcal_100g":310,"proteins_100g":11,"fat_100g":2,"carbohydrates_100g":57$fiber}
+            }}
+        """.trimIndent()
+
+        assertEquals(1650, parseOffProduct("4600000000017", body(""","fiber_100g":16.5"""))!!.nutriments.fiber100)
+        assertNull(parseOffProduct("4600000000017", body(""))!!.nutriments.fiber100)
+    }
+
     @Test
     fun `пустое русское название уступает общему`() {
         val body = """{"status":1,"product":{"product_name":"Milk","product_name_ru":"  ",

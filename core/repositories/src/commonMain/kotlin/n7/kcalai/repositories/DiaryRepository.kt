@@ -134,6 +134,7 @@ private fun FoodCandidate.toEntity(
     source = source,
     foodRef = ref.serialize(),
     createdAt = now,
+    fiber100 = nutriments.fiber100,
 )
 
 private fun List<DiaryEntryEntity>.sumTotals(): NutrimentTotals =

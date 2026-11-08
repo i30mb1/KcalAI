@@ -2,11 +2,39 @@ package n7.kcalai.model
 
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.test.Test
 
 class NutrimentsTest {
 
     private val buckwheat = Nutriments(kcal100 = 132, prot100 = 456, fat100 = 110, carb100 = 2500)
+
+    /** Гречка сухая: 11,3 г клетчатки на 100 г — отдельно от углеводов, как в русских таблицах. */
+    private val buckwheatDry = Nutriments(kcal100 = 308, prot100 = 1260, fat100 = 330, carb100 = 5710, fiber100 = 1130)
+
+    @Test
+    fun `клетчатка считается на порцию так же, как БЖУ`() {
+        assertEquals(FiberTotal(cg = 565, unknown = 0), buckwheatDry.fiberFor(50))
+    }
+
+    /** У котлеты без данных клетчатка не ноль, а неизвестна: итог дня тогда «не меньше». */
+    @Test
+    fun `неизвестная клетчатка — пробел в сумме, а не ноль`() {
+        val cutlet = Nutriments(kcal100 = 250, prot100 = 1500, fat100 = 1800, carb100 = 900)
+
+        val day = buckwheatDry.fiberFor(100) + cutlet.fiberFor(100)
+
+        assertEquals(1130, day.cg)
+        assertEquals(1, day.unknown)
+        assertFalse(day.complete)
+    }
+
+    @Test
+    fun `в пустом дне клетчатки ноль, и это известно`() {
+        assertTrue(FiberTotal.ZERO.complete)
+        assertEquals(buckwheatDry.fiberFor(100), FiberTotal.ZERO + buckwheatDry.fiberFor(100))
+    }
 
     @Test
     fun `сто грамм дают исходные значения`() {

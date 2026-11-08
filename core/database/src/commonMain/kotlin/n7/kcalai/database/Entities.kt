@@ -28,6 +28,11 @@ data class DiaryEntryEntity(
     /** Только для «повторить». Может протухнуть после обновления справочника — это нормально. */
     val foodRef: String?,
     val createdAt: Long,
+    /**
+     * Клетчатка, сотые грамма на 100 г; `null` — неизвестна. Последним столбцом,
+     * потому что обновление базы дописывает его в конец таблицы.
+     */
+    val fiber100: Int? = null,
 )
 
 /**
@@ -49,6 +54,8 @@ data class UserFoodEntity(
     val carb100: Int,
     val servingG: Int? = null,
     val createdAt: Long,
+    /** Клетчатка, сотые грамма на 100 г; `null` — на пачке её не было. */
+    val fiber100: Int? = null,
 )
 
 /**
@@ -73,6 +80,8 @@ data class CachedProductEntity(
     val servingG: Int?,
     val origin: ProductOrigin,
     val fetchedAt: Long,
+    /** Клетчатка, сотые грамма на 100 г; `null` — источник её не знал. */
+    val fiber100: Int? = null,
 )
 
 /**
@@ -110,6 +119,8 @@ data class DailyGoalEntity(
     val prot: Int,
     val fat: Int,
     val carb: Int,
+    /** Клетчатка, граммы. Это минимум, а не потолок; `null` — не задана, считается по калориям. */
+    val fiber: Int? = null,
 )
 
 /** Вес тела за день. Ключ — дата: взвешиваний за сутки может быть много, запись одна. */

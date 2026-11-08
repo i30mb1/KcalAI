@@ -35,6 +35,8 @@ import kotlinx.coroutines.IO
         AutoMigration(from = 5, to = 6),
         // Ответ на вопрос персонажа — новый столбец, у сказанного раньше он пуст.
         AutoMigration(from = 6, to = 7),
+        // Клетчатка — новые столбцы; у записанного раньше она неизвестна, а не ноль.
+        AutoMigration(from = 7, to = 8),
     ],
 )
 @ConstructedBy(KcalDatabaseConstructor::class)
@@ -51,7 +53,7 @@ abstract class KcalDatabase : RoomDatabase() {
 }
 
 /** Версия схемы базы. Константой — её читают тесты обновления и выгрузки схемы. */
-const val KCAL_DB_VERSION = 7
+const val KCAL_DB_VERSION = 8
 
 /** Реализацию для каждой платформы генерирует Room. */
 @Suppress("KotlinNoActualForExpect")
