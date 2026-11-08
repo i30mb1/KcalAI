@@ -8,8 +8,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -95,7 +94,11 @@ fun Header(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 RemainingRow(date, past, totals, goal, onOpenGoal, toToday)
-                MacroTiles(totals, goal, fiber, fiberGoal, emptyHomes, onOpenGoal)
+                // Плитки и клетчатка — одна группа: полоса держится ближе к плиткам, чем неделя.
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MacroTiles(totals, goal, emptyHomes, onOpenGoal)
+                    FiberStrip(fiber, fiberGoal)
+                }
                 // Один день — одна переписка: тап по столбику открывает его ленту.
                 WeekChart(week, selected = date.toEpochDays(), onSelectDay = onSelectDay)
             }
@@ -194,24 +197,16 @@ private fun RemainingRow(
  * попасть, кроме тапа по остатку. Кнопки цели в шапке больше нет: она открывала
  * ровно то же, но занимала место и не говорила, что покажет.
  *
- * У Зёрнышка в плитке, кроме углеводов, клетчатка — своя полоса под ним. Плитки
- * одной высоты: числа стоят на одной линии вверху, полосы БЖУ — на одной внизу.
- *
  * @param emptyHomes чьи персонажи ушли из плитки: у них на пустом месте подпись
  */
 @Composable
 private fun MacroTiles(
     totals: NutrimentTotals,
     goal: DailyGoalEntity?,
-    fiber: FiberTotal,
-    fiberGoal: Int,
     emptyHomes: Set<Mascot>,
     onOpenGoal: (GoalField) -> Unit,
 ) {
-    Row(
-        Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         listOf(
             Triple(Macro.PROTEIN, totals.protCg, goal?.prot) to GoalField.PROT,
             Triple(Macro.FAT, totals.fatCg, goal?.fat) to GoalField.FAT,
@@ -225,8 +220,7 @@ private fun MacroTiles(
                 labelShown = macro.mascot in emptyHomes,
                 field = field,
                 onOpenGoal = onOpenGoal,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                extra = if (macro == Macro.CARB) FiberExtra(fiber, fiberGoal) else null,
+                modifier = Modifier.weight(1f),
             )
         }
     }
@@ -247,7 +241,6 @@ private fun MacroTile(
     field: GoalField,
     onOpenGoal: (GoalField) -> Unit,
     modifier: Modifier = Modifier,
-    extra: FiberExtra? = null,
 ) {
     val type = KcalTheme.type
     val palette = macro.colors()
@@ -269,14 +262,10 @@ private fun MacroTile(
                     append(" $eaten")
                     if (target != null) append(" из $target")
                     append(" грамм")
-                    extra?.let { append(", ").append(it.description) }
                 }
             },
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // Верх плитки растягивается: в плитке без клетчатки полоса всё равно встаёт
-        // вниз, на одну линию с соседними.
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
                 Text("$eaten", style = type.number, color = KcalTheme.colors.text)
@@ -314,8 +303,6 @@ private fun MacroTile(
                 }
             }
         }
-        extra?.let { FiberRow(it) }
-        }
 
         if (target != null) {
             MiniBar(fraction = eaten.toFloat() / target, fill = palette.fill)
@@ -323,31 +310,33 @@ private fun MacroTile(
     }
 }
 
-/** Клетчатка дня для плитки Зёрнышка: сколько есть и сколько надо. */
-private class FiberExtra(val fiber: FiberTotal, val goalGrams: Int) {
-    val shown: String = formatFiber(fiber) ?: "–"
-    val description: String get() = "клетчатка $shown из $goalGrams грамм"
-}
-
 /**
- * Клетчатка под Зёрнышком: росток, полоса и «9/29».
+ * Клетчатка дня — длинной тонкой полосой под плитками.
  *
- * Полоса толще и темнее полос БЖУ — это то, на что приложение обращает внимание.
- * И она только растёт: клетчатка — минимум, а не потолок, перебора у неё нет.
+ * Тема Зёрнышка: росток — его хохолок, цвет — его зелёный, только темнее. Внутри
+ * его плитки полоса растягивала все три плитки, и в двух других оставалась пустота;
+ * во всю ширину она и места не берёт, и заполняется заметнее. Только растёт:
+ * клетчатка — минимум, перебора у неё нет.
  */
 @Composable
-private fun FiberRow(extra: FiberExtra) {
+private fun FiberStrip(fiber: FiberTotal, goalGrams: Int) {
     val palette = KcalTheme.colors.fiber
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    val shown = formatFiber(fiber) ?: "–"
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics { contentDescription = "клетчатка $shown из $goalGrams грамм" },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         SproutIcon(palette.fill, size = 12.dp)
         MiniBar(
-            fraction = extra.fiber.cg / CENTIGRAMS_PER_GRAM.toFloat() / extra.goalGrams,
+            fraction = fiber.cg / CENTIGRAMS_PER_GRAM.toFloat() / goalGrams,
             fill = palette.fill,
-            height = 6.dp,
-            modifier = Modifier.weight(1f).padding(horizontal = 5.dp),
+            height = 5.dp,
+            modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
         )
-        Text(extra.shown, style = KcalTheme.type.macro.copy(fontWeight = FontWeight.W700), color = palette.text)
-        Text("/${extra.goalGrams}", style = KcalTheme.type.macro, color = palette.text)
+        Text(shown, style = KcalTheme.type.macro.copy(fontWeight = FontWeight.W700), color = palette.text)
+        Text("/$goalGrams", style = KcalTheme.type.macro, color = palette.text)
     }
 }
 
