@@ -123,8 +123,6 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
             goal = state.todayGoal,
             tdee = state.tdee,
             lastWeightGrams = state.lastWeightGrams,
-            date = state.today,
-            focus = overlay.field,
             onConfirm = viewModel::onSetGoal,
             onDismiss = viewModel::onDismissOverlay,
             onSex = viewModel::onSex,
@@ -191,7 +189,7 @@ fun DiaryScreen(
     onUndoDelete: (FeedItem.Deleted) -> Unit,
     onLogWeight: () -> Unit,
     onSubmit: () -> Boolean,
-    onOpenGoal: (GoalField) -> Unit,
+    onOpenGoal: () -> Unit,
     onOpenScan: () -> Unit,
     onOpenLabelDebug: (() -> Unit)?,
     /** Ответ на вопрос персонажа: `true` — «Сказать» / «Пишите», `false` — «Не скажу» / «Не надо». */
@@ -428,7 +426,7 @@ private fun Feed(
     onAskAssistant: (String) -> Unit,
     onOpenScan: () -> Unit,
     onPickPlan: (PlanOption) -> Unit,
-    onOpenGoal: (GoalField) -> Unit,
+    onOpenGoal: () -> Unit,
     onAnswerAsk: (MascotQuestion, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -551,7 +549,7 @@ private fun Feed(
 
                     is FeedItem.Meal -> MealBubble(item, onEditEntry)
 
-                    is FeedItem.Summary -> SummaryBubble(item, onSetGoal = { onOpenGoal(GoalField.KCAL) })
+                    is FeedItem.Summary -> SummaryBubble(item, onSetGoal = onOpenGoal)
 
                     is FeedItem.Gap -> GapBubble(
                         item = item,

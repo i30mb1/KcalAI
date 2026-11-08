@@ -71,14 +71,13 @@ import n7.kcalai.mascot.Reaction
 import n7.kcalai.database.totals
 
 /** Поле шита цели, в котором должен стоять курсор при открытии. */
-enum class GoalField { KCAL, PROT, FAT, CARB }
 
 /** Что сейчас поверх экрана. Шиты и диалоги взаимоисключающие, поэтому это одно состояние. */
 sealed interface Overlay {
     data object None : Overlay
 
     /** Цель на день. [field] — куда человек ткнул: остаток или конкретная плитка. */
-    data class Goal(val field: GoalField = GoalField.KCAL) : Overlay
+    data object Goal : Overlay
 
     /** Правка записи: вес, приём пищи, удаление. Открывается тапом по чипсу в пузырьке. */
     data class EditEntry(val entry: DiaryEntryEntity) : Overlay
@@ -1245,8 +1244,8 @@ class DiaryViewModel(
 
     // --- Цель и вес -------------------------------------------------------------------
 
-    fun onOpenGoal(field: GoalField = GoalField.KCAL) {
-        overlay.value = Overlay.Goal(field)
+    fun onOpenGoal() {
+        overlay.value = Overlay.Goal
     }
 
     fun onDismissOverlay() {

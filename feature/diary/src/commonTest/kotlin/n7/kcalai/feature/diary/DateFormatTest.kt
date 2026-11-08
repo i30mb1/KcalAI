@@ -19,13 +19,6 @@ class DateFormatTest {
     }
 
     @Test
-    fun `месяц в родительном падеже после числа`() {
-        assertEquals("9 мая", formatDayMonthShort(LocalDate(2026, 5, 9)))
-        assertEquals("30 нояб", formatDayMonthShort(LocalDate(2026, 11, 30)))
-        assertEquals("1 июн", formatDayMonthShort(LocalDate(2026, 6, 1)))
-    }
-
-    @Test
     fun `ось графика — двухбуквенные дни`() {
         val week = (14..20).map { formatWeekdayShort(LocalDate(2026, 9, it)) }
 

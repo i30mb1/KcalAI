@@ -67,6 +67,31 @@ class GoalHelperTest {
         assertEquals(25, fiberGoal(null))
     }
 
+    /**
+     * Калории цели не вводятся, а складываются из граммов: «200 ккал и 120 г белка»
+     * больше не сохранить — 120 г белка это уже 480 ккал.
+     */
+    @Test
+    fun `калории цели — сумма граммов по Этуотеру`() {
+        assertEquals(480 + 630 + 960, GoalMacros(prot = 120, fat = 70, carb = 240).kcal)
+        assertEquals(0, GoalMacros(0, 0, 0).kcal)
+    }
+
+    /** Цель из одних калорий, сохранённая раньше, встаёт в поля граммами, которые дают те же калории. */
+    @Test
+    fun `в поля встают граммы цели, а цель из одних калорий раскладывается`() {
+        assertEquals(GoalMacros(120, 70, 240), goalMacros(DailyGoalEntity(0, kcal = 2070, prot = 120, fat = 70, carb = 240)))
+        assertEquals(GoalMacros(prot = 100, fat = 67, carb = 250), goalMacros(DailyGoalEntity(0, kcal = 2000, prot = 0, fat = 0, carb = 0)))
+        assertNull(goalMacros(null))
+    }
+
+    /** Расход по весу подставляется в углеводы: белок и жир человек выбрал сам. */
+    @Test
+    fun `расход по весу подставляется в углеводы`() {
+        assertEquals(310, carbsFor(kcal = 2350, prot = 120, fat = 70))
+        assertEquals(0, carbsFor(kcal = 900, prot = 120, fat = 70))
+    }
+
     /** Опечатка в росте даёт цель, по которой нельзя жить. Кнопка ждёт правдоподобного. */
     @Test
     fun `неправдоподобные данные не считаются`() {

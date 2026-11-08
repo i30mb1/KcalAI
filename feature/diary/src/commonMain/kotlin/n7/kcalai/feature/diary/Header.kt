@@ -74,7 +74,7 @@ fun Header(
     week: List<DaySummary>,
     collapsed: Boolean,
     emptyHomes: Set<Mascot>,
-    onOpenGoal: (GoalField) -> Unit,
+    onOpenGoal: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = KcalTheme.colors
@@ -132,7 +132,7 @@ private fun RemainingRow(
     past: Boolean,
     totals: NutrimentTotals,
     goal: DailyGoalEntity?,
-    onOpenGoal: (GoalField) -> Unit,
+    onOpenGoal: () -> Unit,
     onToToday: () -> Unit,
 ) {
     val colors = KcalTheme.colors
@@ -159,7 +159,7 @@ private fun RemainingRow(
             modifier = Modifier
                 .alignByBaseline()
                 .clip(RoundedCornerShape(KcalShapes.tile))
-                .clickable { onOpenGoal(GoalField.KCAL) }
+                .clickable(onClick = onOpenGoal)
                 .padding(start = 8.dp, top = 2.dp, bottom = 2.dp, end = 2.dp),
         ) {
             Row(verticalAlignment = Alignment.Bottom) {
@@ -193,8 +193,7 @@ private fun RemainingRow(
 /**
  * Три плитки макросов.
  *
- * Тап открывает шит цели курсором в этом поле — и это единственный способ туда
- * попасть, кроме тапа по остатку. Кнопки цели в шапке больше нет: она открывала
+ * Тап открывает шит цели — так же, как тап по остатку. Кнопки цели в шапке больше нет: она открывала
  * ровно то же, но занимала место и не говорила, что покажет.
  *
  * @param emptyHomes чьи персонажи ушли из плитки: у них на пустом месте подпись
@@ -204,21 +203,19 @@ private fun MacroTiles(
     totals: NutrimentTotals,
     goal: DailyGoalEntity?,
     emptyHomes: Set<Mascot>,
-    onOpenGoal: (GoalField) -> Unit,
+    onOpenGoal: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         listOf(
-            Triple(Macro.PROTEIN, totals.protCg, goal?.prot) to GoalField.PROT,
-            Triple(Macro.FAT, totals.fatCg, goal?.fat) to GoalField.FAT,
-            Triple(Macro.CARB, totals.carbCg, goal?.carb) to GoalField.CARB,
-        ).forEach { (values, field) ->
-            val (macro, eatenCg, goalGrams) = values
+            Triple(Macro.PROTEIN, totals.protCg, goal?.prot),
+            Triple(Macro.FAT, totals.fatCg, goal?.fat),
+            Triple(Macro.CARB, totals.carbCg, goal?.carb),
+        ).forEach { (macro, eatenCg, goalGrams) ->
             MacroTile(
                 macro = macro,
                 eatenCg = eatenCg,
                 goalGrams = goalGrams,
                 labelShown = macro.mascot in emptyHomes,
-                field = field,
                 onOpenGoal = onOpenGoal,
                 modifier = Modifier.weight(1f),
             )
@@ -238,8 +235,7 @@ private fun MacroTile(
     eatenCg: Int,
     goalGrams: Int?,
     labelShown: Boolean,
-    field: GoalField,
-    onOpenGoal: (GoalField) -> Unit,
+    onOpenGoal: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val type = KcalTheme.type
@@ -254,7 +250,7 @@ private fun MacroTile(
             .speechObstacle("tile:$macro")
             .clip(RoundedCornerShape(KcalShapes.tile))
             .background(palette.tile)
-            .clickable { onOpenGoal(field) }
+            .clickable(onClick = onOpenGoal)
             .padding(start = 11.dp, end = 8.dp, top = 10.dp, bottom = 10.dp)
             .semantics {
                 contentDescription = buildString {

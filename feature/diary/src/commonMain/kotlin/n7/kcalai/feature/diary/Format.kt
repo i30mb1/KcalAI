@@ -79,10 +79,6 @@ fun dayLabel(day: LocalDate, today: LocalDate): String = when (today.toEpochDays
 /** «Четверг, 29 окт» — заголовок пустого прошлого дня. */
 fun formatDayFull(day: LocalDate): String = formatDateCaps(day).replaceFirstChar(Char::uppercase)
 
-/** «14 сент» — дата начала действия цели в шите. */
-fun formatDayMonthShort(date: LocalDate): String =
-    "${date.day} ${date.monthShort}"
-
 /** «14:10» — время записи в местной зоне: `createdAt` хранится в UTC-миллисекундах. */
 fun formatTime(millis: Long, zone: TimeZone): String =
     Instant.fromEpochMilliseconds(millis).toLocalDateTime(zone).let {

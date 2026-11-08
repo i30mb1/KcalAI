@@ -99,6 +99,38 @@ fun bodyOrNull(
 fun suggestedFiber(kcal: Int?): Int =
     maxOf(FIBER_MIN_G, ((kcal ?: 0) * FIBER_PER_1000_KCAL / 1000.0).roundToInt())
 
+/**
+ * Цель в граммах. Калории из неё считаются, а не вводятся отдельно.
+ *
+ * Отдельное поле калорий давало сохранить невозможное: «200 ккал и 120 г белка»,
+ * хотя 120 г белка — уже 480 ккал. Из граммов калории складываются всегда верно.
+ */
+data class GoalMacros(val prot: Int, val fat: Int, val carb: Int) {
+    val kcal: Int get() = prot * KCAL_PER_PROT + fat * KCAL_PER_FAT + carb * KCAL_PER_CARB
+}
+
+/**
+ * Что встаёт в поля шита цели.
+ *
+ * Граммы сохранённой цели — как есть. Цель из одних калорий, заведённая до того,
+ * как калории стали считаться из граммов, раскладывается 20/30/50: иначе в шите
+ * стояли бы нули, и прежние калории пропали бы при первом же сохранении.
+ */
+fun goalMacros(goal: DailyGoalEntity?): GoalMacros? = when {
+    goal == null -> null
+    goal.prot + goal.fat + goal.carb > 0 -> GoalMacros(goal.prot, goal.fat, goal.carb)
+    goal.kcal > 0 -> GoalMacros(
+        prot = (goal.kcal * KCAL_SPLIT_PROT / KCAL_PER_PROT).roundToInt(),
+        fat = (goal.kcal * KCAL_SPLIT_FAT / KCAL_PER_FAT).roundToInt(),
+        carb = (goal.kcal * KCAL_SPLIT_CARB / KCAL_PER_CARB).roundToInt(),
+    )
+    else -> null
+}
+
+/** Углеводы, с которыми цель даёт [kcal]: белок и жир человек выбрал сам, углеводы — остаток. */
+fun carbsFor(kcal: Int, prot: Int, fat: Int): Int =
+    ((kcal - prot * KCAL_PER_PROT - fat * KCAL_PER_FAT) / KCAL_PER_CARB.toDouble()).roundToInt().coerceAtLeast(0)
+
 /** Цель клетчатки дня: заданная руками, а без неё — посчитанная по калориям. */
 fun fiberGoal(goal: DailyGoalEntity?): Int = goal?.fiber ?: suggestedFiber(goal?.kcal)
 
@@ -106,6 +138,9 @@ private fun roundToTen(kcal: Double): Int = (kcal / 10).roundToInt() * 10
 
 private const val MIN_KCAL = 1200
 private const val FIBER_MIN_G = 25
+private const val KCAL_SPLIT_PROT = 0.2
+private const val KCAL_SPLIT_FAT = 0.3
+private const val KCAL_SPLIT_CARB = 0.5
 private const val FIBER_PER_1000_KCAL = 14
 private const val PROT_KEEP = 1.6
 private const val PROT_CHANGE = 1.8
