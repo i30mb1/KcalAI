@@ -285,7 +285,7 @@ private fun SheetSpeech(line: SheetLine, modifier: Modifier = Modifier) {
                 .padding(start = 4.dp)
                 .weight(1f)
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp))
-                .background(colors.surface)
+                .background(colors.bg)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
         ) { text ->
             Text(text, style = KcalTheme.type.body, color = colors.text, minLines = SPEECH_LINES, maxLines = SPEECH_LINES)
@@ -467,7 +467,7 @@ fun EntrySheet(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(KcalShapes.tile))
-                    .background(colors.surface)
+                    .background(colors.bg)
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
@@ -578,9 +578,12 @@ internal fun Sheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = colors.bg,
+        // Шит светлее ленты, а затемнение за ним гуще: одного цвета с перепиской
+        // он с ней сливался, и было непонятно, где кончается окно. Поля внутри —
+        // наоборот, цвета ленты: углублены в светлую карточку.
+        containerColor = colors.surface,
         contentColor = colors.text,
-        scrimColor = Color(0xFF1C1914).copy(alpha = 0.4f),
+        scrimColor = Color(0xFF1C1914).copy(alpha = 0.6f),
         shape = RoundedCornerShape(topStart = KcalShapes.sheet, topEnd = KcalShapes.sheet),
     ) {
         Column(

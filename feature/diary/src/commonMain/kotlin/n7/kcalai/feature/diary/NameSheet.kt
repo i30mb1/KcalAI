@@ -65,7 +65,7 @@ fun NameSheet(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
                 .padding(top = 14.dp)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(KcalShapes.tile))
-                .background(colors.surface)
+                .background(colors.bg)
                 .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
             BasicTextField(
