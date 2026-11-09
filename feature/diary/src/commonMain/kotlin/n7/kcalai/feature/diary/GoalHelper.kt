@@ -2,7 +2,9 @@ package n7.kcalai.feature.diary
 
 import kotlin.math.roundToInt
 import n7.kcalai.database.DailyGoalEntity
+import n7.kcalai.model.Mascot
 import n7.kcalai.model.Sex
+import n7.kcalai.ui.Macro
 
 /*
  * Цель для новичка по росту, весу и возрасту.
@@ -130,6 +132,28 @@ fun goalMacros(goal: DailyGoalEntity?): GoalMacros? = when {
 /** Углеводы, с которыми цель даёт [kcal]: белок и жир человек выбрал сам, углеводы — остаток. */
 fun carbsFor(kcal: Int, prot: Int, fat: Int): Int =
     ((kcal - prot * KCAL_PER_PROT - fat * KCAL_PER_FAT) / KCAL_PER_CARB.toDouble()).roundToInt().coerceAtLeast(0)
+
+/** Кто говорит в шите цели и что. */
+data class SheetLine(val mascot: Mascot, val text: String)
+
+/**
+ * Реплика в шите цели.
+ *
+ * Без неё шит — три пустых поля и ноль, и непонятно, что от человека хотят.
+ * Объясняет Яйцо: оно главное в знакомстве. Тап по полю — слово берёт хозяин
+ * макроса и говорит про своё, а помощнику по росту и весу — своя строка.
+ *
+ * @param focus поле, в котором сейчас курсор
+ * @param kcal сколько калорий уже складывают граммы в полях
+ */
+fun goalSheetLine(focus: Macro?, helperOpen: Boolean, kcal: Int): SheetLine = when {
+    focus == Macro.PROTEIN -> SheetLine(Mascot.EGG, "Белок — 1,6–1,8 г на килограмм веса. Бережёт мышцы.")
+    focus == Macro.FAT -> SheetLine(Mascot.BUTTER, "Жиры — около трети калорий дня. Спокойно, без перегибов.")
+    focus == Macro.CARB -> SheetLine(Mascot.GRAIN, "Углеводы — всё остальное. Топливо на день!")
+    helperOpen -> SheetLine(Mascot.EGG, "Расскажи о себе — посчитаю по формуле, а ты поправишь.")
+    kcal == 0 -> SheetLine(Mascot.EGG, "Сколько белков, жиров и углеводов в день? Калории сложу сам.")
+    else -> SheetLine(Mascot.EGG, "Это твоя цель на день. Поправь граммы — калории пересчитаю.")
+}
 
 /** Цель клетчатки дня: заданная руками, а без неё — посчитанная по калориям. */
 fun fiberGoal(goal: DailyGoalEntity?): Int = goal?.fiber ?: suggestedFiber(goal?.kcal)

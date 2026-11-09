@@ -1,5 +1,6 @@
 package n7.kcalai.feature.diary
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -35,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
@@ -97,8 +99,12 @@ fun GoalSheet(
     // Пол из помощника запоминается, только если цель сохранили: посчитать
     // и закрыть шит — не повод что-то о человеке хранить.
     var helperSex by remember { mutableStateOf<Sex?>(null) }
+    var focused by remember { mutableStateOf<Macro?>(null) }
+    var helperOpen by remember { mutableStateOf(false) }
 
     Sheet(onDismiss) {
+        SheetSpeech(goalSheetLine(focused, helperOpen, macros.kcal), Modifier.padding(bottom = 14.dp))
+
         // Итог трёх чисел — крупно, как остаток в шапке.
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
@@ -114,9 +120,12 @@ fun GoalSheet(
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
-            MacroField(Macro.PROTEIN, prot, { prot = it }, Modifier.weight(1f))
-            MacroField(Macro.FAT, fat, { fat = it }, Modifier.weight(1f))
-            MacroField(Macro.CARB, carb, { carb = it }, Modifier.weight(1f), imeAction = ImeAction.Done)
+            val onFocus = { macro: Macro, has: Boolean ->
+                if (has) focused = macro else if (focused == macro) focused = null
+            }
+            MacroField(Macro.PROTEIN, prot, { prot = it }, onFocus, Modifier.weight(1f))
+            MacroField(Macro.FAT, fat, { fat = it }, onFocus, Modifier.weight(1f))
+            MacroField(Macro.CARB, carb, { carb = it }, onFocus, Modifier.weight(1f), imeAction = ImeAction.Done)
         }
 
         // Расход по весу — одна строка, и только когда он посчитан: тап подставляет его в углеводы.
@@ -131,6 +140,8 @@ fun GoalSheet(
         }
 
         GoalHelper(
+            open = helperOpen,
+            onToggle = { helperOpen = it },
             lastWeightGrams = lastWeightGrams,
             onSuggest = { suggestion, sex ->
                 helperSex = sex
@@ -169,6 +180,8 @@ fun GoalSheet(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GoalHelper(
+    open: Boolean,
+    onToggle: (Boolean) -> Unit,
     lastWeightGrams: Int?,
     onSuggest: (GoalSuggestion, Sex) -> Unit,
     modifier: Modifier = Modifier,
@@ -176,7 +189,6 @@ private fun GoalHelper(
     val colors = KcalTheme.colors
     val focusManager = LocalFocusManager.current
 
-    var open by remember { mutableStateOf(false) }
     var sex by remember { mutableStateOf<Sex?>(null) }
     var age by remember { mutableStateOf("") }
     var height by remember { mutableStateOf("") }
@@ -188,7 +200,7 @@ private fun GoalHelper(
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         KcalChip(
             onClick = {
-                open = !open
+                onToggle(!open)
                 focusManager.clearFocus()
             },
             background = if (open) colors.bubble else colors.chip,
@@ -212,10 +224,34 @@ private fun GoalHelper(
                 enabled = body != null,
                 onClick = {
                     body?.let { onSuggest(suggestGoal(it), it.sex) }
-                    open = false
+                    onToggle(false)
                     focusManager.clearFocus()
                 },
                 modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/**
+ * Персонаж говорит, что делать в шите: облокотился на пузырёк, как в ленте.
+ * Сменилась реплика — сменяются и пузырёк, и тот, кто говорит.
+ */
+@Composable
+private fun SheetSpeech(line: SheetLine, modifier: Modifier = Modifier) {
+    val colors = KcalTheme.colors
+    Crossfade(targetState = line, modifier = modifier, label = "goal-speech") { current ->
+        Row(verticalAlignment = Alignment.Bottom) {
+            MascotFigure(current.mascot, MascotPose.LEAN, Modifier.size(width = 44.dp, height = 37.dp))
+            Text(
+                current.text,
+                style = KcalTheme.type.body,
+                color = colors.text,
+                modifier = Modifier
+                    .padding(start = 4.dp)
+                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp))
+                    .background(colors.surface)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
             )
         }
     }
@@ -301,6 +337,7 @@ private fun MacroField(
     macro: Macro,
     value: String,
     onValueChange: (String) -> Unit,
+    onFocus: (Macro, Boolean) -> Unit,
     modifier: Modifier = Modifier,
     imeAction: ImeAction = ImeAction.Next,
 ) {
@@ -319,7 +356,10 @@ private fun MacroField(
             style = KcalTheme.type.number,
             placeholder = "0",
             imeAction = imeAction,
-            modifier = Modifier.weight(1f).semantics { contentDescription = "${macro.tileLabel.lowercase()}, граммы" },
+            modifier = Modifier
+                .weight(1f)
+                .onFocusChanged { onFocus(macro, it.isFocused) }
+                .semantics { contentDescription = "${macro.tileLabel.lowercase()}, граммы" },
         )
         Text("г", style = KcalTheme.type.macro, color = palette.text)
         MascotFigure(macro.mascot, MascotPose.HOME, Modifier.padding(start = 4.dp).size(width = 30.dp, height = 25.dp))

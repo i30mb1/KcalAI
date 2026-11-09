@@ -4,7 +4,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.Test
 import n7.kcalai.database.DailyGoalEntity
+import n7.kcalai.model.Mascot
 import n7.kcalai.model.Sex
+import n7.kcalai.ui.Macro
 
 /**
  * Цель для новичка по росту, весу и возрасту.
@@ -99,5 +101,28 @@ class GoalHelperTest {
         assertNull(bodyOrNull(Sex.MALE, age = "30", height = "18", weight = "80", Activity.LOW, Aim.KEEP))
         assertNull(bodyOrNull(Sex.MALE, age = "30", height = "180", weight = "800", Activity.LOW, Aim.KEEP))
         assertNull(bodyOrNull(null, age = "30", height = "180", weight = "80", Activity.LOW, Aim.KEEP))
+    }
+
+    /**
+     * В шите цели говорит персонаж: пустой шит без строки непонятен. Пока поле
+     * не выбрано, Яйцо объясняет, что здесь делать; тап по полю — слово берёт
+     * хозяин макроса.
+     */
+    @Test
+    fun `в шите цели говорит хозяин выбранного поля`() {
+        assertEquals(Mascot.EGG, goalSheetLine(focus = null, helperOpen = false, kcal = 0).mascot)
+        assertEquals(Mascot.EGG, goalSheetLine(focus = Macro.PROTEIN, helperOpen = false, kcal = 0).mascot)
+        assertEquals(Mascot.BUTTER, goalSheetLine(focus = Macro.FAT, helperOpen = false, kcal = 0).mascot)
+        assertEquals(Mascot.GRAIN, goalSheetLine(focus = Macro.CARB, helperOpen = false, kcal = 0).mascot)
+    }
+
+    /** Новичку — что делать, тому, у кого цель есть, — что её можно поправить; помощнику — своя строка. */
+    @Test
+    fun `строка шита меняется вместе с тем, что происходит`() {
+        val empty = goalSheetLine(focus = null, helperOpen = false, kcal = 0).text
+        val filled = goalSheetLine(focus = null, helperOpen = false, kcal = 2070).text
+        val helper = goalSheetLine(focus = null, helperOpen = true, kcal = 0).text
+
+        assertEquals(3, setOf(empty, filled, helper).size)
     }
 }
