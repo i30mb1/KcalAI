@@ -17,11 +17,11 @@ internal class FoodDbQueries(hasFullDb: Boolean) {
     private val productFts = if (hasFullDb) "food.$productFtsName" else "main.$productFtsName"
 
     val findByBarcode: String =
-        "SELECT barcode, name, brand, kcal100, prot100, fat100, carb100, serving_g " +
+        "SELECT barcode, name, brand, kcal100, prot100, fat100, carb100, serving_g, fiber100 " +
             "FROM $productTable WHERE barcode = ?"
 
     val searchProducts: String =
-        "SELECT p.barcode, p.name, p.brand, p.kcal100, p.prot100, p.fat100, p.carb100, p.serving_g " +
+        "SELECT p.barcode, p.name, p.brand, p.kcal100, p.prot100, p.fat100, p.carb100, p.serving_g, p.fiber100 " +
             "FROM $productFts f JOIN $productTable p ON p.barcode = f.barcode " +
             "WHERE f.$productFtsName MATCH ? " +
             "GROUP BY p.barcode ORDER BY p.popularity DESC, p.name LIMIT ?"

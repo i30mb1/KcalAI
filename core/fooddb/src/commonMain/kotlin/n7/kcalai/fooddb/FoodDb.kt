@@ -116,6 +116,7 @@ private fun SQLiteStatement.readProduct(): ProductRow =
             prot100 = getInt(4),
             fat100 = getInt(5),
             carb100 = getInt(6),
+            fiber100 = if (isNull(8)) null else getInt(8),
         ),
         servingG = if (isNull(7)) null else getInt(7),
     )

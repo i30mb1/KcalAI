@@ -87,7 +87,8 @@ def build_seed(out_path: Path, data_dir: Path) -> None:
             data_dir / "generic_alias_extra.csv",
         )
         _load_portion_units(conn, data_dir / "portion_unit.csv")
-        _fill_meta(conn)
+        _load_products(conn, data_dir / "off_products.csv")
+        _fill_meta(conn, data_dir / "off_products.meta")
         conn.commit()
         conn.execute("VACUUM")
         conn.commit()
@@ -162,7 +163,52 @@ def _load_portion_units(conn: sqlite3.Connection, path: Path) -> None:
     )
 
 
-def _fill_meta(conn: sqlite3.Connection) -> None:
+def _load_products(conn: sqlite3.Connection, path: Path) -> None:
+    """Срез Open Food Facts от off_extract.py: товары российских полок по штрих-коду."""
+    if not path.exists():
+        return
+
+    def optional(value: str) -> int | None:
+        return int(value) if value else None
+
+    rows = [
+        (
+            r["barcode"],
+            r["name"],
+            r["brand"] or None,
+            int(r["kcal100"]),
+            int(r["prot100"]),
+            int(r["fat100"]),
+            int(r["carb100"]),
+            optional(r["fiber100"]),
+            optional(r["serving_g"]),
+            int(r["popularity"]),
+        )
+        for r in _rows(path)
+    ]
+    conn.executemany(
+        "INSERT INTO product_seed (barcode, name, brand, kcal100, prot100, fat100, carb100, "
+        "fiber100, serving_g, popularity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        rows,
+    )
+    # В индекс — нормализованное, как у алиасов: запрос приходит сложенным тем же правилом.
+    conn.executemany(
+        "INSERT INTO product_seed_fts (name, brand, barcode) VALUES (?, ?, ?)",
+        [(normalize(name), normalize(brand or ""), barcode) for barcode, name, brand, *_ in rows],
+    )
+
+
+def _off_dump_date(meta_path: Path) -> str:
+    if not meta_path.exists():
+        return ""
+    for line in meta_path.read_text(encoding="utf-8").splitlines():
+        key, _, value = line.partition("=")
+        if key.strip() == "dump_date":
+            return value.strip()
+    return ""
+
+
+def _fill_meta(conn: sqlite3.Connection, off_meta: Path) -> None:
     conn.executemany(
         "INSERT INTO meta (key, value) VALUES (?, ?)",
         [
@@ -170,7 +216,7 @@ def _fill_meta(conn: sqlite3.Connection) -> None:
             ("built_at", date.today().isoformat()),
             ("source", "Open Food Facts (product_seed) + curated generic table"),
             ("license", "ODbL-1.0"),
-            ("off_dump_date", ""),
+            ("off_dump_date", _off_dump_date(off_meta)),
         ],
     )
 
@@ -256,6 +302,21 @@ def verify_seed(db_path: Path) -> list[str]:
                 f"portion_unit: {len(stray)} единиц вне канона парсера ({names}) — "
                 "добавь их в CANONICAL_UNITS и в n7.kcalai.resolver, либо в UNIT_ALIASES"
             )
+
+        # Товары из OFF прошли отбор в off_extract.py; здесь — страховка от ручной правки CSV.
+        bad_products = conn.execute(
+            "SELECT count(*) FROM product_seed WHERE kcal100 < 0 OR kcal100 > ? "
+            "OR prot100 < 0 OR fat100 < 0 OR carb100 < 0 OR prot100 + fat100 + carb100 > ? "
+            "OR fiber100 < 0 OR fiber100 > ? OR length(barcode) NOT IN (8, 13)",
+            (KCAL_MAX, MACRO_MAX_CG + MASS_SLACK_CG, MACRO_MAX_CG),
+        ).fetchone()[0]
+        if bad_products:
+            problems.append(f"product_seed: {bad_products} товаров с числами или кодом вне допустимого")
+
+        product_count = conn.execute("SELECT count(*) FROM product_seed").fetchone()[0]
+        product_fts = conn.execute("SELECT count(*) FROM product_seed_fts").fetchone()[0]
+        if product_fts != product_count:
+            problems.append(f"product_seed_fts: {product_fts} строк против {product_count} товаров")
 
         fts_count = conn.execute("SELECT count(*) FROM generic_fts").fetchone()[0]
         alias_count = conn.execute("SELECT count(*) FROM generic_alias").fetchone()[0]
@@ -353,10 +414,14 @@ def main() -> int:
     generics = conn.execute("SELECT count(*) FROM generic").fetchone()[0]
     aliases = conn.execute("SELECT count(*) FROM generic_alias").fetchone()[0]
     units = conn.execute("SELECT count(*) FROM portion_unit").fetchone()[0]
+    products = conn.execute("SELECT count(*) FROM product_seed").fetchone()[0]
     conn.close()
 
     size_kb = out.stat().st_size // 1024
-    print(f"ОК: {out} — {generics} продуктов, {aliases} алиасов, {units} порций, {size_kb} КБ")
+    print(
+        f"ОК: {out} — {generics} продуктов, {aliases} алиасов, {units} порций, "
+        f"{products} товаров по штрих-коду, {size_kb} КБ"
+    )
 
     if args.install:
         ASSETS.mkdir(parents=True, exist_ok=True)
