@@ -39,7 +39,6 @@ import n7.kcalai.model.Mascot
 import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.repositories.DaySummary
 import n7.kcalai.ui.CapsLabel
-import n7.kcalai.ui.KcalChip
 import n7.kcalai.ui.Macro
 import n7.kcalai.ui.MiniBar
 import n7.kcalai.ui.SproutIcon
@@ -142,15 +141,15 @@ private fun RemainingRow(
 
     Row(Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f).alignByBaseline(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            CapsLabel(formatDateCaps(date))
+            // У прошлого дня дорога назад — стрелка в самой дате: тап возвращает
+            // в сегодня. Отдельная кнопка под датой делала шапку выше, и при
+            // переходе на прошлый день всё прыгало.
+            CapsLabel(
+                text = headerDate(date, past),
+                color = if (past) colors.text else colors.text3,
+                modifier = if (past) Modifier.clickable(onClick = onToToday) else Modifier,
+            )
             FiberStrip(fiber, fiberGoal)
-            if (past) {
-                // Под датой прошлого дня — дорога назад: из вчерашней переписки
-                // человек вернётся к сегодняшней, не ища для этого столбик.
-                KcalChip(onClick = onToToday, background = colors.bubble) {
-                    Text("← Сегодня", style = KcalTheme.type.chip, color = colors.onBubble)
-                }
-            }
         }
 
         // Нажимается весь блок, а не только мелкая строка под числом: в неё
@@ -296,8 +295,12 @@ private fun MacroTile(
             }
         }
 
+        // Место под полосу есть всегда: у дня без цели её нет, и без запаса плитки
+        // были ниже — при переходе между днями шапка прыгала.
         if (target != null) {
             MiniBar(fraction = eaten.toFloat() / target, fill = palette.fill)
+        } else {
+            Spacer(Modifier.height(MINI_BAR_HEIGHT))
         }
     }
 }
@@ -388,6 +391,10 @@ private fun CompactRow(
     }
 }
 
+/** Дата в шапке. У прошлого дня — со стрелкой назад: тап по ней возвращает в сегодня. */
+fun headerDate(date: LocalDate, past: Boolean): String =
+    if (past) "← ${formatDateCaps(date)}" else formatDateCaps(date)
+
 /** Что крупно в шапке: число и подпись к нему. Других чисел калорий рядом нет. */
 data class Headline(val number: Int, val label: String, val over: Boolean)
 
@@ -411,6 +418,9 @@ fun headline(eatenKcal: Int, targetKcal: Int?, past: Boolean): Headline {
 }
 
 private const val CENTIGRAMS_PER_GRAM = 100
+
+/** Высота полосы макроса — та же, что у MiniBar по умолчанию. */
+private val MINI_BAR_HEIGHT = 4.dp
 
 /** Полоса клетчатки под датой: заметная, но короче строки даты. */
 private val FIBER_BAR_WIDTH = 72.dp

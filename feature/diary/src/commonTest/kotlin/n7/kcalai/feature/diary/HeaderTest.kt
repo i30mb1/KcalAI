@@ -1,5 +1,6 @@
 package n7.kcalai.feature.diary
 
+import kotlinx.datetime.LocalDate
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -75,5 +76,16 @@ class HeaderTest {
     fun `со стеклом сквозь них видна размытая лента`() {
         assertTrue(glassScrimAlpha(frosted = true) < 1f)
         assertTrue(glassScrimAlpha(frosted = true) > 0f)
+    }
+
+    /**
+     * Дорога назад из прошлого дня — стрелка в самой дате, а не отдельная кнопка
+     * под ней: кнопка делала шапку выше, и при переходе на прошлый день всё прыгало.
+     */
+    @Test
+    fun `у прошлого дня дата со стрелкой назад, у сегодня — без`() {
+        val day = LocalDate(2026, 11, 9)
+        assertEquals("← понедельник, 9 нояб", headerDate(day, past = true))
+        assertEquals("понедельник, 9 нояб", headerDate(day, past = false))
     }
 }
