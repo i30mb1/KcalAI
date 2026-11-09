@@ -126,11 +126,17 @@ class GoalHelperTest {
         assertEquals(3, setOf(empty, filled, helper).size)
     }
 
-    /** В шите говорящий стоит у реплики, и его поле подписано словом: персонаж на экране один. */
+    /**
+     * В шите говорящий перебегает к реплике, остальные стоят в своих полях — как
+     * на главном экране: персонаж один и переходит с места на место.
+     */
     @Test
-    fun `в шите у говорящего поле без персонажа`() {
-        val line = goalSheetLine(focus = Macro.FAT, helperOpen = false, kcal = 0)
+    fun `в шите говорящий у реплики, остальные дома в полях`() {
+        val places = goalSheetPlaces(goalSheetLine(focus = Macro.FAT, helperOpen = false, kcal = 0))
 
-        assertEquals(setOf(Macro.PROTEIN, Macro.CARB), Macro.entries.filter { fieldShowsMascot(it, line) }.toSet())
+        assertEquals(MascotPlace.Reply(SHEET_SPEECH_ANCHOR), places[Mascot.BUTTER])
+        assertEquals(MascotPlace.Home, places[Mascot.EGG])
+        assertEquals(MascotPlace.Home, places[Mascot.GRAIN])
+        assertEquals(setOf(Mascot.BUTTER), emptyHomes(places))
     }
 }

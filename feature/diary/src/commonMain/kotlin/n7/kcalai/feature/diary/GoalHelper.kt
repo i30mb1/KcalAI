@@ -5,7 +5,6 @@ import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.Sex
 import n7.kcalai.ui.Macro
-import n7.kcalai.ui.mascot.mascot
 
 /*
  * Цель для новичка по росту, весу и возрасту.
@@ -156,8 +155,19 @@ fun goalSheetLine(focus: Macro?, helperOpen: Boolean, kcal: Int): SheetLine = wh
     else -> SheetLine(Mascot.EGG, "Это твоя цель на день. Поправь граммы — калории пересчитаю.")
 }
 
-/** В поле шита стоит хозяин макроса, если он не говорит: тогда он у реплики, а поле подписано словом. */
-fun fieldShowsMascot(macro: Macro, line: SheetLine): Boolean = macro.mascot != line.mascot
+/** Место у реплики в шите цели — туда перебегает тот, кто говорит. */
+const val SHEET_SPEECH_ANCHOR = "sheet-speech"
+
+/**
+ * Кто где стоит в шите цели: говорящий — у реплики, остальные — дома, в своих полях.
+ *
+ * Та же расстановка, что на главном экране: персонаж один и перебегает с места
+ * на место, а пустое место в поле подписано буквой.
+ */
+fun goalSheetPlaces(line: SheetLine): Map<Mascot, MascotPlace> =
+    Mascot.entries.associateWith { mascot ->
+        if (mascot == line.mascot) MascotPlace.Reply(SHEET_SPEECH_ANCHOR) else MascotPlace.Home
+    }
 
 /** Цель клетчатки дня: заданная руками, а без неё — посчитанная по калориям. */
 fun fiberGoal(goal: DailyGoalEntity?): Int = goal?.fiber ?: suggestedFiber(goal?.kcal)

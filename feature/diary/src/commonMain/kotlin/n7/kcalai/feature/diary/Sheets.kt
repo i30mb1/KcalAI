@@ -1,6 +1,8 @@
 package n7.kcalai.feature.diary
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -11,7 +13,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -30,6 +31,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,8 +66,7 @@ import n7.kcalai.ui.letter
 import n7.kcalai.ui.tileLabel
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
-import n7.kcalai.ui.mascot.MascotFigure
-import n7.kcalai.ui.mascot.MascotPose
+import n7.kcalai.model.Mascot
 import n7.kcalai.ui.mascot.mascot
 import n7.kcalai.model.Sex
 import n7.kcalai.model.title
@@ -104,8 +105,17 @@ fun GoalSheet(
     var focused by remember { mutableStateOf<Macro?>(null) }
     var helperOpen by remember { mutableStateOf(false) }
 
+    // Своя сцена в шите: он — отдельное окно, и персонажи главного экрана над ним
+    // не рисуются. Здесь они перебегают с места на место так же, как там.
+    val anchors = remember { MascotAnchors() }
+    val pointer = remember { StagePointer() }
+    val line = goalSheetLine(focused, helperOpen, macros.kcal)
+    val places = goalSheetPlaces(line)
+
     Sheet(onDismiss) {
-        val line = goalSheetLine(focused, helperOpen, macros.kcal)
+    CompositionLocalProvider(LocalMascotAnchors provides anchors) {
+    Box(Modifier.observeTouches(pointer)) {
+    Column {
         SheetSpeech(line, Modifier.padding(bottom = 14.dp))
 
         // Итог трёх чисел — крупно, как остаток в шапке.
@@ -126,10 +136,11 @@ fun GoalSheet(
             val onFocus = { macro: Macro, has: Boolean ->
                 if (has) focused = macro else if (focused == macro) focused = null
             }
-            MacroField(Macro.PROTEIN, prot, { prot = it }, onFocus, fieldShowsMascot(Macro.PROTEIN, line), Modifier.weight(1f))
-            MacroField(Macro.FAT, fat, { fat = it }, onFocus, fieldShowsMascot(Macro.FAT, line), Modifier.weight(1f))
+            val away = emptyHomes(places)
+            MacroField(Macro.PROTEIN, prot, { prot = it }, onFocus, Mascot.EGG !in away, Modifier.weight(1f))
+            MacroField(Macro.FAT, fat, { fat = it }, onFocus, Mascot.BUTTER !in away, Modifier.weight(1f))
             MacroField(
-                Macro.CARB, carb, { carb = it }, onFocus, fieldShowsMascot(Macro.CARB, line), Modifier.weight(1f),
+                Macro.CARB, carb, { carb = it }, onFocus, Mascot.GRAIN !in away, Modifier.weight(1f),
                 imeAction = ImeAction.Done,
             )
         }
@@ -169,6 +180,22 @@ fun GoalSheet(
             // выглядела недоделанной и терялась под текстом.
             modifier = Modifier.padding(top = 16.dp).fillMaxWidth(),
         )
+
+    }
+        MascotStage(
+            places = places,
+            anchors = anchors,
+            pointer = pointer,
+            // Набирают граммы — персонажи косятся вниз, как на главном экране.
+            input = prot + fat + carb,
+            speech = emptyList(),
+            cue = null,
+            night = false,
+            onEvent = {},
+            modifier = Modifier.matchParentSize(),
+        )
+    }
+    }
     }
 }
 
@@ -246,22 +273,27 @@ private fun GoalHelper(
 @Composable
 private fun SheetSpeech(line: SheetLine, modifier: Modifier = Modifier) {
     val colors = KcalTheme.colors
-    Crossfade(targetState = line, modifier = modifier, label = "goal-speech") { current ->
-        Row(verticalAlignment = Alignment.Bottom) {
-            MascotFigure(current.mascot, MascotPose.LEAN, Modifier.size(width = 44.dp, height = 37.dp))
-            Text(
-                current.text,
-                style = KcalTheme.type.body,
-                color = colors.text,
-                modifier = Modifier
-                    .padding(start = 4.dp)
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp))
-                    .background(colors.surface)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-            )
+    Row(modifier, verticalAlignment = Alignment.Bottom) {
+        // Место говорящего: он сам перебегает сюда со сцены шита.
+        Box(Modifier.size(width = 44.dp, height = 37.dp).mascotAnchor(SHEET_SPEECH_ANCHOR))
+        // Пузырёк всегда в две строки: реплики разной длины, и без запаса всё,
+        // что ниже, прыгало бы при каждой смене.
+        Crossfade(
+            targetState = line.text,
+            label = "goal-speech",
+            modifier = Modifier
+                .padding(start = 4.dp)
+                .weight(1f)
+                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp))
+                .background(colors.surface)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) { text ->
+            Text(text, style = KcalTheme.type.body, color = colors.text, minLines = SPEECH_LINES, maxLines = SPEECH_LINES)
         }
     }
 }
+
+private const val SPEECH_LINES = 2
 
 /** Выбор одного из нескольких — чипсами, выбранный тёмный. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -369,17 +401,14 @@ private fun MacroField(
                 .semantics { contentDescription = "${macro.tileLabel.lowercase()}, граммы" },
         )
         Text("г", style = KcalTheme.type.macro, color = palette.text)
-        // Персонаж один на экране: говорящий стоит у реплики, а его место в поле
-        // подписано словом — как пустой домик в шапке.
-        Box(Modifier.padding(start = 4.dp).size(width = 30.dp, height = 25.dp), contentAlignment = Alignment.CenterEnd) {
-            if (mascotShown) {
-                MascotFigure(macro.mascot, MascotPose.HOME, Modifier.fillMaxSize())
-            } else {
-                Text(
-                    macro.letter,
-                    style = KcalTheme.type.capsTile,
-                    color = palette.text,
-                )
+        // Дом персонажа в поле: сам он рисуется сценой шита поверх. Ушёл к реплике —
+        // на пустом месте буква макроса, как подпись пустого домика в шапке.
+        Box(
+            Modifier.padding(start = 4.dp).size(width = 30.dp, height = 25.dp).mascotAnchor(homeAnchor(macro.mascot)),
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            androidx.compose.animation.AnimatedVisibility(visible = !mascotShown, enter = fadeIn(), exit = fadeOut()) {
+                Text(macro.letter, style = KcalTheme.type.capsTile, color = palette.text)
             }
         }
     }
