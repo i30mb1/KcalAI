@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -109,6 +110,8 @@ fun Composer(
     onSubmit: () -> Boolean,
     onOpenScan: () -> Unit,
     onOpenLabelDebug: (() -> Unit)?,
+    /** Строка ввода получила или потеряла курсор: от этого зависит, видны ли подсказки «обычно». */
+    onFocusChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = KcalTheme.colors
@@ -192,7 +195,10 @@ fun Composer(
                     keyboardActions = KeyboardActions(
                         onDone = { if (!onSubmit()) defaultKeyboardAction(ImeAction.Done) },
                     ),
-                    modifier = Modifier.fillMaxWidth().focusRequester(requester),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(requester)
+                        .onFocusChanged { onFocusChange(it.isFocused) },
                 )
                 if (input.isEmpty()) {
                     Text(
@@ -226,6 +232,16 @@ fun Composer(
         Spacer(Modifier.height(10.dp))
     }
 }
+
+/**
+ * Какой ряд подсказок видно.
+ *
+ * «Обычно в это время» — только когда человек собрался писать и тапнул в строку:
+ * иначе ряд висел над пустым полем постоянно и закрывал ленту. Выдача поиска,
+ * вес и скан появляются от набранного — им фокус не нужен, он и так есть.
+ */
+fun visibleRow(row: ComposerRow, inputFocused: Boolean): ComposerRow =
+    if (row is ComposerRow.Predictions && !inputFocused) ComposerRow.None else row
 
 /**
  * Ряд подсказок.

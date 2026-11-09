@@ -292,7 +292,10 @@ fun DiaryScreen(
     // Расстановка через derivedStateOf: прокрутка двигает места каждый кадр, а кто
     // где стоит, меняется редко — экран перекомпонуется только тогда.
     val feed by rememberUpdatedState(state.feed)
-    val owner by rememberUpdatedState(chipOwner(state.composer))
+    // Подсказки «обычно» — только пока строка ввода в фокусе; персонаж стоит на том ряде, что виден.
+    var composerFocused by remember { mutableStateOf(false) }
+    val row = visibleRow(state.composer, composerFocused)
+    val owner by rememberUpdatedState(chipOwner(row))
     // Шит цели со своими персонажами: на главном экране их на это время нет.
     val offstage by rememberUpdatedState(state.overlay is Overlay.Goal)
     val places by remember(anchors) {
@@ -357,7 +360,7 @@ fun DiaryScreen(
 
         Composer(
             input = state.input,
-            row = state.composer,
+            row = row,
             action = state.action,
             pastMeal = state.pastMeal,
             onPickMeal = onPickMeal,
@@ -369,6 +372,7 @@ fun DiaryScreen(
             onSubmit = onSubmit,
             onOpenScan = onOpenScan,
             onOpenLabelDebug = onOpenLabelDebug,
+            onFocusChange = { composerFocused = it },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .onSizeChanged { composerHeight = it.height }

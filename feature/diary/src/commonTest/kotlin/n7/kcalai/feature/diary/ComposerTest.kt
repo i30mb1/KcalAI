@@ -1,6 +1,10 @@
 package n7.kcalai.feature.diary
 
 import n7.kcalai.model.EntrySource
+import n7.kcalai.model.FoodCandidate
+import n7.kcalai.model.FoodRef
+import n7.kcalai.model.Mascot
+import n7.kcalai.model.Nutriments
 import n7.kcalai.resolver.ResolvedItem
 import kotlin.test.assertEquals
 import kotlin.test.Test
@@ -59,4 +63,33 @@ class ComposerTest {
         assertEquals(ComposerAction.SCAN, composerAction(""))
         assertEquals(ComposerAction.SCAN, composerAction("   "))
     }
+
+    /**
+     * «Обычно в это время» — только когда человек собрался писать: тапнул в строку.
+     * Без этого ряд висел над пустым полем постоянно и закрывал ленту.
+     */
+    @Test
+    fun `подсказки «обычно» видны, только пока строка ввода в фокусе`() {
+        val predictions = ComposerRow.Predictions(listOf(oat))
+
+        assertEquals(ComposerRow.None, visibleRow(predictions, inputFocused = false))
+        assertEquals(predictions, visibleRow(predictions, inputFocused = true))
+        assertEquals(ComposerRow.Weight(82_400), visibleRow(ComposerRow.Weight(82_400), inputFocused = false))
+    }
+
+    /** Персонаж не стоит на чипсе, которого не видно. */
+    @Test
+    fun `на скрытых подсказках персонажа нет`() {
+        val predictions = ComposerRow.Predictions(listOf(oat))
+
+        assertEquals(null, chipOwner(visibleRow(predictions, inputFocused = false)))
+        assertEquals(Mascot.GRAIN, chipOwner(visibleRow(predictions, inputFocused = true)))
+    }
+
+    private val oat = FoodCandidate(
+        ref = FoodRef.Generic(8),
+        displayName = "Овсянка",
+        nutriments = Nutriments(kcal100 = 352, prot100 = 1230, fat100 = 620, carb100 = 6180),
+        servingG = 60,
+    )
 }
