@@ -49,6 +49,7 @@ import n7.kcalai.personal.ShownCandidate
 import n7.kcalai.personal.TdeeEstimate
 import n7.kcalai.personal.mealForHour
 import n7.kcalai.repositories.DaySummary
+import n7.kcalai.repositories.BarcodeLookup
 import n7.kcalai.repositories.DayTotals
 import n7.kcalai.repositories.DiaryRepository
 import n7.kcalai.repositories.FoodRepository
@@ -937,7 +938,7 @@ class DiaryViewModel(
         scanned.value = null
 
         viewModelScope.launch {
-            val candidate = try {
+            val lookup = try {
                 food.byBarcode(gtin)
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -945,24 +946,30 @@ class DiaryViewModel(
                 // Сюда входит и отсутствие сети. Промах и сбой ведут в одну и ту же
                 // форму, и различать их перед человеком незачем.
                 Log.e(TAG, "поиск по коду $gtin не удался", error)
-                null
+                BarcodeLookup.Miss
             }
 
             // Окно могли закрыть посреди поиска — тогда промах его не открывает.
             val stillWaiting = overlay.value == searching
 
-            if (candidate == null) {
+            when (lookup) {
                 // Промах ведёт прямо в карточку продукта в том же окне: код уже
                 // известен, остальное человек снимет камерой или впишет сам.
-                if (stillWaiting) overlay.value = Overlay.Scan(ScanStep.NewProduct(gtin))
-            } else {
-                if (stillWaiting) overlay.value = Overlay.None
-                // Название уезжает в поле ввода, курсор — за ним. Скан опознал
-                // товар, но не знает, сколько его съели, и дописать «150» к уже
-                // готовой строке быстрее, чем открывать отдельный шит веса.
-                // Чипс при этом остаётся и считает калории от набранного.
-                scanned.value = candidate.toScannedItem(EntrySource.BARCODE)
-                input.value = "${candidate.displayName} "
+                BarcodeLookup.Miss ->
+                    if (stillWaiting) overlay.value = Overlay.Scan(ScanStep.NewProduct(gtin))
+                // Известное название встаёт в карточку сразу: его не надо ни снимать,
+                // ни вписывать, а справочник по нему предложит похожий.
+                is BarcodeLookup.NameOnly ->
+                    if (stillWaiting) overlay.value = Overlay.Scan(ScanStep.NewProduct(gtin, name = lookup.name))
+                is BarcodeLookup.Found -> {
+                    if (stillWaiting) overlay.value = Overlay.None
+                    // Название уезжает в поле ввода, курсор — за ним. Скан опознал
+                    // товар, но не знает, сколько его съели, и дописать «150» к уже
+                    // готовой строке быстрее, чем открывать отдельный шит веса.
+                    // Чипс при этом остаётся и считает калории от набранного.
+                    scanned.value = lookup.candidate.toScannedItem(EntrySource.BARCODE)
+                    input.value = "${lookup.candidate.displayName} "
+                }
             }
         }
     }

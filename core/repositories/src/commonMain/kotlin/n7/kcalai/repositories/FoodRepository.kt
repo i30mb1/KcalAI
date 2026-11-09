@@ -28,15 +28,34 @@ fun interface FoodDbSource {
     suspend fun get(): FoodDb
 }
 
-/** Товар, пришедший по сети. [origin] решает, можно ли его отдавать дальше. */
+/**
+ * Товар, пришедший по сети. [origin] решает, можно ли его отдавать дальше.
+ *
+ * @param nutriments `null` — источник знает товар только по названию
+ */
 data class RemoteProduct(
     val gtin: String,
     val name: String,
     val brand: String?,
-    val nutriments: Nutriments,
+    val nutriments: Nutriments?,
     val servingG: Int?,
     val origin: ProductOrigin,
 )
+
+/** Чем кончился поиск по штрих-коду. */
+sealed interface BarcodeLookup {
+
+    data class Found(val candidate: FoodCandidate) : BarcodeLookup
+
+    /**
+     * Товар известен, но без КБЖУ — или с мусорным. Записать его нечем, а название
+     * пригодится: карточка нового продукта откроется уже подписанной, и справочник
+     * по нему предложит похожий.
+     */
+    data class NameOnly(val name: String) : BarcodeLookup
+
+    data object Miss : BarcodeLookup
+}
 
 /**
  * Сеть глазами репозитория.
@@ -121,15 +140,19 @@ class FoodRepository(
      * Сетевой ответ оседает в `cached_product` с пометкой источника. В `user_food`
      * он не попадает никогда — там живёт только введённое человеком, и именно
      * поэтому очередь отправки не может заразиться данными под ODbL.
+     *
+     * Ответ с одним названием в кэш не ложится: записывать в него нечего, а при
+     * следующем скане в сети уже могли вбить таблицу.
      */
-    suspend fun byBarcode(gtin: String): FoodCandidate? {
-        userFoodDao.findByBarcode(gtin)?.let { return it.toCandidate() }
-        onDb { it.findByBarcode(gtin) }?.let { return it.toCandidate() }
-        cachedProductDao.findByGtin(gtin)?.let { return it.toCandidate() }
+    suspend fun byBarcode(gtin: String): BarcodeLookup {
+        userFoodDao.findByBarcode(gtin)?.let { return BarcodeLookup.Found(it.toCandidate()) }
+        onDb { it.findByBarcode(gtin) }?.let { return BarcodeLookup.Found(it.toCandidate()) }
+        cachedProductDao.findByGtin(gtin)?.let { return BarcodeLookup.Found(it.toCandidate()) }
 
-        val fetched = remote.fetch(gtin) ?: return null
-        cachedProductDao.insert(fetched.toEntity(fetchedAt = currentTimeMillis()))
-        return fetched.toCandidate()
+        val fetched = remote.fetch(gtin) ?: return BarcodeLookup.Miss
+        val nutriments = fetched.nutriments ?: return BarcodeLookup.NameOnly(brandedName(fetched.brand, fetched.name))
+        cachedProductDao.insert(fetched.toEntity(nutriments, fetchedAt = currentTimeMillis()))
+        return BarcodeLookup.Found(fetched.toCandidate(nutriments))
     }
 
     /**
@@ -301,7 +324,7 @@ private fun CachedProductEntity.toCandidate(): FoodCandidate =
 private fun CachedProductEntity.toNutriments(): Nutriments =
     Nutriments(kcal100 = kcal100, prot100 = prot100, fat100 = fat100, carb100 = carb100, fiber100 = fiber100)
 
-private fun RemoteProduct.toCandidate(): FoodCandidate =
+private fun RemoteProduct.toCandidate(nutriments: Nutriments): FoodCandidate =
     FoodCandidate(
         ref = FoodRef.Barcode(gtin),
         displayName = brandedName(brand, name),
@@ -309,7 +332,7 @@ private fun RemoteProduct.toCandidate(): FoodCandidate =
         servingG = servingG,
     )
 
-private fun RemoteProduct.toEntity(fetchedAt: Long): CachedProductEntity =
+private fun RemoteProduct.toEntity(nutriments: Nutriments, fetchedAt: Long): CachedProductEntity =
     CachedProductEntity(
         gtin = gtin,
         name = name,

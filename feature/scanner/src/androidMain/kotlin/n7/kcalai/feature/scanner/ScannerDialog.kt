@@ -119,7 +119,7 @@ actual fun ScannerDialog(
 
     val label = step is ScanStep.NewProduct
     val searching = step is ScanStep.Searching
-    val card = (step as? ScanStep.NewProduct)?.let { rememberScanState(it.gtin) }
+    val card = (step as? ScanStep.NewProduct)?.let { rememberScanState(it.gtin, it.name) }
     var typingCode by rememberSaveable { mutableStateOf(false) }
 
     // Последний резкий кадр этикетки: его читает нейросеть, когда камера застряла.

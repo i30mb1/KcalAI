@@ -82,6 +82,26 @@ class ScanStateTest {
         assertTrue(ScanState(null).apply { barcode.type(GTIN) }.hasDraft)
     }
 
+    /**
+     * Сеть знает пачку по названию, но без КБЖУ: название уже стоит в карточке,
+     * справочник ищет похожий по нему, а закрыть такую карточку можно сразу —
+     * человек в неё ещё ничего не вложил.
+     */
+    @Test
+    fun `название из сети стоит в карточке, ищется в справочнике и потерей не считается`() {
+        val card = ScanState(GTIN, initialName = "Простоквашино Творог 5%")
+
+        assertEquals("Простоквашино Творог 5%", card.name.text)
+        assertEquals("Простоквашино Творог 5%", card.nameQuery)
+        assertFalse(card.hasDraft)
+        assertTrue(card.apply { kcal.type("121") }.hasDraft)
+    }
+
+    @Test
+    fun `название из сети, поправленное человеком, — уже работа`() {
+        assertTrue(ScanState(GTIN, initialName = "Творог").apply { name.type("Творог 9%") }.hasDraft)
+    }
+
     // --- Недостающие числа вписывает человек ------------------------------------------
 
     /**

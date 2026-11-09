@@ -27,6 +27,7 @@ sealed interface ScanStep {
      *
      * @param gtin код, с промаха которого сюда пришли. `null` — этикетку снимают
      *        напрямую, без кода; камера попробует поймать его сама.
+     * @param name название, под которым товар знает сеть, хоть и без КБЖУ
      */
-    data class NewProduct(val gtin: String? = null) : ScanStep
+    data class NewProduct(val gtin: String? = null, val name: String? = null) : ScanStep
 }

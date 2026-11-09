@@ -50,6 +50,10 @@ class OffProductSource(
  *
  * Различие важное: на ошибку следовало бы ругаться и пробовать снова, а на
  * отсутствие — молча вести человека в форму. Промах здесь основной сценарий.
+ *
+ * Товар без годного КБЖУ возвращается с одним названием: в российском разделе OFF
+ * это частый случай — фото и название есть, таблицу никто не вбил. Названия хватает,
+ * чтобы карточка нового продукта открылась уже подписанной, а справочник предложил похожий.
  */
 internal fun parseOffProduct(gtin: String, body: String): RemoteProduct? {
     // Разбор чужого JSON — заведомо ненадёжное место. Ломаться здесь нельзя:
@@ -62,15 +66,12 @@ internal fun parseOffProduct(gtin: String, body: String): RemoteProduct? {
     val product = root.obj("product") ?: return null
 
     val name = product.firstNonBlank("product_name_ru", "product_name") ?: return null
-    val nutriments = product.obj("nutriments")?.toNutriments() ?: return null
 
     // В OFF хватает мусорных записей — нули во всех полях, калории на порцию
     // вместо ста грамм. Показать такое хуже, чем не показать ничего:
     // человек подтвердит цифру не глядя, потому что она пришла «из базы».
-    if (!NutrimentValidator.check(nutriments).valid) {
-        Log.i(TAG, "$gtin отброшен: КБЖУ не проходит проверку")
-        return null
-    }
+    val nutriments = product.obj("nutriments")?.toNutriments()?.takeIf { NutrimentValidator.check(it).valid }
+    if (nutriments == null) Log.i(TAG, "$gtin без годного КБЖУ: остаётся только название")
 
     return RemoteProduct(
         gtin = gtin,

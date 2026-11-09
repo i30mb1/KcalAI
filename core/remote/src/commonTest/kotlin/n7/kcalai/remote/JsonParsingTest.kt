@@ -41,8 +41,8 @@ class JsonParsingTest {
             }}
         """.trimIndent()
 
-        assertEquals(1650, parseOffProduct("4600000000017", body(""","fiber_100g":16.5"""))!!.nutriments.fiber100)
-        assertNull(parseOffProduct("4600000000017", body(""))!!.nutriments.fiber100)
+        assertEquals(1650, parseOffProduct("4600000000017", body(""","fiber_100g":16.5"""))!!.nutriments!!.fiber100)
+        assertNull(parseOffProduct("4600000000017", body(""))!!.nutriments!!.fiber100)
     }
 
     @Test
@@ -57,7 +57,7 @@ class JsonParsingTest {
     fun `калории из килоджоулей, если ккал нет`() {
         val body = """{"status":1,"product":{"product_name":"X","nutriments":{"energy-kj_100g":418.4}}}"""
 
-        assertEquals(100, parseOffProduct("1", body)!!.nutriments.kcal100)
+        assertEquals(100, parseOffProduct("1", body)!!.nutriments!!.kcal100)
     }
 
     @Test
@@ -73,11 +73,35 @@ class JsonParsingTest {
         assertEquals(emptySet(), parseAccepted("oops"))
     }
 
+    /**
+     * Мусорные числа не показываются, но товар по-прежнему известен по названию:
+     * карточка нового продукта откроется с ним, и справочник предложит похожий.
+     */
     @Test
-    fun `КБЖУ вне допустимого отбрасывается`() {
+    fun `КБЖУ вне допустимого — остаётся только название`() {
         val body = """{"status":1,"product":{"product_name":"X","nutriments":{"energy-kcal_100g":5000}}}"""
 
-        assertNull(parseOffProduct("1", body))
+        val product = parseOffProduct("1", body)!!
+
+        assertEquals("X", product.name)
+        assertNull(product.nutriments)
+    }
+
+    /** В российском разделе OFF это частый случай: фото и название есть, таблицу никто не вбил. */
+    @Test
+    fun `название без КБЖУ — товар известен по имени`() {
+        val body = """{"status":1,"product":{"product_name_ru":"Творог 5%","brands":"Простоквашино","nutriments":{}}}"""
+
+        val product = parseOffProduct("4600000000017", body)!!
+
+        assertEquals("Творог 5%", product.name)
+        assertEquals("Простоквашино", product.brand)
+        assertNull(product.nutriments)
+    }
+
+    @Test
+    fun `без названия и без КБЖУ — промах`() {
+        assertNull(parseOffProduct("1", """{"status":1,"product":{"brands":"X"}}"""))
     }
 
     @Test

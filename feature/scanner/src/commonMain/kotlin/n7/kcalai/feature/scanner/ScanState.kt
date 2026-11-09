@@ -81,11 +81,13 @@ internal class ScanField(initial: String = "", manual: Boolean = false) {
 @Stable
 internal class ScanState(
     initialGtin: String?,
+    /** Название, под которым пачку знает сеть, хоть и без КБЖУ. Камера его не перебивает. */
+    val initialName: String? = null,
     /** Миллисекунды с открытия карточки. Свои, а не системные: тест двигает их сам. */
     private val clock: () -> Long = monotonicClock(),
 ) {
 
-    val name = ScanField()
+    val name = ScanField().apply { offer(initialName) }
     val kcal = ScanField()
     val prot = ScanField()
     val fat = ScanField()
@@ -458,7 +460,9 @@ internal class ScanState(
      * не прочла. Пока всё это есть, закрытие сначала спрашивает.
      */
     val hasDraft: Boolean
-        get() = filledFields > 0 || (barcode.filled && barcode.text != initialBarcode)
+        get() = listOf(kcal, prot, fat, carb).any { it.filled } ||
+            (name.filled && name.text != initialName) ||
+            (barcode.filled && barcode.text != initialBarcode)
 
     /** Сколько полей заполнила камера, а не человек, — для отклика ладони. */
     val cameraFilled: Int
@@ -532,18 +536,22 @@ private fun monotonicClock(): () -> Long {
  * поворот, стирающий набранное вручную, обесценивает всю затею.
  */
 @Composable
-internal fun rememberScanState(initialGtin: String?): ScanState =
-    rememberSaveable(initialGtin, saver = ScanStateSaver) { ScanState(initialGtin) }
+internal fun rememberScanState(initialGtin: String?, initialName: String? = null): ScanState =
+    rememberSaveable(initialGtin, initialName, saver = ScanStateSaver) { ScanState(initialGtin, initialName) }
 
 private val ScanStateSaver: Saver<ScanState, Any> = listSaver(
     save = { state ->
         listOf(
             state.name.text, state.kcal.text, state.prot.text,
             state.fat.text, state.carb.text, state.barcode.text,
+            state.initialName.orEmpty(),
         )
     },
     restore = { saved ->
-        ScanState(saved.getOrNull(5)?.takeIf { it.isNotEmpty() }).apply {
+        ScanState(
+            initialGtin = saved.getOrNull(5)?.takeIf { it.isNotEmpty() },
+            initialName = saved.getOrNull(6)?.takeIf { it.isNotEmpty() },
+        ).apply {
             // Восстановленное считается набранным человеком: после поворота
             // камера начнёт читать заново, и затирать пережившее поворот нельзя.
             name.type(saved[0])

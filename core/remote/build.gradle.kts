@@ -16,6 +16,9 @@ kotlin {
             // JSON через JsonElement API, как на сервере: компиляторный плагин не нужен.
             implementation(libs.kotlinx.serialization.json)
         }
+        commonTest.dependencies {
+            implementation(libs.kotlinx.coroutines.test)
+        }
         androidMain.dependencies {
             implementation(libs.ktor.client.android)
         }

@@ -70,6 +70,12 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
     val userFoodDao = FakeUserFoodDao()
     val mascotDao = FakeMascotDao()
 
+    /** Справочник по умолчанию не открывается: экрану он нужен в редких тестах. */
+    var foodDb = FoodDbSource { error("справочник в этих тестах не открывается") }
+
+    /** Сеть по умолчанию молчит — промах по коду. */
+    var remote = RemoteProductSource { null }
+
     val today: Long get() = clock.now().toLocalDateTime(zone).date.toEpochDays()
 
     fun viewModel(
@@ -79,11 +85,11 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
     ): DiaryViewModel {
         val personal = PersonalRepository(diaryDao, FakePersonalDao(), bodyMetricDao, goalDao, zone)
         val food = FoodRepository(
-            foodDb = FoodDbSource { error("справочник в этих тестах не открывается") },
+            foodDb = foodDb,
             userFoodDao = userFoodDao,
             cachedProductDao = FakeCachedProductDao(),
             contributionDao = FakeContributionDao(),
-            remote = RemoteProductSource { null },
+            remote = remote,
             dispatcher = dispatcher,
         )
         val brain = MascotBrain(

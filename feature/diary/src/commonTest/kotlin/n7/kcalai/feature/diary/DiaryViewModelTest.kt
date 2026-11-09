@@ -20,6 +20,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import n7.kcalai.feature.scanner.ScanStep
+import n7.kcalai.model.ProductOrigin
+import n7.kcalai.repositories.FoodDbSource
+import n7.kcalai.repositories.RemoteProduct
+import n7.kcalai.repositories.RemoteProductSource
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.MealType
 import n7.kcalai.model.Mascot
@@ -415,6 +419,26 @@ class DiaryViewModelTest {
         advanceUntilIdle()
 
         assertEquals(Overlay.Scan(ScanStep.NewProduct(UNKNOWN_GTIN)), vm.state.value.overlay)
+    }
+
+    /**
+     * Сеть знает товар только по названию — КБЖУ на пачке никто не вбил.
+     * Карточка открывается уже подписанной: вписывать название не нужно,
+     * а справочник по нему предложит похожий.
+     */
+    @Test
+    fun `товар известен только по названию — карточка нового продукта открывается с ним`() = runTest(dispatcher) {
+        harness.foodDb = FoodDbSource { emptySeed() }
+        harness.remote = RemoteProductSource { gtin ->
+            RemoteProduct(gtin, "Творог 5%", brand = "Простоквашино", nutriments = null, servingG = null, origin = ProductOrigin.OFF)
+        }
+        val vm = screen()
+
+        vm.onOpenScan()
+        vm.onScanned(UNKNOWN_GTIN)
+        advanceUntilIdle()
+
+        assertEquals(Overlay.Scan(ScanStep.NewProduct(UNKNOWN_GTIN, name = "Простоквашино Творог 5%")), vm.state.value.overlay)
     }
 
     /** Человек передумал и закрыл окно, пока шёл поиск, — промах не открывает его снова. */
