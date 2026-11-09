@@ -93,12 +93,8 @@ fun Header(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                RemainingRow(date, past, totals, goal, onOpenGoal, toToday)
-                // Плитки и клетчатка — одна группа: полоса держится ближе к плиткам, чем неделя.
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MacroTiles(totals, goal, emptyHomes, onOpenGoal)
-                    FiberStrip(fiber, fiberGoal)
-                }
+                RemainingRow(date, past, totals, goal, fiber, fiberGoal, onOpenGoal, toToday)
+                MacroTiles(totals, goal, emptyHomes, onOpenGoal)
                 // Один день — одна переписка: тап по столбику открывает его ленту.
                 WeekChart(week, selected = date.toEpochDays(), onSelectDay = onSelectDay)
             }
@@ -124,7 +120,10 @@ fun Header(
  * Второе выводится из первого, обратное — нет.
  *
  * Заголовка «Дневник» нет: что это дневник, видно и так. Дата стоит на одной
- * линии с крупным числом.
+ * линии с крупным числом, под ней — клетчатка.
+ *
+ * Калории крупно один раз. Строка «1470 / 2100» под числом повторяла их же,
+ * а цель видна тапом по числу и пунктиром на графике недели.
  */
 @Composable
 private fun RemainingRow(
@@ -132,6 +131,8 @@ private fun RemainingRow(
     past: Boolean,
     totals: NutrimentTotals,
     goal: DailyGoalEntity?,
+    fiber: FiberTotal,
+    fiberGoal: Int,
     onOpenGoal: () -> Unit,
     onToToday: () -> Unit,
 ) {
@@ -142,6 +143,7 @@ private fun RemainingRow(
     Row(Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f).alignByBaseline(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             CapsLabel(formatDateCaps(date))
+            FiberStrip(fiber, fiberGoal)
             if (past) {
                 // Под датой прошлого дня — дорога назад: из вчерашней переписки
                 // человек вернётся к сегодняшней, не ища для этого столбик.
@@ -178,14 +180,6 @@ private fun RemainingRow(
                 )
             }
 
-            head.line?.let { line ->
-                Text(
-                    text = line,
-                    style = type.macro,
-                    color = colors.text3,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
-                )
-            }
         }
     }
 }
@@ -251,7 +245,9 @@ private fun MacroTile(
             .clip(RoundedCornerShape(KcalShapes.tile))
             .background(palette.tile)
             .clickable(onClick = onOpenGoal)
-            .padding(start = 11.dp, end = 8.dp, top = 10.dp, bottom = 10.dp)
+            // Сверху поля меньше, чем было: над числом стоял пустой воздух — домик
+            // персонажа выше числа, и плитка тянулась под него.
+            .padding(start = 11.dp, end = 8.dp, top = 6.dp, bottom = 8.dp)
             .semantics {
                 contentDescription = buildString {
                     append(macro.tileLabel.lowercase())
@@ -279,7 +275,7 @@ private fun MacroTile(
             // человек и узнаёт, кто есть кто. Сам персонаж — слоем сверху,
             // и пока он в ленте, на пустом месте стоит слово.
             Box(
-                modifier = Modifier.size(width = 38.dp, height = 32.dp).mascotAnchor(homeAnchor(macro.mascot)),
+                modifier = Modifier.size(width = 36.dp, height = 28.dp).mascotAnchor(homeAnchor(macro.mascot)),
                 contentAlignment = Alignment.BottomEnd,
             ) {
                 // Полное имя — чтобы не взялась версия для Row снаружи: она здесь недоступна.
@@ -307,21 +303,19 @@ private fun MacroTile(
 }
 
 /**
- * Клетчатка дня — длинной тонкой полосой под плитками.
+ * Клетчатка дня — компактно, под датой: росток, короткая полоса и «9/29».
  *
- * Тема Зёрнышка: росток — его хохолок, цвет — его зелёный, только темнее. Внутри
- * его плитки полоса растягивала все три плитки, и в двух других оставалась пустота;
- * во всю ширину она и места не берёт, и заполняется заметнее. Только растёт:
- * клетчатка — минимум, перебора у неё нет.
+ * Тема Зёрнышка: росток — его хохолок, цвет — его зелёный, только темнее. Своей
+ * строки во всю ширину у неё нет: место под датой освободилось, когда калории
+ * перестали повторяться под крупным числом. Полоса только растёт: клетчатка —
+ * минимум, перебора у неё нет.
  */
 @Composable
 private fun FiberStrip(fiber: FiberTotal, goalGrams: Int) {
     val palette = KcalTheme.colors.fiber
     val shown = formatFiber(fiber) ?: "–"
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clearAndSetSemantics { contentDescription = "клетчатка $shown из $goalGrams грамм" },
+        modifier = Modifier.clearAndSetSemantics { contentDescription = "клетчатка $shown из $goalGrams грамм" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SproutIcon(palette.fill, size = 12.dp)
@@ -329,7 +323,7 @@ private fun FiberStrip(fiber: FiberTotal, goalGrams: Int) {
             fraction = fiber.cg / CENTIGRAMS_PER_GRAM.toFloat() / goalGrams,
             fill = palette.fill,
             height = 5.dp,
-            modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
+            modifier = Modifier.padding(horizontal = 6.dp).width(FIBER_BAR_WIDTH),
         )
         Text(shown, style = KcalTheme.type.macro.copy(fontWeight = FontWeight.W700), color = palette.text)
         Text("/$goalGrams", style = KcalTheme.type.macro, color = palette.text)
@@ -394,8 +388,8 @@ private fun CompactRow(
     }
 }
 
-/** Что крупно в шапке: число, подпись к нему и строка под ним; без цели строки нет. */
-data class Headline(val number: Int, val label: String, val line: String?, val over: Boolean)
+/** Что крупно в шапке: число и подпись к нему. Других чисел калорий рядом нет. */
+data class Headline(val number: Int, val label: String, val over: Boolean)
 
 /**
  * Крупное число шапки.
@@ -405,24 +399,18 @@ data class Headline(val number: Int, val label: String, val line: String?, val o
  * а под ним — как это вышло относительно цели того дня.
  */
 fun headline(eatenKcal: Int, targetKcal: Int?, past: Boolean): Headline {
-    // Без цели под числом пусто: цель задаётся тапом по самому числу.
-    if (targetKcal == null) return Headline(eatenKcal, "съедено", line = null, over = false)
+    // Без цели — съеденное: цель задаётся тапом по самому числу.
+    if (targetKcal == null) return Headline(eatenKcal, "съедено", over = false)
     val over = eatenKcal > targetKcal
     return if (past) {
-        Headline(
-            number = eatenKcal,
-            label = "съедено",
-            line = if (over) "перебор ${eatenKcal - targetKcal} ›" else "из $targetKcal ›",
-            over = over,
-        )
+        // Перебор прошлого дня — цветом числа; сколько именно, говорит реплика в ленте.
+        Headline(number = eatenKcal, label = "съедено", over = over)
     } else {
-        Headline(
-            number = abs(targetKcal - eatenKcal),
-            label = if (over) "перебор" else "осталось",
-            line = "$eatenKcal / $targetKcal ›",
-            over = over,
-        )
+        Headline(number = abs(targetKcal - eatenKcal), label = if (over) "перебор" else "осталось", over = over)
     }
 }
 
 private const val CENTIGRAMS_PER_GRAM = 100
+
+/** Полоса клетчатки под датой: заметная, но короче строки даты. */
+private val FIBER_BAR_WIDTH = 72.dp

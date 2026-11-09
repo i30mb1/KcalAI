@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -79,8 +78,6 @@ fun WeekChart(
 
 @Composable
 private fun WeekPlot(days: List<DaySummary>, selected: Long, modifier: Modifier = Modifier) {
-    val colors = KcalTheme.colors
-    val todayGoal = days.last().goalKcal
 
     // Пустой недели нет смысла рисовать: семь серых черточек занимают
     // полтора сантиметра шапки и ничего не говорят. Остаётся строка дней.
@@ -106,9 +103,9 @@ private fun WeekPlot(days: List<DaySummary>, selected: Long, modifier: Modifier 
             .fillMaxWidth()
             .semantics { contentDescription = weekSummary(days) },
     ) {
-        // Полоса под подпись цели — только когда подпись есть: без цели она
-        // была пустой строкой поверх столбиков.
-        Box(Modifier.fillMaxWidth().height(PLOT_HEIGHT + if (todayGoal != null) GOAL_LABEL_BAND else 0.dp)) {
+        // Подписи цели нет: её число уже стоит крупно в шапке, и третья копия калорий
+        // только занимала место. Цель на графике — пунктир.
+        Box(Modifier.fillMaxWidth().height(PLOT_HEIGHT)) {
             Row(
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -128,19 +125,6 @@ private fun WeekPlot(days: List<DaySummary>, selected: Long, modifier: Modifier 
                 GoalSteps(days, scale, Modifier.align(Alignment.BottomStart))
             }
 
-            // Подпись стоит у правого края и говорит про цель сегодняшнего дня:
-            // ступеней может быть несколько, а подписать их все значит завалить
-            // график числами, которых никто не просил.
-            if (todayGoal != null) {
-                Text(
-                    "цель $todayGoal",
-                    style = KcalTheme.type.time,
-                    color = colors.text3,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .offset(y = -(PLOT_HEIGHT * (todayGoal.toFloat() / scale)).coerceAtMost(PLOT_HEIGHT)),
-                )
-            }
         }
 
         WeekdayRow(days, selected, Modifier.padding(top = 5.dp))
@@ -260,9 +244,6 @@ private fun weekSummary(days: List<DaySummary>): String {
 
 /** Область данных: от неё считаются и высота столбика, и положение линии цели. */
 private val PLOT_HEIGHT = 42.dp
-
-/** Полоса над областью данных, где помещается подпись «цель N». */
-private val GOAL_LABEL_BAND = 14.dp
 
 /** Зазор между столбиками. Он же — разрыв между ступенями линии цели. */
 private val GOAL_STEP_GAP = 6.dp
