@@ -293,8 +293,12 @@ fun DiaryScreen(
     // где стоит, меняется редко — экран перекомпонуется только тогда.
     val feed by rememberUpdatedState(state.feed)
     val owner by rememberUpdatedState(chipOwner(state.composer))
+    // Шит цели со своими персонажами: на главном экране их на это время нет.
+    val offstage by rememberUpdatedState(state.overlay is Overlay.Goal)
     val places by remember(anchors) {
-        derivedStateOf { mascotPlaces(feed, shownAnchors(anchors.rects, anchors.coverBottom, anchors.floorTop), owner) }
+        derivedStateOf {
+            mascotPlaces(feed, shownAnchors(anchors.rects, anchors.coverBottom, anchors.floorTop), owner, offstage)
+        }
     }
     // Палец на экране — для взглядов персонажей; касаний наблюдатель не забирает.
     val pointer = remember { StagePointer() }

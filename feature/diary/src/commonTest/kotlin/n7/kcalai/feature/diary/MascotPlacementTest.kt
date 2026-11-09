@@ -146,4 +146,16 @@ class MascotPlacementTest {
 
         assertEquals(Mascot.entries.toSet(), emptyHomes(places))
     }
+
+    /**
+     * Персонаж один на весь экран. Пока открыт шит цели, все трое в нём — у реплики
+     * и в полях, — и с главного экрана уходят: домики в шапке подписаны словами.
+     */
+    @Test
+    fun `пока открыт шит цели, персонажи в нём, а не на главном экране`() {
+        val places = mascotPlaces(listOf(greeting, over), shownKeys = setOf(greeting.key, over.key), chipOwner = Mascot.BUTTER, offstage = true)
+
+        Mascot.entries.forEach { assertEquals(MascotPlace.Offstage, places[it]) }
+        assertEquals(Mascot.entries.toSet(), emptyHomes(places))
+    }
 }

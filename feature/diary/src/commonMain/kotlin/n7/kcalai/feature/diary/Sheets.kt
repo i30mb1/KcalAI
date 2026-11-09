@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -59,6 +60,7 @@ import n7.kcalai.ui.Macro
 import n7.kcalai.ui.MacroDot
 import n7.kcalai.ui.WideButton
 import n7.kcalai.ui.colors
+import n7.kcalai.ui.letter
 import n7.kcalai.ui.tileLabel
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
@@ -103,7 +105,8 @@ fun GoalSheet(
     var helperOpen by remember { mutableStateOf(false) }
 
     Sheet(onDismiss) {
-        SheetSpeech(goalSheetLine(focused, helperOpen, macros.kcal), Modifier.padding(bottom = 14.dp))
+        val line = goalSheetLine(focused, helperOpen, macros.kcal)
+        SheetSpeech(line, Modifier.padding(bottom = 14.dp))
 
         // Итог трёх чисел — крупно, как остаток в шапке.
         Row(verticalAlignment = Alignment.Bottom) {
@@ -123,9 +126,12 @@ fun GoalSheet(
             val onFocus = { macro: Macro, has: Boolean ->
                 if (has) focused = macro else if (focused == macro) focused = null
             }
-            MacroField(Macro.PROTEIN, prot, { prot = it }, onFocus, Modifier.weight(1f))
-            MacroField(Macro.FAT, fat, { fat = it }, onFocus, Modifier.weight(1f))
-            MacroField(Macro.CARB, carb, { carb = it }, onFocus, Modifier.weight(1f), imeAction = ImeAction.Done)
+            MacroField(Macro.PROTEIN, prot, { prot = it }, onFocus, fieldShowsMascot(Macro.PROTEIN, line), Modifier.weight(1f))
+            MacroField(Macro.FAT, fat, { fat = it }, onFocus, fieldShowsMascot(Macro.FAT, line), Modifier.weight(1f))
+            MacroField(
+                Macro.CARB, carb, { carb = it }, onFocus, fieldShowsMascot(Macro.CARB, line), Modifier.weight(1f),
+                imeAction = ImeAction.Done,
+            )
         }
 
         // Расход по весу — одна строка, и только когда он посчитан: тап подставляет его в углеводы.
@@ -338,6 +344,7 @@ private fun MacroField(
     value: String,
     onValueChange: (String) -> Unit,
     onFocus: (Macro, Boolean) -> Unit,
+    mascotShown: Boolean,
     modifier: Modifier = Modifier,
     imeAction: ImeAction = ImeAction.Next,
 ) {
@@ -362,7 +369,19 @@ private fun MacroField(
                 .semantics { contentDescription = "${macro.tileLabel.lowercase()}, граммы" },
         )
         Text("г", style = KcalTheme.type.macro, color = palette.text)
-        MascotFigure(macro.mascot, MascotPose.HOME, Modifier.padding(start = 4.dp).size(width = 30.dp, height = 25.dp))
+        // Персонаж один на экране: говорящий стоит у реплики, а его место в поле
+        // подписано словом — как пустой домик в шапке.
+        Box(Modifier.padding(start = 4.dp).size(width = 30.dp, height = 25.dp), contentAlignment = Alignment.CenterEnd) {
+            if (mascotShown) {
+                MascotFigure(macro.mascot, MascotPose.HOME, Modifier.fillMaxSize())
+            } else {
+                Text(
+                    macro.letter,
+                    style = KcalTheme.type.capsTile,
+                    color = palette.text,
+                )
+            }
+        }
     }
 }
 

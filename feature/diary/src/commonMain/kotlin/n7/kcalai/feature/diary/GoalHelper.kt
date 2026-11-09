@@ -5,6 +5,7 @@ import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.Sex
 import n7.kcalai.ui.Macro
+import n7.kcalai.ui.mascot.mascot
 
 /*
  * Цель для новичка по росту, весу и возрасту.
@@ -154,6 +155,9 @@ fun goalSheetLine(focus: Macro?, helperOpen: Boolean, kcal: Int): SheetLine = wh
     kcal == 0 -> SheetLine(Mascot.EGG, "Сколько белков, жиров и углеводов в день? Калории сложу сам.")
     else -> SheetLine(Mascot.EGG, "Это твоя цель на день. Поправь граммы — калории пересчитаю.")
 }
+
+/** В поле шита стоит хозяин макроса, если он не говорит: тогда он у реплики, а поле подписано словом. */
+fun fieldShowsMascot(macro: Macro, line: SheetLine): Boolean = macro.mascot != line.mascot
 
 /** Цель клетчатки дня: заданная руками, а без неё — посчитанная по калориям. */
 fun fiberGoal(goal: DailyGoalEntity?): Int = goal?.fiber ?: suggestedFiber(goal?.kcal)

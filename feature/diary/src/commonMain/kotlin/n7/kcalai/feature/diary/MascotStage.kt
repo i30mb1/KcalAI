@@ -183,7 +183,11 @@ private fun MascotPlace.anchorKey(mascot: Mascot): String = when (this) {
     MascotPlace.Chip -> CHIP_ANCHOR
     is MascotPlace.Reply -> key
     MascotPlace.Stage -> stageAnchor(mascot)
+    // Места на экране у ушедшего нет: без прямоугольника персонаж не рисуется.
+    MascotPlace.Offstage -> OFFSTAGE_ANCHOR
 }
+
+private const val OFFSTAGE_ANCHOR = "offstage"
 
 private val MascotPlace.pose: MascotPose
     get() = when (this) {
@@ -191,6 +195,7 @@ private val MascotPlace.pose: MascotPose
         MascotPlace.Chip -> MascotPose.PEEK
         is MascotPlace.Reply -> MascotPose.LEAN
         MascotPlace.Stage -> MascotPose.WAVE
+        MascotPlace.Offstage -> MascotPose.HOME
     }
 
 /** Один персонаж на сцене: кукла и то, что с ним делает палец. */

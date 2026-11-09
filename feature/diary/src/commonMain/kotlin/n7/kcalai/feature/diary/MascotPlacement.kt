@@ -23,6 +23,12 @@ sealed interface MascotPlace {
 
     /** Пустой первый день: все трое крупно в ленте. Места полно, и это знакомство. */
     data object Stage : MascotPlace
+
+    /**
+     * Ушёл в шит поверх экрана: там он у реплики или в поле. На главном экране его нет —
+     * персонаж один, и второй копии за затемнением быть не должно.
+     */
+    data object Offstage : MascotPlace
 }
 
 /**
@@ -51,11 +57,18 @@ internal fun shownAnchors(rects: Map<String, Rect>, coverBottom: Float, floorTop
  *
  * @param shownKeys ключи реплик, которые сейчас на экране. Ушедшая за край
  * реплика держать персонажа не может — он висел бы в пустоте.
+ * @param offstage открыт шит с персонажами: все трое там, а не на экране
  */
-fun mascotPlaces(feed: List<FeedItem>, shownKeys: Set<String>, chipOwner: Mascot?): Map<Mascot, MascotPlace> {
+fun mascotPlaces(
+    feed: List<FeedItem>,
+    shownKeys: Set<String>,
+    chipOwner: Mascot?,
+    offstage: Boolean = false,
+): Map<Mascot, MascotPlace> {
     val stage = chipOwner == null && feed.any { it is FeedItem.Summary && it.intro }
     return Mascot.entries.associateWith { mascot ->
         when {
+            offstage -> MascotPlace.Offstage
             stage -> MascotPlace.Stage
             mascot == chipOwner -> MascotPlace.Chip
             else -> feed

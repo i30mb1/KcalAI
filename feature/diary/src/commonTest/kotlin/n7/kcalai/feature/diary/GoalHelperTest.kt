@@ -125,4 +125,12 @@ class GoalHelperTest {
 
         assertEquals(3, setOf(empty, filled, helper).size)
     }
+
+    /** В шите говорящий стоит у реплики, и его поле подписано словом: персонаж на экране один. */
+    @Test
+    fun `в шите у говорящего поле без персонажа`() {
+        val line = goalSheetLine(focus = Macro.FAT, helperOpen = false, kcal = 0)
+
+        assertEquals(setOf(Macro.PROTEIN, Macro.CARB), Macro.entries.filter { fieldShowsMascot(it, line) }.toSet())
+    }
 }
