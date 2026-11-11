@@ -35,6 +35,8 @@ class ContributionWorker(
         // бэкоффе WorkManager: `retry()` без адреса — это работа, которая
         // будет просыпаться каждые пять часов до конца жизни установки.
         if (!container.serverConfigured) return Result.success()
+        // У людей фоном ничего не уходит: продукт отправляется по согласию, через Яйцо.
+        if (!container.silentUploads) return Result.success()
 
         val outcome = uploadPending(container)
         // Сервер недоступен или не принял ничего. Повтор с нарастающей

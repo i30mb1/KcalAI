@@ -16,12 +16,12 @@ class KcalApp : Application() {
         // Разовый толчок очереди: прошлая отправка могла не удаться, а телефон —
         // перезагрузиться. Работа уникальная и с политикой KEEP, так что уже ждущую
         // своей паузы попытку этот вызов не сбивает.
-        ContributionWorker.enqueue(this)
+        if (container.silentUploads) ContributionWorker.enqueue(this)
         // Справочник: спросить сервер, нет ли свежее. Ставится при каждом старте,
         // работает только при сети и только если есть адрес сервера.
         if (container.serverConfigured) SeedUpdateWorker.enqueue(this)
         // Сессии съёмки: прошлая отправка могла не удаться.
-        ScanUploadWorker.enqueue(this)
+        if (container.silentUploads) ScanUploadWorker.enqueue(this)
         // Персонажи раз в полчаса проверяют, есть ли повод написать первыми.
         // Писать без согласия человека они всё равно не станут.
         MascotWorker.schedule(this)

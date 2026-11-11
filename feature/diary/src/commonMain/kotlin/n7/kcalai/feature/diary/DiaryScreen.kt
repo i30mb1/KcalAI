@@ -97,6 +97,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         onPickPlan = { option -> option.items.forEach { viewModel.onPickPrediction(it) } },
         onDismissGap = viewModel::onDismissMealGap,
         onSendOutbox = viewModel::onSendOutbox,
+        onDeclineOutbox = viewModel::onDeclineOutbox,
         onAskAssistant = viewModel::onAskAssistant,
         onEditEntry = viewModel::onEditEntry,
         onUndoDelete = viewModel::onUndoDelete,
@@ -183,6 +184,7 @@ fun DiaryScreen(
     onPickPlan: (PlanOption) -> Unit,
     onDismissGap: (MealType) -> Unit,
     onSendOutbox: () -> Unit,
+    onDeclineOutbox: () -> Unit,
     /** «Разобрать» в реплике «не нашлось»: фразу разбирает нейросеть. */
     onAskAssistant: (String) -> Unit,
     onEditEntry: (DiaryEntryEntity) -> Unit,
@@ -325,6 +327,7 @@ fun DiaryScreen(
             onPickGap = onPickGap,
             onDismissGap = onDismissGap,
             onSendOutbox = onSendOutbox,
+            onDeclineOutbox = onDeclineOutbox,
             onAskAssistant = onAskAssistant,
             onOpenScan = onOpenScan,
             onPickPlan = onPickPlan,
@@ -430,6 +433,7 @@ private fun Feed(
     onPickGap: (FeedItem.Gap, FoodCandidate) -> Unit,
     onDismissGap: (MealType) -> Unit,
     onSendOutbox: () -> Unit,
+    onDeclineOutbox: () -> Unit,
     /** «Разобрать» в реплике «не нашлось»: фразу разбирает нейросеть. */
     onAskAssistant: (String) -> Unit,
     onOpenScan: () -> Unit,
@@ -580,7 +584,7 @@ private fun Feed(
                     is FeedItem.Question -> QuestionBubble(item)
                     is FeedItem.Answer -> AnswerBubble(item)
                     is FeedItem.Deleted -> DeletedBubble(item, onUndo = { onUndoDelete(item) })
-                    is FeedItem.Outbox -> OutboxBubble(item, onSendOutbox)
+                    is FeedItem.Outbox -> OutboxBubble(item, onSendOutbox, onDeclineOutbox)
                     is FeedItem.Said -> SaidBubble(item)
                     is FeedItem.Ask -> AskBubble(
                         item = item,

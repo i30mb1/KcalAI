@@ -649,7 +649,8 @@ class DiaryViewModel(
         }
         feed += body
         feed += replies.filterNot { it is FeedItem.Gap }
-        pending?.let { feed += it }
+        // Предложение отправить — тоже реплика: пока вопрос ждёт ответа, оно ждёт с ним.
+        pending?.takeUnless { waiting }?.let { feed += it }
 
         // Перебор вытесняет остаток, а не дополняет его: это один и тот же ответ
         // на один и тот же вопрос, и показывать оба значило бы спорить с собой.
@@ -1286,7 +1287,7 @@ class DiaryViewModel(
             delay(OUTBOX_SETTLE_MS)
             val shown = try {
                 val count = source.pending()
-                count.takeUnless { it.isEmpty || !source.reachable() }
+                count.takeUnless { it.isEmpty || !it.exceeds(source.declined()) || !source.reachable() }
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {
@@ -1340,11 +1341,33 @@ class DiaryViewModel(
                         "Всё уже ушло на сервер"
                     result is OutboxResult.Sent ->
                         "Отправлено на сервер: ${describeOutbox(result.scans, result.products)}"
-                    else -> "Сервер не ответил — отправлю позже сам"
+                    source.retriesInBackground -> "Сервер не ответил — отправлю позже сам"
+                    else -> "Сервер не ответил — спрошу ещё раз позже"
                 }
             )
             outboxSending = false
             refreshOutbox()
+        }
+    }
+
+    /**
+     * «Не сейчас»: пузырёк остаётся в переписке с отмеченным ответом, а отказ запоминается —
+     * те же продукты Яйцо больше не предлагает, спросит, когда появится новый.
+     */
+    fun onDeclineOutbox() {
+        val source = outbox ?: return
+        val current = outboxItem.value ?: return
+        if (outboxSending) return
+        outboxItem.value = null
+        sessionReplies.value += DayReply(today, current.copy(declined = true))
+        viewModelScope.launch {
+            try {
+                source.decline(current.count)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                Log.e(TAG, "отказ от отправки не запомнился", error)
+            }
         }
     }
 

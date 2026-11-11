@@ -164,7 +164,14 @@ sealed interface FeedItem {
      *        встаёт отдельным — со своим ключом
      * @param done отправка кончилась, кнопка погасла
      */
-    data class Outbox(val count: OutboxCount, val sending: Boolean, val id: Int = 0, val done: Boolean = false) : FeedItem {
+    data class Outbox(
+        val count: OutboxCount,
+        val sending: Boolean,
+        val id: Int = 0,
+        val done: Boolean = false,
+        /** «Не сейчас»: кнопки погасли, ничего не ушло. */
+        val declined: Boolean = false,
+    ) : FeedItem {
         override val key get() = "outbox-$id"
     }
 

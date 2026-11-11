@@ -47,11 +47,11 @@ class MainActivity : ComponentActivity() {
                     personal = container.personalRepository,
                     food = container.foodRepository,
                     brain = container.mascotBrain,
-                    // Продукт сохранён локально и уже работает; отправку
-                    // берёт на себя WorkManager, когда появится сеть.
-                    onContributionQueued = { ContributionWorker.enqueue(applicationContext) },
-                    onScanFinished = { ScanUploadWorker.enqueue(applicationContext) },
-                    // Пузырёк «не отправлено» — только когда есть куда отправлять.
+                    // Продукт сохранён локально и уже работает; у разработчика отправку
+                    // берёт на себя WorkManager, когда появится сеть. У людей её предлагает Яйцо.
+                    onContributionQueued = { if (container.silentUploads) ContributionWorker.enqueue(applicationContext) },
+                    onScanFinished = { if (container.silentUploads) ScanUploadWorker.enqueue(applicationContext) },
+                    // Предложение отправить — только когда есть куда отправлять.
                     outbox = if (container.serverConfigured) Outbox(applicationContext, container) else null,
                     assistant = container.assistant,
                 )

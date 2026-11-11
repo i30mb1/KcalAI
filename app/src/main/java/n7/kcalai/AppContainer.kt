@@ -110,6 +110,12 @@ class AppContainer(context: Context) {
     /** Задан ли адрес сервера. Без него вклады и сессии копятся и ждут, справочник не докачивается. */
     val serverConfigured: Boolean get() = SERVER_BASE_URL.isNotBlank()
 
+    /**
+     * Уходит ли всё само, в фоне. Только у разработчика: в сборке для людей продукт
+     * уходит с согласия, по предложению Яйца, а съёмки этикеток не уходят вовсе.
+     */
+    val silentUploads: Boolean get() = serverConfigured && BuildConfig.KCAL_SILENT_UPLOADS
+
     /** Модель поиска по смыслу: и отпечатки запросов, и докачка её пака. */
     private val embedder: LiteRtQueryEmbedder by lazy { LiteRtQueryEmbedder(appContext) }
 
@@ -227,7 +233,7 @@ class AppContainer(context: Context) {
     private companion object {
         const val TAG = "AppContainer"
 
-        /** Из `local.properties` (`kcal.server=…`). Пустая строка означает «источника нет». */
+        /** Debug — из `local.properties`, release — из `~/.gradle/gradle.properties` (`kcal.server=…`). Пусто — источника нет. */
         val SERVER_BASE_URL: String = BuildConfig.KCAL_SERVER
 
         /**

@@ -55,11 +55,20 @@ android {
 
         debug {
             buildConfigField("String", "KCAL_SERVER", "\"${localProperties.getProperty("kcal.server", "")}\"")
+            // Разработчику всё уходит само, со съёмками этикеток.
+            buildConfigField("boolean", "KCAL_SILENT_UPLOADS", "true")
         }
-        // Сервер разработчика — его компьютер и http без TLS: в сборке для людей
-        // ему не место. Без адреса вклады и сессии съёмки остаются на устройстве.
+        // Сервер для людей — только по https: адрес в ~/.gradle/gradle.properties
+        // (kcal.server=https://…), в публичный репозиторий он не попадает. Продукты
+        // уходят только с согласия — их предлагает отправить Яйцо, — а съёмки этикеток
+        // не уходят вовсе. Без адреса всё остаётся на устройстве.
         release {
-            buildConfigField("String", "KCAL_SERVER", "\"\"")
+            val releaseServer = providers.gradleProperty("kcal.server").orNull.orEmpty()
+            require(releaseServer.isEmpty() || releaseServer.startsWith("https://")) {
+                "kcal.server для release — только https://, а не $releaseServer"
+            }
+            buildConfigField("String", "KCAL_SERVER", "\"$releaseServer\"")
+            buildConfigField("boolean", "KCAL_SILENT_UPLOADS", "false")
             signingConfig = uploadSigning
             // R8 в полном режиме: минификация, обфускация, оптимизация кода и удаление
             // неиспользуемых ресурсов — в DSL AGP 9.3 всё это включает один флаг.

@@ -30,7 +30,8 @@ class ScanUploadWorker(
 
     override suspend fun doWork(): Result {
         val container = (applicationContext as KcalApp).container
-        if (!container.serverConfigured) return Result.success()
+        // Съёмки этикеток уходят только у разработчика: людям обещано, что кадры остаются на телефоне.
+        if (!container.silentUploads) return Result.success()
 
         val outcome = uploadPending(applicationContext, container)
         return if (outcome.reachable == false) Result.retry() else Result.success()

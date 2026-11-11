@@ -732,22 +732,28 @@ private fun AnswerChip(text: String, chosen: Boolean?, primary: Boolean, onClick
 }
 
 /**
- * Очередь отправки: что скопилось и кнопка.
+ * Яйцо предлагает отправить новые продукты в общую базу.
  *
- * Воркеры уносят это сами, когда есть сеть, — но молча, и человек не знает,
- * ушло ли. Кнопка делает то же самое сейчас и отвечает репликой. Пузырёк после
- * этого остаётся в переписке, а кнопка гаснет с галочкой.
+ * Без согласия в сборке для людей ничего не уходит. Ответ пузырёк не убирает: обе
+ * кнопки гаснут, выбранная отмечена — после «Отправить» под ним встаёт итог.
  */
 @Composable
-fun OutboxBubble(item: FeedItem.Outbox, onSend: () -> Unit) {
+fun OutboxBubble(item: FeedItem.Outbox, onSend: () -> Unit, onDecline: () -> Unit) {
+    val answered = item.sending || item.done || item.declined
     IncomingBubble(item) {
-        BubbleText("Не отправлено на сервер: ${describeOutbox(item.count.scans, item.count.products)}")
-        Box(Modifier.padding(top = 8.dp)) {
+        BubbleText(outboxOffer(item.count))
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AnswerChip(
                 text = if (item.sending) "Отправляю…" else "Отправить",
-                chosen = if (item.sending || item.done) item.done else null,
+                chosen = if (answered) item.done else null,
                 primary = true,
                 onClick = onSend,
+            )
+            AnswerChip(
+                text = "Не сейчас",
+                chosen = if (answered) item.declined else null,
+                primary = false,
+                onClick = onDecline,
             )
         }
     }

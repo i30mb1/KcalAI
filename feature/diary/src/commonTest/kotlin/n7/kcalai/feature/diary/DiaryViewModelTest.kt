@@ -34,6 +34,8 @@ import n7.kcalai.mascot.CueKind
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.Choice
 import n7.kcalai.mascot.MascotQuestion
+import n7.kcalai.database.Delivery
+import n7.kcalai.database.MascotMessageEntity
 import kotlinx.coroutines.test.runCurrent
 
 /**
@@ -134,6 +136,93 @@ class DiaryViewModelTest {
         val reply = feed.filterIsInstance<FeedItem.Reply>().single()
         assertTrue(feed.indexOf(sent) < feed.indexOf(reply))
         assertEquals(1, outbox.sends, "второй тап второй раз не отправляет")
+    }
+
+    /** Предложение говорит Яйцо: что за продукты и зачем их отправлять. */
+    @Test
+    fun `Яйцо предлагает отправить новые продукты в общую базу`() = runTest(dispatcher) {
+        val outbox = FakeOutbox(OutboxCount(scans = 0, products = 2), serverUp = true)
+        val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
+        vm.onResume()
+        advanceUntilIdle()
+
+        val offer = vm.state.value.feed.filterIsInstance<FeedItem.Outbox>().single()
+        assertEquals(Mascot.EGG, speakerOf(offer))
+        assertEquals("В общей базе нет 2 твоих продуктов. Отправим, чтобы их находили по коду и другие?", outboxOffer(offer.count))
+    }
+
+    /** «Не сейчас» — тоже ответ: пузырёк остаётся с отмеченным выбором, ничего не уходит. */
+    @Test
+    fun `«Не сейчас» оставляет предложение в ленте отмеченным и ничего не шлёт`() = runTest(dispatcher) {
+        val outbox = FakeOutbox(OutboxCount(scans = 0, products = 2), serverUp = true)
+        val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
+        vm.onResume()
+        advanceUntilIdle()
+
+        vm.onDeclineOutbox()
+        vm.onDeclineOutbox()
+        advanceUntilIdle()
+
+        val declined = vm.state.value.feed.filterIsInstance<FeedItem.Outbox>().single()
+        assertTrue(declined.declined)
+        assertEquals(0, outbox.sends)
+        assertEquals(OutboxCount(scans = 0, products = 2), outbox.declined)
+    }
+
+    /** Отказ держится: те же продукты второй раз не предлагаются, новый — повод спросить снова. */
+    @Test
+    fun `отклонённое не предлагается снова, пока не появится новый продукт`() = runTest(dispatcher) {
+        val outbox = FakeOutbox(OutboxCount(scans = 0, products = 2), serverUp = true)
+        outbox.declined = OutboxCount(scans = 0, products = 2)
+        val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
+        vm.onResume()
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.feed.none { it is FeedItem.Outbox })
+
+        outbox.count = OutboxCount(scans = 0, products = 3)
+        vm.onResume()
+        advanceUntilIdle()
+
+        assertEquals(3, vm.state.value.feed.filterIsInstance<FeedItem.Outbox>().single().count.products)
+    }
+
+    /** Персонажи говорят по одному: пока вопрос ждёт ответа, предложение отправить ждёт с ним. */
+    @Test
+    fun `предложение отправить молчит, пока вопрос персонажа ждёт ответа`() = runTest(dispatcher) {
+        harness.mascotDao.insert(
+            MascotMessageEntity(
+                mascot = Mascot.EGG,
+                topic = MascotQuestion.NAME.topic,
+                text = MascotQuestion.NAME.text,
+                lineIds = "",
+                delivery = Delivery.FEED,
+                dateEpochDay = harness.today,
+                createdAt = harness.clock.now().toEpochMilliseconds(),
+            )
+        )
+        val outbox = FakeOutbox(OutboxCount(scans = 0, products = 2), serverUp = true)
+        val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
+        vm.onResume()
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.feed.none { it is FeedItem.Outbox })
+    }
+
+    /** В сборке для людей фоновой отправки нет: обещать «отправлю сам» нельзя. */
+    @Test
+    fun `без фоновой отправки молчащий сервер — повод спросить ещё раз, а не обещание`() = runTest(dispatcher) {
+        val outbox = FakeOutbox(OutboxCount(scans = 0, products = 1), serverUp = true, retriesInBackground = false)
+        val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
+        vm.onResume()
+        advanceUntilIdle()
+
+        outbox.serverUp = false
+        vm.onSendOutbox()
+        advanceUntilIdle()
+
+        val reply = vm.state.value.feed.filterIsInstance<FeedItem.Reply>().single()
+        assertEquals("Сервер не ответил — спрошу ещё раз позже", reply.text)
     }
 
     // --- «Обед был?» ----------------------------------------------------------------------

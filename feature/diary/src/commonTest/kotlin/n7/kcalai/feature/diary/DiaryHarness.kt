@@ -167,14 +167,27 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
 }
 
 /** Очередь отправки, у которой сервер то отвечает, то нет. Отправленное из очереди уходит. */
-internal class FakeOutbox(var count: OutboxCount, var serverUp: Boolean) : DiaryOutbox {
+internal class FakeOutbox(
+    var count: OutboxCount,
+    var serverUp: Boolean,
+    override val retriesInBackground: Boolean = true,
+) : DiaryOutbox {
     /** Сколько раз отправляли. */
     var sends = 0
 
+    /** Что отклонено «Не сейчас». */
+    var declined: OutboxCount? = null
+
     override suspend fun pending(): OutboxCount = count
     override suspend fun reachable(): Boolean = serverUp
+    override suspend fun declined(): OutboxCount? = declined
+    override suspend fun decline(count: OutboxCount) {
+        declined = count
+    }
+
     override suspend fun send(): OutboxResult {
         sends++
+        if (!serverUp) return OutboxResult.Unreachable
         val sent = count
         count = OutboxCount(scans = 0, products = 0)
         return OutboxResult.Sent(sent.scans, sent.products)
