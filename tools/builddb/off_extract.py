@@ -1,5 +1,8 @@
 """Срез Open Food Facts для справочника: товары российских полок со штрих-кодом и КБЖУ.
 
+Наш товар — продаётся в России, Беларуси или Казахстане по OFF либо несёт
+префикс GS1 этих стран.
+
 Только стандартная библиотека, как и у build_seed.py.
 
 Запуск:
@@ -29,6 +32,11 @@ OUT_META = HERE / "data" / "off_products.meta"
 # Где продаётся товар. Полки этих стран во многом общие: «Савушкин» и «Простоквашино»
 # стоят и в Москве, и в Минске, и в Алматы.
 COUNTRIES = ("en:russia", "en:belarus", "en:kazakhstan")
+
+# Страну в OFF ставит тот, кто сканировал, и у тысяч наших товаров её нет или она чужая:
+# Япония, США, Франция. Префикс GS1 в коде надёжнее — его выдали производителю
+# в России (460–469), Беларуси (481) или Казахстане (487).
+GS1_PREFIXES = tuple(str(p) for p in range(460, 470)) + ("481", "487")
 
 KCAL_MAX = 900
 MACRO_MAX_G = 100.0
@@ -83,6 +91,10 @@ def normalize_gtin(raw: str) -> str | None:
     if len(digits) == 13:
         return digits if checksum_ok(digits) else None
     return None
+
+
+def regional_code(gtin: str) -> bool:
+    return len(gtin) == 13 and gtin.startswith(GS1_PREFIXES)
 
 
 def number(value: str) -> float | None:
@@ -175,8 +187,8 @@ def extract(dump: Path) -> tuple[list[dict], Rejects, int]:
         width = len(header)
         for line in f:
             # Дамп — четыре с лишним миллиона строк, из них наших — доли процента.
-            # Дешёвая проверка подстроки до разбора экономит минуты.
-            if not any(country in line for country in COUNTRIES):
+            # Дешёвая проверка до разбора экономит минуты: код — первая колонка.
+            if not line.startswith(("46", "48")) and not any(country in line for country in COUNTRIES):
                 continue
             values = line.rstrip("\r\n").split("\t")
             if len(values) != width:
@@ -184,7 +196,8 @@ def extract(dump: Path) -> tuple[list[dict], Rejects, int]:
                 continue
             row = dict(zip(header, values))
             tags = row["countries_tags"].split(",")
-            if not any(country in tags for country in COUNTRIES):
+            gtin = normalize_gtin(row["code"])
+            if not any(country in tags for country in COUNTRIES) and not (gtin and regional_code(gtin)):
                 continue
             regional += 1
             product = parse_row(row, reject)

@@ -31,6 +31,17 @@ class SeedProductsTest {
     }
 
     @Test
+    fun `товар с белорусским кодом находится, даже если в OFF у него не отмечена страна`() {
+        // В Open Food Facts паста отмечена только США: страну ставит тот, кто сканировал.
+        // Префикс кода (481 — Беларусь) говорит о полке надёжнее.
+        val paste = db.findByBarcode("4810268023323")!!
+
+        assertEquals("Творожная паста", paste.name)
+        assertEquals("Савушкин", paste.brand)
+        assertEquals(Nutriments(kcal100 = 112, prot100 = 700, fat100 = 350, carb100 = 1300), paste.nutriments)
+    }
+
+    @Test
     fun `товары ищутся и по бренду`() {
         assertTrue(db.searchProducts("простоквашино", limit = 5).isNotEmpty())
     }
