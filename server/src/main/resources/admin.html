@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kcal AI — панель</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --line: #e4e1da; --text: #1e1d1a; --muted: #7a766d;
+    --accent: #2f7d4f; --accent-text: #ffffff; --warn: #b5542b; --pending: #fff6dc; --chip: #efede7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161614; --panel: #201f1c; --line: #34322d; --text: #ece9e2; --muted: #9a958a;
+      --accent: #5bbf82; --accent-text: #0f1a13; --warn: #f08a5d; --pending: #3a3220; --chip: #2b2a26;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; gap: 4px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 1; }
+  header button { border: 0; background: none; color: var(--muted); font: inherit; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+  header button.on { background: var(--chip); color: var(--text); font-weight: 600; }
+  main { padding: 16px; }
+  .split { display: grid; grid-template-columns: minmax(240px, 340px) 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+  .list { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .list .row { padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .list .row:last-child { border-bottom: 0; }
+  .list .row.on { background: var(--chip); }
+  .list .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { color: var(--muted); font-size: 12px; }
+  .mono { font-family: ui-monospace, Consolas, monospace; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-height: 200px; }
+  .empty { color: var(--muted); padding: 24px; text-align: center; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.src td:first-child { font-weight: 600; }
+  tr.pending { background: var(--pending); }
+  tr.old { color: var(--muted); }
+  form { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+  form label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+  form label.wide { grid-column: span 2; }
+  @media (max-width: 760px) { form { grid-template-columns: repeat(2, 1fr); } }
+  input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; width: 100%; }
+  .actions { display: flex; gap: 8px; align-items: center; margin-top: 12px; min-height: 36px; flex-wrap: wrap; }
+  .btn { border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; padding: 7px 14px; border-radius: 8px; cursor: pointer; }
+  .btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  .warn { color: var(--warn); }
+  .top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 12px; flex-wrap: wrap; }
+  .top h2 { margin: 0; font-size: 18px; }
+  a { color: var(--accent); }
+  .scan { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; }
+  @media (max-width: 760px) { .scan { grid-template-columns: 1fr; } }
+  .scan pre { white-space: pre-wrap; margin: 0; font-size: 12px; max-height: 420px; overflow: auto; }
+  .frames { display: flex; flex-wrap: wrap; gap: 6px; }
+  .frames img { height: 120px; border-radius: 6px; border: 1px solid var(--line); }
+  .status { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <button data-tab="queue" class="on">Очередь <span id="n-queue"></span></button>
+  <button data-tab="products">Опубликовано <span id="n-products"></span></button>
+  <button data-tab="scans">Съёмки <span id="n-scans"></span></button>
+</header>
+<main id="main"></main>
+
+<script>
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const g = v => v == null ? '' : (v / 100).toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+const ago = ms => {
+  const min = Math.round((Date.now() - ms) / 60000);
+  if (min < 1) return 'только что';
+  if (min < 60) return `${min} мин назад`;
+  if (min < 60 * 24) return `${Math.round(min / 60)} ч назад`;
+  return new Date(ms).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+};
+const votes = n => n % 10 === 1 && n % 100 !== 11 ? 'голос' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'голоса' : 'голосов';
+const api = async (path, body) => {
+  const r = await fetch('/admin/api' + path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await r.text() || r.status);
+  const t = await r.text();
+  return t ? JSON.parse(t) : null;
+};
+
+let tab = 'queue', selected = null, cache = { queue: [], products: [], scans: [] };
+
+document.querySelectorAll('header button').forEach(b => b.onclick = () => {
+  tab = b.dataset.tab; selected = null;
+  document.querySelectorAll('header button').forEach(x => x.classList.toggle('on', x === b));
+  render();
+});
+
+async function refreshCounts() {
+  const [queue, products, scans] = await Promise.all([api('/queue'), api('/products'), api('/scans')]);
+  cache = { queue, products, scans };
+  $('#n-queue').textContent = queue.length || '';
+  $('#n-products').textContent = products.length || '';
+  $('#n-scans').textContent = scans.length || '';
+}
+
+async function render() {
+  await refreshCounts();
+  if (tab === 'scans') return renderScans();
+  const items = tab === 'queue' ? cache.queue : cache.products;
+  if (!selected || !items.some(i => i.gtin === selected)) selected = items[0]?.gtin ?? null;
+  $('#main').innerHTML = `<div class="split"><div class="list" id="list"></div><div class="card" id="card"></div></div>`;
+  $('#list').innerHTML = items.length ? items.map(i => `
+    <div class="row ${i.gtin === selected ? 'on' : ''}" data-gtin="${esc(i.gtin)}">
+      <div class="name">${esc(i.name)}</div>
+      <div class="meta"><span class="mono">${esc(i.gtin)}</span>${tab === 'queue' ? ` · ${i.count} ${votes(i.count)} · ${ago(i.lastReceivedAt)}` : ` · ${i.kcal100} ккал`}</div>
+    </div>`).join('') : `<div class="empty">${tab === 'queue' ? 'Новых присланных нет' : 'Пока ничего'}</div>`;
+  document.querySelectorAll('#list .row').forEach(r => r.onclick = () => { selected = r.dataset.gtin; render(); });
+  if (selected) renderCard(selected); else $('#card').innerHTML = '<div class="empty">—</div>';
+}
+
+function kcalCheck(k, p, f, c) {
+  const computed = 4 * p / 100 + 9 * f / 100 + 4 * c / 100;
+  return Math.abs(computed - k) <= Math.max(15, 0.25 * Math.max(k, computed)) ? '' : `по макросам выходит ${Math.round(computed)} ккал`;
+}
+
+async function renderCard(gtin) {
+  const d = await api('/gtin/' + gtin);
+  const s = d.suggestion ?? d.product ?? d.seed ?? { name: '', kcal100: 0, prot100: 0, fat100: 0, carb100: 0 };
+  const row = (label, x, cls = '', when = '') => `<tr class="${cls}">
+      <td>${label}</td><td>${esc(x.name)}${x.brand ? ` <span class="meta">${esc(x.brand)}</span>` : ''}</td>
+      <td class="n">${x.kcal100}</td><td class="n">${g(x.prot100)}</td><td class="n">${g(x.fat100)}</td><td class="n">${g(x.carb100)}</td>
+      <td class="n">${x.servingG ?? ''}</td><td class="meta">${when}</td></tr>`;
+  const decision = d.decision ? `${d.decision.verdict === 'published' ? 'опубликован' : 'отклонён'} ${ago(d.decision.decidedAt)}` : '';
+  $('#card').innerHTML = `
+    <div class="top">
+      <h2>${esc(s.name)}</h2>
+      <div class="meta"><span class="mono">${esc(gtin)}</span> · <a href="https://world.openfoodfacts.org/product/${esc(gtin)}" target="_blank" rel="noopener">Open Food Facts</a>${decision ? ' · ' + decision : ''}</div>
+    </div>
+    <table>
+      <thead><tr><th></th><th>Название</th><th class="n">ккал</th><th class="n">Б</th><th class="n">Ж</th><th class="n">У</th><th class="n">порция</th><th></th></tr></thead>
+      <tbody>
+        ${d.seed ? row('Справочник', d.seed, 'src') : ''}
+        ${d.product ? row('Опубликовано', d.product, 'src') : ''}
+        ${d.contributions.slice().reverse().map(c => row('Прислали', c, c.pending ? 'pending' : 'old', ago(c.receivedAt) + (kcalCheck(c.kcal100, c.prot100, c.fat100, c.carb100) ? ' · <span class="warn">ккал не сходятся</span>' : ''))).join('')}
+      </tbody>
+    </table>
+    <form id="form">
+      <label class="wide">Название<input name="name" value="${esc(s.name)}" required></label>
+      <label>Бренд<input name="brand" value="${esc(s.brand ?? '')}"></label>
+      <label>ккал<input name="kcal100" type="number" min="0" max="900" value="${s.kcal100}"></label>
+      <label>Белки, г<input name="prot100" type="number" min="0" max="100" step="0.01" value="${s.prot100 / 100}"></label>
+      <label>Жиры, г<input name="fat100" type="number" min="0" max="100" step="0.01" value="${s.fat100 / 100}"></label>
+      <label>Углеводы, г<input name="carb100" type="number" min="0" max="100" step="0.01" value="${s.carb100 / 100}"></label>
+      <label>Порция, г<input name="servingG" type="number" min="1" value="${s.servingG ?? ''}"></label>
+    </form>
+    <div class="actions">
+      <button class="btn primary" id="publish">${d.product ? 'Обновить' : 'Опубликовать'}</button>
+      ${tab === 'queue' ? '<button class="btn" id="reject">Отклонить</button>' : ''}
+      ${d.product && tab === 'products' ? '<button class="btn" id="unpublish">Снять с публикации</button>' : ''}
+      <span class="status" id="status"></span>
+    </div>`;
+
+  const form = $('#form');
+  const read = () => {
+    const v = Object.fromEntries(new FormData(form));
+    return {
+      name: v.name.trim(), brand: v.brand.trim() || null, kcal100: Math.round(+v.kcal100),
+      prot100: Math.round(+v.prot100 * 100), fat100: Math.round(+v.fat100 * 100), carb100: Math.round(+v.carb100 * 100),
+      servingG: v.servingG ? Math.round(+v.servingG) : null,
+    };
+  };
+  const check = () => { const p = read(); const w = kcalCheck(p.kcal100, p.prot100, p.fat100, p.carb100); $('#status').innerHTML = w ? `<span class="warn">${w}</span>` : ''; };
+  form.oninput = check; check();
+  const act = async (fn, done) => { try { await fn(); $('#status').textContent = done; setTimeout(render, 500); } catch (e) { $('#status').innerHTML = `<span class="warn">${esc(e.message)}</span>`; } };
+  $('#publish').onclick = () => act(() => api(`/gtin/${gtin}/publish`, read()), 'Опубликовано — телефон найдёт его по коду');
+  $('#reject')?.addEventListener('click', () => act(() => api(`/gtin/${gtin}/reject`, {}), 'Отклонено'));
+  $('#unpublish')?.addEventListener('click', () => act(() => api(`/products/${gtin}/delete`, {}), 'Снято'));
+}
+
+function renderScans() {
+  $('#main').innerHTML = cache.scans.length ? cache.scans.map(s => `
+    <div class="card scan" style="margin-bottom:12px">
+      <div><div class="top"><h2 class="mono" style="font-size:14px">${esc(s.id)}</h2><span class="meta">${ago(s.receivedAt)}</span></div><pre>${esc(s.readings)}</pre></div>
+      <div class="frames">${s.frames.map(f => `<a href="/admin/scans/${esc(s.id)}/${esc(f)}" target="_blank"><img loading="lazy" src="/admin/scans/${esc(s.id)}/${esc(f)}" alt="${esc(f)}"></a>`).join('')}</div>
+    </div>`).join('') : '<div class="empty">Съёмок нет</div>';
+}
+
+render();
+// Новые голоса приходят, пока панель открыта: обновляем счётчики, не трогая открытую карточку.
+setInterval(() => refreshCounts().catch(() => {}), 15000);
+</script>
+</body>
+</html>

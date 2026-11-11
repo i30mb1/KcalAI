@@ -36,6 +36,16 @@ class Db(path: String) : AutoCloseable {
                 """.trimIndent()
             )
             stmt.executeUpdate("CREATE INDEX IF NOT EXISTS contribution_gtin ON contribution(gtin)")
+            // Решение по коду: опубликован или отклонён. `upto_id` — последний голос, который
+            // видел разработчик; голос новее возвращает код в очередь.
+            stmt.executeUpdate(
+                """
+                CREATE TABLE IF NOT EXISTS decision (
+                  gtin TEXT PRIMARY KEY, verdict TEXT NOT NULL,
+                  upto_id INTEGER NOT NULL, decided_at INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
         }
     }
 
@@ -93,27 +103,103 @@ class Db(path: String) : AutoCloseable {
         }
     }
 
+    fun contributionsFor(gtin: String): List<Contribution> = votesFor(gtin).map { it.contribution }
+
+    /** Все голоса за код, старые первыми; `pending` — пришёл после последнего решения. */
     @Synchronized
-    fun contributionsFor(gtin: String): List<Contribution> =
+    fun votesFor(gtin: String): List<Vote> =
         connection.prepareStatement(
-            "SELECT gtin, name, kcal100, prot100, fat100, carb100, serving_g, created_at " +
-                "FROM contribution WHERE gtin = ? ORDER BY id"
+            "SELECT c.id, c.gtin, c.name, c.kcal100, c.prot100, c.fat100, c.carb100, c.serving_g, c.created_at, c.received_at, " +
+                "c.id > COALESCE(d.upto_id, 0) AS pending " +
+                "FROM contribution c LEFT JOIN decision d ON d.gtin = c.gtin WHERE c.gtin = ? ORDER BY c.id"
         ).use { stmt ->
             stmt.setString(1, gtin)
             stmt.executeQuery().use { rows ->
                 buildList {
                     while (rows.next()) add(
-                        Contribution(
-                            gtin = rows.getString("gtin"),
-                            name = rows.getString("name"),
-                            nutriments = rows.toNutriments(),
-                            servingG = rows.getInt("serving_g").takeUnless { rows.wasNull() },
-                            createdAt = rows.getLong("created_at"),
+                        Vote(
+                            contribution = Contribution(
+                                gtin = rows.getString("gtin"),
+                                name = rows.getString("name"),
+                                nutriments = rows.toNutriments(),
+                                servingG = rows.getInt("serving_g").takeUnless { rows.wasNull() },
+                                createdAt = rows.getLong("created_at"),
+                            ),
+                            receivedAt = rows.getLong("received_at"),
+                            pending = rows.getBoolean("pending"),
                         )
                     )
                 }
             }
         }
+
+    /** Коды с голосами после последнего решения, свежие первыми. */
+    @Synchronized
+    fun queue(): List<QueueItem> =
+        connection.prepareStatement(
+            """
+            SELECT q.gtin, q.votes, q.last_at, last.name AS last_name FROM (
+              SELECT c.gtin, COUNT(*) AS votes, MAX(c.received_at) AS last_at, MAX(c.id) AS last_id
+              FROM contribution c LEFT JOIN decision d ON d.gtin = c.gtin
+              WHERE c.id > COALESCE(d.upto_id, 0)
+              GROUP BY c.gtin
+            ) q JOIN contribution last ON last.id = q.last_id
+            ORDER BY q.last_id DESC
+            """.trimIndent()
+        ).use { stmt ->
+            stmt.executeQuery().use { rows ->
+                buildList {
+                    while (rows.next()) add(
+                        QueueItem(rows.getString("gtin"), rows.getString("last_name"), rows.getInt("votes"), rows.getLong("last_at"))
+                    )
+                }
+            }
+        }
+
+    /** Закрывает все голоса за код, пришедшие до этой минуты. */
+    @Synchronized
+    fun decide(gtin: String, verdict: Verdict, now: Long) {
+        connection.prepareStatement(
+            """
+            INSERT INTO decision (gtin, verdict, upto_id, decided_at)
+            VALUES (?, ?, (SELECT COALESCE(MAX(id), 0) FROM contribution WHERE gtin = ?), ?)
+            ON CONFLICT(gtin) DO UPDATE SET verdict = excluded.verdict, upto_id = excluded.upto_id,
+              decided_at = excluded.decided_at
+            """.trimIndent()
+        ).use { stmt ->
+            stmt.setString(1, gtin)
+            stmt.setString(2, verdict.name.lowercase())
+            stmt.setString(3, gtin)
+            stmt.setLong(4, now)
+            stmt.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun decisionFor(gtin: String): Decision? =
+        connection.prepareStatement("SELECT verdict, decided_at FROM decision WHERE gtin = ?").use { stmt ->
+            stmt.setString(1, gtin)
+            stmt.executeQuery().use { rows ->
+                if (rows.next()) Decision(Verdict.valueOf(rows.getString("verdict").uppercase()), rows.getLong("decided_at")) else null
+            }
+        }
+
+    /** Опубликованное, свежие правки первыми. */
+    @Synchronized
+    fun products(): List<Product> =
+        connection.prepareStatement(
+            "SELECT gtin, name, brand, kcal100, prot100, fat100, carb100, serving_g FROM product ORDER BY updated_at DESC"
+        ).use { stmt ->
+            stmt.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.toProduct()) } }
+        }
+
+    @Synchronized
+    fun deleteProduct(gtin: String) {
+        connection.prepareStatement("DELETE FROM product WHERE gtin = ?").use { stmt ->
+            stmt.setString(1, gtin)
+            stmt.executeUpdate()
+        }
+    }
 
     override fun close() = connection.close()
 

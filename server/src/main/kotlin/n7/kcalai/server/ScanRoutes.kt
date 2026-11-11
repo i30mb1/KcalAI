@@ -69,5 +69,5 @@ fun Route.scanRoutes(scansDir: File) {
     }
 }
 
-private val SCAN_ID = Regex("[a-z0-9-]{1,64}")
-private val FRAME_NAME = Regex("frame-\\d{2,3}\\.jpg")
+internal val SCAN_ID = Regex("[a-z0-9-]{1,64}")
+internal val FRAME_NAME = Regex("frame-\\d{2,3}\\.jpg")

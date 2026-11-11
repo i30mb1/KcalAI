@@ -9,7 +9,7 @@ plugins {
     alias(libs.plugins.play.publisher)
 }
 
-// Адрес локального сервера — в local.properties (не в git): kcal.server=http://192.168.1.10:8080
+// Адрес сервера разработчика — в local.properties (не в git): kcal.server=http://<внешний IP>:8080
 val localProperties = Properties().apply {
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
 }
@@ -56,7 +56,7 @@ android {
         debug {
             buildConfigField("String", "KCAL_SERVER", "\"${localProperties.getProperty("kcal.server", "")}\"")
         }
-        // Локальный сервер — домашняя сеть разработчика и http без TLS: в сборке для людей
+        // Сервер разработчика — его компьютер и http без TLS: в сборке для людей
         // ему не место. Без адреса вклады и сессии съёмки остаются на устройстве.
         release {
             buildConfigField("String", "KCAL_SERVER", "\"\"")

@@ -1,5 +1,5 @@
 plugins {
-    kotlin("jvm") version "2.3.10"
+    kotlin("jvm") version "2.3.21"
     application
 }
 
@@ -23,3 +23,8 @@ dependencies {
 }
 
 application { mainClass.set("n7.kcalai.server.MainKt") }
+
+// Консоль Android Studio читает вывод как UTF-8, а JVM на Windows по умолчанию пишет в cp1251.
+tasks.named<JavaExec>("run") {
+    jvmArgs("-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+}

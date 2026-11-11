@@ -38,3 +38,11 @@ data class Contribution(
     val servingG: Int?,
     val createdAt: Long,
 )
+
+data class Vote(val contribution: Contribution, val receivedAt: Long, val pending: Boolean)
+
+data class QueueItem(val gtin: String, val name: String, val votes: Int, val lastReceivedAt: Long)
+
+enum class Verdict { PUBLISHED, REJECTED }
+
+data class Decision(val verdict: Verdict, val decidedAt: Long)

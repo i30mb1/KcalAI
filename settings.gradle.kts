@@ -41,3 +41,7 @@ include(":core:remote")
 include(":feature:diary")
 include(":feature:scanner")
 include(":smoke")
+
+// Сервер — отдельная сборка: своя JVM-цель, свой Ktor. Включён сюда, чтобы Android Studio
+// видела его и запускала конфигурацией «Сервер» (`.run/`): `:server:run`.
+includeBuild("server")
