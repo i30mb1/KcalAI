@@ -8,7 +8,8 @@ import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
-import io.ktor.utils.io.toByteArray
+import io.ktor.utils.io.readRemaining
+import kotlinx.io.readByteArray
 import java.io.File
 
 /**
@@ -37,14 +38,21 @@ fun Route.scanRoutes(scansDir: File) {
         val staging = File(scansDir, "$id.part").apply { deleteRecursively(); mkdirs() }
         var readings: String? = null
         var frames = 0
+        var tooLarge = false
         call.receiveMultipart().forEachPart { part ->
             when (part) {
                 is PartData.FormItem -> if (part.name == "readings") readings = part.value
                 is PartData.FileItem -> {
                     val name = part.originalFileName?.let(::File)?.name
-                    if (part.name == "frame" && name != null && FRAME_NAME.matches(name)) {
-                        File(staging, name).writeBytes(part.provider().toByteArray())
-                        frames++
+                    if (part.name == "frame" && name != null && FRAME_NAME.matches(name) && !tooLarge) {
+                        // Сервер открыт в интернет: читаем не больше, чем бывает в кадре с телефона.
+                        val bytes = part.provider().readRemaining(MAX_FRAME_BYTES + 1).readByteArray()
+                        if (bytes.size > MAX_FRAME_BYTES || frames >= MAX_FRAMES) {
+                            tooLarge = true
+                        } else {
+                            File(staging, name).writeBytes(bytes)
+                            frames++
+                        }
                     }
                 }
                 else -> Unit
@@ -52,6 +60,11 @@ fun Route.scanRoutes(scansDir: File) {
             part.dispose()
         }
 
+        if (tooLarge) {
+            staging.deleteRecursively()
+            call.respondText("кадр больше $MAX_FRAME_BYTES байт или кадров больше $MAX_FRAMES", status = HttpStatusCode.PayloadTooLarge)
+            return@post
+        }
         val text = readings
         if (text == null || frames == 0) {
             staging.deleteRecursively()
@@ -71,3 +84,5 @@ fun Route.scanRoutes(scansDir: File) {
 
 internal val SCAN_ID = Regex("[a-z0-9-]{1,64}")
 internal val FRAME_NAME = Regex("frame-\\d{2,3}\\.jpg")
+private const val MAX_FRAME_BYTES = 8L * 1024 * 1024
+private const val MAX_FRAMES = 200

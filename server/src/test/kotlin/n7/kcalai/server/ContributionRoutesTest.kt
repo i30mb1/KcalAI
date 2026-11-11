@@ -97,4 +97,18 @@ class ContributionRoutesTest {
         assertEquals("""{"accepted":[]}""", send("[$noName,$blankName,$noDate]").bodyAsText())
         assertEquals(0, db.contributionsFor("4600699500001").size)
     }
+
+    /** Сервер открыт в интернет: пачка с телефона — десятки вкладов, а не мегабайты. */
+    @Test
+    fun `слишком большое тело не читается`() = app {
+        val huge = "[" + List(5_000) { milk }.joinToString(",") + "]"
+
+        assertEquals(HttpStatusCode.PayloadTooLarge, send(huge).status)
+        assertEquals(0, db.contributionsFor("4600699500001").size)
+    }
+
+    @Test
+    fun `больше сотни вкладов за раз не принимается`() = app {
+        assertEquals(HttpStatusCode.PayloadTooLarge, send("[" + List(101) { milk }.joinToString(",") + "]").status)
+    }
 }

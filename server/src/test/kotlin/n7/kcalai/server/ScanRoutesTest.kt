@@ -121,4 +121,14 @@ class ScanRoutesTest {
         assertFalse(File(dataDir, "evil.jpg").exists())
         assertFalse(File(dataDir, "scans/scan-bad-frame").exists())
     }
+
+    /** Сервер открыт в интернет: кадр с телефона — сотни килобайт, а не десятки мегабайт. */
+    @Test
+    fun `слишком большой кадр — 413, и сессии не остаётся`() = app {
+        val response = upload("scan-huge", "x", ByteArray(8 * 1024 * 1024 + 1))
+
+        assertEquals(HttpStatusCode.PayloadTooLarge, response.status)
+        assertFalse(File(dataDir, "scans/scan-huge").exists())
+        assertFalse(File(dataDir, "scans/scan-huge.part").exists())
+    }
 }
