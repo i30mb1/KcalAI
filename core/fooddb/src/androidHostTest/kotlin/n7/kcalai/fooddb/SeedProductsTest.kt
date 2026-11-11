@@ -41,6 +41,15 @@ class SeedProductsTest {
         assertEquals(Nutriments(kcal100 = 112, prot100 = 700, fat100 = 350, carb100 = 1300), paste.nutriments)
     }
 
+    /** Проверенное и опубликованное в панели сервера едет в справочник: у полки сеть не нужна. */
+    @Test
+    fun `опубликованный на сервере товар находится без сети`() {
+        val pineapple = db.findByBarcode("4814944008796")!!
+
+        assertEquals("Ананасы кусочки", pineapple.name)
+        assertEquals(55, pineapple.nutriments.kcal100)
+    }
+
     @Test
     fun `товары ищутся и по бренду`() {
         assertTrue(db.searchProducts("простоквашино", limit = 5).isNotEmpty())

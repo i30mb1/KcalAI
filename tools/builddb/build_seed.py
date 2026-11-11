@@ -87,7 +87,8 @@ def build_seed(out_path: Path, data_dir: Path) -> None:
             data_dir / "generic_alias_extra.csv",
         )
         _load_portion_units(conn, data_dir / "portion_unit.csv")
-        _load_products(conn, data_dir / "off_products.csv")
+        # Опубликованное в панели сервера идёт вторым и перекрывает OFF: его проверил человек.
+        _load_products(conn, data_dir / "off_products.csv", data_dir / "server_products.csv")
         _fill_meta(conn, data_dir / "off_products.meta")
         conn.commit()
         conn.execute("VACUUM")
@@ -163,29 +164,31 @@ def _load_portion_units(conn: sqlite3.Connection, path: Path) -> None:
     )
 
 
-def _load_products(conn: sqlite3.Connection, path: Path) -> None:
-    """Срез Open Food Facts от off_extract.py: товары российских полок по штрих-коду."""
-    if not path.exists():
-        return
+def _load_products(conn: sqlite3.Connection, *paths: Path) -> None:
+    """Товары по штрих-коду: срез OFF от off_extract.py, затем опубликованное
+    на сервере от server_extract.py. Тот же код в файле позже перекрывает прежний."""
 
     def optional(value: str) -> int | None:
         return int(value) if value else None
 
-    rows = [
-        (
-            r["barcode"],
-            r["name"],
-            r["brand"] or None,
-            int(r["kcal100"]),
-            int(r["prot100"]),
-            int(r["fat100"]),
-            int(r["carb100"]),
-            optional(r["fiber100"]),
-            optional(r["serving_g"]),
-            int(r["popularity"]),
-        )
-        for r in _rows(path)
-    ]
+    by_barcode: dict[str, tuple] = {}
+    for path in paths:
+        if not path.exists():
+            continue
+        for r in _rows(path):
+            by_barcode[r["barcode"]] = (
+                r["barcode"],
+                r["name"],
+                r["brand"] or None,
+                int(r["kcal100"]),
+                int(r["prot100"]),
+                int(r["fat100"]),
+                int(r["carb100"]),
+                optional(r["fiber100"]),
+                optional(r["serving_g"]),
+                int(r["popularity"]),
+            )
+    rows = list(by_barcode.values())
     conn.executemany(
         "INSERT INTO product_seed (barcode, name, brand, kcal100, prot100, fat100, carb100, "
         "fiber100, serving_g, popularity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -214,7 +217,7 @@ def _fill_meta(conn: sqlite3.Connection, off_meta: Path) -> None:
         [
             ("schema_version", SCHEMA_VERSION),
             ("built_at", date.today().isoformat()),
-            ("source", "Open Food Facts (product_seed) + curated generic table"),
+            ("source", "Open Food Facts + Kcal AI server (product_seed) + curated generic table"),
             ("license", "ODbL-1.0"),
             ("off_dump_date", _off_dump_date(off_meta)),
         ],
