@@ -37,6 +37,7 @@ import n7.kcalai.remote.ChainedProductSource
 import n7.kcalai.remote.ContributionUploader
 import n7.kcalai.remote.KcalServerSource
 import n7.kcalai.remote.OffProductSource
+import n7.kcalai.remote.VkusVillProductSource
 import n7.kcalai.remote.ScanUploader
 import n7.kcalai.remote.SeedSource
 import n7.kcalai.remote.ServerProbe
@@ -97,9 +98,12 @@ class AppContainer(context: Context) {
      * Порядок содержательный: в своём пуле лежат российские товары, заведённые
      * людьми вручную, — тех самых, которых в OFF нет и не появится. И только ответ
      * своего сервера мы вправе раздавать дальше: OFF лежит под ODbL.
+     *
+     * ВкусВилл последний: его каталог спрашивается, только когда чисел не нашлось
+     * ни у себя, ни в OFF, — чужому серверу достаются одни настоящие промахи.
      */
     val remoteProductSource: RemoteProductSource by lazy {
-        ChainedProductSource(listOf(kcalServer, OffProductSource(USER_AGENT)))
+        ChainedProductSource(listOf(kcalServer, OffProductSource(USER_AGENT), VkusVillProductSource(USER_AGENT)))
     }
 
     val contributionUploader: ContributionUploader get() = kcalServer

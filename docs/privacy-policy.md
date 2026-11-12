@@ -1,6 +1,6 @@
 # Политика конфиденциальности Kcal AI
 
-Действует с 11 ноября 2026 года. Приложение: Kcal AI (`n7.kcalai`) для Android.
+Действует с 12 ноября 2026 года. Приложение: Kcal AI (`n7.kcalai`) для Android.
 
 ## Коротко
 
@@ -34,6 +34,7 @@
 ## Что уходит в интернет
 
 - **Open Food Facts.** Если штрих-кода нет в справочнике на телефоне, приложение запрашивает его в открытой базе Open Food Facts (world.openfoodfacts.org). Отправляется только номер штрих-кода. Как любой веб-сервер, Open Food Facts видит IP-адрес запроса; его политика — https://world.openfoodfacts.org/privacy.
+- **ВкусВилл.** Если калорийности товара не нашлось и в Open Food Facts, номер штрих-кода запрашивается в каталоге ВкусВилла (mcp.vkusvill.ru). Отправляется только номер штрих-кода. Как любой веб-сервер, ВкусВилл видит IP-адрес запроса.
 - **Google ML Kit.** Сканер штрих-кодов построен на ML Kit от Google, как и нейросеть Gemini Nano, которая на поддерживающих её телефонах разбирает непонятые фразы, отвечает на вопросы о дневнике и помогает прочитать этикетку. Распознавание и нейросеть работают на телефоне: ваши фразы, вопросы, дневник и кадры с камеры в интернет не уходят. Но ML Kit отправляет в Google технические сведения: модель устройства и версию Android, версию приложения, идентификатор установки (не привязан к человеку), время работы и коды ошибок. Google использует их для диагностики и не передаёт третьим лицам. Подробнее: https://developers.google.com/ml-kit/android-data-disclosure.
 
 - **Сервер Kcal AI.** Если штрих-кода нет в справочнике на телефоне, его номер сначала запрашивается у нашего сервера: там лежат продукты, которых нет в Open Food Facts. С этого же сервера приложение скачивает обновления справочника. Когда вы заводите продукт со штрих-кодом, Яйцо предлагает отправить его в общую базу, чтобы его находили и другие. Только если вы нажмёте «Отправить», на сервер уходят штрих-код, название, калорийность, белки, жиры, углеводы и порция продукта. Ни дневник, ни имя, ни кадры с камеры не отправляются, и продукт не связан с вами или вашим устройством. Соединение шифруется (HTTPS). Сервер видит IP-адрес запроса и не хранит его вместе с продуктом. Присланные продукты разработчик проверяет и публикует, чтобы приложение находило их по штрих-коду у всех.
@@ -56,7 +57,7 @@
 
 # Kcal AI Privacy Policy (English)
 
-Effective November 11, 2026. App: Kcal AI (`n7.kcalai`) for Android.
+Effective November 12, 2026. App: Kcal AI (`n7.kcalai`) for Android.
 
 There is no sign-up. Your food diary, goals and body weight are stored only on your device. A custom food goes to the shared database only if you accept the Egg's offer to send it. We do not sell data, show ads, or share your diary with anyone.
 
@@ -66,6 +67,7 @@ There is no sign-up. Your food diary, goals and body weight are stored only on y
 
 **Network:**
 - *Open Food Facts.* When a barcode is not in the on-device database, only the barcode number is sent to Open Food Facts (world.openfoodfacts.org), which, like any web server, sees the request's IP address.
+- *VkusVill.* When Open Food Facts has no nutrition values for the product either, only the barcode number is sent to the VkusVill catalogue (mcp.vkusvill.ru), which, like any web server, sees the request's IP address.
 - *Google ML Kit.* The barcode scanner uses Google ML Kit, and so does Gemini Nano, the on-device model that, on phones that support it, parses phrases the search did not understand, answers questions about the diary and helps read nutrition labels. Scanning and the model run on the device: your phrases, questions, diary and camera frames do not leave it. But ML Kit sends Google device and app information, a per-installation identifier not tied to a person, performance metrics and error codes for diagnostics and analytics. This data is not shared with third parties. See https://developers.google.com/ml-kit/android-data-disclosure.
 
 - *Kcal AI server.* When a barcode is not in the on-device database, its number is first looked up on our server, which holds products missing from Open Food Facts; the app also downloads database updates from it. When you add a food with a barcode, the Egg offers to send it to the shared database so others can find it. Only if you tap "Send" does the app upload the barcode, name, calories, protein, fat, carbs and serving size. Your diary, name and camera frames are never sent, and the product is not linked to you or your device. The connection is encrypted (HTTPS). The server sees the request's IP address and does not store it with the product. The developer reviews submitted products and publishes them so the app can find them by barcode for everyone.
