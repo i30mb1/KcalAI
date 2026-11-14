@@ -3,6 +3,7 @@
 .gradle/
 /build
 /app/build
+/app-ios/build
 /core/*/build
 /feature/*/build
 /smoke/build
@@ -21,6 +22,10 @@ local.properties
 # IDE
 /.idea/
 .DS_Store
+# Xcode: сборка, настройки окна и выбранная схема — у каждого свои.
+/iosApp/build/
+*.xcuserdatad
+xcuserdata/
 
 # Подпись — никогда не коммитить
 *.jks

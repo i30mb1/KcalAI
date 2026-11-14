@@ -1,0 +1,271 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 54;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		07001FBEBD37495293CC41AB /* KcalAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116AD7F8A7A34AB183F1D6E4 /* KcalAIApp.swift */; };
+		8EF87B0C5ADA4A36A4AB4758 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E1581B9CEF8E43CCB7111AC9 /* Assets.xcassets */; };
+		942631321D2244308509303E /* seed.db in Resources */ = {isa = PBXBuildFile; fileRef = B842BD44A934459CBA8C21A2 /* seed.db */; };
+		8A0A6DC4FC71441484259B5F /* seed.db.sha256 in Resources */ = {isa = PBXBuildFile; fileRef = A116E9FF53734672945EDF51 /* seed.db.sha256 */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		6420FB9A4745446692860E95 /* KcalAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KcalAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		116AD7F8A7A34AB183F1D6E4 /* KcalAIApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KcalAIApp.swift; sourceTree = "<group>"; };
+		E1581B9CEF8E43CCB7111AC9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		EB786FC1305542E489AF9FAF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B842BD44A934459CBA8C21A2 /* seed.db */ = {isa = PBXFileReference; lastKnownFileType = file; name = seed.db; path = ../app/src/main/assets/seed.db; sourceTree = "<group>"; };
+		A116E9FF53734672945EDF51 /* seed.db.sha256 */ = {isa = PBXFileReference; lastKnownFileType = text; name = seed.db.sha256; path = ../app/src/main/assets/seed.db.sha256; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8CE4910008C94BE1BD2F0D40 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		6805B88F33244E958A743413 = {
+			isa = PBXGroup;
+			children = (
+				D49271E254FC453088E7B908 /* KcalAI */,
+				CFB43A774151421295401AAE /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CFB43A774151421295401AAE /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				6420FB9A4745446692860E95 /* KcalAI.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D49271E254FC453088E7B908 /* KcalAI */ = {
+			isa = PBXGroup;
+			children = (
+				116AD7F8A7A34AB183F1D6E4 /* KcalAIApp.swift */,
+				E1581B9CEF8E43CCB7111AC9 /* Assets.xcassets */,
+				EB786FC1305542E489AF9FAF /* Info.plist */,
+				B842BD44A934459CBA8C21A2 /* seed.db */,
+				A116E9FF53734672945EDF51 /* seed.db.sha256 */,
+			);
+			path = KcalAI;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		9C03BFF47F934CBFAA0E92E0 /* KcalAI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B3D7D59BD65E40EC9B056DD7 /* Build configuration list for PBXNativeTarget "KcalAI" */;
+			buildPhases = (
+				F5093FC04A1F46A1A43819E4 /* Собрать общий код */,
+				FC60A6466D7F4DDA953031FA /* Sources */,
+				8CE4910008C94BE1BD2F0D40 /* Frameworks */,
+				31DF48CA884345668354161D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KcalAI;
+			productName = KcalAI;
+			productReference = 6420FB9A4745446692860E95 /* KcalAI.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		0C96EA024E8142009B5BB0CC /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					9C03BFF47F934CBFAA0E92E0 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = 67B8048D224C42AFB4A911BF /* Build configuration list for PBXProject "KcalAI" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = ru;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				ru,
+				Base,
+			);
+			mainGroup = 6805B88F33244E958A743413;
+			productRefGroup = CFB43A774151421295401AAE /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				9C03BFF47F934CBFAA0E92E0 /* KcalAI */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		31DF48CA884345668354161D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8EF87B0C5ADA4A36A4AB4758 /* Assets.xcassets in Resources */,
+				942631321D2244308509303E /* seed.db in Resources */,
+				8A0A6DC4FC71441484259B5F /* seed.db.sha256 in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		F5093FC04A1F46A1A43819E4 /* Собрать общий код */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Собрать общий код";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "cd \"$SRCROOT/..\"\n./gradlew :app-ios:embedAndSignAppleFrameworkForXcode\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		FC60A6466D7F4DDA953031FA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				07001FBEBD37495293CC41AB /* KcalAIApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		F7303B687BBC4AE88AB5D5F3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		59BC3B6AEE124FD3A56E215F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		FEC15D1FC53C468CAEC906D1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = KcalAI/Info.plist;
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.3;
+				PRODUCT_BUNDLE_IDENTIFIER = n7.kcalai;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		81E703883B534DCCA4282F5B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = KcalAI/Info.plist;
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.3;
+				PRODUCT_BUNDLE_IDENTIFIER = n7.kcalai;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		67B8048D224C42AFB4A911BF /* Build configuration list for PBXProject "KcalAI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F7303B687BBC4AE88AB5D5F3 /* Debug */,
+				59BC3B6AEE124FD3A56E215F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B3D7D59BD65E40EC9B056DD7 /* Build configuration list for PBXNativeTarget "KcalAI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FEC15D1FC53C468CAEC906D1 /* Debug */,
+				81E703883B534DCCA4282F5B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 0C96EA024E8142009B5BB0CC /* Project object */;
+}

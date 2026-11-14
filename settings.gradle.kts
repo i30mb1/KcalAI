@@ -25,6 +25,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "Kcal AI"
 include(":app")
+// Оболочка для iOS: отдаёт Xcode фреймворк KcalApp. На Android оболочка своя — `:app`.
+include(":app-ios")
 include(":core:model")
 include(":core:fooddb")
 include(":core:database")
