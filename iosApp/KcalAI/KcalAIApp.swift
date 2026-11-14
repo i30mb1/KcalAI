@@ -33,7 +33,13 @@ private final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         // Обработчики фоновых задач система требует зарегистрировать до возврата отсюда.
-        KcalApp.shared.onLaunch()
+        // Нейросеть — только с iOS 26: раньше Foundation Models не существует,
+        // и дневник живёт без неё, как на телефонах без Apple Intelligence.
+        var model: AssistantAppleModelBridge?
+        if #available(iOS 26.0, *) {
+            model = AppleModel(tools: AssistantTools(tools: KcalApp.shared.diaryTools))
+        }
+        KcalApp.shared.onLaunch(model: model)
         return true
     }
 }

@@ -20,6 +20,8 @@ kotlin {
             implementation(project(":core:resolver"))
             implementation(project(":core:remote"))
             implementation(project(":core:personal"))
+            // Нейросеть Apple на телефоне: разбор фраз и вопросы к дневнику.
+            implementation(project(":core:assistant"))
             implementation(project(":core:mascot"))
             implementation(project(":core:ui"))
             implementation(project(":feature:diary"))

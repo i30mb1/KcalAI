@@ -10,6 +10,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
+import n7.kcalai.assistant.AppleAssistant
+import n7.kcalai.assistant.AppleModelBridge
+import n7.kcalai.assistant.DiaryTools
+import n7.kcalai.assistant.FoodAssistant
 import n7.kcalai.database.KcalDatabase
 import n7.kcalai.database.buildKcalDatabase
 import n7.kcalai.fooddb.FoodDb
@@ -114,6 +118,34 @@ class AppContainer {
 
     val textResolver: TextFoodResolver by lazy {
         TextFoodResolver(foodRepository, personalRepository)
+    }
+
+    /**
+     * Инструменты нейросети: поиск по той же базе, что у строки ввода, и итоги
+     * дневника. Один экземпляр на приложение — его зовёт оболочка на Swift,
+     * а предложения проверяет экран, и помнить, что поиск показывал, они
+     * должны общее.
+     */
+    val diaryTools: DiaryTools by lazy {
+        DiaryTools(
+            search = { query, limit -> foodRepository.search(query, limit) },
+            day = { epochDay -> diaryRepository.observeDay(epochDay).first().entries },
+            goal = { epochDay -> diaryRepository.goalFor(epochDay) },
+            today = { Clock.System.todayIn(TimeZone.currentSystemDefault()).toEpochDays() },
+        )
+    }
+
+    /**
+     * Нейросеть Apple на телефоне. `null` — оболочка её не дала: на этом
+     * устройстве нет Apple Intelligence, и экран живёт без неё, как и на
+     * телефонах без Gemini Nano.
+     */
+    var assistant: FoodAssistant? = null
+        private set
+
+    /** Зовётся оболочкой на Swift: Foundation Models доступен только оттуда. */
+    fun useAppleModel(bridge: AppleModelBridge) {
+        assistant = AppleAssistant(bridge, diaryTools)
     }
 
     /**

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		07001FBEBD37495293CC41AB /* KcalAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116AD7F8A7A34AB183F1D6E4 /* KcalAIApp.swift */; };
+		5A1C0E77B2F4418FA3D7C091 /* AppleModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D4E2B10C6A84F2E8B15D3A6 /* AppleModel.swift */; };
 		8EF87B0C5ADA4A36A4AB4758 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E1581B9CEF8E43CCB7111AC9 /* Assets.xcassets */; };
 		942631321D2244308509303E /* seed.db in Resources */ = {isa = PBXBuildFile; fileRef = B842BD44A934459CBA8C21A2 /* seed.db */; };
 		8A0A6DC4FC71441484259B5F /* seed.db.sha256 in Resources */ = {isa = PBXBuildFile; fileRef = A116E9FF53734672945EDF51 /* seed.db.sha256 */; };
@@ -16,6 +17,7 @@
 /* Begin PBXFileReference section */
 		6420FB9A4745446692860E95 /* KcalAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KcalAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		116AD7F8A7A34AB183F1D6E4 /* KcalAIApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KcalAIApp.swift; sourceTree = "<group>"; };
+		9D4E2B10C6A84F2E8B15D3A6 /* AppleModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleModel.swift; sourceTree = "<group>"; };
 		E1581B9CEF8E43CCB7111AC9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		EB786FC1305542E489AF9FAF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B842BD44A934459CBA8C21A2 /* seed.db */ = {isa = PBXFileReference; lastKnownFileType = file; name = seed.db; path = ../app/src/main/assets/seed.db; sourceTree = "<group>"; };
@@ -53,6 +55,7 @@
 			isa = PBXGroup;
 			children = (
 				116AD7F8A7A34AB183F1D6E4 /* KcalAIApp.swift */,
+				9D4E2B10C6A84F2E8B15D3A6 /* AppleModel.swift */,
 				E1581B9CEF8E43CCB7111AC9 /* Assets.xcassets */,
 				EB786FC1305542E489AF9FAF /* Info.plist */,
 				B842BD44A934459CBA8C21A2 /* seed.db */,
@@ -152,6 +155,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				07001FBEBD37495293CC41AB /* KcalAIApp.swift in Sources */,
+				5A1C0E77B2F4418FA3D7C091 /* AppleModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -2,6 +2,8 @@ package n7.kcalai.ios
 
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.window.ComposeUIViewController
+import n7.kcalai.assistant.AppleModelBridge
+import n7.kcalai.assistant.DiaryTools
 import n7.kcalai.feature.diary.DiaryRoute
 import n7.kcalai.feature.diary.DiaryViewModel
 import n7.kcalai.ui.KcalTheme
@@ -22,6 +24,9 @@ object KcalApp {
 
     private val notifier = MascotNotifier()
 
+    /** Инструменты нейросети: их зовёт оболочка на Swift, где и живёт модель. */
+    val diaryTools: DiaryTools get() = container.diaryTools
+
     private val diary by lazy {
         DiaryViewModel(
             diary = container.diaryRepository,
@@ -29,14 +34,20 @@ object KcalApp {
             personal = container.personalRepository,
             food = container.foodRepository,
             brain = container.mascotBrain,
+            assistant = container.assistant,
         )
     }
 
     /**
      * Зовётся из `didFinishLaunching` — до его возврата: обработчики фоновых
      * задач система требует зарегистрировать именно там.
+     *
+     * @param model нейросеть Apple. `null` — на этом устройстве её нет,
+     *        и экран живёт без неё. Передаётся здесь, до сборки экранной модели:
+     *        дневник спрашивает про модель один раз.
      */
-    fun onLaunch() {
+    fun onLaunch(model: AppleModelBridge?) {
+        model?.let(container::useAppleModel)
         background.register()
         background.schedule()
     }
