@@ -10,18 +10,12 @@ import androidx.core.view.WindowCompat
 import n7.kcalai.ui.KcalTheme
 
 /**
- * Экран съёмки во весь экран, включая полосы статуса и навигации.
- *
- * Диалог по умолчанию отступает от системных полос, и над камерой висит
- * глухая полоса под часами. Живая картинка должна идти до самого края —
- * как в любой камере; свои отступы верхняя строка и панель делают сами.
- *
- * @param onCamera под значками статуса превью: они светлые, затемнение под
- *        ними есть всегда. Без камеры — ручной ввод кода, отказ в доступе —
- *        под ними фон темы, и в светлой теме белые часы на бежевом не видны.
+ * Диалог по умолчанию отступает от системных полос, и над камерой висит глухая
+ * полоса под часами. Отсюда `decorFitsSystemWindows = false` и перекраска значков
+ * статуса: иначе белые часы оказались бы на бежевом фоне светлой темы.
  */
 @Composable
-fun ScanDialog(onDismiss: () -> Unit, onCamera: Boolean = true, content: @Composable () -> Unit) {
+actual fun ScanDialog(onDismiss: () -> Unit, onCamera: Boolean, content: @Composable () -> Unit) {
     val lightBars = !onCamera && !KcalTheme.colors.isDark
 
     Dialog(
