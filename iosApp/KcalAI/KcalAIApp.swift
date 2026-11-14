@@ -21,7 +21,9 @@ struct KcalAIApp: App {
                 // иначе содержимое подвинулось бы дважды.
                 .ignoresSafeArea(.keyboard)
         }
-        .onChange(of: phase) { _, now in
+        // Одним параметром, а не двумя: вариант с «было и стало» появился в iOS 17,
+        // а приложение живёт с 16-й.
+        .onChange(of: phase) { now in
             if now == .active { KcalApp.shared.onForeground() }
         }
     }

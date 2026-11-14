@@ -20,8 +20,8 @@
 		9D4E2B10C6A84F2E8B15D3A6 /* AppleModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleModel.swift; sourceTree = "<group>"; };
 		E1581B9CEF8E43CCB7111AC9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		EB786FC1305542E489AF9FAF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		B842BD44A934459CBA8C21A2 /* seed.db */ = {isa = PBXFileReference; lastKnownFileType = file; name = seed.db; path = ../app/src/main/assets/seed.db; sourceTree = "<group>"; };
-		A116E9FF53734672945EDF51 /* seed.db.sha256 */ = {isa = PBXFileReference; lastKnownFileType = text; name = seed.db.sha256; path = ../app/src/main/assets/seed.db.sha256; sourceTree = "<group>"; };
+		B842BD44A934459CBA8C21A2 /* seed.db */ = {isa = PBXFileReference; lastKnownFileType = file; name = seed.db; path = ../app/src/main/assets/seed.db; sourceTree = SOURCE_ROOT; };
+		A116E9FF53734672945EDF51 /* seed.db.sha256 */ = {isa = PBXFileReference; lastKnownFileType = text; name = seed.db.sha256; path = ../app/src/main/assets/seed.db.sha256; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
