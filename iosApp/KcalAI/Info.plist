@@ -26,6 +26,13 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<!--
+		Без этого на айфонах с ProMotion экран обновлялся бы 60 раз в секунду
+		вместо 120: лента и перебежки персонажей шли бы вдвое грубее. Compose
+		это проверяет и без ключа не запускается вовсе.
+	-->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<!-- Камера понадобится сканеру: без описания система не спросит разрешение, а откажет. -->
 	<key>NSCameraUsageDescription</key>
 	<string>Чтобы считать штрих-код и прочитать состав с этикетки</string>
