@@ -310,7 +310,9 @@ internal class FakeUserFoodDao : UserFoodDao {
     }
 
     override suspend fun update(food: UserFoodEntity) {
-        foods.replaceAll { if (it.id == food.id) food else it }
+        // Не `replaceAll`: на Kotlin/Native он ещё экспериментальный, а подмена
+        // одной строки по индексу того не стоит.
+        foods.indices.forEach { i -> if (foods[i].id == food.id) foods[i] = food }
     }
 
     /**
@@ -353,7 +355,7 @@ private class FakeContributionDao : ContributionDao {
     override suspend fun pendingCount(): Int = queue.count { it.sentAt == null }
 
     override suspend fun markSent(ids: List<Long>, sentAt: Long) {
-        queue.replaceAll { if (it.id in ids) it.copy(sentAt = sentAt) else it }
+        queue.indices.forEach { i -> if (queue[i].id in ids) queue[i] = queue[i].copy(sentAt = sentAt) }
     }
 }
 

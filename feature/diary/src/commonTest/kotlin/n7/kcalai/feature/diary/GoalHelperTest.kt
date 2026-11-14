@@ -19,7 +19,7 @@ class GoalHelperTest {
 
     /** 30 лет, 180 см, 80 кг, спорт 3–5 раз: обмен 1780, расход ×1,55 ≈ 2760. */
     @Test
-    fun `держать вес — расход по формуле белок 1.6 г на кило`() {
+    fun `держать вес — расход по формуле белок по весу`() {
         val goal = suggestGoal(Body(Sex.MALE, age = 30, heightCm = 180, weightKg = 80.0, Activity.ACTIVE, Aim.KEEP))
 
         assertEquals(GoalSuggestion(kcal = 2760, prot = 128, fat = 92, carb = 355), goal)

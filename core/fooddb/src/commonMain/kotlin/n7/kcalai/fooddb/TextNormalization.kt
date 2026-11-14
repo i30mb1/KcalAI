@@ -44,7 +44,14 @@ fun stemRu(token: String): String {
     return token
 }
 
-private val TOKEN_SPLIT = Regex("[^\\p{L}\\p{Nd}]+")
+/**
+ * Буквы перечислены диапазонами, а не `\p{L}`: Kotlin/Native теряет смысл
+ * остальных символов класса, когда внутри отрицающего класса стоит свойство
+ * Unicode, — и «1.5» распадалось бы на «1» и «5». Текст сюда приходит после
+ * [normalizeForSearch], то есть в нижнем регистре и без «ё», так что
+ * диапазоны покрывают его целиком.
+ */
+private val TOKEN_SPLIT = Regex("[^а-яa-z0-9]+")
 
 /** Разбивает нормализованный текст на слова, выбрасывая пунктуацию. */
 fun tokenize(text: String): List<String> =
