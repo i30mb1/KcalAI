@@ -30,7 +30,7 @@ fun installSeed(): Path = SeedInstaller.install(
 
 /** Справочник живёт рядом с дневником — в Application Support, не на глазах у человека. */
 @OptIn(ExperimentalForeignApi::class)
-internal fun seedDirectory(): String {
+fun seedDirectory(): String {
     val support = NSSearchPathForDirectoriesInDomains(
         directory = NSApplicationSupportDirectory,
         domainMask = NSUserDomainMask,

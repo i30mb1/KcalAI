@@ -20,7 +20,9 @@ extensions.configure<KotlinMultiplatformExtension> {
 
     listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
         target.binaries.framework {
-            baseName = "KcalApp"
+            // Не `KcalApp`: так зовётся объект-точка входа, и в Swift имя модуля
+            // затеняло бы его — `KcalApp.shared` перестал бы разрешаться.
+            baseName = "Shared"
             // Статическим: динамический пришлось бы подписывать и вкладывать в бандл,
             // а наружу торчит один контроллер — делить тут нечего.
             isStatic = true

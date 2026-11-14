@@ -5,6 +5,7 @@ import n7.kcalai.AppContainer
 import n7.kcalai.feature.diary.DiaryOutbox
 import n7.kcalai.feature.diary.OutboxCount
 import n7.kcalai.feature.diary.OutboxResult
+import n7.kcalai.remote.UploadOutcome
 
 /**
  * Очередь отправки для экрана: считает и шлёт тем же кодом, что воркеры.
@@ -57,11 +58,3 @@ class Outbox(
         const val DECLINED_PRODUCTS = "declined_products"
     }
 }
-
-/**
- * Итог одной попытки отправки.
- *
- * @param reachable сервер отвечал — даже если принял не всё; `null` — слать было
- *        нечего, и о сервере эта попытка ничего не говорит
- */
-class UploadOutcome(val sent: Int, val reachable: Boolean?)

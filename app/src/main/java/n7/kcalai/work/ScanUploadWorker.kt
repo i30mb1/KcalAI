@@ -15,6 +15,7 @@ import n7.kcalai.AppContainer
 import n7.kcalai.KcalApp
 import n7.kcalai.feature.scanner.labelScansDirectory
 import n7.kcalai.remote.ScanFrame
+import n7.kcalai.remote.UploadOutcome
 
 /**
  * Отправка сессий съёмки этикеток на локальный сервер — материал для правки разбора.

@@ -29,6 +29,20 @@
 	<!-- Камера понадобится сканеру: без описания система не спросит разрешение, а откажет. -->
 	<key>NSCameraUsageDescription</key>
 	<string>Чтобы считать штрих-код и прочитать состав с этикетки</string>
+	<!--
+		Фоновая работа: отправка вкладов и докачка справочника. Идентификаторы
+		обязаны быть здесь — незаявленную задачу система поставить не даёт.
+	-->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>n7.kcalai.contributions</string>
+		<string>n7.kcalai.seed</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
 	<!-- Адрес сервера. Пусто — источника нет, всё остаётся на устройстве. -->
 	<key>KcalServer</key>
 	<string>$(KCAL_SERVER)</string>

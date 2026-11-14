@@ -1,29 +1,46 @@
 import SwiftUI
-import KcalApp
+import Shared
 
-/// Всё приложение — один контроллер из общего кода.
+/// Оболочка: всё содержательное — в общем коде, вместе с Android.
 ///
-/// Swift здесь только оболочка: граф зависимостей, экранная модель и вёрстка
-/// живут в Kotlin и общие с Android. Поэтому тут нет ни состояния, ни логики —
-/// иначе они разошлись бы с андроидными.
+/// Здесь нет ни состояния, ни логики намеренно: появись они тут, их пришлось бы
+/// держать в согласии с андроидной половиной вручную.
 @main
 struct KcalAIApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+
+    @Environment(\.scenePhase) private var phase
+
     var body: some Scene {
         WindowGroup {
             DiaryView()
                 // Персонажи и лента рисуются во весь экран, вместе с «чёлкой»:
                 // на Android ровно это делает enableEdgeToEdge.
                 .ignoresSafeArea(.all)
-                // Клавиатура не поднимает ленту: строка ввода следит за ней сама,
-                // как на Android, — иначе содержимое дёргалось бы дважды.
+                // Строка ввода следит за клавиатурой сама, как на Android, —
+                // иначе содержимое подвинулось бы дважды.
                 .ignoresSafeArea(.keyboard)
         }
+        .onChange(of: phase) { _, now in
+            if now == .active { KcalApp.shared.onForeground() }
+        }
+    }
+}
+
+private final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        // Обработчики фоновых задач система требует зарегистрировать до возврата отсюда.
+        KcalApp.shared.onLaunch()
+        return true
     }
 }
 
 private struct DiaryView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewController {
-        MainViewControllerKt.mainViewController()
+        KcalApp.shared.viewController()
     }
 
     func updateUIViewController(_ controller: UIViewController, context: Context) {}
