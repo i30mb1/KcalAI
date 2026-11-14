@@ -48,7 +48,7 @@ class MealGapDetectorTest {
      * «ты обедал?» прилетал бы в 13:15, когда человек ещё не донёс тарелку.
      */
     @Test
-    fun `вопрос не приходит раньше, чем через два часа после обычного`() {
+    fun `вопрос не приходит раньше чем через два часа после обычного`() {
         fun gapAt(hour: Int) = MealGapDetector.detect(
             history = history(),
             mealsLoggedToday = emptySet(),
@@ -107,7 +107,7 @@ class MealGapDetectorTest {
     }
 
     @Test
-    fun `про приём пищи, которого у человека нет, не спрашивают`() {
+    fun `про приём пищи которого у человека нет не спрашивают`() {
         val gap = MealGapDetector.detect(
             history = history(),
             mealsLoggedToday = emptySet(),

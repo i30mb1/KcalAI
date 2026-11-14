@@ -25,7 +25,7 @@ class Migration7To8Test {
     fun close() = connection.close()
 
     @Test
-    fun `записанное на месте, клетчатка у него неизвестна, таблицы совпадают со схемой версии 8`() {
+    fun `записанное на месте клетчатка у него неизвестна таблицы совпадают со схемой версии 8`() {
         createSqlOf(7).forEach(connection::execSQL)
         connection.execSQL(
             "INSERT INTO diary_entry (dateEpochDay, meal, displayName, grams, kcal100, prot100, fat100, " +

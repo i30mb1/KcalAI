@@ -77,7 +77,7 @@ class LabelConsensusTest {
 
     /** Подпись не прочитана ни разу, и кадры сходятся на нуле: у сахара белка и правда нет. */
     @Test
-    fun `ноль без подписи голосует, пока никто её не прочитал`() {
+    fun `ноль без подписи голосует пока никто её не прочитал`() {
         val consensus = LabelConsensus()
 
         val verdict = List(3) { consensus.add(traced(carb = 0, zeroed = true)) }.last()

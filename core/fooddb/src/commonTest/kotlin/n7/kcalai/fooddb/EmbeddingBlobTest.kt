@@ -26,7 +26,7 @@ class EmbeddingBlobTest {
     }
 
     @Test
-    fun `обрезанный блоб — ошибка сборки базы, а не вектор`() {
+    fun `обрезанный блоб — ошибка сборки базы — не вектор`() {
         assertFailsWith<IllegalArgumentException> { decodeEmbedding(byteArrayOf(0, 0, 0)) }
     }
 }

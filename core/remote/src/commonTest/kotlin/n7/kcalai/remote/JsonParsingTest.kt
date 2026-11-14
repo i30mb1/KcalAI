@@ -34,7 +34,7 @@ class JsonParsingTest {
 
     /** Клетчатка в OFF приходит тем же блоком; нет поля — не ноль, а неизвестно. */
     @Test
-    fun `клетчатка из OFF, а без поля — неизвестна`() {
+    fun `клетчатка из OFF а без поля — неизвестна`() {
         fun body(fiber: String) = """
             {"status":1,"product":{"product_name":"Хлебцы ржаные",
               "nutriments":{"energy-kcal_100g":310,"proteins_100g":11,"fat_100g":2,"carbohydrates_100g":57$fiber}
@@ -54,7 +54,7 @@ class JsonParsingTest {
     }
 
     @Test
-    fun `калории из килоджоулей, если ккал нет`() {
+    fun `калории из килоджоулей если ккал нет`() {
         val body = """{"status":1,"product":{"product_name":"X","nutriments":{"energy-kj_100g":418.4}}}"""
 
         assertEquals(100, parseOffProduct("1", body)!!.nutriments!!.kcal100)
@@ -66,7 +66,7 @@ class JsonParsingTest {
     }
 
     @Test
-    fun `битый JSON — не исключение, а промах`() {
+    fun `битый JSON — не исключение а промах`() {
         assertNull(parseOffProduct("1", "<html>502</html>"))
         assertNull(parseServerProduct("1", "{"))
         assertNull(parseManifest("http://s", "[]"))
@@ -118,7 +118,7 @@ class JsonParsingTest {
     }
 
     @Test
-    fun `без порции и бренда — null, а не ноль и пустая строка`() {
+    fun `без порции и бренда — null — не ноль и пустая строка`() {
         val product = parseServerProduct("1", """{"name":"X","kcal100":59}""")!!
 
         assertNull(product.brand)
@@ -138,7 +138,7 @@ class JsonParsingTest {
     }
 
     @Test
-    fun `вклад уходит в единицах контракта, без пустой порции`() {
+    fun `вклад уходит в единицах контракта без пустой порции`() {
         val json = contributionsJson(
             listOf(
                 ContributionEntity(

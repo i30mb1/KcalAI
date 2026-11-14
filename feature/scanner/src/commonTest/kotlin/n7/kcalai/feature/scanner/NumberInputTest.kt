@@ -82,7 +82,7 @@ class NumberInputTest {
 
     /** Вставить из буфера можно что угодно: «12,4 г», код с пробелами. */
     @Test
-    fun `всё, кроме цифр, не встаёт`() {
+    fun `всё кроме цифр не встаёт`() {
         assertEquals("12,4", NumberKind.GRAMS.clean("12,4 г"))
         assertEquals("121", NumberKind.KCAL.clean("121 ккал"))
         assertEquals("4607001771234", NumberKind.CODE.clean("4 607001 771234"))

@@ -24,7 +24,7 @@ class Migration6To7Test {
     fun close() = connection.close()
 
     @Test
-    fun `сказанное на месте, ответа у него нет, таблица совпадает со схемой версии 7`() {
+    fun `сказанное на месте ответа у него нет таблица совпадает со схемой версии 7`() {
         createSqlOf(6).forEach(connection::execSQL)
         connection.execSQL(
             "INSERT INTO diary_entry (dateEpochDay, meal, displayName, grams, kcal100, prot100, fat100, " +

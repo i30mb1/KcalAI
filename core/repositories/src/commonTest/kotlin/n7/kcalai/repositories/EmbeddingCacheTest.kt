@@ -54,7 +54,7 @@ class EmbeddingCacheTest {
     }
 
     @Test
-    fun `за раз досчитывается не больше бюджета, начиная с первых`() = runTest {
+    fun `за раз досчитывается не больше бюджета начиная с первых`() = runTest {
         val cache = cache()
 
         val first = cache.vectors(listOf(porridge, milk, coffee), budget = 2)
@@ -77,7 +77,7 @@ class EmbeddingCacheTest {
     }
 
     @Test
-    fun `продукт размечается документом, запрос — запросом`() = runTest {
+    fun `продукт размечается документом запрос — запросом`() = runTest {
         val asQuery = EmbeddingKey(EmbeddingMarkup.QUERY, "Молоко 3,2%")
 
         val found = cache().vectors(listOf(milk, asQuery), budget = 10)
@@ -87,7 +87,7 @@ class EmbeddingCacheTest {
     }
 
     @Test
-    fun `хранится начало вектора, снова длиной один`() = runTest {
+    fun `хранится начало вектора снова длиной один`() = runTest {
         val long = FakeEmbedder(queries = mapOf("каша утром" to floatArrayOf(3f, 4f, 12f)))
 
         val found = cache(embedder = long).vectors(listOf(porridge), budget = 10)

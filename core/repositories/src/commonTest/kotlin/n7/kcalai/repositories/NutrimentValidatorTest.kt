@@ -31,7 +31,7 @@ class NutrimentValidatorTest {
     }
 
     @Test
-    fun `калорий больше, чем у чистого жира, не бывает`() {
+    fun `калорий больше чем у чистого жира не бывает`() {
         assertFalse(NutrimentValidator.check(Nutriments(901, 0, 10_000, 0)).valid)
         assertTrue(NutrimentValidator.check(Nutriments(900, 0, 10_000, 0)).valid)
     }
@@ -63,7 +63,7 @@ class NutrimentValidatorTest {
     }
 
     @Test
-    fun `потерянный разряд в калориях ловится предупреждением, а не ошибкой`() {
+    fun `потерянный разряд в калориях ловится предупреждением — не ошибкой`() {
         // Гречка: Б 12,6 / Ж 3,3 / У 62 дают ~330 ккал, а введено 33.
         val check = NutrimentValidator.check(Nutriments(33, 1_260, 330, 6_200))
 

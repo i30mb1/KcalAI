@@ -1,8 +1,9 @@
-package n7.kcalai.shake
+package n7.kcalai.model
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * Тряска телефона — у персонажей кружится голова.
@@ -32,7 +33,7 @@ class ShakeDetectorTest {
 
         assertFalse(detector.feed(jolt, 0))
         assertFalse(detector.feed(jolt, 150))
-        assertEquals(true, detector.feed(jolt, 300))
+        assertTrue(detector.feed(jolt, 300))
     }
 
     /** Достали из кармана, положили на стол — рывки есть, но редкие. */

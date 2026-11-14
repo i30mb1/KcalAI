@@ -71,7 +71,7 @@ class DiaryToolsTest {
     }
 
     @Test
-    fun `пустой поиск говорит модели, что искать заново`() = runTest {
+    fun `пустой поиск говорит модели что искать заново`() = runTest {
         val found = tools.searchFood("хрючево")
 
         assertTrue("ничего" in found, found)
@@ -96,7 +96,7 @@ class DiaryToolsTest {
     }
 
     @Test
-    fun `вес приходит из модели и строкой, и целым`() = runTest {
+    fun `вес приходит из модели и строкой и целым`() = runTest {
         tools.searchFood("хлеб")
 
         assertEquals(60, tools.proposal("propose_food", mapOf("foodId" to "generic:31", "grams" to "60"))?.grams)
@@ -117,7 +117,7 @@ class DiaryToolsTest {
     }
 
     @Test
-    fun `продукт, которого поиск не показывал, не предлагается — модель не выдумывает`() = runTest {
+    fun `продукт которого поиск не показывал не предлагается — модель не выдумывает`() = runTest {
         tools.searchFood("борщ")
 
         assertNull(tools.proposal("propose_food", mapOf("foodId" to "generic:31", "grams" to 30)))
@@ -166,7 +166,7 @@ class DiaryToolsTest {
     }
 
     @Test
-    fun `день без записей так и называется, а не нулями`() = runTest {
+    fun `день без записей так и называется — не нулями`() = runTest {
         val summary = tools.diaryDays(1)
 
         assertTrue("сегодня: записей нет" in summary, summary)
@@ -180,7 +180,7 @@ class DiaryToolsTest {
     }
 
     @Test
-    fun `записи дня — с приёмом, весом и калориями`() = runTest {
+    fun `записи дня — с приёмом весом и калориями`() = runTest {
         entries[today - 1] = listOf(
             entry(today - 1, "Овсянка", 250, kcal100 = 90, meal = MealType.BREAKFAST),
             entry(today - 1, "Борщ", 300, kcal100 = 49, meal = MealType.LUNCH),

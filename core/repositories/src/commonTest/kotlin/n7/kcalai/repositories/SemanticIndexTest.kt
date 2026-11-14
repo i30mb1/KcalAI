@@ -28,7 +28,7 @@ class SemanticIndexTest {
     }
 
     @Test
-    fun `ниже порога — не находка, а шум`() {
+    fun `ниже порога — не находка а шум`() {
         val found = index.nearest(unit(1f, 0f, 0f), limit = 3, minScore = 0.5f)
 
         assertEquals(listOf(1L, 2L), found.map { it.id })

@@ -70,7 +70,7 @@ class IdleHolderTest {
     }
 
     @Test
-    fun `нечего открыть — нет ни результата, ни таймера`() = runTest {
+    fun `нечего открыть — нет ни результата ни таймера`() = runTest {
         val holder = holder(available = false)
 
         assertNull(holder.use { 42 })

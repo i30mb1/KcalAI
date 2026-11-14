@@ -19,7 +19,7 @@ class StageTest {
     // --- Тычки ----------------------------------------------------------------------------
 
     @Test
-    fun `тычки считаются, пока идут подряд`() {
+    fun `тычки считаются пока идут подряд`() {
         val meter = PokeMeter()
 
         assertEquals(1, meter.poke(0).count)
@@ -37,7 +37,7 @@ class StageTest {
     }
 
     @Test
-    fun `двойной тап — трюк, медленный второй тык — нет`() {
+    fun `двойной тап — трюк медленный второй тык — нет`() {
         val quick = PokeMeter()
         assertFalse(quick.poke(0).trick)
         assertTrue(quick.poke(200).trick)
@@ -69,7 +69,7 @@ class StageTest {
     }
 
     @Test
-    fun `близкий палец — взгляд вполсилы, палец на персонаже — прямо`() {
+    fun `близкий палец — взгляд вполсилы палец на персонаже — прямо`() {
         val near = gaze(from = Offset(100f, 100f), to = Offset(100f, 250f), reachPx = 300f)
         assertEquals(0.5f, near.y, 0.001f)
 
@@ -89,7 +89,7 @@ class StageTest {
     // --- Сон ------------------------------------------------------------------------------
 
     @Test
-    fun `от безделья сначала зевают, потом спят`() {
+    fun `от безделья сначала зевают потом спят`() {
         assertEquals(Rest.AWAKE, restAfterIdle(10_000))
         assertEquals(Rest.DROWSY, restAfterIdle(45_000))
         assertEquals(Rest.ASLEEP, restAfterIdle(70_000))
@@ -101,7 +101,7 @@ class StageTest {
     private val bubble = IntSize(400, 120)
 
     @Test
-    fun `облачко — над персонажем, хвостиком к нему`() {
+    fun `облачко — над персонажем хвостиком к нему`() {
         val mascot = Rect(left = 400f, top = 800f, right = 520f, bottom = 900f)
 
         val placed = speechPlacement(mascot, bubble, screen, marginPx = 32)
@@ -122,7 +122,7 @@ class StageTest {
     }
 
     @Test
-    fun `у бокового края — прижато к краю, а хвостик всё равно у персонажа`() {
+    fun `у бокового края — прижато к краю а хвостик всё равно у персонажа`() {
         val mascot = Rect(left = 0f, top = 800f, right = 60f, bottom = 900f)
 
         val placed = speechPlacement(mascot, bubble, screen, marginPx = 32)
@@ -147,7 +147,7 @@ class StageTest {
     }
 
     @Test
-    fun `занято и сверху, и снизу — облачко встаёт там, где закроет меньше`() {
+    fun `занято и сверху и снизу — облачко встаёт там где закроет меньше`() {
         val mascot = Rect(left = 400f, top = 800f, right = 520f, bottom = 900f)
         val above = Rect(left = 0f, top = 600f, right = 1_080f, bottom = 790f)
         val below = Rect(left = 0f, top = 905f, right = 300f, bottom = 950f)
@@ -158,7 +158,7 @@ class StageTest {
     }
 
     @Test
-    fun `сверху занято, а снизу край экрана — облачко всё равно над персонажем`() {
+    fun `сверху занято а снизу край экрана — облачко всё равно над персонажем`() {
         val mascot = Rect(left = 400f, top = 1_820f, right = 520f, bottom = 1_920f)
         val reply = Rect(left = 0f, top = 1_600f, right = 1_080f, bottom = 1_810f)
 

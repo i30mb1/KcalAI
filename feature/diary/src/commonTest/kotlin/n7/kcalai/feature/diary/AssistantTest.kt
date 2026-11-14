@@ -134,7 +134,7 @@ class AssistantTest {
     }
 
     @Test
-    fun `чипс нейросети записывается, а остальные её предложения остаются`() = runTest(dispatcher) {
+    fun `чипс нейросети записывается а остальные её предложения остаются`() = runTest(dispatcher) {
         assistant.proposals = listOf(
             proposal(borscht, 350, "тарелка борща"),
             proposal(harness.kefir, 250, "стакан кефира"),
@@ -180,7 +180,7 @@ class AssistantTest {
     }
 
     @Test
-    fun `сбой модели — та же реплика, а не падение экрана`() = runTest(dispatcher) {
+    fun `сбой модели — та же реплика — не падение экрана`() = runTest(dispatcher) {
         assistant.failure = IllegalStateException("BUSY")
         val vm = screen()
         vm.onInputChange("хрючево")
@@ -213,7 +213,7 @@ class AssistantTest {
     // --- Вопрос про дневник --------------------------------------------------------------
 
     @Test
-    fun `вопрос уходит нейросети, а не в поиск, и ответ встаёт в ленту`() = runTest(dispatcher) {
+    fun `вопрос уходит нейросети — не в поиск и ответ встаёт в ленту`() = runTest(dispatcher) {
         assistant.answerParts = listOf("Вчера ", "Вчера 1840 ккал.")
         val vm = screen()
 
@@ -280,7 +280,7 @@ class AssistantTest {
     }
 
     @Test
-    fun `без нейросети кнопка та же, но записывать нечего — она только прячет клавиатуру`() = runTest(dispatcher) {
+    fun `без нейросети кнопка та же но записывать нечего — она только прячет клавиатуру`() = runTest(dispatcher) {
         val vm = screen(withAssistant = false)
         vm.onInputChange("доел за ребёнком макароны")
         advanceUntilIdle()

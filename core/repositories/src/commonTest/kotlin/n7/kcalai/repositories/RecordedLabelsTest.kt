@@ -160,7 +160,7 @@ class RecordedLabelsTest {
 
     /** Жиров на обезжиренном напитке и правда нет: без подписи ноль, потому что калории сходятся. */
     @Test
-    fun `макрос без подписи — ноль, когда калории сходятся и без него`() {
+    fun `макрос без подписи — ноль когда калории сходятся и без него`() {
         val reading = LabelParser.parseLines(exponenta.toLines())
 
         assertEquals(0, reading.draft.fat100)
@@ -172,7 +172,7 @@ class RecordedLabelsTest {
      * не на этикетке нет, а просто не влезла в кадр, и ноль здесь был бы выдумкой.
      */
     @Test
-    fun `калории не сходятся — макрос без подписи не ноль, а неизвестен`() {
+    fun `калории не сходятся — макрос без подписи не ноль а неизвестен`() {
         val reading = LabelParser.parseLines(balsamic.toLines())
 
         assertEquals(201, reading.draft.kcal100)

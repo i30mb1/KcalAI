@@ -18,6 +18,7 @@ import androidx.core.graphics.drawable.IconCompat
 import n7.kcalai.MainActivity
 import n7.kcalai.R
 import n7.kcalai.database.MascotMessageEntity
+import n7.kcalai.mascot.SuggestionExtras
 import n7.kcalai.mascot.Written
 import n7.kcalai.mascot.voice.foodName
 import n7.kcalai.model.Mascot

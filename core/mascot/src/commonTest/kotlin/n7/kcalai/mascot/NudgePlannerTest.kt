@@ -141,7 +141,7 @@ class NudgePlannerTest {
     // --- Пропал ---------------------------------------------------------------------------
 
     @Test
-    fun `«пропал» — на второй, четвёртый, седьмой и четырнадцатый день, и пишут по очереди`() {
+    fun `«пропал» — на второй четвёртый седьмой и четырнадцатый день и пишут по очереди`() {
         fun away(days: Int) = plan(snapshot(15) { copy(daysAway = days) })
 
         assertEquals(Nudge(Topic.COMEBACK, Mascot.GRAIN), away(2))
@@ -211,7 +211,7 @@ class NudgePlannerTest {
     }
 
     @Test
-    fun `серия под угрозой — ближе к вечеру, пишет Яйцо`() {
+    fun `серия под угрозой — ближе к вечеру пишет Яйцо`() {
         val streak: Facts.() -> Facts = { copy(daysAway = 1, streakDays = 5) }
 
         assertEquals(Topic.EMPTY_DAY, plan(snapshot(15, facts = streak))?.topic)
@@ -228,7 +228,7 @@ class NudgePlannerTest {
     }
 
     @Test
-    fun `«вчера в цель» — утром, пока сегодня пусто, и не чаще раза в три дня`() {
+    fun `«вчера в цель» — утром пока сегодня пусто и не чаще раза в три дня`() {
         val win = snapshot(10) { copy(yesterdayOnGoal = true) }
 
         assertEquals(Nudge(Topic.YESTERDAY_WIN, Mascot.BUTTER), plan(win))

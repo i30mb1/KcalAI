@@ -42,7 +42,7 @@ class RussianTest {
     }
 
     @Test
-    fun `счёт словами до десяти, дальше цифрой`() {
+    fun `счёт словами до десяти дальше цифрой`() {
         assertEquals("один день", countPhrase(1, "день", "дня", "дней"))
         assertEquals("три дня", countPhrase(3, "день", "дня", "дней"))
         assertEquals("шесть дней", countPhrase(6, "день", "дня", "дней"))

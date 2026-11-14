@@ -14,7 +14,7 @@ import kotlin.test.Test
 class WeightInputTest {
 
     @Test
-    fun `«вес 82,4» и «82,4 кг» — одно и то же взвешивание`() {
+    fun `«вес 82.4» и «82.4 кг» — одно и то же взвешивание`() {
         assertEquals(82_400, parseWeight("вес 82,4"))
         assertEquals(82_400, parseWeight("82.4 кг"))
         assertEquals(82_400, parseWeight("  Вес 82.4  "))

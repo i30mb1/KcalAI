@@ -22,7 +22,7 @@ class Migration5To6Test {
     fun close() = connection.close()
 
     @Test
-    fun `дневник на месте, кэш отпечатков появился и совпадает со схемой версии 6`() {
+    fun `дневник на месте кэш отпечатков появился и совпадает со схемой версии 6`() {
         createSqlOf(5).forEach(connection::execSQL)
         connection.execSQL(
             "INSERT INTO diary_entry (dateEpochDay, meal, displayName, grams, kcal100, prot100, fat100, " +

@@ -106,7 +106,7 @@ class SemanticFoodSearchTest {
     // --- Свои продукты -------------------------------------------------------------------
 
     @Test
-    fun `свой продукт находится по смыслу, размеченный документом`() = runTest {
+    fun `свой продукт находится по смыслу размеченный документом`() = runTest {
         val embedder = FakeEmbedder(
             queries = mapOf("творожок простоквашинский" to at(0.0)),
             documents = mapOf(cottage.displayName to at(20.0)),
@@ -146,7 +146,7 @@ class SemanticFoodSearchTest {
     }
 
     @Test
-    fun `справочника нет, а свои продукты есть — ищем по своим`() = runTest {
+    fun `справочника нет а свои продукты есть — ищем по своим`() = runTest {
         val embedder = FakeEmbedder(
             queries = mapOf("творожок" to at(0.0)),
             documents = mapOf(cottage.displayName to at(10.0)),
@@ -163,7 +163,7 @@ class SemanticFoodSearchTest {
     private fun porridges(oatmealAngle: Double) = SemanticIndex(mapOf(8L to at(25.0), 7L to at(oatmealAngle)))
 
     @Test
-    fun `похожий прошлый запрос приносит то, что человек тогда выбрал`() = runTest {
+    fun `похожий прошлый запрос приносит то что человек тогда выбрал`() = runTest {
         val embedder = FakeEmbedder(queries = mapOf("моя утренняя каша" to at(0.0), "каша утром" to at(15.0)))
         val past = listOf(PastPick("каша утром", oatmeal.ref, times = 1, lastAt = 100))
 
@@ -175,7 +175,7 @@ class SemanticFoodSearchTest {
     }
 
     @Test
-    fun `прошлый выбор не годится, если сам продукт запросу заметно чужой`() = runTest {
+    fun `прошлый выбор не годится если сам продукт запросу заметно чужой`() = runTest {
         // «пельмени со сметаной» и «вареники со сметаной» как запросы почти одно и то же,
         // а пельмени для «вареников» далеко позади лучшего из справочника.
         val embedder = FakeEmbedder(queries = mapOf("моя утренняя каша" to at(0.0), "каша утром" to at(15.0)))
@@ -209,7 +209,7 @@ class SemanticFoodSearchTest {
     }
 
     @Test
-    fun `из похожих прошлых выигрывает выбранное чаще, при равенстве — позже`() = runTest {
+    fun `из похожих прошлых выигрывает выбранное чаще при равенстве — позже`() = runTest {
         val embedder = FakeEmbedder(
             queries = mapOf(
                 "кашка" to at(0.0),
@@ -245,7 +245,7 @@ class SemanticFoodSearchTest {
     }
 
     @Test
-    fun `одно и то же не повторяется, и лишнего не выдаётся`() = runTest {
+    fun `одно и то же не повторяется и лишнего не выдаётся`() = runTest {
         val embedder = FakeEmbedder(
             queries = mapOf("борщец" to at(0.0), "борщик" to at(5.0)),
             documents = mapOf(cottage.displayName to at(30.0)),
@@ -260,7 +260,7 @@ class SemanticFoodSearchTest {
     }
 
     @Test
-    fun `выбор, пропавший из справочника, пропускается`() = runTest {
+    fun `выбор пропавший из справочника пропускается`() = runTest {
         val embedder = FakeEmbedder(queries = mapOf("борщец" to at(0.0), "борщик" to at(5.0)))
         val gone = FoodRef.Generic(999)
         val past = listOf(PastPick("борщик", gone, times = 9, lastAt = 100))

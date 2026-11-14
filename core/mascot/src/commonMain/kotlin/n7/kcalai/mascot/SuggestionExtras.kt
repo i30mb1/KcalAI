@@ -1,6 +1,5 @@
-package n7.kcalai.notify
+package n7.kcalai.mascot
 
-import n7.kcalai.mascot.Suggestion
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType

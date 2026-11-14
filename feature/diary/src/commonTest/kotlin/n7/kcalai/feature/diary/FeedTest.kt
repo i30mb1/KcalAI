@@ -45,7 +45,7 @@ class FeedTest {
     // --- Пузырьки ------------------------------------------------------------------------
 
     @Test
-    fun `завтрак — один пузырёк, даже если к нему возвращались`() {
+    fun `завтрак — один пузырёк даже если к нему возвращались`() {
         val bubbles = groupIntoBubbles(
             listOf(
                 entry(1, hour = 8, meal = MealType.BREAKFAST),
@@ -63,7 +63,7 @@ class FeedTest {
 
     /** Клетчатка пузырька — сумма его записей; неизвестная у котлеты не превращается в ноль. */
     @Test
-    fun `клетчатка приёма — сумма записей, неизвестная остаётся пробелом`() {
+    fun `клетчатка приёма — сумма записей неизвестная остаётся пробелом`() {
         val buckwheat = entry(1, hour = 13, meal = MealType.LUNCH).copy(grams = 200, fiber100 = 270)
         val salad = entry(2, hour = 13, minute = 5, meal = MealType.LUNCH).copy(grams = 150, fiber100 = 150)
         val cutlet = entry(3, hour = 13, minute = 6, meal = MealType.LUNCH)
@@ -140,7 +140,7 @@ class FeedTest {
     }
 
     @Test
-    fun `активен пузырёк, куда упадёт следующая запись`() {
+    fun `активен пузырёк куда упадёт следующая запись`() {
         val bubbles = groupIntoBubbles(
             listOf(
                 entry(1, hour = 8, meal = MealType.BREAKFAST),
@@ -192,7 +192,7 @@ class FeedTest {
      * что было до перекуса, то есть про уже записанное.
      */
     @Test
-    fun `вопрос встаёт после всех пузырьков, что были раньше`() {
+    fun `вопрос встаёт после всех пузырьков что были раньше`() {
         val bubbles = groupIntoBubbles(
             listOf(
                 entry(1, hour = 8, meal = MealType.BREAKFAST),
@@ -235,7 +235,7 @@ class FeedTest {
     }
 
     @Test
-    fun `сообщение в ту же минуту, что запись, — после неё`() {
+    fun `сообщение в ту же минуту что запись — после неё`() {
         val bubbles = groupIntoBubbles(listOf(entry(1, hour = 8, meal = MealType.BREAKFAST)), zone, nowMillis = at(9))
         val said = FeedItem.Said(id = 7, mascot = Mascot.EGG, text = "Принято.", time = "08:00", minute = 8 * 60)
 
@@ -247,7 +247,7 @@ class FeedTest {
      * Минута одна, но вопрос был раньше ответа, и в переписке он стоит выше.
      */
     @Test
-    fun `сообщение, написанное до записи в ту же минуту, — перед ней`() {
+    fun `сообщение написанное до записи в ту же минуту — перед ней`() {
         val bubbles = groupIntoBubbles(listOf(entry(1, hour = 8, meal = MealType.BREAKFAST)), zone, nowMillis = at(9))
         val asked = FeedItem.Said(id = 7, mascot = Mascot.GRAIN, text = "Время завтрака!", time = "08:00", minute = 8 * 60, at = at(8) - 5_000)
         val answered = FeedItem.Said(id = 8, mascot = Mascot.GRAIN, text = "Записал!", time = "08:00", minute = 8 * 60, at = at(8) + 2_000)
@@ -257,7 +257,7 @@ class FeedTest {
 
     /** Вопрос персонажа — такое же сообщение переписки: стоит там, когда задан, и с ответом там же. */
     @Test
-    fun `вопрос встаёт между пузырьками по времени, как сообщение`() {
+    fun `вопрос встаёт между пузырьками по времени как сообщение`() {
         val bubbles = groupIntoBubbles(
             listOf(entry(1, hour = 8, meal = MealType.BREAKFAST), entry(2, hour = 13, meal = MealType.LUNCH)),
             zone,

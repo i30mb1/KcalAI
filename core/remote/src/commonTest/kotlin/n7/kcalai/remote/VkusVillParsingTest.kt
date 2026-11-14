@@ -110,7 +110,7 @@ class VkusVillParsingTest {
 
     /** У воды и зелени свойства «пищевая ценность» нет совсем. */
     @Test
-    fun `без пищевой ценности — только название, и без разметки в нём`() {
+    fun `без пищевой ценности — только название и без разметки в нём`() {
         val product = parseVkusVillProduct(GTIN, answer(name = "Вода питьевая негазированная, 5&nbsp;л", nutrition = null))!!
 
         assertEquals("Вода питьевая негазированная, 5 л", product.name)
@@ -131,7 +131,7 @@ class VkusVillParsingTest {
     }
 
     @Test
-    fun `битый ответ — не исключение, а промах`() {
+    fun `битый ответ — не исключение а промах`() {
         assertNull(parseVkusVillProduct(GTIN, "<html>403</html>"))
         assertNull(parseVkusVillProduct(GTIN, """{"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"bad"}}"""))
         assertNull(parseVkusVillProduct(GTIN, rpc("не json")))
@@ -139,7 +139,7 @@ class VkusVillParsingTest {
 
     /** Сервер принимает только EAN-13, и короткий код в сеть не уходит. */
     @Test
-    fun `запрос — вызов инструмента поиска по коду, и только для тринадцати цифр`() {
+    fun `запрос — вызов инструмента поиска по коду и только для тринадцати цифр`() {
         assertEquals(
             """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":""" +
                 """{"name":"vkusvill_product_barcode","arguments":{"barcode":"$GTIN"}}}""",

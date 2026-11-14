@@ -79,7 +79,7 @@ class FactsBuilderTest {
     }
 
     @Test
-    fun `сегодняшнее в серию не идёт, но и не рвёт её`() = runTest {
+    fun `сегодняшнее в серию не идёт но и не рвёт её`() = runTest {
         listOf(0, 1, 2).forEach { eat("Каша", daysAgo = it, hour = 9) }
 
         assertEquals(2, build().facts.streakDays)
@@ -121,7 +121,7 @@ class FactsBuilderTest {
     }
 
     @Test
-    fun `любимое — то, что в истории хотя бы трижды`() = runTest {
+    fun `любимое — то что в истории хотя бы трижды`() = runTest {
         listOf(1, 2, 3).forEach { eat("Овсянка на молоке", daysAgo = it, hour = 8, meal = MealType.BREAKFAST) }
         listOf(1, 2).forEach { eat("Суп", daysAgo = it, hour = 13) }
 
@@ -182,7 +182,7 @@ class FactsBuilderTest {
     }
 
     @Test
-    fun `пустая история — факты пустые, без падений`() = runTest {
+    fun `пустая история — факты пустые без падений`() = runTest {
         val snapshot = build()
 
         with(snapshot.facts) {
@@ -200,7 +200,7 @@ class FactsBuilderTest {
     }
 
     @Test
-    fun `имя, пол и отсутствие — из профиля`() = runTest {
+    fun `имя пол и отсутствие — из профиля`() = runTest {
         val profile = MascotProfileEntity(name = "Женя", sex = Sex.FEMALE, lastOpenAt = now.toEpochMilliseconds() - 300 * 60_000L)
 
         val facts = build(profile).facts

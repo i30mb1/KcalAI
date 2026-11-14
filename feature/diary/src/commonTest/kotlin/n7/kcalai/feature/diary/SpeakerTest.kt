@@ -52,7 +52,7 @@ class SpeakerTest {
     }
 
     @Test
-    fun `остаток с недобранным белком — Яйцо, без него — Зёрнышко`() {
+    fun `остаток с недобранным белком — Яйцо без него — Зёрнышко`() {
         val withProtein = DayPlan(remainingKcal = 500, remainingProtCg = 2000, options = emptyList())
         val noProtein = DayPlan(remainingKcal = 500, remainingProtCg = 0, options = emptyList())
 
@@ -83,7 +83,7 @@ class SpeakerTest {
     }
 
     @Test
-    fun `имя спрашивает Яйцо, разрешение писать — Зёрнышко`() {
+    fun `имя спрашивает Яйцо разрешение писать — Зёрнышко`() {
         fun ask(question: MascotQuestion) = FeedItem.Ask(id = 1, question = question, text = question.text, time = "10:00", minute = 600)
 
         assertEquals(Mascot.EGG, speakerOf(ask(MascotQuestion.NAME)))

@@ -29,7 +29,7 @@ class TextParserTest {
     }
 
     @Test
-    fun `жирность — часть названия, а не количество`() {
+    fun `жирность — часть названия — не количество`() {
         val segment = parseSegment("творог 5%")!!
 
         assertEquals("творог", segment.name)
@@ -130,7 +130,7 @@ class TextParserTest {
     // --- Фраза ------------------------------------------------------------------------
 
     @Test
-    fun `фраза делится по запятой, «и» и плюсу`() {
+    fun `фраза делится по запятой «и» и плюсу`() {
         val names = parsePhrase("гречка 200, курица и салат + хлеб").map { it.name }
 
         assertEquals(listOf("гречка", "курица", "салат", "хлеб"), names)
@@ -167,7 +167,7 @@ class TextParserTest {
     }
 
     @Test
-    fun `маленькое число у нештучного продукта — не граммы, а порция`() {
+    fun `маленькое число у нештучного продукта — не граммы а порция`() {
         // «молоко 3» — ни штуки, ни граммы. Три грамма молока честнее не записывать.
         val grams = Quantity.Bare(3.0).toGrams(emptyMap(), defaultPortionG = 200)
 
@@ -176,7 +176,7 @@ class TextParserTest {
     }
 
     @Test
-    fun `дюжина — ещё штуки, сотня — уже граммы`() {
+    fun `дюжина — ещё штуки сотня — уже граммы`() {
         assertEquals(12 * 60, Quantity.Bare(12.0).toGrams(egg, 60).value)
         assertEquals(100, Quantity.Bare(100.0).toGrams(egg, 60).value)
     }
@@ -207,7 +207,7 @@ class TextParserTest {
     }
 
     @Test
-    fun `«немного» масштабирует порцию, но не до нуля`() {
+    fun `«немного» масштабирует порцию но не до нуля`() {
         assertEquals(50, Quantity.Vague(0.5).toGrams(emptyMap(), 100).value)
         assertEquals(1, Quantity.Vague(0.1).toGrams(emptyMap(), 4).value)
     }

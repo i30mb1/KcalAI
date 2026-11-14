@@ -53,7 +53,7 @@ class ScanStateTest {
      * хоть строку, а закрыть пустую карточку без вопроса было бы нельзя.
      */
     @Test
-    fun `заполненная карточка — пять из пяти, сколько бы ни было в коде`() {
+    fun `заполненная карточка — пять из пяти сколько бы ни было в коде`() {
         assertEquals(5, filled(gtin = GTIN).filledFields)
         assertEquals(5, filled(gtin = null).filledFields)
     }
@@ -69,13 +69,13 @@ class ScanStateTest {
      * сначала спрашивает.
      */
     @Test
-    fun `терять нечего, пока в карточке только код с промаха скана`() {
+    fun `терять нечего пока в карточке только код с промаха скана`() {
         assertFalse(ScanState(GTIN).hasDraft)
         assertFalse(ScanState(null).hasDraft)
     }
 
     @Test
-    fun `есть что терять, как только поле заполнила камера или человек`() {
+    fun `есть что терять как только поле заполнила камера или человек`() {
         assertTrue(ScanState(GTIN).apply { name.type("Творог") }.hasDraft)
         assertTrue(ScanState(null).apply { kcal.offer("121") }.hasDraft)
         // Код, набранный руками на карточке без промаха скана, — тоже работа.
@@ -88,7 +88,7 @@ class ScanStateTest {
      * человек в неё ещё ничего не вложил.
      */
     @Test
-    fun `название из сети стоит в карточке, ищется в справочнике и потерей не считается`() {
+    fun `название из сети стоит в карточке ищется в справочнике и потерей не считается`() {
         val card = ScanState(GTIN, initialName = "Простоквашино Творог 5%")
 
         assertEquals("Простоквашино Творог 5%", card.name.text)
@@ -98,7 +98,7 @@ class ScanStateTest {
     }
 
     @Test
-    fun `название из сети, поправленное человеком, — уже работа`() {
+    fun `название из сети поправленное человеком — уже работа`() {
         assertTrue(ScanState(GTIN, initialName = "Творог").apply { name.type("Творог 9%") }.hasDraft)
     }
 
@@ -110,7 +110,7 @@ class ScanStateTest {
      * годами врали в дневнике. Чего камера не прочла, человек вписывает сам.
      */
     @Test
-    fun `без белков, жиров и углеводов продукт не сохраняется`() {
+    fun `без белков жиров и углеводов продукт не сохраняется`() {
         val state = ScanState(null).apply {
             name.type("Творог 5%")
             kcal.type("121")
@@ -141,7 +141,7 @@ class ScanStateTest {
      * человеку, который ещё не дописал.
      */
     @Test
-    fun `сверка калорий с макросами молчит, пока числа не вписаны все`() {
+    fun `сверка калорий с макросами молчит пока числа не вписаны все`() {
         val partial = ScanState(null).apply {
             name.type("Творог 5%")
             kcal.type("121")
@@ -156,7 +156,7 @@ class ScanStateTest {
 
     /** Человек в этот момент целится в таблицу: клавиатура закрыла бы ему кадр. */
     @Test
-    fun `камера ничего не прочла за 20 секунд — просят вписать, но клавиатуру не открывают`() {
+    fun `камера ничего не прочла за 20 секунд — просят вписать но клавиатуру не открывают`() {
         var now = 0L
         val state = ScanState(GTIN) { now }
 
@@ -279,7 +279,7 @@ class ScanStateTest {
 
     /** Человек набирает название — поле чисел не перехватывает клавиатуру посреди слова. */
     @Test
-    fun `пока набирают название, просьба вписать числа ждёт`() {
+    fun `пока набирают название просьба вписать числа ждёт`() {
         var now = 0L
         val state = ScanState(GTIN) { now }
 
@@ -315,7 +315,7 @@ class ScanStateTest {
     // --- Цифры с клавиатуры ---------------------------------------------------------------
 
     @Test
-    fun `цифры встают в выбранное поле, и камера их больше не трогает`() {
+    fun `цифры встают в выбранное поле и камера их больше не трогает`() {
         val state = ScanState(GTIN)
 
         state.startTyping(state.carb)
@@ -330,7 +330,7 @@ class ScanStateTest {
      * обратно. Поле, которое сейчас набирают, камера не трогает вовсе.
      */
     @Test
-    fun `в поле, которое сейчас набирают, камера не пишет — даже в стёртое`() {
+    fun `в поле которое сейчас набирают камера не пишет — даже в стёртое`() {
         val state = ScanState(GTIN)
         state.onFrame(read(fat = 550))
 
@@ -369,7 +369,7 @@ class ScanStateTest {
     }
 
     @Test
-    fun `калории вписываются без запятой, а код — с ведущим нулём`() {
+    fun `калории вписываются без запятой а код — с ведущим нулём`() {
         val state = ScanState(null)
 
         state.input(state.kcal, "1,2")
@@ -440,7 +440,7 @@ class ScanStateTest {
     }
 
     @Test
-    fun `числа не сходятся — сохранить можно, но кнопка говорит об этом прямо`() {
+    fun `числа не сходятся — сохранить можно но кнопка говорит об этом прямо`() {
         val state = unbalanced()
 
         assertTrue(state.canSave)
@@ -449,7 +449,7 @@ class ScanStateTest {
     }
 
     @Test
-    fun `числа не сходятся — персонажи не говорят, что всё сошлось`() {
+    fun `числа не сходятся — персонажи не говорят что всё сошлось`() {
         val state = unbalanced()
 
         assertEquals(MascotMood.ASKING, state.line(Mascot.EGG).mood)
@@ -483,7 +483,7 @@ class ScanStateTest {
 
     /** Белки — Яйцо, жиры — Масло, углеводы — Зёрнышко: тот же, кто сидит в плитке дневника. */
     @Test
-    fun `каждый ждёт своё, а получив, называет число и ждёт остальных`() {
+    fun `каждый ждёт своё а получив называет число и ждёт остальных`() {
         val state = ScanState(GTIN)
         assertTrue(state.mascotLines().all { it.mood == MascotMood.ASKING })
 
@@ -499,7 +499,7 @@ class ScanStateTest {
     }
 
     @Test
-    fun `камера не справилась — у кого пусто, просят вписать, у кого есть — ждут`() {
+    fun `камера не справилась — у кого пусто просят вписать у кого есть — ждут`() {
         var now = 0L
         val state = ScanState(GTIN) { now }
         state.onFrame(read(prot = 1240))
@@ -518,7 +518,7 @@ class ScanStateTest {
 
     /** 950 ккал не бывает — сохранять такое нельзя, и звать к этому персонажи не должны. */
     @Test
-    fun `цифры не сходятся — Яйцо просит проверить, сохранять никто не зовёт`() {
+    fun `цифры не сходятся — Яйцо просит проверить сохранять никто не зовёт`() {
         val state = filled().apply { kcal.type("950") }
 
         assertEquals(MascotMood.ASKING, state.line(Mascot.EGG).mood)
@@ -535,7 +535,7 @@ class ScanStateTest {
     }
 
     @Test
-    fun `осталось одно название — Яйцо спрашивает, как называется продукт`() {
+    fun `осталось одно название — Яйцо спрашивает как называется продукт`() {
         val state = ScanState(GTIN)
         state.onFrame(read(kcal = 121, prot = 1600, fat = 500, carb = 300))
 
@@ -546,7 +546,7 @@ class ScanStateTest {
     // --- Подсказка в панели ---------------------------------------------------------------
 
     @Test
-    fun `подсказка учит наводить камеру, пока камера читает, и молчит, когда всё готово`() {
+    fun `подсказка учит наводить камеру пока камера читает и молчит когда всё готово`() {
         assertEquals(
             TABLE_HINT,
             panelHint(camera = true, answered = true, ocr = true, manual = false, numbersMissing = true, nameMissing = true),
@@ -556,7 +556,7 @@ class ScanStateTest {
 
     /** У сахара строк «Белки» и «Жиры» нет вовсе — и человек ищет, что вписать в поле, которого на пачке нет. */
     @Test
-    fun `когда вписывают руками, подсказка говорит про строку, которой нет на пачке`() {
+    fun `когда вписывают руками подсказка говорит про строку которой нет на пачке`() {
         assertEquals(
             "Если строки на пачке нет — впишите 0",
             panelHint(camera = true, answered = true, ocr = true, manual = true, numbersMissing = true, nameMissing = true),
@@ -565,7 +565,7 @@ class ScanStateTest {
 
     /** Числа вписаны — «впишите 0» больше не к месту: осталось назвать продукт. */
     @Test
-    fun `числа есть, названия нет — подсказка просит назвать продукт`() {
+    fun `числа есть названия нет — подсказка просит назвать продукт`() {
         assertEquals(
             "Назовите продукт — без названия его потом не найти",
             panelHint(camera = true, answered = true, ocr = true, manual = true, numbersMissing = false, nameMissing = true),
@@ -578,7 +578,7 @@ class ScanStateTest {
     }
 
     @Test
-    fun `без камеры и без распознавания подсказка говорит, что вписывать самим`() {
+    fun `без камеры и без распознавания подсказка говорит что вписывать самим`() {
         assertEquals(
             "Камеры нет — впишите числа с пачки",
             panelHint(camera = false, answered = true, ocr = true, manual = true, numbersMissing = true, nameMissing = true),
@@ -599,7 +599,7 @@ class ScanStateTest {
     private val curd = ProductDraft(name = "Творог 5%", kcal100 = 121, prot100 = 1_600, fat100 = 500, carb100 = 300)
 
     @Test
-    fun `камера восемь секунд без нового числа — зовут нейросеть, и только раз`() {
+    fun `камера восемь секунд без нового числа — зовут нейросеть и только раз`() {
         var now = 0L
         val state = ScanState(GTIN) { now }
         state.onFrame(read())
@@ -661,7 +661,7 @@ class ScanStateTest {
     }
 
     @Test
-    fun `цифры нейросети, не сходящиеся по Этуотеру, в поля не встают`() {
+    fun `цифры нейросети не сходящиеся по Этуотеру в поля не встают`() {
         val state = ScanState(GTIN)
 
         state.onVision(curd.copy(kcal100 = 480))
@@ -697,7 +697,7 @@ class ScanStateTest {
 
     /** Поле заполняется, только когда кадры сошлись в названии, а искать можно уже по лучшему кандидату. */
     @Test
-    fun `пока поле названия пустое, ищется лучший кандидат с пачки`() {
+    fun `пока поле названия пустое ищется лучший кандидат с пачки`() {
         val state = ScanState(GTIN)
 
         state.onFrame(LabelFrame(LabelReading.EMPTY, 0, names = listOf("Масса нетто 180 г", "Творог 5% 180 г")))
@@ -711,7 +711,7 @@ class ScanStateTest {
     }
 
     @Test
-    fun `похожий продукт предлагается, пока таблица не дочитана`() {
+    fun `похожий продукт предлагается пока таблица не дочитана`() {
         val state = ScanState(GTIN).apply { name.type("Творог 5%") }
 
         state.onMatch("Творог 5%", curdReference)

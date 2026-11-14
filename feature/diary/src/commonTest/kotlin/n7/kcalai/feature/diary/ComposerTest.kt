@@ -69,7 +69,7 @@ class ComposerTest {
      * Без этого ряд висел над пустым полем постоянно и закрывал ленту.
      */
     @Test
-    fun `подсказки «обычно» видны, только пока строка ввода в фокусе`() {
+    fun `подсказки «обычно» видны только пока строка ввода в фокусе`() {
         val predictions = ComposerRow.Predictions(listOf(oat))
 
         assertEquals(ComposerRow.None, visibleRow(predictions, inputFocused = false))

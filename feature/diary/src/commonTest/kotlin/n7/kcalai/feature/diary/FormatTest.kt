@@ -19,7 +19,7 @@ class FormatTest {
     }
 
     @Test
-    fun `клетчатка целыми граммами, неполная — «не меньше», неизвестная — нигде`() {
+    fun `клетчатка целыми граммами неполная — «не меньше» неизвестная — нигде`() {
         assertEquals("8", formatFiber(FiberTotal(cg = 810, unknown = 0)))
         assertEquals("≥8", formatFiber(FiberTotal(cg = 810, unknown = 1)))
         assertEquals("0", formatFiber(FiberTotal(cg = 0, unknown = 0)))
@@ -56,7 +56,7 @@ class FormatTest {
 
     /** Подпись над перепиской дня: сегодня и вчера — словом, дальше — датой. */
     @Test
-    fun `день ленты называется словом, пока это возможно`() {
+    fun `день ленты называется словом пока это возможно`() {
         val today = kotlinx.datetime.LocalDate(2026, 10, 31)
 
         assertEquals("сегодня", dayLabel(today, today))

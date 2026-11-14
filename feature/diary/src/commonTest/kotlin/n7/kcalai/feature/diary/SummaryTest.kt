@@ -39,7 +39,7 @@ class SummaryTest {
 
     /** Старая фраза просила тапнуть «по остатку», которого без цели на экране нет. */
     @Test
-    fun `без цели не новичок — просьба задать цель, а не тап по остатку`() {
+    fun `без цели не новичок — просьба задать цель — не тап по остатку`() {
         val summary = daySummary(goalKcal = null, week = week(1500, 0), outline = null, hour = 14)
 
         assertFalse(summary.intro)
@@ -89,7 +89,7 @@ class SummaryTest {
     }
 
     @Test
-    fun `пустой неделе не нужен график, неделе с целью — нужен`() {
+    fun `пустой неделе не нужен график неделе с целью — нужен`() {
         assertFalse(hasWeekData(week(0, 0, 0, 0, 0, 0, 0)))
         assertTrue(hasWeekData(week(0, 0, 0, 0, 0, 0, 0, goal = 2000)))
         assertTrue(hasWeekData(week(0, 0, 0, 900, 0, 0, 0)))

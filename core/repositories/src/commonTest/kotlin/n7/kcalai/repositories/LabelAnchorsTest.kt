@@ -32,7 +32,7 @@ class LabelAnchorsTest {
     )
 
     @Test
-    fun `белки и углеводы берутся по подписям, а не по порядку`() {
+    fun `белки и углеводы берутся по подписям — не по порядку`() {
         val reading = LabelParser.parseLines(label())
 
         assertTrue(reading.confident)
@@ -92,7 +92,7 @@ class LabelAnchorsTest {
      * форма вставала на «Ж —», хотя правильный ответ ноль.
      */
     @Test
-    fun `слово из состава, похожее на подпись, подписью не считается`() {
+    fun `слово из состава похожее на подпись подписью не считается`() {
         val lines = listOf(
             line("сахар, глюкозно-фруктозный сироп", y = 60f),
             line("Пищевая ценность:", y = 100f),
@@ -110,7 +110,7 @@ class LabelAnchorsTest {
     }
 
     @Test
-    fun `«100 мл» с нулями-буквами остаётся подписью, а не значением`() {
+    fun `«100 мл» с нулями-буквами остаётся подписью — не значением`() {
         val lines = listOf(
             line("углеводы, г/1о0 мп", y = 140f), line("6,0", y = 140f, x = 300f),
             line("ккал/1о0 мп", y = 220f), line("25,0", y = 220f, x = 300f),
@@ -138,7 +138,7 @@ class LabelAnchorsTest {
     }
 
     @Test
-    fun `берётся колонка, что ближе к подписи`() {
+    fun `берётся колонка что ближе к подписи`() {
         // Слева «на 100 г», справа «на порцию 40 г».
         val lines = listOf(
             line("Белки", y = 100f), line("13,0", y = 100f, x = 300f), line("5,2", y = 100f, x = 500f),
@@ -178,7 +178,7 @@ class LabelAnchorsTest {
     }
 
     @Test
-    fun `название продукта предлагается, а таблица в кандидаты не идёт`() {
+    fun `название продукта предлагается а таблица в кандидаты не идёт`() {
         val reading = LabelParser.parseLines(label())
 
         assertEquals("Творог 5%", reading.names.first())
@@ -203,7 +203,7 @@ class LabelAnchorsTest {
      * в поле названия.
      */
     @Test
-    fun `крупный логотип, прочитанный неуверенно, уступает мелкой надписи`() {
+    fun `крупный логотип прочитанный неуверенно уступает мелкой надписи`() {
         val lines = listOf(
             TextLine(text = "Ннаьуи", centerX = 300f, centerY = 40f, width = 400f, height = 90f, confidence = 0.35f),
             TextLine(text = "Творог 5%", centerX = 200f, centerY = 150f, width = 160f, height = 24f, confidence = 0.97f),
@@ -243,7 +243,7 @@ class LabelAnchorsTest {
     }
 
     @Test
-    fun `без подписей работает арифметика, но за неё расписывается человек`() {
+    fun `без подписей работает арифметика но за неё расписывается человек`() {
         // Латинский распознаватель: цифры есть, слов нет.
         val lines = listOf(
             line("506", y = 100f), line("121", y = 140f),

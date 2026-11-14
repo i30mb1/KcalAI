@@ -18,18 +18,18 @@ import kotlin.test.Test
 class HeaderTest {
 
     @Test
-    fun `шапка раскрывается, когда под ней хватает места`() {
+    fun `шапка раскрывается когда под ней хватает места`() {
         assertTrue(headerFits(spare = 900, growth = 600))
         assertTrue(headerFits(spare = 600, growth = 600))
     }
 
     @Test
-    fun `шапка не раскрывается, если лента под ней перестанет помещаться`() {
+    fun `шапка не раскрывается если лента под ней перестанет помещаться`() {
         assertFalse(headerFits(spare = 300, growth = 600))
     }
 
     @Test
-    fun `лента, которая не помещается и так, шапку не раскрывает`() {
+    fun `лента которая не помещается и так шапку не раскрывает`() {
         assertFalse(headerFits(spare = null, growth = 600))
     }
 
@@ -83,7 +83,7 @@ class HeaderTest {
      * под ней: кнопка делала шапку выше, и при переходе на прошлый день всё прыгало.
      */
     @Test
-    fun `у прошлого дня дата со стрелкой назад, у сегодня — без`() {
+    fun `у прошлого дня дата со стрелкой назад у сегодня — без`() {
         val day = LocalDate(2026, 11, 9)
         assertEquals("← понедельник, 9 нояб", headerDate(day, past = true))
         assertEquals("понедельник, 9 нояб", headerDate(day, past = false))

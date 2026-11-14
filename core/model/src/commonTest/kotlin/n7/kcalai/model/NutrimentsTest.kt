@@ -14,13 +14,13 @@ class NutrimentsTest {
     private val buckwheatDry = Nutriments(kcal100 = 308, prot100 = 1260, fat100 = 330, carb100 = 5710, fiber100 = 1130)
 
     @Test
-    fun `клетчатка считается на порцию так же, как БЖУ`() {
+    fun `клетчатка считается на порцию так же как БЖУ`() {
         assertEquals(FiberTotal(cg = 565, unknown = 0), buckwheatDry.fiberFor(50))
     }
 
     /** У котлеты без данных клетчатка не ноль, а неизвестна: итог дня тогда «не меньше». */
     @Test
-    fun `неизвестная клетчатка — пробел в сумме, а не ноль`() {
+    fun `неизвестная клетчатка — пробел в сумме — не ноль`() {
         val cutlet = Nutriments(kcal100 = 250, prot100 = 1500, fat100 = 1800, carb100 = 900)
 
         val day = buckwheatDry.fiberFor(100) + cutlet.fiberFor(100)
@@ -31,7 +31,7 @@ class NutrimentsTest {
     }
 
     @Test
-    fun `в пустом дне клетчатки ноль, и это известно`() {
+    fun `в пустом дне клетчатки ноль и это известно`() {
         assertTrue(FiberTotal.ZERO.complete)
         assertEquals(buckwheatDry.fiberFor(100), FiberTotal.ZERO + buckwheatDry.fiberFor(100))
     }

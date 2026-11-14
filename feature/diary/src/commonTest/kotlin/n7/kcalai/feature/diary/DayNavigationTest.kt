@@ -107,7 +107,7 @@ class DayNavigationTest {
      * в ленте не на своё место и научил бы модели привычек, что ужинают в девять.
      */
     @Test
-    fun `запись в прошлый день ложится в этот день, в выбранный приём и в его время`() = runTest(dispatcher) {
+    fun `запись в прошлый день ложится в этот день в выбранный приём и в его время`() = runTest(dispatcher) {
         val vm = screen()
 
         vm.onSelectDay(yesterday)
@@ -152,7 +152,7 @@ class DayNavigationTest {
     }
 
     @Test
-    fun `вес, записанный в прошлом дне, — вес того дня, и реплика живёт там же`() = runTest(dispatcher) {
+    fun `вес записанный в прошлом дне — вес того дня и реплика живёт там же`() = runTest(dispatcher) {
         val vm = screen()
 
         vm.onSelectDay(yesterday)
@@ -186,7 +186,7 @@ class DayNavigationTest {
 
     /** Про вчерашний перебор «завтра это учтётся» — уже неправда: завтра наступило. */
     @Test
-    fun `перебор в прошлом дне — итог, а не обещание на завтра`() = runTest(dispatcher) {
+    fun `перебор в прошлом дне — итог — не обещание на завтра`() = runTest(dispatcher) {
         harness.goalDao.upsert(DailyGoalEntity(fromDateEpochDay = harness.today - 10, kcal = 1000, prot = 50, fat = 30, carb = 120))
         harness.addEntry("Пицца", grams = 500, meal = MealType.DINNER, daysAgo = 1, kcal100 = 300)
         val vm = screen()

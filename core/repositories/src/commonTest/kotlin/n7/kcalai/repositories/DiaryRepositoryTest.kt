@@ -44,7 +44,7 @@ class DiaryRepositoryTest {
     }
 
     @Test
-    fun `неделя всегда из семи дней, пустой день — ноль, а не пропуск`() = runBlocking {
+    fun `неделя всегда из семи дней пустой день — ноль — не пропуск`() = runBlocking {
         add(grams = 200, date = TODAY)
         add(grams = 100, date = TODAY - 3, meal = MealType.LUNCH)
 
@@ -56,7 +56,7 @@ class DiaryRepositoryTest {
     }
 
     @Test
-    fun `цель у каждого дня та, что действовала тогда`() = runBlocking {
+    fun `цель у каждого дня та что действовала тогда`() = runBlocking {
         goalDao.upsert(DailyGoalEntity(fromDateEpochDay = TODAY - 10, kcal = 1800, prot = 100, fat = 60, carb = 200))
         goalDao.upsert(DailyGoalEntity(fromDateEpochDay = TODAY - 2, kcal = 2100, prot = 120, fat = 70, carb = 230))
 
@@ -89,7 +89,7 @@ class DiaryRepositoryTest {
     }
 
     @Test
-    fun `в дневник ложится снимок КБЖУ, а не ссылка`() = runBlocking {
+    fun `в дневник ложится снимок КБЖУ — не ссылка`() = runBlocking {
         add(grams = 200, date = TODAY)
 
         val entry = repository.observeDay(TODAY).first().entries.single()
@@ -101,7 +101,7 @@ class DiaryRepositoryTest {
 
     /** Клетчатка ложится в снимок вместе с БЖУ, а неизвестная так и остаётся неизвестной. */
     @Test
-    fun `клетчатка в снимке записи, неизвестная — null`() = runBlocking {
+    fun `клетчатка в снимке записи неизвестная — null`() = runBlocking {
         val bran = oatmeal.copy(nutriments = oatmeal.nutriments.copy(fiber100 = 1540))
         repository.add(bran, grams = 30, meal = MealType.BREAKFAST, date = TODAY, source = EntrySource.TEXT, now = 1)
         add(grams = 200, date = TODAY, now = 2)

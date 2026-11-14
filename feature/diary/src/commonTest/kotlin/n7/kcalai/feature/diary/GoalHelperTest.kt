@@ -19,7 +19,7 @@ class GoalHelperTest {
 
     /** 30 лет, 180 см, 80 кг, спорт 3–5 раз: обмен 1780, расход ×1,55 ≈ 2760. */
     @Test
-    fun `держать вес — расход по формуле, белок 1,6 г на кило`() {
+    fun `держать вес — расход по формуле белок 1.6 г на кило`() {
         val goal = suggestGoal(Body(Sex.MALE, age = 30, heightCm = 180, weightKg = 80.0, Activity.ACTIVE, Aim.KEEP))
 
         assertEquals(GoalSuggestion(kcal = 2760, prot = 128, fat = 92, carb = 355), goal)
@@ -54,7 +54,7 @@ class GoalHelperTest {
      * Без цели калорий — те же 25: норма клетчатки от похудения не зависит.
      */
     @Test
-    fun `клетчатка по калориям цели, но не меньше 25 г`() {
+    fun `клетчатка по калориям цели но не меньше 25 г`() {
         assertEquals(29, suggestedFiber(2100))
         assertEquals(39, suggestedFiber(2800))
         assertEquals(25, suggestedFiber(1500))
@@ -81,7 +81,7 @@ class GoalHelperTest {
 
     /** Цель из одних калорий, сохранённая раньше, встаёт в поля граммами, которые дают те же калории. */
     @Test
-    fun `в поля встают граммы цели, а цель из одних калорий раскладывается`() {
+    fun `в поля встают граммы цели а цель из одних калорий раскладывается`() {
         assertEquals(GoalMacros(120, 70, 240), goalMacros(DailyGoalEntity(0, kcal = 2070, prot = 120, fat = 70, carb = 240)))
         assertEquals(GoalMacros(prot = 100, fat = 67, carb = 250), goalMacros(DailyGoalEntity(0, kcal = 2000, prot = 0, fat = 0, carb = 0)))
         assertNull(goalMacros(null))
@@ -118,7 +118,7 @@ class GoalHelperTest {
 
     /** Новичку — что делать, тому, у кого цель есть, — что её можно поправить; помощнику — своя строка. */
     @Test
-    fun `строка шита меняется вместе с тем, что происходит`() {
+    fun `строка шита меняется вместе с тем что происходит`() {
         val empty = goalSheetLine(focus = null, helperOpen = false, kcal = 0).text
         val filled = goalSheetLine(focus = null, helperOpen = false, kcal = 2070).text
         val helper = goalSheetLine(focus = null, helperOpen = true, kcal = 0).text
@@ -131,7 +131,7 @@ class GoalHelperTest {
      * на главном экране: персонаж один и переходит с места на место.
      */
     @Test
-    fun `в шите говорящий у реплики, остальные дома в полях`() {
+    fun `в шите говорящий у реплики остальные дома в полях`() {
         val places = goalSheetPlaces(goalSheetLine(focus = Macro.FAT, helperOpen = false, kcal = 0))
 
         assertEquals(MascotPlace.Reply(SHEET_SPEECH_ANCHOR), places[Mascot.BUTTER])

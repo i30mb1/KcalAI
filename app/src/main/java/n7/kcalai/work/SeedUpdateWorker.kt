@@ -9,7 +9,8 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import java.io.File
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import n7.kcalai.KcalApp
 import n7.kcalai.fooddb.SeedInstaller
 
@@ -28,7 +29,7 @@ class SeedUpdateWorker(
 
     override suspend fun doWork(): Result {
         val container = (applicationContext as KcalApp).container
-        val dir = applicationContext.filesDir
+        val dir = Path(applicationContext.filesDir.absolutePath)
 
         val manifest = container.seedSource.seedManifest() ?: return Result.success()
         val installed = SeedInstaller.installedDigest(dir)
@@ -39,9 +40,9 @@ class SeedUpdateWorker(
             return Result.success()
         }
 
-        val tmp = File(dir, "seed.db.download")
-        if (!container.seedSource.downloadSeed(manifest, tmp.absolutePath)) {
-            tmp.delete()
+        val tmp = Path(dir, "seed.db.download")
+        if (!container.seedSource.downloadSeed(manifest, tmp.toString())) {
+            SystemFileSystem.delete(tmp, mustExist = false)
             return Result.success()
         }
         val ready = SeedInstaller.stage(dir, tmp, manifest.sha256)

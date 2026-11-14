@@ -13,7 +13,7 @@ import kotlin.test.assertEquals
 class LabelFactsSchemaTest {
 
     @Test
-    fun `схема ответа по этикетке находится так же, как её ищет ML Kit`() {
+    fun `схема ответа по этикетке находится так же как её ищет ML Kit`() {
         val providers = ServiceLoader.load(GenerableProvider::class.java, javaClass.classLoader)
             .filter { it.targetClass == LabelFacts::class }
 

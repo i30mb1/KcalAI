@@ -10,7 +10,7 @@ class EmbeddingModelTest {
 
     /** Человеку всё равно, ждёт ли Play очереди или уже перекладывает файл: модель в пути. */
     @Test
-    fun `всё, что идёт своим ходом, — докачка`() {
+    fun `всё что идёт своим ходом — докачка`() {
         assertEquals(ModelDelivery.DOWNLOADING, assetPackDelivery(AssetPackStatus.PENDING))
         assertEquals(ModelDelivery.DOWNLOADING, assetPackDelivery(AssetPackStatus.DOWNLOADING))
         assertEquals(ModelDelivery.DOWNLOADING, assetPackDelivery(AssetPackStatus.TRANSFERRING))

@@ -8,6 +8,7 @@ import android.hardware.SensorManager
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import n7.kcalai.model.ShakeDetector
 
 /**
  * Тряска телефона — потоком, пока его собирают.

@@ -160,7 +160,7 @@ class MascotBrainTest {
     }
 
     @Test
-    fun `час назад — не встречают, ночью — тем более`() = runTest {
+    fun `час назад — не встречают ночью — тем более`() = runTest {
         mascots.upsertProfile(MascotProfileEntity(lastOpenAt = (now - 1.hours).toEpochMilliseconds()))
         assertNull(brain().onAppOpened(now))
 
@@ -172,7 +172,7 @@ class MascotBrainTest {
     // --- Реакции --------------------------------------------------------------------------
 
     @Test
-    fun `третий тык — реплика, первый и второй — молча`() = runTest {
+    fun `третий тык — реплика первый и второй — молча`() = runTest {
         val brain = brain()
 
         assertNull(brain.react(MascotEvent.Poked(Mascot.EGG, 1), now)?.speech)
@@ -181,7 +181,7 @@ class MascotBrainTest {
     }
 
     @Test
-    fun `еда — гордится хозяин, новая — с репликой`() = runTest {
+    fun `еда — гордится хозяин новая — с репликой`() = runTest {
         mascots.upsertProfile(MascotProfileEntity(name = "Женя", nameAsked = true))
         val curd = eat("Творог", now, prot100 = 1_700, carb100 = 300)
 
@@ -192,7 +192,7 @@ class MascotBrainTest {
     }
 
     @Test
-    fun `открыл из шторки — отмечено прочитанным, автор радуется`() = runTest {
+    fun `открыл из шторки — отмечено прочитанным автор радуется`() = runTest {
         val id = mascots.insert(message(Mascot.BUTTER))
 
         val reaction = brain().react(MascotEvent.Opened(id), now)
@@ -257,7 +257,7 @@ class MascotBrainTest {
 
     /** Ответ на имя — один ответ Яйца. Второй вопрос вслед за ним был бы двумя репликами разом. */
     @Test
-    fun `разрешение писать спрашивают со следующей записью, а не вслед за ответом на имя`() = runTest {
+    fun `разрешение писать спрашивают со следующей записью — не вслед за ответом на имя`() = runTest {
         val brain = brain()
         brain.react(MascotEvent.Ate(eat("Гречка", now - 2.hours)), now - 2.hours)
         brain.react(MascotEvent.Ate(eat("Кефир", now - 1.hours)), now - 1.hours)
@@ -283,7 +283,7 @@ class MascotBrainTest {
     }
 
     @Test
-    fun `ответ ложится в сам вопрос, и второй раз его не принимают`() = runTest {
+    fun `ответ ложится в сам вопрос и второй раз его не принимают`() = runTest {
         val brain = brain()
         brain.react(MascotEvent.Ate(eat("Гречка", now)), now)
 
@@ -296,7 +296,7 @@ class MascotBrainTest {
     }
 
     @Test
-    fun `вопрос держит слово, пока он после последней записи и без ответа`() = runTest {
+    fun `вопрос держит слово пока он после последней записи и без ответа`() = runTest {
         val brain = brain()
         val entry = eat("Гречка", now)
         brain.react(MascotEvent.Ate(entry), now)
@@ -312,7 +312,7 @@ class MascotBrainTest {
 
     /** Новость о фоновой работе не перебивает знакомство: до первой записи на экране только оно. */
     @Test
-    fun `новость ждёт, пока человек не начнёт вести дневник`() = runTest {
+    fun `новость ждёт пока человек не начнёт вести дневник`() = runTest {
         val brain = brain()
 
         val said = async { brain.report(BackgroundModel.SEARCH, ModelDelivery.READY, at(now)) }
@@ -327,7 +327,7 @@ class MascotBrainTest {
     }
 
     @Test
-    fun `пока вопрос ждёт ответа, новость ждёт тоже`() = runTest {
+    fun `пока вопрос ждёт ответа новость ждёт тоже`() = runTest {
         val brain = brain()
         brain.react(MascotEvent.Ate(eat("Гречка", now - 10.minutes)), now - 10.minutes)
 
@@ -392,7 +392,7 @@ class MascotBrainTest {
 
     /** Статус приходит при каждом запуске, а рассказать надо один раз. */
     @Test
-    fun `о начале докачки сообщают один раз, и после перезапуска тоже`() = runTest {
+    fun `о начале докачки сообщают один раз и после перезапуска тоже`() = runTest {
         started()
         brain().report(BackgroundModel.SEARCH, ModelDelivery.DOWNLOADING, at(now))
 
@@ -400,7 +400,7 @@ class MascotBrainTest {
     }
 
     @Test
-    fun `о том, что докачалось, сообщают один раз`() = runTest {
+    fun `о том что докачалось сообщают один раз`() = runTest {
         started()
         brain().report(BackgroundModel.SEARCH, ModelDelivery.READY, at(now))
 
@@ -473,7 +473,7 @@ class MascotBrainTest {
     }
 
     @Test
-    fun `«Пишите» ждёт ответа телефона, а Зёрнышко отвечает по итогу`() = runTest {
+    fun `«Пишите» ждёт ответа телефона а Зёрнышко отвечает по итогу`() = runTest {
         asked(MascotQuestion.WRITE)
         val brain = brain()
 
@@ -485,7 +485,7 @@ class MascotBrainTest {
     }
 
     @Test
-    fun `«Не надо» — согласие отозвано, Зёрнышко обещает молчать`() = runTest {
+    fun `«Не надо» — согласие отозвано Зёрнышко обещает молчать`() = runTest {
         asked(MascotQuestion.WRITE)
 
         assertTrue(brain().answerWrite(allow = false, now))

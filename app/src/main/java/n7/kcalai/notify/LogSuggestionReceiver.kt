@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import n7.kcalai.KcalApp
+import n7.kcalai.mascot.SuggestionExtras
 import n7.kcalai.mascot.voice.Topic
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.Log

@@ -27,7 +27,7 @@ import n7.kcalai.database.KcalDatabase
 import n7.kcalai.database.buildKcalDatabase
 import n7.kcalai.fooddb.FoodDb
 import n7.kcalai.fooddb.FoodDbFactory
-import n7.kcalai.fooddb.SeedInstaller
+import n7.kcalai.fooddb.installSeed
 import n7.kcalai.mascot.FactsBuilder
 import n7.kcalai.mascot.MascotBrain
 import n7.kcalai.model.BackgroundModel
@@ -75,7 +75,7 @@ class AppContainer(context: Context) {
         openedFoodDb ?: foodDbLock.withLock {
             openedFoodDb ?: FoodDbFactory.open(
                 driver = BundledSQLiteDriver(),
-                seedPath = SeedInstaller.install(appContext),
+                seedPath = installSeed(appContext).toString(),
                 // Полный срез Open Food Facts докачивается в Плане 4.
                 foodPath = null,
             ).also { openedFoodDb = it }

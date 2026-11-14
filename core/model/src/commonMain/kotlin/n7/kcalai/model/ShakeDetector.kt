@@ -1,4 +1,4 @@
-package n7.kcalai.shake
+package n7.kcalai.model
 
 import kotlin.math.sqrt
 
@@ -9,6 +9,10 @@ import kotlin.math.sqrt
  * рывков за [windowMs]: один рывок бывает, когда телефон кладут на стол или
  * достают из кармана, три подряд за полсекунды — только когда трясут. После
  * тряски — [cooldownMs] тишины: трясут долго, а голова кружится раз.
+ *
+ * Порог — в м/с², как отдаёт акселерометр Android. CoreMotion на iOS меряет
+ * в g, и тамошняя подписка переводит образцы сюда, а не наоборот: иначе порог
+ * пришлось бы держать в двух единицах сразу.
  */
 class ShakeDetector(
     private val thresholdMs2: Float = 13f,

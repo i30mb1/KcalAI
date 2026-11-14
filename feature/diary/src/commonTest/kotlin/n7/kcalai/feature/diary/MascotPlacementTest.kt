@@ -52,7 +52,7 @@ class MascotPlacementTest {
     }
 
     @Test
-    fun `у последней видимой реплики, а не у первой`() {
+    fun `у последней видимой реплики — не у первой`() {
         val older = FeedItem.Reply(id = 1, text = "раньше", time = "08:00")
         val newer = FeedItem.Reply(id = 2, text = "сейчас", time = "09:00")
         val places = mascotPlaces(listOf(greeting, older, newer, gap), shownKeys = setOf(greeting.key, older.key, newer.key, gap.key), chipOwner = null)
@@ -89,7 +89,7 @@ class MascotPlacementTest {
      * стоял бы поверх цифр шапки, поэтому её место считается пропавшим.
      */
     @Test
-    fun `место у реплики, целиком ушедшей под шапку, пропадает`() {
+    fun `место у реплики целиком ушедшей под шапку пропадает`() {
         val rects = mapOf(
             "said:1" to Rect(left = 16f, top = 120f, right = 60f, bottom = 160f),
             "said:2" to Rect(left = 16f, top = 380f, right = 60f, bottom = 420f),
@@ -98,7 +98,7 @@ class MascotPlacementTest {
     }
 
     @Test
-    fun `место у реплики, выглядывающей из-под шапки, остаётся`() {
+    fun `место у реплики выглядывающей из-под шапки остаётся`() {
         val rects = mapOf("said:1" to Rect(left = 16f, top = 280f, right = 60f, bottom = 320f))
         assertEquals(setOf("said:1"), shownAnchors(rects, coverBottom = 300f, floorTop = 2000f))
     }
@@ -112,7 +112,7 @@ class MascotPlacementTest {
 
     /** То же снизу: лента идёт и под стеклянной строкой ввода. */
     @Test
-    fun `место у реплики, целиком ушедшей под строку ввода, пропадает`() {
+    fun `место у реплики целиком ушедшей под строку ввода пропадает`() {
         val rects = mapOf(
             "said:1" to Rect(left = 16f, top = 1700f, right = 60f, bottom = 1740f),
             "said:2" to Rect(left = 16f, top = 2050f, right = 60f, bottom = 2090f),
@@ -152,7 +152,7 @@ class MascotPlacementTest {
      * и в полях, — и с главного экрана уходят: домики в шапке подписаны словами.
      */
     @Test
-    fun `пока открыт шит цели, персонажи в нём, а не на главном экране`() {
+    fun `пока открыт шит цели персонажи в нём — не на главном экране`() {
         val places = mascotPlaces(listOf(greeting, over), shownKeys = setOf(greeting.key, over.key), chipOwner = Mascot.BUTTER, offstage = true)
 
         Mascot.entries.forEach { assertEquals(MascotPlace.Offstage, places[it]) }

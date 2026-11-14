@@ -33,7 +33,7 @@ class PuppetTest {
     }
 
     @Test
-    fun `каждое действие конечно, короче трёх секунд и возвращает в покой`() = runTest {
+    fun `каждое действие конечно короче трёх секунд и возвращает в покой`() = runTest {
         withContext(TestFrameClock()) {
             for (mascot in Mascot.entries) for (act in MascotAct.entries) {
                 val puppet = MascotPuppet(mascot)
@@ -51,7 +51,7 @@ class PuppetTest {
     }
 
     @Test
-    fun `новое действие прерывает прошлое, и покой всё равно наступает`() = runTest {
+    fun `новое действие прерывает прошлое и покой всё равно наступает`() = runTest {
         withContext(TestFrameClock()) {
             val puppet = MascotPuppet(Mascot.GRAIN)
 
@@ -86,7 +86,7 @@ class PuppetTest {
 
     /** Держат сколько угодно долго — но кадров это не стоит: лицо просто держится. */
     @Test
-    fun `пока держат — лицо держится, отпустили — покой`() = runTest {
+    fun `пока держат — лицо держится отпустили — покой`() = runTest {
         withContext(TestFrameClock()) {
             val puppet = MascotPuppet(Mascot.EGG)
 

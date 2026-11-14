@@ -28,7 +28,7 @@ class CandidateRankerTest {
     )
 
     @Test
-    fun `до обучения порядок в точности такой же, как у поиска`() {
+    fun `до обучения порядок в точности такой же как у поиска`() {
         val ranked = CandidateRanker.rerank(
             weights = CandidateRanker.INITIAL.copyOf(),
             history = history(),

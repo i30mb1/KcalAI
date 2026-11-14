@@ -77,7 +77,7 @@ class ComposerTest {
     }
 
     @Test
-    fun `недавно сказанное не повторяется, пока есть свежее`() {
+    fun `недавно сказанное не повторяется пока есть свежее`() {
         val recent = listOf(listOf(Line("Щекотно!").id), listOf(Line("Ай!").id))
 
         repeat(20) { seed ->
@@ -99,7 +99,7 @@ class ComposerTest {
 
     /** Каждая часть уже звучала, но в этом сочетании — ещё нет. Так и надо собрать. */
     @Test
-    fun `точный повтор недавнего сообщения не собирается, пока можно иначе`() {
+    fun `точный повтор недавнего сообщения не собирается пока можно иначе`() {
         val pairs = voice(Mascot.GRAIN) {
             topic(Topic.EMPTY_DAY) {
                 recipe {
@@ -158,7 +158,7 @@ class ComposerTest {
     }
 
     @Test
-    fun `необязательный слот иногда звучит, иногда нет`() {
+    fun `необязательный слот иногда звучит иногда нет`() {
         val texts = (0 until 40).mapNotNull { compose(Topic.EMPTY_DAY, facts, seed = it)?.text }.toSet()
 
         assertEquals(setOf("Сегодня в дневнике пусто.", "Эй! Сегодня в дневнике пусто."), texts)
@@ -184,7 +184,7 @@ class ComposerTest {
 
     /** Обрезанное на полуслове уведомление выглядит сломанным; лучше промолчать о необязательном. */
     @Test
-    fun `длинная фраза теряет необязательные части, а не обрезается`() {
+    fun `длинная фраза теряет необязательные части — не обрезается`() {
         val chatty = voice(Mascot.EGG) {
             topic(Topic.STREAK_KEEP) {
                 recipe {

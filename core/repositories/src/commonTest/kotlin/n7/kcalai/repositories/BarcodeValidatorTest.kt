@@ -57,7 +57,7 @@ class BarcodeValidatorTest {
     }
 
     @Test
-    fun `UPC-E разворачивается в EAN-13, когда формат известен`() {
+    fun `UPC-E разворачивается в EAN-13 когда формат известен`() {
         // 01234565 — сжатая запись UPC-A 012345000065.
         assertEquals("0012345000065", BarcodeValidator.normalizeUpcE("01234565"))
     }

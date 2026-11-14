@@ -13,6 +13,8 @@ kotlin {
             api(libs.androidx.sqlite)
             // FTS5 не гарантирован системным SQLite на minSdk 26 — нужен свой.
             implementation(libs.androidx.sqlite.bundled)
+            // Файлы справочника — общим кодом: правила обновления у Android и iOS одни.
+            api(libs.kotlinx.io.core)
         }
         // Собранный справочник проверяется без телефона: настоящий SQLite под компьютер.
         getByName("androidHostTest").dependencies {

@@ -1,14 +1,13 @@
-package n7.kcalai.notify
+package n7.kcalai.mascot
 
-import n7.kcalai.mascot.Suggestion
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.FoodRef
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.Nutriments
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 /**
  * Кнопка «Записать: гречка» в шторке.
@@ -38,7 +37,7 @@ class SuggestionExtrasTest {
     }
 
     @Test
-    fun `битые extras — null, а не падение`() {
+    fun `битые extras — null — не падение`() {
         val extras = SuggestionExtras.encode(buckwheat, messageId = 42, mascot = Mascot.GRAIN)
 
         assertNull(SuggestionExtras.decode(emptyMap()))

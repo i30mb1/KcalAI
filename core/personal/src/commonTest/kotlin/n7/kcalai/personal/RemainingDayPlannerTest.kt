@@ -128,7 +128,7 @@ class RemainingDayPlannerTest {
     }
 
     @Test
-    fun `съеденное сегодня опускается, но не исчезает`() {
+    fun `съеденное сегодня опускается но не исчезает`() {
         val withoutRepeat = RemainingDayPlanner.plan(
             history = history(),
             remainingKcal = 300,
@@ -163,7 +163,7 @@ class RemainingDayPlannerTest {
      * хотя добавить вторую порцию совершенно нормально.
      */
     @Test
-    fun `когда съедено всё подходящее, добор всё равно предлагается`() {
+    fun `когда съедено всё подходящее добор всё равно предлагается`() {
         val plan = RemainingDayPlanner.plan(
             history = history(),
             remainingKcal = 300,

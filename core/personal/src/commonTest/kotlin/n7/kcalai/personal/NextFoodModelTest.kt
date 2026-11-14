@@ -32,7 +32,7 @@ class NextFoodModelTest {
     private fun history(): FoodHistory = historyOf(fortnight())
 
     @Test
-    fun `утром предлагается завтрак, а не ужин`() {
+    fun `утром предлагается завтрак — не ужин`() {
         val predictions = NextFoodModel.predict(
             history = history(),
             context = contextAt(hour = 8, meal = MealType.BREAKFAST),
@@ -60,7 +60,7 @@ class NextFoodModelTest {
     }
 
     @Test
-    fun `граммы берутся из личной медианы, а не из таблицы порций`() {
+    fun `граммы берутся из личной медианы — не из таблицы порций`() {
         val predictions = NextFoodModel.predict(
             history = history(),
             context = contextAt(hour = 8, meal = MealType.BREAKFAST),
@@ -70,7 +70,7 @@ class NextFoodModelTest {
     }
 
     @Test
-    fun `на пустой истории модель молчит, а не выдумывает`() {
+    fun `на пустой истории модель молчит — не выдумывает`() {
         // Одна запись, и та — не в сегодняшнем приёме: фильтр «съеденное сегодня»
         // её не убирает, молчит именно порог истории.
         val predictions = NextFoodModel.predict(
@@ -147,7 +147,7 @@ class NextFoodModelTest {
      * утром, значило бы править привычку вместо того, чтобы её угадывать.
      */
     @Test
-    fun `съеденное в другой приём пищи опускается, но остаётся`() {
+    fun `съеденное в другой приём пищи опускается но остаётся`() {
         val entries = fortnight() +
             entry(98, TODAY, 8, MealType.BREAKFAST, "Кофе с молоком", COFFEE, grams = 200)
 
@@ -173,7 +173,7 @@ class NextFoodModelTest {
      * на первое место вместо того, чтобы опускать.
      */
     @Test
-    fun `съеденное сегодня уступает первое место, но остаётся в ряду`() {
+    fun `съеденное сегодня уступает первое место но остаётся в ряду`() {
         fun dinnerRow(chickenDay: Long): List<String> {
             val entries = fortnight() +
                 entry(99, chickenDay, 8, MealType.BREAKFAST, "Куриная грудка", CHICKEN)
@@ -218,7 +218,7 @@ class NextFoodModelTest {
 
     /** Весь день записан — предлагать нечего, и ряд честнее убрать совсем. */
     @Test
-    fun `когда в этот приём пищи записано всё обычное, ряд пустеет`() {
+    fun `когда в этот приём пищи записано всё обычное ряд пустеет`() {
         val entries = fortnight() +
             entry(97, TODAY, 8, MealType.BREAKFAST, "Овсянка", OATMEAL, grams = 250) +
             entry(98, TODAY, 8, MealType.BREAKFAST, "Кофе с молоком", COFFEE, grams = 200) +

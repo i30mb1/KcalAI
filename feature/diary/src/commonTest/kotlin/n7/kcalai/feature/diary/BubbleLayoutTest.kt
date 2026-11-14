@@ -18,14 +18,14 @@ class BubbleLayoutTest {
     // --- Время в пузырьке -----------------------------------------------------------------
 
     @Test
-    fun `короткая реплика — время в той же строке, пузырёк чуть шире текста`() {
+    fun `короткая реплика — время в той же строке пузырёк чуть шире текста`() {
         val slot = timeSlot(textWidth = 200, lastLineRight = 200, timeWidth = 60, gapPx = 16, maxWidth = 600)
 
         assertEquals(TimeSlot(inline = true, width = 276), slot)
     }
 
     @Test
-    fun `последняя строка короткая — время рядом с ней, ширина пузырька та же`() {
+    fun `последняя строка короткая — время рядом с ней ширина пузырька та же`() {
         val slot = timeSlot(textWidth = 580, lastLineRight = 150, timeWidth = 60, gapPx = 16, maxWidth = 600)
 
         assertEquals(TimeSlot(inline = true, width = 580), slot)
@@ -48,7 +48,7 @@ class BubbleLayoutTest {
     // --- Зазоры между репликами -----------------------------------------------------------
 
     @Test
-    fun `реплики одной стороны подряд — тесно, смена стороны — просторнее`() {
+    fun `реплики одной стороны подряд — тесно смена стороны — просторнее`() {
         val reply = FeedItem.Reply(id = 1, text = "Отправлено", time = "09:00")
         val weight = FeedItem.WeightLogged(id = 2, grams = 82_400, time = "09:01")
 
@@ -60,7 +60,7 @@ class BubbleLayoutTest {
     }
 
     @Test
-    fun `вопрос к дневнику стоит на стороне человека, ответ на него — на стороне приложения`() {
+    fun `вопрос к дневнику стоит на стороне человека ответ на него — на стороне приложения`() {
         val question = FeedItem.Question(id = 1, text = "сколько белка?", time = "09:00")
         val answer = FeedItem.Answer(id = 2, text = "62 г", time = "09:00", done = true)
 
@@ -70,7 +70,7 @@ class BubbleLayoutTest {
     }
 
     @Test
-    fun `над первым элементом зазора нет, после разделителя дня — как при смене стороны`() {
+    fun `над первым элементом зазора нет после разделителя дня — как при смене стороны`() {
         val separator = FeedItem.DaySeparator("сегодня")
 
         assertEquals(0.dp, gapBefore(null, separator))

@@ -13,7 +13,7 @@ import kotlin.test.assertNull
 class LabelNameQueryTest {
 
     @Test
-    fun `масса нетто из запроса уходит, жирность остаётся`() {
+    fun `масса нетто из запроса уходит жирность остаётся`() {
         assertEquals("ТВОРОГ 5% Простоквашино", LabelNameQuery.of("ТВОРОГ 5% Простоквашино 180 г"))
         assertEquals("Масло сливочное 82,5%", LabelNameQuery.of("Масло сливочное 82,5% 180г"))
         assertEquals("Молоко питьевое 3,2%", LabelNameQuery.of("Молоко питьевое 3,2% 0,9 л"))
@@ -29,7 +29,7 @@ class LabelNameQueryTest {
     }
 
     @Test
-    fun `кавычки бренда снимаются, а сам бренд остаётся`() {
+    fun `кавычки бренда снимаются а сам бренд остаётся`() {
         assertEquals("Творог 5% простоквашино", LabelNameQuery.of("Творог 5% \"простоквашино"))
         assertEquals("Сыр Российский", LabelNameQuery.of("Сыр «Российский»"))
     }
@@ -70,7 +70,7 @@ class LabelNameQueryTest {
     }
 
     @Test
-    fun `состав — не название, даже без слова «состав»`() {
+    fun `состав — не название даже без слова «состав»`() {
         assertNull(LabelNameQuery.of("Состав: творог, закваска"))
         // Продолжение состава на следующей строке: перечисление через запятую.
         assertNull(LabelNameQuery.of("Молоко нормализованное, закваска, сычужный фермент"))
@@ -83,7 +83,7 @@ class LabelNameQueryTest {
     }
 
     @Test
-    fun `масса, даты, сроки и ГОСТ — не название`() {
+    fun `масса даты сроки и ГОСТ — не название`() {
         assertNull(LabelNameQuery.of("Масса нетто 180 г"))
         assertNull(LabelNameQuery.of("Годен до 12.05.2026"))
         assertNull(LabelNameQuery.of("Изготовлено 01.11.26"))
@@ -118,7 +118,7 @@ class LabelNameQueryTest {
     }
 
     @Test
-    fun `из кандидатов берётся первый, из которого выходит запрос`() {
+    fun `из кандидатов берётся первый из которого выходит запрос`() {
         assertEquals(
             "ТВОРОГ 5%",
             LabelNameQuery.pick(listOf("", "Масса нетто 180 г", "ТВОРОГ 5% 180 г", "Простоквашино")),

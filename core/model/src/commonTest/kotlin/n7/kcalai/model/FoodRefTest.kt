@@ -29,7 +29,7 @@ class FoodRefTest {
     }
 
     @Test
-    fun `мусор в строке — это null, а не исключение`() {
+    fun `мусор в строке — это null — не исключение`() {
         assertNull(parseFoodRef(null))
         assertNull(parseFoodRef(""))
         assertNull(parseFoodRef("generic"))

@@ -49,7 +49,7 @@ class FrameSharpnessTest {
     }
 
     @Test
-    fun `кадр, смазанный целиком, — смазан`() {
+    fun `кадр смазанный целиком — смазан`() {
         assertTrue(sharpness(frame(::text).smeared(reach = 12)) < FrameSharpness.MIN)
     }
 
@@ -59,7 +59,7 @@ class FrameSharpnessTest {
     }
 
     @Test
-    fun `кадр меньше сетки — ноль, а не падение`() {
+    fun `кадр меньше сетки — ноль — не падение`() {
         assertEquals(0.0, FrameSharpness.of(IntArray(4), 2, 2))
     }
 

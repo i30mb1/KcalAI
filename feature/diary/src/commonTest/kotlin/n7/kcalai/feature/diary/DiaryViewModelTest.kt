@@ -95,7 +95,7 @@ class DiaryViewModelTest {
      * и пузырёк был бы только шумом в ленте.
      */
     @Test
-    fun `пузырёк про отправку молчит, пока сервер не отвечает`() = runTest(dispatcher) {
+    fun `пузырёк про отправку молчит пока сервер не отвечает`() = runTest(dispatcher) {
         val outbox = FakeOutbox(OutboxCount(scans = 2, products = 1), serverUp = false)
         val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
         vm.onResume()
@@ -105,7 +105,7 @@ class DiaryViewModelTest {
     }
 
     @Test
-    fun `пузырёк про отправку появляется, когда сервер отвечает`() = runTest(dispatcher) {
+    fun `пузырёк про отправку появляется когда сервер отвечает`() = runTest(dispatcher) {
         val outbox = FakeOutbox(OutboxCount(scans = 2, products = 1), serverUp = false)
         val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
         advanceUntilIdle()
@@ -120,7 +120,7 @@ class DiaryViewModelTest {
 
     /** Лента — переписка: пузырёк с «Отправить» не пропадает, кнопка гаснет, ответ встаёт под ним. */
     @Test
-    fun `после «Отправить» пузырёк остаётся с погасшей кнопкой, а ответ — под ним`() = runTest(dispatcher) {
+    fun `после «Отправить» пузырёк остаётся с погасшей кнопкой а ответ — под ним`() = runTest(dispatcher) {
         val outbox = FakeOutbox(OutboxCount(scans = 2, products = 1), serverUp = true)
         val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
         vm.onResume()
@@ -171,7 +171,7 @@ class DiaryViewModelTest {
 
     /** Отказ держится: те же продукты второй раз не предлагаются, новый — повод спросить снова. */
     @Test
-    fun `отклонённое не предлагается снова, пока не появится новый продукт`() = runTest(dispatcher) {
+    fun `отклонённое не предлагается снова пока не появится новый продукт`() = runTest(dispatcher) {
         val outbox = FakeOutbox(OutboxCount(scans = 0, products = 2), serverUp = true)
         outbox.declined = OutboxCount(scans = 0, products = 2)
         val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
@@ -189,7 +189,7 @@ class DiaryViewModelTest {
 
     /** Персонажи говорят по одному: пока вопрос ждёт ответа, предложение отправить ждёт с ним. */
     @Test
-    fun `предложение отправить молчит, пока вопрос персонажа ждёт ответа`() = runTest(dispatcher) {
+    fun `предложение отправить молчит пока вопрос персонажа ждёт ответа`() = runTest(dispatcher) {
         harness.mascotDao.insert(
             MascotMessageEntity(
                 mascot = Mascot.EGG,
@@ -211,7 +211,7 @@ class DiaryViewModelTest {
 
     /** В сборке для людей фоновой отправки нет: обещать «отправлю сам» нельзя. */
     @Test
-    fun `без фоновой отправки молчащий сервер — повод спросить ещё раз, а не обещание`() = runTest(dispatcher) {
+    fun `без фоновой отправки молчащий сервер — повод спросить ещё раз — не обещание`() = runTest(dispatcher) {
         val outbox = FakeOutbox(OutboxCount(scans = 0, products = 1), serverUp = true, retriesInBackground = false)
         val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
         vm.onResume()
@@ -229,7 +229,7 @@ class DiaryViewModelTest {
 
     /** Вопрос про пропущенный обед — тоже реплика переписки: ответ его не стирает. */
     @Test
-    fun `ответ на пропущенный обед остаётся в ленте отмеченным, второй тап ничего не пишет`() = runTest(dispatcher) {
+    fun `ответ на пропущенный обед остаётся в ленте отмеченным второй тап ничего не пишет`() = runTest(dispatcher) {
         val afternoon = DiaryHarness(now = "2026-10-31T16:00:00Z")
         repeat(6) { day -> afternoon.addEntry("Гречка", 200, MealType.LUNCH, minutesAgo = 180, daysAgo = day + 1) }
         afternoon.mascotDao.upsertProfile(MascotProfileEntity(name = "Женя", nameAsked = true, consent = WriteConsent.ALLOWED))
@@ -256,7 +256,7 @@ class DiaryViewModelTest {
      * с анимацией, будто их только что добавили.
      */
     @Test
-    fun `пока день не прочитан из базы, лента не выдумывает пустой день`() = runTest(dispatcher) {
+    fun `пока день не прочитан из базы лента не выдумывает пустой день`() = runTest(dispatcher) {
         harness.addEntry("Гречка отварная", grams = 200, meal = n7.kcalai.model.MealType.LUNCH)
         harness.diaryDao.holdDay()
         val vm = screen()
@@ -279,7 +279,7 @@ class DiaryViewModelTest {
      * ошибку можно отменить. Без отмены случайный тап стирает запись насовсем.
      */
     @Test
-    fun `удалённую запись возвращает «Вернуть» — та же запись, на том же месте`() = runTest(dispatcher) {
+    fun `удалённую запись возвращает «Вернуть» — та же запись на том же месте`() = runTest(dispatcher) {
         val entry = harness.addEntry("Гречка отварная", grams = 200, meal = n7.kcalai.model.MealType.LUNCH)
         val vm = screen()
 
@@ -299,7 +299,7 @@ class DiaryViewModelTest {
 
     /** Лента — переписка: «Удалил…» остаётся в ней, а «Вернуть» гаснет и второй раз не срабатывает. */
     @Test
-    fun `после «Вернуть» реплика остаётся с погасшей кнопкой, и второй тап запись не дублирует`() = runTest(dispatcher) {
+    fun `после «Вернуть» реплика остаётся с погасшей кнопкой и второй тап запись не дублирует`() = runTest(dispatcher) {
         val entry = harness.addEntry("Гречка отварная", grams = 200, meal = n7.kcalai.model.MealType.LUNCH)
         val vm = screen()
         vm.onDeleteEntry(entry)
@@ -341,7 +341,7 @@ class DiaryViewModelTest {
     // --- ✓ на клавиатуре --------------------------------------------------------------------
 
     @Test
-    fun `✓ на клавиатуре записывает вес, как тап по чипсу`() = runTest(dispatcher) {
+    fun `✓ на клавиатуре записывает вес как тап по чипсу`() = runTest(dispatcher) {
         val vm = screen()
 
         vm.type("вес 82,4")
@@ -397,7 +397,7 @@ class DiaryViewModelTest {
 
     /** Поиск идёт с паузой, и чипсы ещё про «гречка 20»: записать надо то, что набрано. */
     @Test
-    fun `✓ раньше ответа поиска ждёт его, а не берёт чипсы прошлой строки`() = runTest(dispatcher) {
+    fun `✓ раньше ответа поиска ждёт его — не берёт чипсы прошлой строки`() = runTest(dispatcher) {
         ownBuckwheat()
         val vm = screen()
 
@@ -412,7 +412,7 @@ class DiaryViewModelTest {
     }
 
     @Test
-    fun `строка, изменённая после ✓, не записывается`() = runTest(dispatcher) {
+    fun `строка изменённая после ✓ не записывается`() = runTest(dispatcher) {
         ownBuckwheat()
         val vm = screen()
 
@@ -441,7 +441,7 @@ class DiaryViewModelTest {
     }
 
     @Test
-    fun `✓ на то, чего нет, ничего не записывает`() = runTest(dispatcher) {
+    fun `✓ на то чего нет ничего не записывает`() = runTest(dispatcher) {
         val vm = screen()
 
         vm.type("хрючево")
@@ -460,7 +460,7 @@ class DiaryViewModelTest {
      * на полуслове.
      */
     @Test
-    fun `строка без единой буквы — ещё не блюдо, и «не нашлось» не появляется`() = runTest(dispatcher) {
+    fun `строка без единой буквы — ещё не блюдо и «не нашлось» не появляется`() = runTest(dispatcher) {
         val vm = screen()
 
         listOf("200", ".", "2,5").forEach { text ->
@@ -482,7 +482,7 @@ class DiaryViewModelTest {
      * камерой. Теперь окно ждёт ответа открытым.
      */
     @Test
-    fun `пока товар ищется по коду, окно съёмки открыто, а нашёлся — закрывается`() = runTest(dispatcher) {
+    fun `пока товар ищется по коду окно съёмки открыто а нашёлся — закрывается`() = runTest(dispatcher) {
         harness.userFoodDao.add(barcode = GTIN, name = "Сыр", kcal100 = 350)
         val network = CompletableDeferred<Unit>()
         harness.userFoodDao.slowLookup = network
@@ -682,7 +682,7 @@ class DiaryViewModelTest {
     }
 
     @Test
-    fun `имя сохраняется, вопрос остаётся, и Яйцо отвечает под ним`() = runTest(dispatcher) {
+    fun `имя сохраняется вопрос остаётся и Яйцо отвечает под ним`() = runTest(dispatcher) {
         val vm = screen()
         vm.onPickPrediction(harness.kefir)
         advanceUntilIdle()
@@ -701,7 +701,7 @@ class DiaryViewModelTest {
     }
 
     @Test
-    fun `разрешение писать Зёрнышко спрашивает со второй записи, когда имя уже знает`() = runTest(dispatcher) {
+    fun `разрешение писать Зёрнышко спрашивает со второй записи когда имя уже знает`() = runTest(dispatcher) {
         harness.mascotDao.upsertProfile(MascotProfileEntity(name = "Женя", nameAsked = true))
         val vm = screen()
 
@@ -717,7 +717,7 @@ class DiaryViewModelTest {
 
     /** Кнопка погасла не только на экране: второй тап, успевший раньше, телефон не спрашивает. */
     @Test
-    fun `«Пишите» спрашивает телефон один раз, даже если тапнуть дважды`() = runTest(dispatcher) {
+    fun `«Пишите» спрашивает телефон один раз даже если тапнуть дважды`() = runTest(dispatcher) {
         val vm = askedToWrite()
         val requests = mutableListOf<Unit>()
         backgroundScope.launch { vm.notificationRequests.collect { requests += it } }
@@ -754,7 +754,7 @@ class DiaryViewModelTest {
 
     /** Вопрос не тонет среди подсказок: перебор и остаток подождут ответа. */
     @Test
-    fun `пока вопрос ждёт ответа, перебор ждёт тоже — а после ответа встаёт`() = runTest(dispatcher) {
+    fun `пока вопрос ждёт ответа перебор ждёт тоже — а после ответа встаёт`() = runTest(dispatcher) {
         harness.goalDao.upsert(DailyGoalEntity(harness.today, kcal = 50, prot = 0, fat = 0, carb = 0))
         val vm = screen()
 
@@ -771,7 +771,7 @@ class DiaryViewModelTest {
     }
 
     @Test
-    fun `записал дальше, не ответив, — вопрос остаётся, но ленту больше не держит`() = runTest(dispatcher) {
+    fun `записал дальше не ответив — вопрос остаётся но ленту больше не держит`() = runTest(dispatcher) {
         harness.goalDao.upsert(DailyGoalEntity(harness.today, kcal = 50, prot = 0, fat = 0, carb = 0))
         val vm = screen()
         vm.onPickPrediction(harness.kefir)
@@ -823,7 +823,7 @@ class DiaryViewModelTest {
     // --- Сцена: облачка и сигналы -------------------------------------------------------
 
     @Test
-    fun `третий тык — облачко, и оно уходит само`() = runTest(dispatcher) {
+    fun `третий тык — облачко и оно уходит само`() = runTest(dispatcher) {
         val vm = screen()
 
         vm.onMascotEvent(MascotEvent.Poked(Mascot.EGG, count = 3))
@@ -909,7 +909,7 @@ class DiaryViewModelTest {
     }
 
     @Test
-    fun `ночью персонажи спят, утром — нет`() = runTest(dispatcher) {
+    fun `ночью персонажи спят утром — нет`() = runTest(dispatcher) {
         assertFalse(screen().state.value.night, "в девять утра")
 
         val night = DiaryHarness(now = "2026-10-31T02:00:00Z")
