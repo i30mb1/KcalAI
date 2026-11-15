@@ -703,6 +703,29 @@ fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit) {
 }
 
 /**
+ * Рядом кто-то свой — Зёрнышко зовёт отправить ему еду.
+ *
+ * Имя соседа — чипс: их бывает несколько, и выбор между ними делает тап,
+ * а не список с заголовком.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun NearbyBubble(item: FeedItem.Nearby, onSend: (String) -> Unit) {
+    IncomingBubble(item) {
+        BubbleText(nearbyOffer(item.people.map { it.name }))
+        FlowRow(
+            modifier = Modifier.padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            item.people.forEach { person ->
+                AnswerChip(person.name, chosen = null, primary = true, onClick = { onSend(person.id) })
+            }
+        }
+    }
+}
+
+/**
  * Телефон рядом предлагает записать еду — ответ одним тапом.
  *
  * Устроено как вопрос персонажа, и теми же кнопками: отвеченное остаётся

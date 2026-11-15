@@ -197,6 +197,17 @@ sealed interface FeedItem {
     }
 
     /**
+     * Рядом кто-то свой, и ему можно отправить еду.
+     *
+     * Не [Message]: сосед — это состояние сети прямо сейчас, а не сказанное
+     * в какую-то минуту. Поэтому стоит в конце ленты, как предложение отправить
+     * вклады, и исчезает, когда сосед уходит.
+     */
+    data class Nearby(val people: List<NearbyPerson>) : FeedItem {
+        override val key get() = "nearby"
+    }
+
+    /**
      * Сообщение персонажа из базы — сказанное или спрошенное.
      *
      * Хранится в базе, а не в сессии, — и поэтому стоит в переписке дня, когда
@@ -265,6 +276,7 @@ sealed interface FeedItem {
         override val key get() = "offer-$id"
     }
 }
+
 
 /**
  * Сводка пустого дня.
@@ -339,7 +351,7 @@ fun speakerOf(item: FeedItem): Mascot? = when (item) {
     is FeedItem.Said -> item.mascot
     is FeedItem.Ask -> item.question.mascot
     is FeedItem.Over -> Mascot.BUTTER
-    is FeedItem.Gap -> Mascot.GRAIN
+    is FeedItem.Gap, is FeedItem.Nearby -> Mascot.GRAIN
     is FeedItem.Remaining -> if (item.plan.remainingProtCg > 0) Mascot.EGG else Mascot.GRAIN
     is FeedItem.Summary,
     is FeedItem.EmptyDay,

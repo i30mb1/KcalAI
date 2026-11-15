@@ -101,6 +101,8 @@ fun Composer(
     /** Чем сейчас стала кнопка у строки ввода: сканером или ✓. */
     action: ComposerAction,
     pastMeal: MealType?,
+    /** Кому сейчас пишут; `null` — себе. Видно в подсказке поля. */
+    sendingTo: String?,
     onPickMeal: (MealType) -> Unit,
     onInputChange: (String) -> Unit,
     onPick: (ResolvedItem) -> Unit,
@@ -202,7 +204,10 @@ fun Composer(
                 )
                 if (input.isEmpty()) {
                     Text(
-                        "Написать, что съели…",
+                        // Режим отправки обязан быть виден: невидимый однажды
+                        // отправит чужую еду в свой дневник. Это реплика, а не
+                        // подпись, — поэтому вместо подсказки, а не рядом с ней.
+                        if (sendingTo != null) "Что съела $sendingTo…" else "Написать, что съели…",
                         style = KcalTheme.type.input,
                         color = colors.text3,
                     )

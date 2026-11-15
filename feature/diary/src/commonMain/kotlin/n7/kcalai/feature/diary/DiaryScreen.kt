@@ -114,6 +114,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
             }
         },
         onAnswerOffer = viewModel::onAnswerOffer,
+        onSendToPeer = viewModel::onSendToPeer,
     )
 
     when (val overlay = state.overlay) {
@@ -198,6 +199,7 @@ fun DiaryScreen(
     /** Ответ на вопрос персонажа: `true` — «Сказать» / «Пишите», `false` — «Не скажу» / «Не надо». */
     onAnswerAsk: (MascotQuestion, Boolean) -> Unit,
     onAnswerOffer: (Long, Boolean) -> Unit,
+    onSendToPeer: (String) -> Unit,
     /** С персонажем что-то сделали: ткнули, взяли в руку, погладили, разбудили. */
     onMascotEvent: (MascotEvent) -> Unit,
 ) {
@@ -336,6 +338,7 @@ fun DiaryScreen(
             onOpenGoal = onOpenGoal,
             onAnswerAsk = onAnswerAsk,
             onAnswerOffer = onAnswerOffer,
+            onSendToPeer = onSendToPeer,
             modifier = Modifier.fillMaxSize().nestedScroll(expandOnPull),
         )
         }
@@ -369,6 +372,7 @@ fun DiaryScreen(
             row = row,
             action = state.action,
             pastMeal = state.pastMeal,
+            sendingTo = state.sendingTo,
             onPickMeal = onPickMeal,
             onInputChange = onInputChange,
             onPick = onPick,
@@ -444,6 +448,7 @@ private fun Feed(
     onOpenGoal: () -> Unit,
     onAnswerAsk: (MascotQuestion, Boolean) -> Unit,
     onAnswerOffer: (Long, Boolean) -> Unit,
+    onSendToPeer: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     /*
@@ -595,6 +600,7 @@ private fun Feed(
                         onYes = { onAnswerAsk(item.question, true) },
                         onNo = { onAnswerAsk(item.question, false) },
                     )
+                    is FeedItem.Nearby -> NearbyBubble(item, onSendToPeer)
                     is FeedItem.Offer -> OfferBubble(
                         item = item,
                         onYes = { onAnswerOffer(item.id, true) },

@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -168,6 +169,13 @@ data class DiaryUiState(
     val todayGoal: DailyGoalEntity? = null,
     /** В какой приём пишется прошлый день. `null` — открыт сегодняшний. */
     val pastMeal: MealType? = null,
+    /**
+     * Имя соседа, которому сейчас пишут. `null` — пишут себе.
+     *
+     * Видно в подсказке строки ввода: режим, который не видно, однажды отправит
+     * чужую еду в свой дневник.
+     */
+    val sendingTo: String? = null,
     /** Нужен шиту цели: расход по факту подставляется в калории одним тапом. */
     val tdee: TdeeEstimate? = null,
     /** Нужен шиту цели: помощь с целью начинается с уже записанного веса. */
@@ -215,6 +223,10 @@ class DiaryViewModel(
      * и переживать закрытие экрана это должно в базе.
      */
     private val peerOffers: PeerOfferDao? = null,
+    /**
+     * Телефоны рядом. `null` — фича выключена: ни соседей в ленте, ни отправки.
+     */
+    private val peers: NearbyPeers? = null,
     private val assistant: FoodAssistant? = null,
     private val clock: Clock = Clock.System,
     /** Зона, в которой считаются день и час: `createdAt` хранится в UTC. */
@@ -349,8 +361,20 @@ class DiaryViewModel(
     /** Облачки и сигнал сцене — одним потоком: у [combine] потолок в пять. */
     private val stage = combine(speech, cue) { lines, signal -> lines to signal }
 
-    val state = combine(typingAndReplies, data, personalState, stage) { session, loaded, models, scene ->
+    /** Кому сейчас пишут; `null` — себе. */
+    private val sendingTo = MutableStateFlow<NearbyPerson?>(null)
+
+    /**
+     * Кто рядом и кому пишем — одним потоком.
+     *
+     * Поиск идёт, пока на состояние экрана подписаны: `WhileSubscribed` снимает
+     * подписку вместе с экраном, и в кармане телефон соседей не ищет.
+     */
+    private val nearby = combine(peers?.nearby() ?: flowOf(emptyList()), sendingTo, ::Pair)
+
+    val state = combine(typingAndReplies, data, personalState, stage, nearby) { session, loaded, models, scene, near ->
         val (typed, replies, pending, meal) = session
+        val (people, writingTo) = near
         if (loaded == null) {
             return@combine DiaryUiState(input = typed.input, overlay = typed.overlay)
         }
@@ -367,6 +391,9 @@ class DiaryViewModel(
                 // Очередь отправки — разговор о сегодняшнем, во вчерашней переписке ей не место.
                 pending = pending.takeIf { pastMeal == null },
                 pastMeal = pastMeal,
+                // Соседи — разговор о сейчас: во вчерашней переписке им не место,
+                // как и очереди отправки.
+                nearby = people.takeIf { pastMeal == null && writingTo == null }.orEmpty(),
             ),
             composer = row,
             action = composerAction(typed.input),
@@ -381,6 +408,7 @@ class DiaryViewModel(
             lastWeightGrams = models.lastWeightGrams,
             overlay = typed.overlay,
             pastMeal = pastMeal,
+            sendingTo = writingTo?.name,
             speech = scene.first,
             cue = scene.second,
             night = isNight(hourNow()),
@@ -642,6 +670,7 @@ class DiaryViewModel(
         replies: List<FeedItem>,
         pending: FeedItem.Outbox?,
         pastMeal: MealType?,
+        nearby: List<NearbyPerson> = emptyList(),
     ): List<FeedItem> {
         val now = nowMillis()
         val hour = hourNow()
@@ -679,6 +708,8 @@ class DiaryViewModel(
         feed += replies.filterNot { it is FeedItem.Gap }
         // Предложение отправить — тоже реплика: пока вопрос ждёт ответа, оно ждёт с ним.
         pending?.takeUnless { waiting }?.let { feed += it }
+        // Соседи ждут вместе с остальными: персонажи говорят по одному.
+        if (!waiting && nearby.isNotEmpty()) feed += FeedItem.Nearby(nearby)
 
         // Перебор вытесняет остаток, а не дополняет его: это один и тот же ответ
         // на один и тот же вопрос, и показывать оба значило бы спорить с собой.
@@ -775,6 +806,7 @@ class DiaryViewModel(
     fun onPick(item: ResolvedItem, meal: MealType? = null) {
         val candidate = item.candidate ?: return
         if (item.grams <= 0) return
+        if (sendToPeerInstead(candidate, item.grams)) return
 
         val shown = answer.value?.items.orEmpty()
         val pickedIndex = shown.indexOfFirst { it.candidate?.ref == candidate.ref }
@@ -824,6 +856,9 @@ class DiaryViewModel(
     fun onPickPrediction(candidate: FoodCandidate, meal: MealType? = null) {
         val grams = candidate.servingG ?: return
         if (grams <= 0) return
+        // В режиме отправки еда уходит соседу, а в свой дневник не попадает:
+        // отправитель её не ел.
+        if (sendToPeerInstead(candidate, grams)) return
         val before = dayKcal()
         val today = !isPast
 
@@ -1465,6 +1500,45 @@ class DiaryViewModel(
             // Ссылку на продукт не кладём: на чужом телефоне она указывает на другую еду.
             reactToMeal(entryId, before, today)
         }
+    }
+
+    /**
+     * Дальше человек пишет не себе, а соседу.
+     *
+     * Режим виден в подсказке строки ввода: невидимый однажды отправил бы чужую
+     * еду в свой дневник.
+     */
+    fun onSendToPeer(id: String) {
+        val source = peers ?: return
+        viewModelScope.launch {
+            sendingTo.value = source.nearby().first().find { it.id == id }
+        }
+    }
+
+    /** Передумал: дальше снова пишет себе. */
+    fun onCancelSendToPeer() {
+        sendingTo.value = null
+    }
+
+    /**
+     * Отправить еду соседу вместо записи себе.
+     *
+     * @return взяли ли на себя: `false` — режима нет, и запись идёт обычным путём
+     */
+    private fun sendToPeerInstead(candidate: FoodCandidate, grams: Int): Boolean {
+        val source = peers ?: return false
+        val person = sendingTo.value ?: return false
+        // Режим снимается сразу: ждать ответа сети, держа человека в чужом
+        // режиме, значило бы записать следующую еду не туда.
+        sendingTo.value = null
+        viewModelScope.launch {
+            val sent = source.send(person.id, candidate.displayName, grams, candidate.nutriments)
+            reply(
+                if (sent) "${person.name} — отправлено: ${candidate.displayName}"
+                else "${person.name} — не доставлено: телефон не отозвался"
+            )
+        }
+        return true
     }
 
     // --- Персонажи: имя и разрешение писать ---------------------------------------------
