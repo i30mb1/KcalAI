@@ -54,6 +54,9 @@ class MainActivity : ComponentActivity() {
                     // Предложение отправить — только когда есть куда отправлять.
                     outbox = if (container.serverConfigured) Outbox(applicationContext, container) else null,
                     assistant = container.assistant,
+                    // Предложения соседа: приходят в базу, лента берёт их оттуда.
+                    peerOffers = container.database.peerOfferDao(),
+                    peers = container.nearbyPeers,
                 )
             }
         }

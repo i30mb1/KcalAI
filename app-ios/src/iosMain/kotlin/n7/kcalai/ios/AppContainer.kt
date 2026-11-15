@@ -21,6 +21,12 @@ import n7.kcalai.fooddb.FoodDbFactory
 import n7.kcalai.fooddb.installSeed
 import n7.kcalai.mascot.FactsBuilder
 import n7.kcalai.mascot.MascotBrain
+import n7.kcalai.feature.diary.NearbyPeers
+import n7.kcalai.feature.diary.NearbyPeersOverLan
+import n7.kcalai.nearby.DatabaseOfferInbox
+import n7.kcalai.nearby.OfferReceiver
+import kotlinx.coroutines.flow.map
+import n7.kcalai.nearby.BonjourDiscovery
 import n7.kcalai.personal.PersonalRepository
 import n7.kcalai.remote.ChainedProductSource
 import n7.kcalai.remote.ContributionUploader
@@ -146,6 +152,21 @@ class AppContainer {
     /** Зовётся оболочкой на Swift: Foundation Models доступен только оттуда. */
     fun useAppleModel(bridge: AppleModelBridge) {
         assistant = AppleAssistant(bridge, diaryTools)
+    }
+
+    /**
+     * Телефоны рядом: кому предложить еду и чем её отправить.
+     *
+     * Приёмник и объявление живут, пока открыт дневник, — этим распоряжается
+     * сам [NearbyPeersOverLan] по подписке. Имя берётся из профиля: пока человек
+     * не назвался, фича молчит.
+     */
+    val nearbyPeers: NearbyPeers by lazy {
+        NearbyPeersOverLan(
+            discovery = BonjourDiscovery(),
+            receiver = OfferReceiver(DatabaseOfferInbox(database.peerOfferDao())),
+            myName = mascotBrain.profile.map { it.name },
+        )
     }
 
     /**

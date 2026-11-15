@@ -35,6 +35,9 @@ object KcalApp {
             food = container.foodRepository,
             brain = container.mascotBrain,
             assistant = container.assistant,
+            // Предложения соседа: приходят в базу, лента берёт их оттуда.
+            peerOffers = container.database.peerOfferDao(),
+            peers = container.nearbyPeers,
         )
     }
 

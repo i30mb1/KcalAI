@@ -30,6 +30,12 @@ import n7.kcalai.fooddb.FoodDbFactory
 import n7.kcalai.fooddb.installSeed
 import n7.kcalai.mascot.FactsBuilder
 import n7.kcalai.mascot.MascotBrain
+import n7.kcalai.feature.diary.NearbyPeers
+import n7.kcalai.feature.diary.NearbyPeersOverLan
+import n7.kcalai.nearby.DatabaseOfferInbox
+import n7.kcalai.nearby.OfferReceiver
+import kotlinx.coroutines.flow.map
+import n7.kcalai.nearby.NsdDiscovery
 import n7.kcalai.model.BackgroundModel
 import n7.kcalai.model.ModelDelivery
 import n7.kcalai.personal.PersonalRepository
@@ -189,6 +195,21 @@ class AppContainer(context: Context) {
     val labelVision: LabelVision by lazy {
         val reader = NanoLabelReader()
         LabelVision { label -> reader.read(label) }
+    }
+
+    /**
+     * Телефоны рядом: кому предложить еду и чем её отправить.
+     *
+     * Приёмник и объявление живут, пока открыт дневник, — этим распоряжается
+     * сам [NearbyPeersOverLan] по подписке. Имя берётся из профиля: пока человек
+     * не назвался, фича молчит.
+     */
+    val nearbyPeers: NearbyPeers by lazy {
+        NearbyPeersOverLan(
+            discovery = NsdDiscovery(appContext),
+            receiver = OfferReceiver(DatabaseOfferInbox(database.peerOfferDao())),
+            myName = mascotBrain.profile.map { it.name },
+        )
     }
 
     /**
