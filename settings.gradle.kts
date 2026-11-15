@@ -40,6 +40,8 @@ include(":core:assistant")
 include(":core:semantic")
 include(":assets:embedding")
 include(":core:remote")
+// Телефон рядом: обнаружение в общей сети и предложение записи соседу.
+include(":core:nearby")
 include(":feature:diary")
 include(":feature:scanner")
 include(":smoke")
