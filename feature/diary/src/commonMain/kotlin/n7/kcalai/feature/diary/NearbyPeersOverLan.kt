@@ -1,6 +1,7 @@
 package n7.kcalai.feature.diary
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -45,6 +46,10 @@ class NearbyPeersOverLan(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun nearby(): Flow<List<NearbyPerson>> = myName
+        // Профиль приходит потоком из базы и повторяет себя на каждое её изменение,
+        // а перезапуск здесь — это новый сокет на новом порту. Сосед, успевший
+        // узнать прошлый порт, стучался бы в закрытую дверь.
+        .distinctUntilChanged()
         .flatMapLatest { name ->
             if (name.isNullOrBlank()) {
                 // Назваться нечем — ни объявляемся, ни ищем.
