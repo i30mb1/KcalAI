@@ -113,6 +113,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
                 MascotQuestion.WRITE -> viewModel.onAnswerWrite(yes)
             }
         },
+        onAnswerOffer = viewModel::onAnswerOffer,
     )
 
     when (val overlay = state.overlay) {
@@ -196,6 +197,7 @@ fun DiaryScreen(
     onOpenLabelDebug: (() -> Unit)?,
     /** Ответ на вопрос персонажа: `true` — «Сказать» / «Пишите», `false` — «Не скажу» / «Не надо». */
     onAnswerAsk: (MascotQuestion, Boolean) -> Unit,
+    onAnswerOffer: (Long, Boolean) -> Unit,
     /** С персонажем что-то сделали: ткнули, взяли в руку, погладили, разбудили. */
     onMascotEvent: (MascotEvent) -> Unit,
 ) {
@@ -333,6 +335,7 @@ fun DiaryScreen(
             onPickPlan = onPickPlan,
             onOpenGoal = onOpenGoal,
             onAnswerAsk = onAnswerAsk,
+            onAnswerOffer = onAnswerOffer,
             modifier = Modifier.fillMaxSize().nestedScroll(expandOnPull),
         )
         }
@@ -440,6 +443,7 @@ private fun Feed(
     onPickPlan: (PlanOption) -> Unit,
     onOpenGoal: () -> Unit,
     onAnswerAsk: (MascotQuestion, Boolean) -> Unit,
+    onAnswerOffer: (Long, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     /*
@@ -590,6 +594,11 @@ private fun Feed(
                         item = item,
                         onYes = { onAnswerAsk(item.question, true) },
                         onNo = { onAnswerAsk(item.question, false) },
+                    )
+                    is FeedItem.Offer -> OfferBubble(
+                        item = item,
+                        onYes = { onAnswerOffer(item.id, true) },
+                        onNo = { onAnswerOffer(item.id, false) },
                     )
                 }
             }

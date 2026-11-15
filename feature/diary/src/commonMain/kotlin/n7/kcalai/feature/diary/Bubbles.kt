@@ -703,6 +703,31 @@ fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit) {
 }
 
 /**
+ * Телефон рядом предлагает записать еду — ответ одним тапом.
+ *
+ * Устроено как вопрос персонажа, и теми же кнопками: отвеченное остаётся
+ * в переписке, выбранная с галочкой, повторный тап не вешается вовсе.
+ * `FlowRow`, а не `Row`: у чужой еды подписи бывают длинными.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun OfferBubble(item: FeedItem.Offer, onYes: () -> Unit, onNo: () -> Unit) {
+    val answered = item.choice
+
+    IncomingBubble(item) {
+        BubbleText(peerOffer(item.fromName, item.food, item.grams), time = item.time)
+        FlowRow(
+            modifier = Modifier.padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            AnswerChip("Записать", chosen = answered?.let { it == Choice.YES }, primary = true, onClick = onYes)
+            AnswerChip("Не надо", chosen = answered?.let { it == Choice.NO }, primary = false, onClick = onNo)
+        }
+    }
+}
+
+/**
  * Кнопка ответа в реплике.
  *
  * Пока ответа нет — живая. Ответили — гаснут все, а выбранная отмечена галочкой:

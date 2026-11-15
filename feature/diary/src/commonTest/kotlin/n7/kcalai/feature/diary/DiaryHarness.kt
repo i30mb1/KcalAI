@@ -47,6 +47,8 @@ import n7.kcalai.mascot.MascotBrain
 import n7.kcalai.mascot.FactsBuilder
 import n7.kcalai.database.MascotProfileEntity
 import n7.kcalai.database.MascotMessageEntity
+import n7.kcalai.database.PeerOfferDao
+import n7.kcalai.database.PeerOfferEntity
 import n7.kcalai.database.MascotDao
 import n7.kcalai.database.Delivery
 import kotlin.random.Random
@@ -69,6 +71,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
     val bodyMetricDao = FakeBodyMetricDao()
     val userFoodDao = FakeUserFoodDao()
     val mascotDao = FakeMascotDao()
+    val peerOfferDao = FakePeerOfferDao()
 
     /** Справочник по умолчанию не открывается: экрану он нужен в редких тестах. */
     var foodDb = FoodDbSource { error("справочник в этих тестах не открывается") }
@@ -82,6 +85,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
         dispatcher: CoroutineDispatcher,
         outbox: DiaryOutbox? = null,
         assistant: FoodAssistant? = null,
+        peerOffers: PeerOfferDao? = null,
     ): DiaryViewModel {
         val personal = PersonalRepository(diaryDao, FakePersonalDao(), bodyMetricDao, goalDao, zone)
         val food = FoodRepository(
@@ -106,6 +110,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
             food = food,
             brain = brain,
             outbox = outbox,
+            peerOffers = peerOffers,
             assistant = assistant,
             clock = clock,
             zone = zone,
@@ -386,6 +391,32 @@ private class FakePersonalDao : PersonalDao {
 }
 
 /** Сообщения и профиль персонажей в памяти. */
+/** Предложения соседа: отвечаются по id и один раз, как в настоящем запросе. */
+internal class FakePeerOfferDao : PeerOfferDao {
+
+    val offers = MutableStateFlow<List<PeerOfferEntity>>(emptyList())
+    private var nextId = 1L
+
+    override suspend fun insert(offer: PeerOfferEntity): Long {
+        val id = nextId++
+        offers.value += offer.copy(id = id)
+        return id
+    }
+
+    override fun observeDay(dateEpochDay: Long): Flow<List<PeerOfferEntity>> =
+        offers.map { all -> all.filter { it.dateEpochDay == dateEpochDay }.sortedWith(compareBy({ it.createdAt }, { it.id })) }
+
+    override suspend fun findById(id: Long): PeerOfferEntity? = offers.value.find { it.id == id }
+
+    override suspend fun answer(id: Long, choice: Choice): Int {
+        val waiting = offers.value.count { it.id == id && it.choice == null }
+        offers.value = offers.value.map { if (it.id == id && it.choice == null) it.copy(choice = choice) else it }
+        return waiting
+    }
+
+    override suspend fun waitingCount(): Int = offers.value.count { it.choice == null }
+}
+
 internal class FakeMascotDao : MascotDao {
 
     override suspend fun lastSaid(topic: String): Long? =

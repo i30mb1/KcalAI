@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -62,6 +63,9 @@ import n7.kcalai.mascot.MascotEvent
 import n7.kcalai.mascot.awaitsAnswer
 import n7.kcalai.mascot.question
 import n7.kcalai.database.MascotMessageEntity
+import n7.kcalai.database.Choice
+import n7.kcalai.database.PeerOfferDao
+import n7.kcalai.database.PeerOfferEntity
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.channels.Channel
@@ -203,6 +207,14 @@ class DiaryViewModel(
     private val onScanFinished: () -> Unit = {},
     /** Очередь отправки. `null` — сервера нет, и пузырька про него не будет. */
     private val outbox: DiaryOutbox? = null,
+    /**
+     * Предложения с телефона рядом. `null` — фича выключена, и предложений
+     * в ленте не бывает вовсе.
+     *
+     * Кладёт их сюда приёмник, а не экран: сосед присылает, когда присылает,
+     * и переживать закрытие экрана это должно в базе.
+     */
+    private val peerOffers: PeerOfferDao? = null,
     private val assistant: FoodAssistant? = null,
     private val clock: Clock = Clock.System,
     /** Зона, в которой считаются день и час: `createdAt` хранится в UTC. */
@@ -296,15 +308,25 @@ class DiaryViewModel(
     private val data = combine(date, picked) { now, chosen -> now to (chosen ?: now) }
         .distinctUntilChanged()
         .flatMapLatest { (now, day) ->
+            // Сказанное и предложенное — одним потоком: у типизированного combine
+            // потолок в пять, а дню нужно шесть.
+            val saidAndOffered = combine(
+                // Что персонажи написали в этот день — из шторки или ответом в ленте.
+                brain.messages(day.toEpochDays()),
+                // Что предложили с телефона рядом; без шва предложений не бывает.
+                peerOffers?.observeDay(day.toEpochDays()) ?: flowOf(emptyList()),
+                ::Pair,
+            )
             combine(
                 diary.observeDay(day.toEpochDays()),
                 diary.observeGoal(day.toEpochDays()),
                 // Неделя — всегда последние семь дней до сегодня: по ней и выбирают день.
                 diary.observeWeek(now.toEpochDays()),
                 diary.observeGoal(now.toEpochDays()),
-                // Что персонажи написали в этот день — из шторки или ответом в ленте.
-                brain.messages(day.toEpochDays()),
-            ) { dayTotals, goal, week, todayGoal, said -> DayData(day, now, dayTotals, goal, week, todayGoal, said) }
+                saidAndOffered,
+            ) { dayTotals, goal, week, todayGoal, (said, offers) ->
+                DayData(day, now, dayTotals, goal, week, todayGoal, said, offers)
+            }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -461,6 +483,7 @@ class DiaryViewModel(
         val week: List<DaySummary>,
         val todayGoal: DailyGoalEntity?,
         val said: List<MascotMessageEntity>,
+        val offers: List<PeerOfferEntity> = emptyList(),
     )
 
     /** Реплика сессии и день, в переписке которого она стоит. */
@@ -635,9 +658,14 @@ class DiaryViewModel(
             }
         }
 
-        val waiting = isToday && awaitsAnswer(loaded.said, dayTotals.entries.maxOfOrNull { it.createdAt })
+        val lastEntryAt = dayTotals.entries.maxOfOrNull { it.createdAt }
+        // Предложение соседа держит слово наравне с вопросом персонажа: и то и другое
+        // ждёт ответа, а персонажи говорят по одному.
+        val waiting = isToday &&
+            (awaitsAnswer(loaded.said, lastEntryAt) || awaitsOffer(loaded.offers, lastEntryAt))
         val bubbles = groupIntoBubbles(dayTotals.entries, zone, now, activeMeal = pastMeal)
-        val body = interleave(bubbles, loaded.said.map { it.toFeedItem() }, zone).toMutableList()
+        val said = loaded.said.map { it.toFeedItem() } + loaded.offers.map { it.toFeedItem() }
+        val body = interleave(bubbles, said, zone).toMutableList()
         // Отвеченный «Обед был?» стоит там же, где был задан; новый — только когда слово свободно.
         val answered = replies.filterIsInstance<FeedItem.Gap>()
         val live = models.mealGap
@@ -1381,6 +1409,62 @@ class DiaryViewModel(
                 time = formatTime(nowMillis(), zone),
             ),
         )
+    }
+
+    // --- Телефон рядом: предложение записи -----------------------------------------------
+
+    /** Предложение соседа в переписке — с кнопками ответа, как вопрос персонажа. */
+    private fun PeerOfferEntity.toFeedItem(): FeedItem.Offer {
+        val local = Instant.fromEpochMilliseconds(createdAt).toLocalDateTime(zone)
+        return FeedItem.Offer(
+            id = id,
+            fromName = fromName,
+            food = displayName,
+            grams = grams,
+            time = formatTime(createdAt, zone),
+            minute = local.hour * 60 + local.minute,
+            at = createdAt,
+            choice = choice,
+        )
+    }
+
+    /**
+     * Ответ на предложение соседа.
+     *
+     * Сначала ответ, потом запись: пока `answer` не сказал, что строка и правда
+     * ждала, писать нечего. Ноль — ответ уже дан, и второй тап не должен положить
+     * вторую запись.
+     */
+    fun onAnswerOffer(id: Long, yes: Boolean) {
+        val dao = peerOffers ?: return
+        val before = dayKcal()
+        val today = !isPast
+        viewModelScope.launch {
+            val offer = dao.findById(id) ?: return@launch
+            if (dao.answer(id, if (yes) Choice.YES else Choice.NO) == 0) return@launch
+            if (!yes) return@launch
+
+            // Приём пищи — по своим часам: завтрак соседа и завтрак человека
+            // приходятся на разное время, а поправить его можно и после.
+            val meal = context().meal
+            val entryId = diary.addSnapshot(
+                displayName = offer.displayName,
+                nutriments = Nutriments(
+                    kcal100 = offer.kcal100,
+                    prot100 = offer.prot100,
+                    fat100 = offer.fat100,
+                    carb100 = offer.carb100,
+                    fiber100 = offer.fiber100,
+                ),
+                grams = offer.grams,
+                meal = meal,
+                date = shownDate.toEpochDays(),
+                source = EntrySource.SHARED,
+                now = entryTime(meal),
+            )
+            // Ссылку на продукт не кладём: на чужом телефоне она указывает на другую еду.
+            reactToMeal(entryId, before, today)
+        }
     }
 
     // --- Персонажи: имя и разрешение писать ---------------------------------------------

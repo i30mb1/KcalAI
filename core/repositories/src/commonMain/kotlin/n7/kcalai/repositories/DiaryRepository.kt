@@ -12,6 +12,7 @@ import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
+import n7.kcalai.model.Nutriments
 import n7.kcalai.model.plus
 import n7.kcalai.model.serialize
 
@@ -55,6 +56,39 @@ class DiaryRepository(
         source: EntrySource,
         now: Long,
     ): Long = diaryDao.insert(candidate.toEntity(grams, meal, date, source, now))
+
+    /**
+     * То же, но еда пришла снимком и ссылки на продукт у неё нет.
+     *
+     * Так приходит предложение с телефона рядом: ссылка вида `user:7` — номер
+     * строки в чужой базе, и у нас под тем же номером лежит другая еда. Записи
+     * ссылка не нужна — она только для «повторить», и поле её nullable.
+     */
+    suspend fun addSnapshot(
+        displayName: String,
+        nutriments: Nutriments,
+        grams: Int,
+        meal: MealType,
+        date: Long,
+        source: EntrySource,
+        now: Long,
+        foodRef: String? = null,
+    ): Long = diaryDao.insert(
+        DiaryEntryEntity(
+            dateEpochDay = date,
+            meal = meal,
+            displayName = displayName,
+            grams = grams,
+            kcal100 = nutriments.kcal100,
+            prot100 = nutriments.prot100,
+            fat100 = nutriments.fat100,
+            carb100 = nutriments.carb100,
+            source = source,
+            foodRef = foodRef,
+            createdAt = now,
+            fiber100 = nutriments.fiber100,
+        )
+    )
 
     /** Запись как она легла в дневник — персонажам, чтобы отозваться на неё. */
     suspend fun entry(id: Long): DiaryEntryEntity? = diaryDao.findById(id)

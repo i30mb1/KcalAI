@@ -242,6 +242,28 @@ sealed interface FeedItem {
     ) : Message {
         override val key get() = "ask-$id"
     }
+
+    /**
+     * Телефон рядом предлагает записать еду, и ответить можно одним тапом.
+     *
+     * Как и вопрос, стоит в переписке своего дня по времени и после ответа
+     * не пропадает: кнопки гаснут, выбранная отмечена. В дневник до ответа
+     * не попадает ничего — предложение до него живёт только здесь.
+     *
+     * @param choice что человек ответил; `null` — ответа ещё нет, и кнопки живые
+     */
+    data class Offer(
+        val id: Long,
+        val fromName: String,
+        val food: String,
+        val grams: Int,
+        val time: String,
+        override val minute: Int,
+        override val at: Long = Long.MAX_VALUE,
+        val choice: Choice? = null,
+    ) : Message {
+        override val key get() = "offer-$id"
+    }
 }
 
 /**
@@ -326,6 +348,8 @@ fun speakerOf(item: FeedItem): Mascot? = when (item) {
     is FeedItem.Reply,
     is FeedItem.Answer,
     is FeedItem.Deleted,
+    // Еду приносит Яйцо — и чужую тоже.
+    is FeedItem.Offer,
     is FeedItem.Outbox -> Mascot.EGG
 }
 
