@@ -16,6 +16,15 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--
+        Предложить еду телефону рядом: его ищет mDNS в той же Wi-Fi сети.
+        Диалога человеку эти два не показывают. Мультикаст система по умолчанию
+        режет ради батареи, и без CHANGE_WIFI_MULTICAST_STATE объявления соседей
+        не доходят вовсе — замок берётся на время поиска, см. NsdDiscovery.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
+    <!--
         WorkManager и Play Asset Delivery объявляют foreground-сервисы «на всякий случай»,
         а Google Play за каждое такое разрешение требует декларацию с видео. Отправка вкладов
         и распаковка пака идут обычной фоновой работой и в передний план не выходят.
