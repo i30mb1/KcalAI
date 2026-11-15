@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -369,8 +370,16 @@ class DiaryViewModel(
      *
      * Поиск идёт, пока на состояние экрана подписаны: `WhileSubscribed` снимает
      * подписку вместе с экраном, и в кармане телефон соседей не ищет.
+     *
+     * `onStart` с пустым списком обязателен: пока никого не нашли, Bonjour молчит,
+     * а `combine` не отдаёт состояние, пока не отозвался каждый поток. Без этого
+     * экран оставался пустым целиком — при живом приложении и работающем поиске.
      */
-    private val nearby = combine(peers?.nearby() ?: flowOf(emptyList()), sendingTo, ::Pair)
+    private val nearby = combine(
+        (peers?.nearby() ?: flowOf(emptyList())).onStart { emit(emptyList()) },
+        sendingTo,
+        ::Pair,
+    )
 
     val state = combine(typingAndReplies, data, personalState, stage, nearby) { session, loaded, models, scene, near ->
         val (typed, replies, pending, meal) = session

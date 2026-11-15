@@ -3,7 +3,9 @@ package n7.kcalai.feature.diary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -126,6 +128,28 @@ class SendToPeerTest {
         advanceUntilIdle()
 
         assertTrue(vm.state.value.feed.any { it is FeedItem.Reply }, "о неудаче сказано в ленте")
+    }
+
+    /**
+     * Поиск соседей молчит, пока никого не нашёл, — так ведёт себя Bonjour.
+     *
+     * Лента обязана работать и в этом случае: `combine` не отдаёт состояние,
+     * пока не отозвался каждый поток, и молчащий поиск однажды оставил экран
+     * пустым целиком — при живом приложении.
+     */
+    @Test
+    fun `экран работает пока поиск соседей молчит`() = runTest(dispatcher) {
+        val silent = object : NearbyPeers {
+            override fun nearby(): Flow<List<NearbyPerson>> = flow { awaitCancellation() }
+            override suspend fun send(id: String, food: String, grams: Int, nutriments: Nutriments) = false
+        }
+
+        val vm = harness.viewModel(dispatcher, peers = silent).also { vm ->
+            backgroundScope.launch { vm.state.collect {} }
+            advanceUntilIdle()
+        }
+
+        assertTrue(vm.state.value.loaded, "лента не дождалась молчащего поиска и осталась пустой")
     }
 
     private class FakeNearbyPeers : NearbyPeers {
