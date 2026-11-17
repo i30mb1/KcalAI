@@ -104,6 +104,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         onLogWeight = viewModel::onLogWeight,
         onSubmit = viewModel::onSubmit,
         onOpenGoal = viewModel::onOpenGoal,
+        onFiberTap = viewModel::onFiberTapped,
         onOpenScan = viewModel::onOpenScan,
         onOpenLabelDebug = if (labelDebug) viewModel::onOpenLabelDebug else null,
         onMascotEvent = viewModel::onMascotEvent,
@@ -134,6 +135,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         is Overlay.EditEntry -> EntrySheet(
             entry = overlay.entry,
             onSave = { grams, meal -> viewModel.onSaveEntry(overlay.entry, grams, meal) },
+            onSaveProduct = { per100 -> viewModel.onCorrectProduct(overlay.entry, per100) },
             onDelete = { viewModel.onDeleteEntry(overlay.entry) },
             onDismiss = viewModel::onDismissOverlay,
         )
@@ -194,6 +196,8 @@ fun DiaryScreen(
     onLogWeight: () -> Unit,
     onSubmit: () -> Boolean,
     onOpenGoal: () -> Unit,
+    /** Тап по клетчатке в шапке: о ней рассказывает Зёрнышко. */
+    onFiberTap: () -> Unit,
     onOpenScan: () -> Unit,
     onOpenLabelDebug: (() -> Unit)?,
     /** Ответ на вопрос персонажа: `true` — «Сказать» / «Пишите», `false` — «Не скажу» / «Не надо». */
@@ -355,6 +359,7 @@ fun DiaryScreen(
             collapsed = collapsed,
             emptyHomes = emptyHomes(places),
             onOpenGoal = onOpenGoal,
+            onFiberTap = onFiberTap,
             modifier = Modifier
                 .onSizeChanged { size ->
                     headerHeight = size.height

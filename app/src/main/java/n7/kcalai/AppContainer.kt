@@ -148,7 +148,7 @@ class AppContainer(context: Context) {
     }
 
     val diaryRepository: DiaryRepository by lazy {
-        DiaryRepository(database.diaryDao(), database.goalDao())
+        DiaryRepository(database.diaryDao(), database.goalDao(), database.contributionDao())
     }
 
     /**

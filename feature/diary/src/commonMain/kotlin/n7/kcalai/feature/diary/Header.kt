@@ -74,6 +74,7 @@ fun Header(
     collapsed: Boolean,
     emptyHomes: Set<Mascot>,
     onOpenGoal: () -> Unit,
+    onFiberTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = KcalTheme.colors
@@ -92,7 +93,7 @@ fun Header(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                RemainingRow(date, past, totals, goal, fiber, fiberGoal, onOpenGoal, toToday)
+                RemainingRow(date, past, totals, goal, fiber, fiberGoal, onOpenGoal, onFiberTap, toToday)
                 MacroTiles(totals, goal, emptyHomes, onOpenGoal)
                 // Один день — одна переписка: тап по столбику открывает его ленту.
                 WeekChart(week, selected = date.toEpochDays(), onSelectDay = onSelectDay)
@@ -104,7 +105,7 @@ fun Header(
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut(),
         ) {
-            CompactRow(date, past, totals, goal, fiber, fiberGoal, toToday)
+            CompactRow(date, past, totals, goal, fiber, fiberGoal, onFiberTap, toToday)
         }
 
         HorizontalDivider(color = colors.line)
@@ -133,6 +134,7 @@ private fun RemainingRow(
     fiber: FiberTotal,
     fiberGoal: Int,
     onOpenGoal: () -> Unit,
+    onFiberTap: () -> Unit,
     onToToday: () -> Unit,
 ) {
     val colors = KcalTheme.colors
@@ -149,7 +151,7 @@ private fun RemainingRow(
                 color = if (past) colors.text else colors.text3,
                 modifier = if (past) Modifier.clickable(onClick = onToToday) else Modifier,
             )
-            FiberStrip(fiber, fiberGoal)
+            FiberStrip(fiber, fiberGoal, onFiberTap)
         }
 
         // Нажимается весь блок, а не только мелкая строка под числом: в неё
@@ -314,11 +316,14 @@ private fun MacroTile(
  * минимум, перебора у неё нет.
  */
 @Composable
-private fun FiberStrip(fiber: FiberTotal, goalGrams: Int) {
+private fun FiberStrip(fiber: FiberTotal, goalGrams: Int, onTap: () -> Unit) {
     val palette = KcalTheme.colors.fiber
     val shown = formatFiber(fiber) ?: "–"
     Row(
-        modifier = Modifier.clearAndSetSemantics { contentDescription = "клетчатка $shown из $goalGrams грамм" },
+        // Тап по клетчатке — Зёрнышко говорит, что это за число: подписи «клетчатка» у полосы нет.
+        modifier = Modifier
+            .clickable(onClick = onTap)
+            .clearAndSetSemantics { contentDescription = "клетчатка $shown из $goalGrams грамм" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SproutIcon(palette.fill, size = 12.dp)
@@ -342,6 +347,7 @@ private fun CompactRow(
     goal: DailyGoalEntity?,
     fiber: FiberTotal,
     fiberGoal: Int,
+    onFiberTap: () -> Unit,
     onToToday: () -> Unit,
 ) {
     val colors = KcalTheme.colors
@@ -370,13 +376,15 @@ private fun CompactRow(
         }
         Spacer(Modifier.weight(1f))
         // Клетчатка остаётся и в сжатой шапке: это то, ради чего её считают.
-        SproutIcon(colors.fiber.fill, size = 11.dp)
-        Text(
-            "${formatFiber(fiber) ?: "–"}/$fiberGoal",
-            style = type.label,
-            color = colors.fiber.text,
-            modifier = Modifier.padding(start = 3.dp, end = 12.dp),
-        )
+        Row(Modifier.clickable(onClick = onFiberTap), verticalAlignment = Alignment.CenterVertically) {
+            SproutIcon(colors.fiber.fill, size = 11.dp)
+            Text(
+                "${formatFiber(fiber) ?: "–"}/$fiberGoal",
+                style = type.label,
+                color = colors.fiber.text,
+                modifier = Modifier.padding(start = 3.dp, end = 12.dp),
+            )
+        }
         Text(
             text = head.number.toString(),
             style = type.number,

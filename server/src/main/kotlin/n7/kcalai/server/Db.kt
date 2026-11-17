@@ -35,6 +35,10 @@ class Db(path: String) : AutoCloseable {
                 )
                 """.trimIndent()
             )
+            // Клетчатка пришла с клиентом позже: у уже созданной таблицы столбца нет, дописываем.
+            if (stmt.executeQuery("SELECT 1 FROM pragma_table_info('contribution') WHERE name = 'fiber100'").use { it.next() }.not()) {
+                stmt.executeUpdate("ALTER TABLE contribution ADD COLUMN fiber100 INTEGER")
+            }
             stmt.executeUpdate("CREATE INDEX IF NOT EXISTS contribution_gtin ON contribution(gtin)")
             // Решение по коду: опубликован или отклонён. `upto_id` — последний голос, который
             // видел разработчик; голос новее возвращает код в очередь.
@@ -86,8 +90,8 @@ class Db(path: String) : AutoCloseable {
     fun insertContribution(c: Contribution, receivedAt: Long) {
         connection.prepareStatement(
             """
-            INSERT INTO contribution (gtin, name, kcal100, prot100, fat100, carb100, serving_g, created_at, received_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO contribution (gtin, name, kcal100, prot100, fat100, carb100, serving_g, created_at, received_at, fiber100)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent()
         ).use { stmt ->
             stmt.setString(1, c.gtin)
@@ -99,6 +103,7 @@ class Db(path: String) : AutoCloseable {
             stmt.setObject(7, c.servingG)
             stmt.setLong(8, c.createdAt)
             stmt.setLong(9, receivedAt)
+            stmt.setObject(10, c.fiber100)
             stmt.executeUpdate()
         }
     }
@@ -109,7 +114,7 @@ class Db(path: String) : AutoCloseable {
     @Synchronized
     fun votesFor(gtin: String): List<Vote> =
         connection.prepareStatement(
-            "SELECT c.id, c.gtin, c.name, c.kcal100, c.prot100, c.fat100, c.carb100, c.serving_g, c.created_at, c.received_at, " +
+            "SELECT c.id, c.gtin, c.name, c.kcal100, c.prot100, c.fat100, c.carb100, c.serving_g, c.fiber100, c.created_at, c.received_at, " +
                 "c.id > COALESCE(d.upto_id, 0) AS pending " +
                 "FROM contribution c LEFT JOIN decision d ON d.gtin = c.gtin WHERE c.gtin = ? ORDER BY c.id"
         ).use { stmt ->
@@ -124,6 +129,7 @@ class Db(path: String) : AutoCloseable {
                                 nutriments = rows.toNutriments(),
                                 servingG = rows.getInt("serving_g").takeUnless { rows.wasNull() },
                                 createdAt = rows.getLong("created_at"),
+                                fiber100 = rows.getInt("fiber100").takeUnless { rows.wasNull() },
                             ),
                             receivedAt = rows.getLong("received_at"),
                             pending = rows.getBoolean("pending"),

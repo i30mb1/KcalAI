@@ -154,4 +154,23 @@ class JsonParsingTest {
             json,
         )
     }
+
+    /** Клетчатка уходит в тот же блок, что и БЖУ; неизвестная — ключа нет вовсе. */
+    @Test
+    fun `клетчатка вклада уходит полем fiber100, а неизвестная не уходит`() {
+        val known = contributionsJson(
+            listOf(
+                ContributionEntity(
+                    gtin = "1", name = "Отруби", kcal100 = 200, prot100 = 1000, fat100 = 500,
+                    carb100 = 3000, servingG = null, createdAt = 1, fiber100 = 4000,
+                ),
+            ),
+        )
+
+        assertEquals(
+            """[{"gtin":"1","name":"Отруби","kcal100":200,"prot100":1000,"fat100":500,""" +
+                """"carb100":3000,"fiber100":4000,"createdAt":1}]""",
+            known,
+        )
+    }
 }

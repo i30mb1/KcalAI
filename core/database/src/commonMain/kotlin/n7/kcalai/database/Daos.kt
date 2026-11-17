@@ -55,6 +55,10 @@ interface DiaryDao {
      */
     @Query("UPDATE diary_entry SET meal = :meal WHERE id = :id")
     suspend fun updateMeal(id: Long, meal: MealType)
+
+    /** Человек поправил цифры продукта. Вес и приём пищи не трогаются. */
+    @Query("UPDATE diary_entry SET kcal100 = :kcal, prot100 = :prot, fat100 = :fat, carb100 = :carb, fiber100 = :fiber WHERE id = :id")
+    suspend fun updateNutriments(id: Long, kcal: Int, prot: Int, fat: Int, carb: Int, fiber: Int?)
 }
 
 @Dao

@@ -105,7 +105,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
             random = Random(1),
         )
         return DiaryViewModel(
-            diary = DiaryRepository(diaryDao, goalDao),
+            diary = DiaryRepository(diaryDao, goalDao, FakeContributionDao()),
             resolver = TextFoodResolver(food, personal),
             personal = personal,
             food = food,
@@ -255,6 +255,12 @@ internal class FakeDiaryDao : DiaryDao {
 
     override suspend fun updateMeal(id: Long, meal: MealType) {
         entries.value = entries.value.map { if (it.id == id) it.copy(meal = meal) else it }
+    }
+
+    override suspend fun updateNutriments(id: Long, kcal: Int, prot: Int, fat: Int, carb: Int, fiber: Int?) {
+        entries.value = entries.value.map {
+            if (it.id == id) it.copy(kcal100 = kcal, prot100 = prot, fat100 = fat, carb100 = carb, fiber100 = fiber) else it
+        }
     }
 
     private companion object {

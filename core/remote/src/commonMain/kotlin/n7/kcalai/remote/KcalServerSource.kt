@@ -206,6 +206,7 @@ internal fun contributionsJson(items: List<ContributionEntity>): String =
                 put("fat100", item.fat100)
                 put("carb100", item.carb100)
                 item.servingG?.let { put("servingG", it) }
+                item.fiber100?.let { put("fiber100", it) }
                 put("createdAt", item.createdAt)
             }
         },

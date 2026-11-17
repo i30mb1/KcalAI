@@ -52,6 +52,17 @@ class ContributionRoutesTest {
         assertEquals(0, db.contributionsFor("4600699500002").size)
     }
 
+    /** Клетчатка приходит с правкой и хранится рядом с КБЖУ; без неё поле пустое, а не ноль. */
+    @Test
+    fun `клетчатка принимается и хранится, а без неё — пусто`() = app {
+        val withFiber = """{"gtin":"4600699500001","name":"Отруби","kcal100":200,"prot100":1000,"fat100":500,"carb100":3000,"fiber100":4000,"createdAt":1757721600000}"""
+        send("[$withFiber]")
+        send("[$milk]")
+
+        val stored = db.contributionsFor("4600699500001")
+        assertEquals(listOf(4000, null), stored.map { it.fiber100 })
+    }
+
     @Test
     fun `повтор того же GTIN — ещё один голос`() = app {
         send("[$milk]")

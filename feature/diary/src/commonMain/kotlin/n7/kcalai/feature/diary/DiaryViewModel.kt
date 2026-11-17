@@ -35,6 +35,7 @@ import n7.kcalai.feature.scanner.ScanStep
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.Log
+import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.NutrimentTotals
@@ -454,6 +455,12 @@ class DiaryViewModel(
 
     /** Телефон тряхнули — голова кружится у всех. */
     fun onPhoneShaken() = onMascotEvent(MascotEvent.Shaken)
+
+    /** Тап по клетчатке в шапке: Зёрнышко — её хозяин — говорит, что это за число. */
+    fun onFiberTapped() {
+        val goal = data.value?.takeIf { it.date == shownDate }?.goal
+        say(Speech(Mascot.GRAIN, fiberSpeech(shownEntries.fiber(), fiberGoal(goal))))
+    }
 
     private fun show(reaction: Reaction?) {
         reaction ?: return
@@ -1220,6 +1227,25 @@ class DiaryViewModel(
             if (grams != entry.grams) personal.onGramsEdited(entry.id, grams, nowMillis())
             if (meal != entry.meal) diary.moveToMeal(entry.id, meal)
         }
+    }
+
+    /**
+     * Человек поправил сам продукт — цифры на 100 г, а не порцию.
+     *
+     * Шит остаётся открытым и уже с поправленным продуктом: порцию считают по новым
+     * цифрам, а следующая правка сравнивается с ними, а не с тем, что было при открытии.
+     */
+    fun onCorrectProduct(entry: DiaryEntryEntity, per100: Nutriments) {
+        overlay.value = Overlay.EditEntry(
+            entry.copy(
+                kcal100 = per100.kcal100,
+                prot100 = per100.prot100,
+                fat100 = per100.fat100,
+                carb100 = per100.carb100,
+                fiber100 = per100.fiber100,
+            )
+        )
+        viewModelScope.launch { diary.correctNutriments(entry, per100, nowMillis()) }
     }
 
     /**

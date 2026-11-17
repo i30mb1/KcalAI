@@ -106,6 +106,8 @@ data class ContributionEntity(
     val servingG: Int?,
     val createdAt: Long,
     val sentAt: Long? = null,
+    /** Клетчатка, сотые грамма на 100 г; `null` — человек её не указал. Последним столбцом: миграция дописывает его в конец. */
+    val fiber100: Int? = null,
 )
 
 /**

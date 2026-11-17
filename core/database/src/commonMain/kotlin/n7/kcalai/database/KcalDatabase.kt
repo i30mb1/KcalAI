@@ -40,6 +40,8 @@ import kotlinx.coroutines.IO
         AutoMigration(from = 7, to = 8),
         // Предложения соседа — новая таблица, дневник не трогается.
         AutoMigration(from = 8, to = 9),
+        // Клетчатка во вкладах — новый столбец; у старых вкладов она неизвестна.
+        AutoMigration(from = 9, to = 10),
     ],
 )
 @ConstructedBy(KcalDatabaseConstructor::class)
@@ -57,7 +59,7 @@ abstract class KcalDatabase : RoomDatabase() {
 }
 
 /** Версия схемы базы. Константой — её читают тесты обновления и выгрузки схемы. */
-const val KCAL_DB_VERSION = 9
+const val KCAL_DB_VERSION = 10
 
 /** Реализацию для каждой платформы генерирует Room. */
 @Suppress("KotlinNoActualForExpect")

@@ -24,7 +24,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -55,11 +57,15 @@ import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.totals
 import n7.kcalai.model.MealType
+import n7.kcalai.model.FoodRef
+import n7.kcalai.model.Nutriments
+import n7.kcalai.model.parseFoodRef
 import n7.kcalai.personal.TdeeEstimate
 import n7.kcalai.ui.CapsLabel
 import n7.kcalai.ui.KcalChip
 import n7.kcalai.ui.Macro
 import n7.kcalai.ui.MacroDot
+import n7.kcalai.ui.SproutIcon
 import n7.kcalai.ui.WideButton
 import n7.kcalai.ui.colors
 import n7.kcalai.ui.letter
@@ -68,6 +74,7 @@ import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.model.Mascot
 import n7.kcalai.ui.mascot.mascot
+import kotlin.math.roundToInt
 import n7.kcalai.model.Sex
 import n7.kcalai.model.title
 
@@ -415,28 +422,91 @@ private fun MacroField(
 }
 
 /**
- * Правка записи: вес, приём пищи, удаление.
+ * Правка записи — две разные правки в одном шите.
  *
- * Вес правится кнопками и полем сразу: правка веса — самый чистый сигнал для
- * памяти личных порций, какой бывает, потому что человек видел подставленное
+ * Порция: вес, приём пищи, удаление. Это про то, сколько и когда человек съел,
+ * и правится молча. Вес правится кнопками и полем сразу: правка веса — самый
+ * чистый сигнал для памяти личных порций, потому что человек видел подставленное
  * число и заменил его своим.
+ *
+ * Продукт: цифры на 100 г. Это про саму еду, а не про порцию, и правка уходит
+ * дальше дневника — у продукта с кодом в общую базу. Поэтому она отдельным шагом
+ * за карточкой продукта, и ведёт её Яйцо: оно говорит, куда уйдут цифры.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EntrySheet(
     entry: DiaryEntryEntity,
     onSave: (grams: Int, meal: MealType) -> Unit,
+    onSaveProduct: (per100: Nutriments) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val colors = KcalTheme.colors
+    // Порция переживает переход к продукту и обратно: набранный вес не сбрасывается.
     var grams by remember { mutableStateOf(entry.grams.toString()) }
     var meal by remember { mutableStateOf(entry.meal) }
+    var productMode by remember { mutableStateOf(false) }
+    val anchors = remember { MascotAnchors() }
+    val pointer = remember { StagePointer() }
 
+    Sheet(onDismiss) {
+    CompositionLocalProvider(LocalMascotAnchors provides anchors) {
+    Box(Modifier.observeTouches(pointer)) {
+        if (productMode) {
+            ProductEditor(
+                entry = entry,
+                onSave = { per100 ->
+                    onSaveProduct(per100)
+                    productMode = false
+                },
+                onBack = { productMode = false },
+            )
+        } else {
+            PortionEditor(
+                entry = entry,
+                grams = grams,
+                onGrams = { grams = it },
+                meal = meal,
+                onMeal = { meal = it },
+                onOpenProduct = { productMode = true },
+                onSave = onSave,
+                onDelete = onDelete,
+            )
+        }
+        MascotStage(
+            places = entrySheetPlaces(productMode),
+            anchors = anchors,
+            pointer = pointer,
+            input = grams,
+            speech = emptyList(),
+            cue = null,
+            night = false,
+            onEvent = {},
+            modifier = Modifier.matchParentSize(),
+        )
+    }
+    }
+    }
+}
+
+/** Порция: сколько и в какой приём. Продукт — карточкой, тап по ней открывает его правку. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PortionEditor(
+    entry: DiaryEntryEntity,
+    grams: String,
+    onGrams: (String) -> Unit,
+    meal: MealType,
+    onMeal: (MealType) -> Unit,
+    onOpenProduct: () -> Unit,
+    onSave: (grams: Int, meal: MealType) -> Unit,
+    onDelete: () -> Unit,
+) {
+    val colors = KcalTheme.colors
     val value = grams.toIntOrNull()?.coerceAtLeast(MIN_GRAMS)
     val totals = entry.copy(grams = value ?: 0).totals()
 
-    Sheet(onDismiss) {
+    Column {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             MacroDot(dominantMacro(entry.totals()).colors().fill)
             Text(
@@ -447,12 +517,9 @@ fun EntrySheet(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 8.dp).weight(1f),
             )
-            Text(
-                "на 100 г · ${entry.kcal100} ккал",
-                style = KcalTheme.type.time,
-                color = colors.text3,
-            )
         }
+
+        ProductCard(entry, onClick = onOpenProduct, modifier = Modifier.padding(top = 12.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
@@ -460,7 +527,7 @@ fun EntrySheet(
             horizontalArrangement = Arrangement.spacedBy(9.dp),
         ) {
             StepButton("−10") {
-                grams = ((value ?: MIN_GRAMS) - GRAMS_STEP).coerceAtLeast(MIN_GRAMS).toString()
+                onGrams(((value ?: MIN_GRAMS) - GRAMS_STEP).coerceAtLeast(MIN_GRAMS).toString())
             }
 
             Row(
@@ -473,7 +540,7 @@ fun EntrySheet(
             ) {
                 NumberInput(
                     value = grams,
-                    onValueChange = { grams = it },
+                    onValueChange = onGrams,
                     style = KcalTheme.type.heroInput,
                     placeholder = "0",
                     modifier = Modifier.weight(1f),
@@ -487,7 +554,7 @@ fun EntrySheet(
             }
 
             StepButton("+10") {
-                grams = ((value ?: MIN_GRAMS) + GRAMS_STEP).toString()
+                onGrams(((value ?: MIN_GRAMS) + GRAMS_STEP).toString())
             }
         }
 
@@ -504,7 +571,7 @@ fun EntrySheet(
             MealType.entries.forEach { candidate ->
                 val selected = candidate == meal
                 KcalChip(
-                    onClick = { meal = candidate },
+                    onClick = { onMeal(candidate) },
                     background = if (selected) colors.bubble else colors.chip,
                 ) {
                     Text(
@@ -552,6 +619,208 @@ fun EntrySheet(
         }
     }
 }
+
+/**
+ * Продукт на 100 г — карточкой под названием. Порция ниже считается из этих цифр,
+ * а карандаш говорит, что их можно поправить: подпись «изменить продукт» не нужна.
+ */
+@Composable
+private fun ProductCard(entry: DiaryEntryEntity, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = KcalTheme.colors
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(KcalShapes.tile))
+            .background(colors.bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "100 г  ·  ${entry.kcal100} ккал  ·  Б ${formatCentigrams(entry.prot100)}  " +
+                "·  Ж ${formatCentigrams(entry.fat100)}  ·  У ${formatCentigrams(entry.carb100)}",
+            style = KcalTheme.type.macro,
+            color = colors.text2,
+            maxLines = 2,
+            modifier = Modifier.weight(1f),
+        )
+        entry.fiber100?.let { fiber ->
+            SproutIcon(colors.fiber.fill, size = 11.dp)
+            Text(
+                formatCentigrams(fiber),
+                style = KcalTheme.type.macro,
+                color = colors.fiber.text,
+                modifier = Modifier.padding(start = 3.dp),
+            )
+        }
+        Icon(
+            Icons.Outlined.Edit,
+            contentDescription = "Поправить продукт",
+            tint = colors.text3,
+            modifier = Modifier.padding(start = 10.dp).size(16.dp),
+        )
+    }
+}
+
+/**
+ * Правка самого продукта: цифры на 100 г по упаковке. Яйцо говорит, куда они уйдут.
+ *
+ * Поля заводятся от записи: после сохранения шит возвращается к порции уже
+ * с поправленным продуктом, и следующая правка начинается с новых цифр.
+ */
+@Composable
+private fun ProductEditor(entry: DiaryEntryEntity, onSave: (Nutriments) -> Unit, onBack: () -> Unit) {
+    val colors = KcalTheme.colors
+    var kcal by remember(entry) { mutableStateOf(entry.kcal100.toString()) }
+    var prot by remember(entry) { mutableStateOf(entry.prot100.gramsField()) }
+    var fat by remember(entry) { mutableStateOf(entry.fat100.gramsField()) }
+    var carb by remember(entry) { mutableStateOf(entry.carb100.gramsField()) }
+    var fiber by remember(entry) { mutableStateOf(entry.fiber100?.gramsField() ?: "") }
+    val per100 = per100Nutriments(entry, kcal, prot, fat, carb, fiber)
+
+    Column {
+        SheetSpeech(
+            productSpeech(hasBarcode = parseFoodRef(entry.foodRef) is FoodRef.Barcode),
+            Modifier.padding(bottom = 14.dp),
+        )
+        Text(
+            entry.displayName,
+            style = KcalTheme.type.title,
+            color = colors.text,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            NutrientField("ккал на 100 г", kcal, { kcal = it }, Modifier.weight(2f))
+            // Клетчатку можно не знать: пустое поле — «неизвестно», а не ноль.
+            NutrientField(
+                label = "",
+                value = fiber,
+                onValueChange = { fiber = it },
+                modifier = Modifier.weight(1f),
+                icon = { SproutIcon(colors.fiber.fill, size = 12.dp) },
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            NutrientField("Б", prot, { prot = it }, Modifier.weight(1f))
+            NutrientField("Ж", fat, { fat = it }, Modifier.weight(1f))
+            NutrientField("У", carb, { carb = it }, Modifier.weight(1f))
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(KcalShapes.tile))
+                    .background(colors.chip)
+                    .clickable(onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = "К порции",
+                    tint = colors.text,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            WideButton(
+                text = "Сохранить",
+                enabled = per100 != null,
+                onClick = { per100?.let(onSave) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+/** Реплика Яйца в правке продукта: куда уйдут поправленные цифры. */
+internal fun productSpeech(hasBarcode: Boolean): SheetLine = SheetLine(
+    Mascot.EGG,
+    if (hasBarcode) "Сверь с упаковкой и поправь. Сохраню и отправлю в общую базу."
+    else "Сверь с упаковкой и поправь. Пересчитаю запись в дневнике.",
+)
+
+/** Кто где стоит в шите записи: в правке продукта Яйцо у реплики, в остальное время все за сценой. */
+internal fun entrySheetPlaces(productMode: Boolean): Map<Mascot, MascotPlace> =
+    Mascot.entries.associateWith { mascot ->
+        if (productMode && mascot == Mascot.EGG) MascotPlace.Reply(SHEET_SPEECH_ANCHOR) else MascotPlace.Offstage
+    }
+
+/** Поле цифры на 100 г: подпись слева от значения, без рамки — как у веса. */
+@Composable
+private fun NutrientField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier,
+    icon: (@Composable () -> Unit)? = null,
+) {
+    val colors = KcalTheme.colors
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(KcalShapes.tile))
+            .background(colors.bg)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        NumberInput(
+            value = value,
+            onValueChange = onValueChange,
+            style = KcalTheme.type.macro,
+            placeholder = "0",
+            modifier = Modifier.weight(1f),
+        )
+        if (icon != null) {
+            icon()
+        } else {
+            Text(label, style = KcalTheme.type.label, color = colors.text2)
+        }
+    }
+}
+
+/**
+ * Цифры на 100 г из полей. Поле, которого человек не трогал, сохраняет свои сотые:
+ * иначе «2,95» округлилось бы до «3» на одном только открытии шита, и правка ушла бы
+ * к людям, которой никто не делал.
+ */
+private fun per100Nutriments(
+    entry: DiaryEntryEntity,
+    kcal: String,
+    prot: String,
+    fat: String,
+    carb: String,
+    fiber: String,
+): Nutriments? {
+    val kcalValue = kcal.toIntOrNull()?.takeIf { it >= 0 } ?: return null
+    // Клетчатку можно не знать: пустое поле — не ноль, а честное «неизвестно».
+    val fiberValue = if (fiber.isBlank()) null else centigrams(fiber, entry.fiber100) ?: return null
+    return Nutriments(
+        kcal100 = kcalValue,
+        prot100 = centigrams(prot, entry.prot100) ?: return null,
+        fat100 = centigrams(fat, entry.fat100) ?: return null,
+        carb100 = centigrams(carb, entry.carb100) ?: return null,
+        fiber100 = fiberValue,
+    )
+}
+
+private fun centigrams(text: String, original: Int?): Int? =
+    if (original != null && text == original.gramsField()) original
+    else text.replace(',', '.').toDoubleOrNull()?.takeIf { it >= 0 }?.let { (it * 100).roundToInt() }
+
+/** Сотые грамма в поле: «2,9», «2,95», «3» — без хвостовых нулей. */
+private fun Int.gramsField(): String =
+    if (this % 100 == 0) (this / 100).toString()
+    else "${this / 100},${(this % 100).toString().padStart(2, '0').trimEnd('0')}"
 
 /** Шаг веса: два тапа быстрее, чем вызвать клавиатуру и напечатать «210». */
 @Composable

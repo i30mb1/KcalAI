@@ -80,9 +80,12 @@ private fun JsonObject.toContribution(): Contribution? {
         ),
         servingG = int("servingG")?.takeIf { it > 0 },
         createdAt = (this["createdAt"] as? JsonPrimitive)?.longOrNull ?: return null,
+        fiber100 = int("fiber100")?.takeIf { it in 0..MAX_FIBER_CG },
     )
 }
 
 /** Телефон шлёт пачками по 50 — с запасом вдвое. */
 private const val MAX_ITEMS = 100
+/** Клетчатка не больше 100 г на 100 г — иначе это опечатка или мусор. */
+private const val MAX_FIBER_CG = 10_000
 private const val MAX_BODY_BYTES = 128L * 1024

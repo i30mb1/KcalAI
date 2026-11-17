@@ -3,6 +3,8 @@ package n7.kcalai.repositories
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import n7.kcalai.database.ContributionDao
+import n7.kcalai.database.ContributionEntity
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryDao
 import n7.kcalai.database.DiaryEntryEntity
@@ -10,6 +12,9 @@ import n7.kcalai.database.GoalDao
 import n7.kcalai.database.totals
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
+import n7.kcalai.model.FoodRef
+import n7.kcalai.model.Nutriments
+import n7.kcalai.model.parseFoodRef
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.model.Nutriments
@@ -45,6 +50,7 @@ data class DaySummary(
 class DiaryRepository(
     private val diaryDao: DiaryDao,
     private val goalDao: GoalDao,
+    private val contributionDao: ContributionDao,
 ) {
 
     /** Кладёт в дневник снимок КБЖУ, а не ссылку: обновление справочника не трогает историю. */
@@ -141,6 +147,47 @@ class DiaryRepository(
 
     /** Человек сказал, что это был обед, а не ужин. Правило по времени тут ни при чём. */
     suspend fun moveToMeal(id: Long, meal: MealType) = diaryDao.updateMeal(id, meal)
+
+    /**
+     * Человек поправил КБЖУ продукта: сверил с упаковкой и увидел, что цифры не те.
+     *
+     * Снимок записи меняется сразу. Если у продукта есть штрих-код, исправление
+     * уходит в очередь вкладов — остальным с тем же кодом станет верно. Без кода
+     * отправить некуда, поэтому правка остаётся в дневнике. Нетронутые цифры не
+     * отправляются: вклад — подтверждение человека, а не повтор того, что было.
+     */
+    suspend fun correctNutriments(entry: DiaryEntryEntity, nutriments: Nutriments, now: Long) {
+        val unchanged = entry.kcal100 == nutriments.kcal100 &&
+            entry.prot100 == nutriments.prot100 &&
+            entry.fat100 == nutriments.fat100 &&
+            entry.carb100 == nutriments.carb100 &&
+            entry.fiber100 == nutriments.fiber100
+        if (unchanged) return
+
+        diaryDao.updateNutriments(
+            id = entry.id,
+            kcal = nutriments.kcal100,
+            prot = nutriments.prot100,
+            fat = nutriments.fat100,
+            carb = nutriments.carb100,
+            fiber = nutriments.fiber100,
+        )
+
+        val gtin = (parseFoodRef(entry.foodRef) as? FoodRef.Barcode)?.gtin ?: return
+        contributionDao.insert(
+            ContributionEntity(
+                gtin = gtin,
+                name = entry.displayName,
+                kcal100 = nutriments.kcal100,
+                prot100 = nutriments.prot100,
+                fat100 = nutriments.fat100,
+                carb100 = nutriments.carb100,
+                servingG = null,
+                createdAt = now,
+                fiber100 = nutriments.fiber100,
+            )
+        )
+    }
 
     suspend fun goalFor(date: Long): DailyGoalEntity? = goalDao.goalFor(date)
 

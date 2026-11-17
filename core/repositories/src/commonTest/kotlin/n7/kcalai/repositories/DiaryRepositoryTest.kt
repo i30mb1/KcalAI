@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
+import n7.kcalai.database.ContributionDao
+import n7.kcalai.database.ContributionEntity
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryDao
 import n7.kcalai.database.DiaryEntryEntity
@@ -17,6 +19,7 @@ import n7.kcalai.model.MealType
 import n7.kcalai.model.Nutriments
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.test.Test
 
 /**
@@ -30,7 +33,8 @@ class DiaryRepositoryTest {
 
     private val diaryDao = FakeDiaryDao()
     private val goalDao = FakeGoalDao()
-    private val repository = DiaryRepository(diaryDao, goalDao)
+    private val contributions = FakeContributionDao()
+    private val repository = DiaryRepository(diaryDao, goalDao, contributions)
 
     private val oatmeal = FoodCandidate(
         ref = FoodRef.Generic(1),
@@ -128,9 +132,85 @@ class DiaryRepositoryTest {
         assertEquals(listOf(deleted), repository.observeDay(TODAY).first().entries)
     }
 
+    /** Человек поправил КБЖУ продукта с кодом: снимок в дневнике и вклад в очереди. */
+    @Test
+    fun `исправленные КБЖУ продукта с кодом уходят в очередь вкладов`() = runBlocking {
+        val barcoded = oatmeal.copy(ref = FoodRef.Barcode("4600699500001"))
+        repository.add(barcoded, grams = 200, meal = MealType.BREAKFAST, date = TODAY, source = EntrySource.TEXT, now = 1)
+        val entry = repository.observeDay(TODAY).first().entries.single()
+
+        repository.correctNutriments(entry, Nutriments(kcal100 = 120, prot100 = 300, fat100 = 200, carb100 = 1400), now = 5)
+
+        val saved = repository.observeDay(TODAY).first().entries.single()
+        assertEquals(120, saved.kcal100)
+        assertEquals(1400, saved.carb100)
+        val sent = contributions.queued.single()
+        assertEquals("4600699500001", sent.gtin)
+        assertEquals("Овсянка", sent.name)
+        assertEquals(120, sent.kcal100)
+        assertEquals(1400, sent.carb100)
+    }
+
+    /** У продукта без кода отправить некуда: правка остаётся в дневнике. */
+    @Test
+    fun `исправление продукта без кода остаётся в дневнике`() = runBlocking {
+        add(grams = 200, date = TODAY)
+        val entry = repository.observeDay(TODAY).first().entries.single()
+
+        repository.correctNutriments(entry, Nutriments(kcal100 = 120, prot100 = 300, fat100 = 200, carb100 = 1400), now = 5)
+
+        assertEquals(120, repository.observeDay(TODAY).first().entries.single().kcal100)
+        assertTrue(contributions.queued.isEmpty())
+    }
+
+    /** Клетчатка — такая же часть КБЖУ: правка только её тоже уходит вкладом. */
+    @Test
+    fun `клетчатка продукта с кодом уходит вкладом вместе с правкой`() = runBlocking {
+        val barcoded = oatmeal.copy(ref = FoodRef.Barcode("4600699500001"))
+        repository.add(barcoded, grams = 200, meal = MealType.BREAKFAST, date = TODAY, source = EntrySource.TEXT, now = 1)
+        val entry = repository.observeDay(TODAY).first().entries.single()
+
+        repository.correctNutriments(
+            entry,
+            Nutriments(kcal100 = 100, prot100 = 300, fat100 = 200, carb100 = 1500, fiber100 = 8000),
+            now = 5,
+        )
+
+        assertEquals(8000, repository.observeDay(TODAY).first().entries.single().fiber100)
+        assertEquals(8000, contributions.queued.single().fiber100)
+    }
+
+    /** Нетронутые значения не подтверждаются от имени человека: вклад не уходит. */
+    @Test
+    fun `нетронутые КБЖУ не попадают в очередь`() = runBlocking {
+        val barcoded = oatmeal.copy(ref = FoodRef.Barcode("4600699500001"))
+        repository.add(barcoded, grams = 200, meal = MealType.BREAKFAST, date = TODAY, source = EntrySource.TEXT, now = 1)
+        val entry = repository.observeDay(TODAY).first().entries.single()
+
+        repository.correctNutriments(entry, Nutriments(kcal100 = 100, prot100 = 300, fat100 = 200, carb100 = 1500), now = 5)
+
+        assertTrue(contributions.queued.isEmpty())
+    }
+
     private companion object {
         const val TODAY = 20_000L
     }
+}
+
+private class FakeContributionDao : ContributionDao {
+
+    val queued = mutableListOf<ContributionEntity>()
+
+    override suspend fun insert(contribution: ContributionEntity): Long {
+        queued += contribution
+        return queued.size.toLong()
+    }
+
+    override suspend fun pending(limit: Int): List<ContributionEntity> = queued.take(limit)
+
+    override suspend fun pendingCount(): Int = queued.size
+
+    override suspend fun markSent(ids: List<Long>, sentAt: Long) = Unit
 }
 
 private class FakeDiaryDao : DiaryDao {
@@ -167,6 +247,12 @@ private class FakeDiaryDao : DiaryDao {
 
     override suspend fun updateMeal(id: Long, meal: MealType) {
         entries.value = entries.value.map { if (it.id == id) it.copy(meal = meal) else it }
+    }
+
+    override suspend fun updateNutriments(id: Long, kcal: Int, prot: Int, fat: Int, carb: Int, fiber: Int?) {
+        entries.value = entries.value.map {
+            if (it.id == id) it.copy(kcal100 = kcal, prot100 = prot, fat100 = fat, carb100 = carb, fiber100 = fiber) else it
+        }
     }
 
     private companion object {

@@ -37,6 +37,8 @@ data class Contribution(
     val nutriments: Nutriments,
     val servingG: Int?,
     val createdAt: Long,
+    /** Клетчатка, сотые грамма на 100 г; `null` — не указана. */
+    val fiber100: Int? = null,
 )
 
 data class Vote(val contribution: Contribution, val receivedAt: Long, val pending: Boolean)
