@@ -81,6 +81,7 @@ fun Route.adminRoutes(
                                 put("prot100", c.nutriments.prot100)
                                 put("fat100", c.nutriments.fat100)
                                 put("carb100", c.nutriments.carb100)
+                                put("fiber100", c.fiber100)
                                 put("servingG", c.servingG)
                                 put("createdAt", c.createdAt)
                                 put("receivedAt", vote.receivedAt)
@@ -181,12 +182,15 @@ private fun suggest(votes: List<Vote>, brand: String?): Product? {
     val basis = votes.filter { it.pending }.ifEmpty { votes }.map { it.contribution }
     if (basis.isEmpty()) return null
     fun median(pick: (Nutriments) -> Int) = basis.map { pick(it.nutriments) }.sorted().let { it[(it.size - 1) / 2] }
+    // Клетчатку присылают не все: медиана тех, кто прислал, а без неё — неизвестна.
+    val fibers = basis.mapNotNull { it.fiber100 }.sorted()
     return Product(
         gtin = basis.last().gtin,
         name = basis.last().name,
         brand = brand,
         nutriments = Nutriments(median { it.kcal100 }, median { it.prot100 }, median { it.fat100 }, median { it.carb100 }),
         servingG = basis.lastOrNull { it.servingG != null }?.servingG,
+        fiber100 = fibers.getOrNull((fibers.size - 1) / 2),
     )
 }
 
@@ -204,8 +208,12 @@ private suspend fun ApplicationCall.receiveProduct(gtin: String): Product? {
         brand = text("brand"),
         nutriments = Nutriments(int("kcal100") ?: return null, int("prot100") ?: return null, int("fat100") ?: return null, int("carb100") ?: return null),
         servingG = int("servingG")?.takeIf { it > 0 },
+        fiber100 = int("fiber100")?.takeIf { it in 0..MAX_FIBER_CG },
     )
 }
+
+/** Клетчатка не больше 100 г на 100 г. */
+private const val MAX_FIBER_CG = 10_000
 
 private suspend fun ApplicationCall.respondJson(body: kotlinx.serialization.json.JsonElement) =
     respondText(body.toString(), ContentType.Application.Json)

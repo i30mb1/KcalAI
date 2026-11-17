@@ -120,6 +120,44 @@ class AdminRoutesTest {
         assertEquals(MILK, json("/admin/api/products").jsonArray.single().jsonObject.str("gtin"))
     }
 
+    /** Клетчатка видна у каждого голоса, а к публикации предложена медиана тех, кто её прислал. */
+    @Test
+    fun `клетчатка голосов видна в карточке и в предложении`() = app {
+        val psyllium = Nutriments(42, 290, 10, 730)
+        db.insertContribution(Contribution(MILK, "Псиллиум", psyllium, null, createdAt = 1, fiber100 = 8000), receivedAt = 1)
+        db.insertContribution(Contribution(MILK, "Псиллиум", psyllium, null, createdAt = 2, fiber100 = 8500), receivedAt = 2)
+        db.insertContribution(Contribution(MILK, "Псиллиум", psyllium, null, createdAt = 3), receivedAt = 3)
+
+        val card = json("/admin/api/gtin/$MILK").jsonObject
+
+        assertEquals(
+            listOf("8000", "8500", "null"),
+            card["contributions"]!!.jsonArray.map { it.jsonObject["fiber100"].toString() },
+        )
+        assertEquals(8000, card["suggestion"]!!.jsonObject["fiber100"]!!.jsonPrimitive.int)
+    }
+
+    @Test
+    fun `опубликованная клетчатка отдаётся телефону и видна в опубликованном`() = app {
+        postJson(
+            "/admin/api/gtin/$MILK/publish",
+            """{"name":"Псиллиум","kcal100":42,"prot100":290,"fat100":10,"carb100":730,"fiber100":8500}""",
+        )
+
+        val forPhone = Json.parseToJsonElement(client.get("/v1/products/$MILK").bodyAsText()).jsonObject
+        assertEquals(8500, forPhone["fiber100"]!!.jsonPrimitive.int)
+        assertEquals(8500, json("/admin/api/products").jsonArray.single().jsonObject["fiber100"]!!.jsonPrimitive.int)
+    }
+
+    @Test
+    fun `клетчатка справочника видна в карточке для сверки`() = app {
+        seed(MILK, "Псиллиум", kcal = 42, fiber = 1200)
+
+        val seed = json("/admin/api/gtin/$MILK").jsonObject["seed"]!!.jsonObject
+
+        assertEquals(1200, seed["fiber100"]!!.jsonPrimitive.int)
+    }
+
     @Test
     fun `абсурдное КБЖУ не публикуется`() = app {
         val response = postJson(
@@ -185,7 +223,7 @@ class AdminRoutesTest {
         assertEquals(HttpStatusCode.NotFound, client.get("/admin/scans/scan-1/..%2F..%2Fkcal-server.db").status)
     }
 
-    private fun seed(gtin: String, name: String, kcal: Int) {
+    private fun seed(gtin: String, name: String, kcal: Int, fiber: Int? = null) {
         val dir = File(dataDir, "seed").apply { mkdirs() }
         DriverManager.getConnection("jdbc:sqlite:${File(dir, "seed.db").path}").use { c ->
             c.createStatement().use {
@@ -194,7 +232,7 @@ class AdminRoutesTest {
                         "prot100 INTEGER NOT NULL, fat100 INTEGER NOT NULL, carb100 INTEGER NOT NULL, fiber100 INTEGER, serving_g INTEGER, " +
                         "popularity INTEGER NOT NULL DEFAULT 0)"
                 )
-                it.executeUpdate("INSERT INTO product_seed VALUES ('$gtin', '$name', NULL, $kcal, 290, 320, 470, NULL, NULL, 0)")
+                it.executeUpdate("INSERT INTO product_seed VALUES ('$gtin', '$name', NULL, $kcal, 290, 320, 470, ${fiber ?: "NULL"}, NULL, 0)")
             }
         }
     }

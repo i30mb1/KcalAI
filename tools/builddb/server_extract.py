@@ -35,7 +35,7 @@ def extract(server_db: Path, out: Path) -> int:
     try:
         rows = conn.execute(
             """
-            SELECT p.gtin, p.name, p.brand, p.kcal100, p.prot100, p.fat100, p.carb100, p.serving_g,
+            SELECT p.gtin, p.name, p.brand, p.kcal100, p.prot100, p.fat100, p.carb100, p.fiber100, p.serving_g,
               (SELECT count(*) FROM contribution c WHERE c.gtin = p.gtin)
             FROM product p ORDER BY p.gtin
             """
@@ -46,8 +46,9 @@ def extract(server_db: Path, out: Path) -> int:
     with out.open("w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f, lineterminator="\n")
         writer.writerow(FIELDS)
-        for gtin, name, brand, kcal, prot, fat, carb, serving, votes in rows:
-            writer.writerow([gtin, name, brand or "", kcal, prot, fat, carb, "", serving or "", votes])
+        for gtin, name, brand, kcal, prot, fat, carb, fiber, serving, votes in rows:
+            fiber = "" if fiber is None else fiber
+            writer.writerow([gtin, name, brand or "", kcal, prot, fat, carb, fiber, serving or "", votes])
     return len(rows)
 
 

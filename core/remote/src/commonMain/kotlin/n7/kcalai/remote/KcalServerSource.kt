@@ -151,6 +151,8 @@ internal fun parseServerProduct(gtin: String, body: String): RemoteProduct? {
         prot100 = json.int("prot100", 0),
         fat100 = json.int("fat100", 0),
         carb100 = json.int("carb100", 0),
+        // Клетчатку панель публикует не всегда: без поля она неизвестна, а не ноль.
+        fiber100 = json.int("fiber100", -1).takeIf { it in 0..MAX_FIBER_CG },
     )
     if (!NutrimentValidator.check(nutriments).valid) {
         Log.w(TAG, "$gtin отброшен: сервер прислал КБЖУ вне допустимого")
@@ -166,6 +168,9 @@ internal fun parseServerProduct(gtin: String, body: String): RemoteProduct? {
         origin = ProductOrigin.SERVER,
     )
 }
+
+/** Клетчатка не больше 100 г на 100 г — иначе это мусор, а не цифра. */
+private const val MAX_FIBER_CG = 10_000
 
 /** GTIN'ы, которые сервер подтвердил. */
 internal fun parseAccepted(body: String): Set<String> {

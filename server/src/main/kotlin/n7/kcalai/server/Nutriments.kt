@@ -29,6 +29,8 @@ data class Product(
     val brand: String?,
     val nutriments: Nutriments,
     val servingG: Int?,
+    /** Клетчатка, сотые грамма на 100 г; `null` — неизвестна. */
+    val fiber100: Int? = null,
 )
 
 data class Contribution(

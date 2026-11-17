@@ -35,5 +35,6 @@ fun Product.toJson(): JsonObject = buildJsonObject {
     put("prot100", nutriments.prot100)
     put("fat100", nutriments.fat100)
     put("carb100", nutriments.carb100)
+    fiber100?.let { put("fiber100", it) }
     servingG?.let { put("servingG", it) }
 }

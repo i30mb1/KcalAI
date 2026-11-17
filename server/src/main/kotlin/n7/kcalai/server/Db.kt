@@ -35,9 +35,11 @@ class Db(path: String) : AutoCloseable {
                 )
                 """.trimIndent()
             )
-            // Клетчатка пришла с клиентом позже: у уже созданной таблицы столбца нет, дописываем.
-            if (stmt.executeQuery("SELECT 1 FROM pragma_table_info('contribution') WHERE name = 'fiber100'").use { it.next() }.not()) {
-                stmt.executeUpdate("ALTER TABLE contribution ADD COLUMN fiber100 INTEGER")
+            // Клетчатка пришла с клиентом позже: у уже созданных таблиц столбца нет, дописываем.
+            for (table in listOf("contribution", "product")) {
+                if (stmt.executeQuery("SELECT 1 FROM pragma_table_info('$table') WHERE name = 'fiber100'").use { it.next() }.not()) {
+                    stmt.executeUpdate("ALTER TABLE $table ADD COLUMN fiber100 INTEGER")
+                }
             }
             stmt.executeUpdate("CREATE INDEX IF NOT EXISTS contribution_gtin ON contribution(gtin)")
             // Решение по коду: опубликован или отклонён. `upto_id` — последний голос, который
@@ -56,7 +58,7 @@ class Db(path: String) : AutoCloseable {
     @Synchronized
     fun findProduct(gtin: String): Product? =
         connection.prepareStatement(
-            "SELECT gtin, name, brand, kcal100, prot100, fat100, carb100, serving_g FROM product WHERE gtin = ?"
+            "SELECT gtin, name, brand, kcal100, prot100, fat100, carb100, serving_g, fiber100 FROM product WHERE gtin = ?"
         ).use { stmt ->
             stmt.setString(1, gtin)
             stmt.executeQuery().use { rows -> if (rows.next()) rows.toProduct() else null }
@@ -66,11 +68,12 @@ class Db(path: String) : AutoCloseable {
     fun upsertProduct(product: Product, now: Long) {
         connection.prepareStatement(
             """
-            INSERT INTO product (gtin, name, brand, kcal100, prot100, fat100, carb100, serving_g, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO product (gtin, name, brand, kcal100, prot100, fat100, carb100, serving_g, updated_at, fiber100)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(gtin) DO UPDATE SET name = excluded.name, brand = excluded.brand,
               kcal100 = excluded.kcal100, prot100 = excluded.prot100, fat100 = excluded.fat100,
-              carb100 = excluded.carb100, serving_g = excluded.serving_g, updated_at = excluded.updated_at
+              carb100 = excluded.carb100, serving_g = excluded.serving_g, updated_at = excluded.updated_at,
+              fiber100 = excluded.fiber100
             """.trimIndent()
         ).use { stmt ->
             stmt.setString(1, product.gtin)
@@ -82,6 +85,7 @@ class Db(path: String) : AutoCloseable {
             stmt.setInt(7, product.nutriments.carb100)
             stmt.setObject(8, product.servingG)
             stmt.setLong(9, now)
+            stmt.setObject(10, product.fiber100)
             stmt.executeUpdate()
         }
     }
@@ -194,7 +198,7 @@ class Db(path: String) : AutoCloseable {
     @Synchronized
     fun products(): List<Product> =
         connection.prepareStatement(
-            "SELECT gtin, name, brand, kcal100, prot100, fat100, carb100, serving_g FROM product ORDER BY updated_at DESC"
+            "SELECT gtin, name, brand, kcal100, prot100, fat100, carb100, serving_g, fiber100 FROM product ORDER BY updated_at DESC"
         ).use { stmt ->
             stmt.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.toProduct()) } }
         }
@@ -222,6 +226,7 @@ class Db(path: String) : AutoCloseable {
         brand = getString("brand"),
         nutriments = toNutriments(),
         servingG = getInt("serving_g").takeUnless { wasNull() },
+        fiber100 = getInt("fiber100").takeUnless { wasNull() },
     )
 
     companion object {

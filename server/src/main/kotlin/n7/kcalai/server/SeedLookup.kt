@@ -15,7 +15,7 @@ class SeedLookup(private val file: File) {
         val readOnly = SQLiteConfig().apply { setReadOnly(true) }.toProperties()
         return DriverManager.getConnection("jdbc:sqlite:${file.path}", readOnly).use { connection ->
             connection.prepareStatement(
-                "SELECT name, brand, kcal100, prot100, fat100, carb100, serving_g FROM product_seed WHERE barcode = ?"
+                "SELECT name, brand, kcal100, prot100, fat100, carb100, serving_g, fiber100 FROM product_seed WHERE barcode = ?"
             ).use { stmt ->
                 stmt.setString(1, gtin)
                 stmt.executeQuery().use { rows ->
@@ -26,6 +26,7 @@ class SeedLookup(private val file: File) {
                         brand = rows.getString("brand"),
                         nutriments = Nutriments(rows.getInt("kcal100"), rows.getInt("prot100"), rows.getInt("fat100"), rows.getInt("carb100")),
                         servingG = rows.getInt("serving_g").takeUnless { rows.wasNull() },
+                        fiber100 = rows.getInt("fiber100").takeUnless { rows.wasNull() },
                     )
                 }
             }

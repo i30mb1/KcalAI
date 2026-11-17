@@ -74,11 +74,12 @@ class ServerProductsTest(unittest.TestCase):
         conn.executescript(
             """
             CREATE TABLE product (gtin TEXT PRIMARY KEY, name TEXT NOT NULL, brand TEXT, kcal100 INTEGER NOT NULL,
-              prot100 INTEGER NOT NULL, fat100 INTEGER NOT NULL, carb100 INTEGER NOT NULL, serving_g INTEGER, updated_at INTEGER NOT NULL);
+              prot100 INTEGER NOT NULL, fat100 INTEGER NOT NULL, carb100 INTEGER NOT NULL, serving_g INTEGER, updated_at INTEGER NOT NULL,
+              fiber100 INTEGER);
             CREATE TABLE contribution (id INTEGER PRIMARY KEY AUTOINCREMENT, gtin TEXT NOT NULL, name TEXT NOT NULL,
               kcal100 INTEGER NOT NULL, prot100 INTEGER NOT NULL, fat100 INTEGER NOT NULL, carb100 INTEGER NOT NULL,
               serving_g INTEGER, created_at INTEGER NOT NULL, received_at INTEGER NOT NULL);
-            INSERT INTO product VALUES ('4810285017077', 'Купляйце белое', NULL, 120, 300, 500, 1500, NULL, 1);
+            INSERT INTO product VALUES ('4810285017077', 'Купляйце белое', NULL, 120, 300, 500, 1500, NULL, 1, 850);
             INSERT INTO contribution (gtin, name, kcal100, prot100, fat100, carb100, created_at, received_at)
               VALUES ('4810285017077', 'Купляйце', 120, 300, 500, 1500, 1, 1), ('4810285017077', 'Купляйце бел', 121, 300, 500, 1500, 2, 2);
             """
@@ -95,6 +96,8 @@ class ServerProductsTest(unittest.TestCase):
         self.assertEqual("Купляйце белое", rows[0]["name"])
         self.assertEqual("", rows[0]["brand"])
         self.assertEqual("2", rows[0]["popularity"])
+        # Клетчатка, проверенная в панели, едет в справочник вместе с КБЖУ.
+        self.assertEqual("850", rows[0]["fiber100"])
 
 
 if __name__ == "__main__":

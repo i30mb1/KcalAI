@@ -39,7 +39,7 @@
   tr.src td:first-child { font-weight: 600; }
   tr.pending { background: var(--pending); }
   tr.old { color: var(--muted); }
-  form { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+  form { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
   form label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
   form label.wide { grid-column: span 2; }
   @media (max-width: 760px) { form { grid-template-columns: repeat(2, 1fr); } }
@@ -128,7 +128,7 @@ async function renderCard(gtin) {
   const row = (label, x, cls = '', when = '') => `<tr class="${cls}">
       <td>${label}</td><td>${esc(x.name)}${x.brand ? ` <span class="meta">${esc(x.brand)}</span>` : ''}</td>
       <td class="n">${x.kcal100}</td><td class="n">${g(x.prot100)}</td><td class="n">${g(x.fat100)}</td><td class="n">${g(x.carb100)}</td>
-      <td class="n">${x.servingG ?? ''}</td><td class="meta">${when}</td></tr>`;
+      <td class="n">${g(x.fiber100)}</td><td class="n">${x.servingG ?? ''}</td><td class="meta">${when}</td></tr>`;
   const decision = d.decision ? `${d.decision.verdict === 'published' ? 'опубликован' : 'отклонён'} ${ago(d.decision.decidedAt)}` : '';
   $('#card').innerHTML = `
     <div class="top">
@@ -136,7 +136,7 @@ async function renderCard(gtin) {
       <div class="meta"><span class="mono">${esc(gtin)}</span> · <a href="https://world.openfoodfacts.org/product/${esc(gtin)}" target="_blank" rel="noopener">Open Food Facts</a>${decision ? ' · ' + decision : ''}</div>
     </div>
     <table>
-      <thead><tr><th></th><th>Название</th><th class="n">ккал</th><th class="n">Б</th><th class="n">Ж</th><th class="n">У</th><th class="n">порция</th><th></th></tr></thead>
+      <thead><tr><th></th><th>Название</th><th class="n">ккал</th><th class="n">Б</th><th class="n">Ж</th><th class="n">У</th><th class="n">Кл</th><th class="n">порция</th><th></th></tr></thead>
       <tbody>
         ${d.seed ? row('Справочник', d.seed, 'src') : ''}
         ${d.product ? row('Опубликовано', d.product, 'src') : ''}
@@ -150,6 +150,7 @@ async function renderCard(gtin) {
       <label>Белки, г<input name="prot100" type="number" min="0" max="100" step="0.01" value="${s.prot100 / 100}"></label>
       <label>Жиры, г<input name="fat100" type="number" min="0" max="100" step="0.01" value="${s.fat100 / 100}"></label>
       <label>Углеводы, г<input name="carb100" type="number" min="0" max="100" step="0.01" value="${s.carb100 / 100}"></label>
+      <label>Клетчатка, г<input name="fiber100" type="number" min="0" max="100" step="0.01" value="${s.fiber100 == null ? '' : s.fiber100 / 100}"></label>
       <label>Порция, г<input name="servingG" type="number" min="1" value="${s.servingG ?? ''}"></label>
     </form>
     <div class="actions">
@@ -165,6 +166,8 @@ async function renderCard(gtin) {
     return {
       name: v.name.trim(), brand: v.brand.trim() || null, kcal100: Math.round(+v.kcal100),
       prot100: Math.round(+v.prot100 * 100), fat100: Math.round(+v.fat100 * 100), carb100: Math.round(+v.carb100 * 100),
+      // Пустое поле — клетчатка неизвестна, а не ноль.
+      fiber100: v.fiber100 === '' ? null : Math.round(+v.fiber100 * 100),
       servingG: v.servingG ? Math.round(+v.servingG) : null,
     };
   };
