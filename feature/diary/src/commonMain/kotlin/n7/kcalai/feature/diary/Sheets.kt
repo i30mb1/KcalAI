@@ -691,7 +691,7 @@ private fun ProductEditor(entry: DiaryEntryEntity, onSave: (name: String, per100
             modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
-            NutrientField("ккал на 100 г", kcal, { kcal = it }, Modifier.weight(2f))
+            NutrientField("ккал на 100 г", kcal, { kcal = it }, Modifier.weight(2f), decimal = false)
             // Клетчатку можно не знать: пустое поле — «неизвестно», а не ноль.
             NutrientField(
                 label = "",
@@ -699,6 +699,8 @@ private fun ProductEditor(entry: DiaryEntryEntity, onSave: (name: String, per100
                 onValueChange = { fiber = it },
                 modifier = Modifier.weight(1f),
                 icon = { SproutIcon(colors.fiber.fill, size = 12.dp) },
+                // Пусто — неизвестна, и подсказка не выдаёт это за ноль.
+                placeholder = "–",
             )
         }
         Row(
@@ -782,6 +784,8 @@ private fun NutrientField(
     onValueChange: (String) -> Unit,
     modifier: Modifier,
     icon: (@Composable () -> Unit)? = null,
+    decimal: Boolean = true,
+    placeholder: String = "0",
 ) {
     val colors = KcalTheme.colors
     Row(
@@ -795,8 +799,9 @@ private fun NutrientField(
             value = value,
             onValueChange = onValueChange,
             style = KcalTheme.type.macro,
-            placeholder = "0",
+            placeholder = placeholder,
             modifier = Modifier.weight(1f),
+            decimal = decimal,
         )
         if (icon != null) {
             icon()
@@ -901,6 +906,8 @@ private fun NumberInput(
     placeholder: String,
     modifier: Modifier = Modifier,
     imeAction: ImeAction = ImeAction.Done,
+    /** Граммы на 100 г с дробью — «2,9»; вес порции и калории — целые. */
+    decimal: Boolean = false,
 ) {
     val colors = KcalTheme.colors
 
@@ -908,12 +915,14 @@ private fun NumberInput(
     Box(modifier) {
         BasicTextField(
             value = value,
-            onValueChange = { text -> onValueChange(text.filter(Char::isDigit).take(MAX_DIGITS)) },
+            onValueChange = { text ->
+                onValueChange(if (decimal) decimalInput(text) else text.filter(Char::isDigit).take(MAX_DIGITS))
+            },
             textStyle = style.copy(color = colors.text),
             cursorBrush = SolidColor(colors.text),
             singleLine = true,
             keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Number,
+                keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
                 imeAction = imeAction,
             ),
             modifier = Modifier.fillMaxWidth(),
@@ -924,6 +933,27 @@ private fun NumberInput(
     }
 }
 
+/**
+ * Граммы с дробью из того, что набрано: цифры и одна запятая, не больше двух знаков
+ * после неё — цифры хранятся в сотых грамма. Точка становится запятой: на разных
+ * клавиатурах разделитель разный, а читается у нас запятая.
+ */
+internal fun decimalInput(text: String): String {
+    val out = StringBuilder()
+    var separator = -1
+    for (char in text) {
+        when {
+            char.isDigit() -> if (separator < 0 || out.length - separator <= DECIMALS) out.append(char)
+            (char == ',' || char == '.') && separator < 0 -> {
+                separator = out.length
+                out.append(',')
+            }
+        }
+    }
+    return out.toString().take(MAX_DIGITS + 1 + DECIMALS)
+}
+
 private const val GRAMS_STEP = 10
 private const val MIN_GRAMS = 1
 private const val MAX_DIGITS = 5
+private const val DECIMALS = 2
