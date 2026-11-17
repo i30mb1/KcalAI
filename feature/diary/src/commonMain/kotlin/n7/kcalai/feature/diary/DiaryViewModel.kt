@@ -1245,7 +1245,11 @@ class DiaryViewModel(
                 fiber100 = per100.fiber100,
             )
         )
-        viewModelScope.launch { diary.correctNutriments(entry, per100, nowMillis()) }
+        viewModelScope.launch {
+            diary.correctNutriments(entry, per100, nowMillis())
+            // Правка продукта с кодом легла в очередь — Яйцо предложит ею поделиться.
+            refreshOutbox()
+        }
     }
 
     /**

@@ -138,9 +138,12 @@ class DiaryViewModelTest {
         assertEquals(1, outbox.sends, "второй тап второй раз не отправляет")
     }
 
-    /** Предложение говорит Яйцо: что за продукты и зачем их отправлять. */
+    /**
+     * Предложение говорит Яйцо: поделиться тем, что человек знает о продуктах.
+     * В очереди и новые продукты, и поправки к уже известным — «нет в базе» было бы неправдой.
+     */
     @Test
-    fun `Яйцо предлагает отправить новые продукты в общую базу`() = runTest(dispatcher) {
+    fun `Яйцо предлагает поделиться знаниями о продуктах`() = runTest(dispatcher) {
         val outbox = FakeOutbox(OutboxCount(scans = 0, products = 2), serverUp = true)
         val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
         vm.onResume()
@@ -148,7 +151,10 @@ class DiaryViewModelTest {
 
         val offer = vm.state.value.feed.filterIsInstance<FeedItem.Outbox>().single()
         assertEquals(Mascot.EGG, speakerOf(offer))
-        assertEquals("В общей базе нет 2 твоих продуктов. Отправим, чтобы их находили по коду и другие?", outboxOffer(offer.count))
+        assertEquals(
+            "Ты знаешь о 2 продуктах больше общей базы. Поделимся, чтобы и другие находили их по коду?",
+            outboxOffer(offer.count),
+        )
     }
 
     /** «Не сейчас» — тоже ответ: пузырёк остаётся с отмеченным выбором, ничего не уходит. */

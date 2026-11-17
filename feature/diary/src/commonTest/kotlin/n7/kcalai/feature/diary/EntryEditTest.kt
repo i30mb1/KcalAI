@@ -63,6 +63,29 @@ class EntryEditTest {
         assertEquals(8000, open.fiber100)
     }
 
+    /** Поправил продукт — Яйцо сразу предлагает поделиться: правка ждёт в очереди. */
+    @Test
+    fun `после правки продукта Яйцо предлагает поделиться`() = runTest(dispatcher) {
+        val outbox = FakeOutbox(OutboxCount(scans = 0, products = 0), serverUp = true)
+        val vm = harness.viewModel(dispatcher, outbox).also { backgroundScope.launch { it.state.collect {} } }
+        advanceUntilIdle()
+        val entry = harness.addEntry("Псиллиум", grams = 100, meal = MealType.LUNCH, kcal100 = 42)
+
+        // Правка легла в очередь вкладов.
+        outbox.count = OutboxCount(scans = 0, products = 1)
+        vm.onCorrectProduct(entry, Nutriments(kcal100 = 35, prot100 = 290, fat100 = 10, carb100 = 730, fiber100 = 8500))
+        advanceUntilIdle()
+
+        val offer = vm.state.value.feed.filterIsInstance<FeedItem.Outbox>().single()
+        assertEquals(1, offer.count.products)
+    }
+
+    @Test
+    fun `Яйцо говорит о продукте в единственном числе`() {
+        assertTrue(outboxOffer(OutboxCount(scans = 0, products = 1)).startsWith("Ты знаешь о 1 продукте больше"))
+        assertTrue(outboxOffer(OutboxCount(scans = 0, products = 21)).startsWith("Ты знаешь о 21 продукте больше"))
+    }
+
     @Test
     fun `сохранение порции не трогает цифры продукта`() = runTest(dispatcher) {
         val entry = harness.addEntry("Псиллиум", grams = 100, meal = MealType.LUNCH, kcal100 = 42)
