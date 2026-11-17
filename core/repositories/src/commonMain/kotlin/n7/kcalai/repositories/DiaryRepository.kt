@@ -149,23 +149,27 @@ class DiaryRepository(
     suspend fun moveToMeal(id: Long, meal: MealType) = diaryDao.updateMeal(id, meal)
 
     /**
-     * Человек поправил КБЖУ продукта: сверил с упаковкой и увидел, что цифры не те.
+     * Человек поправил сам продукт: сверил с упаковкой название и цифры.
      *
      * Снимок записи меняется сразу. Если у продукта есть штрих-код, исправление
      * уходит в очередь вкладов — остальным с тем же кодом станет верно. Без кода
-     * отправить некуда, поэтому правка остаётся в дневнике. Нетронутые цифры не
-     * отправляются: вклад — подтверждение человека, а не повтор того, что было.
+     * отправить некуда, поэтому правка остаётся в дневнике. Нетронутое не
+     * отправляется: вклад — подтверждение человека, а не повтор того, что было.
+     * Пустое название продукт не стирает — остаётся прежнее.
      */
-    suspend fun correctNutriments(entry: DiaryEntryEntity, nutriments: Nutriments, now: Long) {
-        val unchanged = entry.kcal100 == nutriments.kcal100 &&
+    suspend fun correctProduct(entry: DiaryEntryEntity, name: String, nutriments: Nutriments, now: Long) {
+        val newName = name.trim().ifBlank { entry.displayName }
+        val unchanged = entry.displayName == newName &&
+            entry.kcal100 == nutriments.kcal100 &&
             entry.prot100 == nutriments.prot100 &&
             entry.fat100 == nutriments.fat100 &&
             entry.carb100 == nutriments.carb100 &&
             entry.fiber100 == nutriments.fiber100
         if (unchanged) return
 
-        diaryDao.updateNutriments(
+        diaryDao.updateProduct(
             id = entry.id,
+            name = newName,
             kcal = nutriments.kcal100,
             prot = nutriments.prot100,
             fat = nutriments.fat100,
@@ -177,7 +181,7 @@ class DiaryRepository(
         contributionDao.insert(
             ContributionEntity(
                 gtin = gtin,
-                name = entry.displayName,
+                name = newName,
                 kcal100 = nutriments.kcal100,
                 prot100 = nutriments.prot100,
                 fat100 = nutriments.fat100,

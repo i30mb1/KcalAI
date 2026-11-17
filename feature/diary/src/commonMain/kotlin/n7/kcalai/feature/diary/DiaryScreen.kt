@@ -135,7 +135,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         is Overlay.EditEntry -> EntrySheet(
             entry = overlay.entry,
             onSave = { grams, meal -> viewModel.onSaveEntry(overlay.entry, grams, meal) },
-            onSaveProduct = { per100 -> viewModel.onCorrectProduct(overlay.entry, per100) },
+            onSaveProduct = { name, per100 -> viewModel.onCorrectProduct(overlay.entry, name, per100) },
             onDelete = { viewModel.onDeleteEntry(overlay.entry) },
             onDismiss = viewModel::onDismissOverlay,
         )

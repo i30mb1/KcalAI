@@ -51,14 +51,20 @@ class EntryEditTest {
         val vm = screen()
         vm.onEditEntry(entry)
 
-        vm.onCorrectProduct(entry, Nutriments(kcal100 = 35, prot100 = 290, fat100 = 10, carb100 = 730, fiber100 = 8000))
+        vm.onCorrectProduct(
+            entry,
+            name = "Псиллиум шелуха",
+            per100 = Nutriments(kcal100 = 35, prot100 = 290, fat100 = 10, carb100 = 730, fiber100 = 8000),
+        )
         advanceUntilIdle()
 
         val saved = harness.diaryDao.day(harness.today).single()
+        assertEquals("Псиллиум шелуха", saved.displayName)
         assertEquals(35, saved.kcal100)
         assertEquals(8000, saved.fiber100)
         assertEquals(100, saved.grams)
         val open = assertIs<Overlay.EditEntry>(vm.state.value.overlay).entry
+        assertEquals("Псиллиум шелуха", open.displayName)
         assertEquals(35, open.kcal100)
         assertEquals(8000, open.fiber100)
     }
@@ -73,7 +79,7 @@ class EntryEditTest {
 
         // Правка легла в очередь вкладов.
         outbox.count = OutboxCount(scans = 0, products = 1)
-        vm.onCorrectProduct(entry, Nutriments(kcal100 = 35, prot100 = 290, fat100 = 10, carb100 = 730, fiber100 = 8500))
+        vm.onCorrectProduct(entry, entry.displayName, Nutriments(kcal100 = 35, prot100 = 290, fat100 = 10, carb100 = 730, fiber100 = 8500))
         advanceUntilIdle()
 
         val offer = vm.state.value.feed.filterIsInstance<FeedItem.Outbox>().single()

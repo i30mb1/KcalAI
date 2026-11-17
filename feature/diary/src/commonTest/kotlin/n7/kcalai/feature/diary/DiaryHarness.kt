@@ -257,9 +257,9 @@ internal class FakeDiaryDao : DiaryDao {
         entries.value = entries.value.map { if (it.id == id) it.copy(meal = meal) else it }
     }
 
-    override suspend fun updateNutriments(id: Long, kcal: Int, prot: Int, fat: Int, carb: Int, fiber: Int?) {
+    override suspend fun updateProduct(id: Long, name: String, kcal: Int, prot: Int, fat: Int, carb: Int, fiber: Int?) {
         entries.value = entries.value.map {
-            if (it.id == id) it.copy(kcal100 = kcal, prot100 = prot, fat100 = fat, carb100 = carb, fiber100 = fiber) else it
+            if (it.id == id) it.copy(displayName = name, kcal100 = kcal, prot100 = prot, fat100 = fat, carb100 = carb, fiber100 = fiber) else it
         }
     }
 

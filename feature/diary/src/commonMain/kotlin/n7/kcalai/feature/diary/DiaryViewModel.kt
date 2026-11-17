@@ -1235,9 +1235,10 @@ class DiaryViewModel(
      * Шит остаётся открытым и уже с поправленным продуктом: порцию считают по новым
      * цифрам, а следующая правка сравнивается с ними, а не с тем, что было при открытии.
      */
-    fun onCorrectProduct(entry: DiaryEntryEntity, per100: Nutriments) {
+    fun onCorrectProduct(entry: DiaryEntryEntity, name: String, per100: Nutriments) {
         overlay.value = Overlay.EditEntry(
             entry.copy(
+                displayName = name.trim().ifBlank { entry.displayName },
                 kcal100 = per100.kcal100,
                 prot100 = per100.prot100,
                 fat100 = per100.fat100,
@@ -1246,7 +1247,7 @@ class DiaryViewModel(
             )
         )
         viewModelScope.launch {
-            diary.correctNutriments(entry, per100, nowMillis())
+            diary.correctProduct(entry, name, per100, nowMillis())
             // Правка продукта с кодом легла в очередь — Яйцо предложит ею поделиться.
             refreshOutbox()
         }

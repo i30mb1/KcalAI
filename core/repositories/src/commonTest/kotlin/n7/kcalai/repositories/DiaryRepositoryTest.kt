@@ -139,7 +139,7 @@ class DiaryRepositoryTest {
         repository.add(barcoded, grams = 200, meal = MealType.BREAKFAST, date = TODAY, source = EntrySource.TEXT, now = 1)
         val entry = repository.observeDay(TODAY).first().entries.single()
 
-        repository.correctNutriments(entry, Nutriments(kcal100 = 120, prot100 = 300, fat100 = 200, carb100 = 1400), now = 5)
+        repository.correctProduct(entry, entry.displayName, Nutriments(kcal100 = 120, prot100 = 300, fat100 = 200, carb100 = 1400), now = 5)
 
         val saved = repository.observeDay(TODAY).first().entries.single()
         assertEquals(120, saved.kcal100)
@@ -157,7 +157,7 @@ class DiaryRepositoryTest {
         add(grams = 200, date = TODAY)
         val entry = repository.observeDay(TODAY).first().entries.single()
 
-        repository.correctNutriments(entry, Nutriments(kcal100 = 120, prot100 = 300, fat100 = 200, carb100 = 1400), now = 5)
+        repository.correctProduct(entry, entry.displayName, Nutriments(kcal100 = 120, prot100 = 300, fat100 = 200, carb100 = 1400), now = 5)
 
         assertEquals(120, repository.observeDay(TODAY).first().entries.single().kcal100)
         assertTrue(contributions.queued.isEmpty())
@@ -170,8 +170,9 @@ class DiaryRepositoryTest {
         repository.add(barcoded, grams = 200, meal = MealType.BREAKFAST, date = TODAY, source = EntrySource.TEXT, now = 1)
         val entry = repository.observeDay(TODAY).first().entries.single()
 
-        repository.correctNutriments(
+        repository.correctProduct(
             entry,
+            entry.displayName,
             Nutriments(kcal100 = 100, prot100 = 300, fat100 = 200, carb100 = 1500, fiber100 = 8000),
             now = 5,
         )
@@ -187,9 +188,35 @@ class DiaryRepositoryTest {
         repository.add(barcoded, grams = 200, meal = MealType.BREAKFAST, date = TODAY, source = EntrySource.TEXT, now = 1)
         val entry = repository.observeDay(TODAY).first().entries.single()
 
-        repository.correctNutriments(entry, Nutriments(kcal100 = 100, prot100 = 300, fat100 = 200, carb100 = 1500), now = 5)
+        repository.correctProduct(entry, entry.displayName, Nutriments(kcal100 = 100, prot100 = 300, fat100 = 200, carb100 = 1500), now = 5)
 
         assertTrue(contributions.queued.isEmpty())
+    }
+
+    /** Название — тоже знание о продукте: переименованный уходит вкладом под новым именем. */
+    @Test
+    fun `переименованный продукт с кодом уходит вкладом под новым именем`() = runBlocking {
+        val barcoded = oatmeal.copy(ref = FoodRef.Barcode("4600699500001"))
+        repository.add(barcoded, grams = 200, meal = MealType.BREAKFAST, date = TODAY, source = EntrySource.TEXT, now = 1)
+        val entry = repository.observeDay(TODAY).first().entries.single()
+
+        repository.correctProduct(entry, "  Овсяные хлопья Геркулес ", entry.nutriments(), now = 5)
+
+        assertEquals("Овсяные хлопья Геркулес", repository.observeDay(TODAY).first().entries.single().displayName)
+        assertEquals("Овсяные хлопья Геркулес", contributions.queued.single().name)
+    }
+
+    /** Пустое название продукт не стирает: остаётся прежнее. */
+    @Test
+    fun `пустое название оставляет прежнее`() = runBlocking {
+        add(grams = 200, date = TODAY)
+        val entry = repository.observeDay(TODAY).first().entries.single()
+
+        repository.correctProduct(entry, "  ", entry.nutriments().copy(kcal100 = 120), now = 5)
+
+        val saved = repository.observeDay(TODAY).first().entries.single()
+        assertEquals("Овсянка", saved.displayName)
+        assertEquals(120, saved.kcal100)
     }
 
     private companion object {
@@ -249,9 +276,9 @@ private class FakeDiaryDao : DiaryDao {
         entries.value = entries.value.map { if (it.id == id) it.copy(meal = meal) else it }
     }
 
-    override suspend fun updateNutriments(id: Long, kcal: Int, prot: Int, fat: Int, carb: Int, fiber: Int?) {
+    override suspend fun updateProduct(id: Long, name: String, kcal: Int, prot: Int, fat: Int, carb: Int, fiber: Int?) {
         entries.value = entries.value.map {
-            if (it.id == id) it.copy(kcal100 = kcal, prot100 = prot, fat100 = fat, carb100 = carb, fiber100 = fiber) else it
+            if (it.id == id) it.copy(displayName = name, kcal100 = kcal, prot100 = prot, fat100 = fat, carb100 = carb, fiber100 = fiber) else it
         }
     }
 

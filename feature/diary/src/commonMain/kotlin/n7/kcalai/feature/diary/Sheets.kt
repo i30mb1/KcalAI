@@ -50,6 +50,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -438,7 +439,7 @@ private fun MacroField(
 fun EntrySheet(
     entry: DiaryEntryEntity,
     onSave: (grams: Int, meal: MealType) -> Unit,
-    onSaveProduct: (per100: Nutriments) -> Unit,
+    onSaveProduct: (name: String, per100: Nutriments) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -455,8 +456,8 @@ fun EntrySheet(
         if (productMode) {
             ProductEditor(
                 entry = entry,
-                onSave = { per100 ->
-                    onSaveProduct(per100)
+                onSave = { name, per100 ->
+                    onSaveProduct(name, per100)
                     productMode = false
                 },
                 onBack = { productMode = false },
@@ -669,8 +670,9 @@ private fun ProductCard(entry: DiaryEntryEntity, onClick: () -> Unit, modifier: 
  * с поправленным продуктом, и следующая правка начинается с новых цифр.
  */
 @Composable
-private fun ProductEditor(entry: DiaryEntryEntity, onSave: (Nutriments) -> Unit, onBack: () -> Unit) {
+private fun ProductEditor(entry: DiaryEntryEntity, onSave: (name: String, per100: Nutriments) -> Unit, onBack: () -> Unit) {
     val colors = KcalTheme.colors
+    var name by remember(entry) { mutableStateOf(entry.displayName) }
     var kcal by remember(entry) { mutableStateOf(entry.kcal100.toString()) }
     var prot by remember(entry) { mutableStateOf(entry.prot100.gramsField()) }
     var fat by remember(entry) { mutableStateOf(entry.fat100.gramsField()) }
@@ -683,16 +685,10 @@ private fun ProductEditor(entry: DiaryEntryEntity, onSave: (Nutriments) -> Unit,
             productSpeech(hasBarcode = parseFoodRef(entry.foodRef) is FoodRef.Barcode),
             Modifier.padding(bottom = 14.dp),
         )
-        Text(
-            entry.displayName,
-            style = KcalTheme.type.title,
-            color = colors.text,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        NameField(name, onValueChange = { name = it })
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
             horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             NutrientField("ккал на 100 г", kcal, { kcal = it }, Modifier.weight(2f))
@@ -735,12 +731,34 @@ private fun ProductEditor(entry: DiaryEntryEntity, onSave: (Nutriments) -> Unit,
             }
             WideButton(
                 text = "Сохранить",
-                enabled = per100 != null,
-                onClick = { per100?.let(onSave) },
+                enabled = per100 != null && name.isNotBlank(),
+                onClick = { if (per100 != null && name.isNotBlank()) onSave(name, per100) },
                 modifier = Modifier.weight(1f),
             )
         }
     }
+}
+
+/** Название продукта — полем во всю ширину, тем же шрифтом, что заголовок шита. Клавиатура — только по тапу. */
+@Composable
+private fun NameField(value: String, onValueChange: (String) -> Unit) {
+    val colors = KcalTheme.colors
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        textStyle = KcalTheme.type.title.copy(color = colors.text),
+        cursorBrush = SolidColor(colors.text),
+        maxLines = 2,
+        keyboardOptions = KeyboardOptions(
+            capitalization = KeyboardCapitalization.Sentences,
+            imeAction = ImeAction.Done,
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(KcalShapes.tile))
+            .background(colors.bg)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    )
 }
 
 /** Реплика Яйца в правке продукта: куда уйдут поправленные цифры. */
