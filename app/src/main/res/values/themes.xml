@@ -5,8 +5,6 @@
       фон ленты: его же берёт и системная заставка Android 12+.
     -->
     <style name="Theme.KcalAI" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowBackground">@color/kcal_bg</item>
     </style>
 </resources>
