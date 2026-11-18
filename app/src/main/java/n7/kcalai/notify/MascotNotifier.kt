@@ -17,7 +17,8 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import n7.kcalai.MainActivity
 import n7.kcalai.R
-import n7.kcalai.database.MascotMessageEntity
+import n7.kcalai.mascot.MascotShade
+import n7.kcalai.mascot.ShadeReply
 import n7.kcalai.mascot.SuggestionExtras
 import n7.kcalai.mascot.Written
 import n7.kcalai.mascot.voice.foodName
@@ -32,7 +33,7 @@ import n7.kcalai.ui.mascot.mascotPortrait
  * и долгоживущий ярлык. Так оно попадает в раздел разговоров шторки, его можно
  * сделать приоритетным или заглушить одного персонажа, не трогая остальных.
  */
-class MascotNotifier(private val context: Context) {
+class MascotNotifier(private val context: Context) : MascotShade {
 
     private val manager = NotificationManagerCompat.from(context)
 
@@ -42,7 +43,9 @@ class MascotNotifier(private val context: Context) {
      * Если нельзя — мозг не пишет вовсе: ненаписанное не тратит дневной бюджет
      * и не считается проигнорированным.
      */
-    fun canPost(): Boolean {
+    override suspend fun canPost(): Boolean = canPostNow()
+
+    private fun canPostNow(): Boolean {
         val permitted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
@@ -52,8 +55,8 @@ class MascotNotifier(private val context: Context) {
     }
 
     /** Сообщение персонажа: непрочитанное за сегодня — одной перепиской, с кнопкой, если есть что записать. */
-    fun post(written: Written) {
-        if (!canPost()) return
+    override suspend fun post(written: Written) {
+        if (!canPostNow()) return
         val mascot = written.message.mascot
         val author = person(mascot)
         pushShortcut(mascot, author)
@@ -74,19 +77,20 @@ class MascotNotifier(private val context: Context) {
      *
      * Без звука: человек только что сам нажал кнопку и смотрит на шторку.
      */
-    fun postReply(mascot: Mascot, original: MascotMessageEntity?, logged: String, loggedAt: Long, reply: MascotMessageEntity?) {
-        if (!canPost()) return
+    override suspend fun postReply(reply: ShadeReply) {
+        if (!canPostNow()) return
+        val mascot = reply.mascot
         val author = person(mascot)
         val style = NotificationCompat.MessagingStyle(me())
-        original?.let { style.addMessage(it.text, it.createdAt, author) }
+        reply.original?.let { style.addMessage(it.text, it.createdAt, author) }
         // Автор null — сам человек, «Ты» из стиля переписки.
-        style.addMessage(logged, loggedAt, null as Person?)
-        reply?.let { style.addMessage(it.text, it.createdAt, author) }
+        style.addMessage(reply.logged, reply.loggedAt, null as Person?)
+        reply.reply?.let { style.addMessage(it.text, it.createdAt, author) }
 
         notify(
             mascot,
             base(mascot, style)
-                .setContentIntent(open(mascot, original?.id ?: 0))
+                .setContentIntent(open(mascot, reply.original?.id ?: 0))
                 .setOnlyAlertOnce(true)
                 .setSilent(true),
         )

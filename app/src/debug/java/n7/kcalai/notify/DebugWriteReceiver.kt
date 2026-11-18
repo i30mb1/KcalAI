@@ -36,7 +36,7 @@ class DebugWriteReceiver : BroadcastReceiver() {
             try {
                 val written = brain.write(topic, mascot, Clock.System.now())
                 if (written == null) Log.i(TAG, "$mascot молчит на $topic: по фактам дня сказать нечего")
-                written?.let(MascotNotifier(context)::post)
+                written?.let { MascotNotifier(context).post(it) }
             } catch (error: Exception) {
                 Log.e(TAG, "отладочное сообщение не вышло", error)
             } finally {

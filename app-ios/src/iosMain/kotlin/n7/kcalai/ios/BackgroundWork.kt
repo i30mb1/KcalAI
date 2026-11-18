@@ -20,7 +20,7 @@ import platform.Foundation.NSDate
 import platform.Foundation.dateByAddingTimeInterval
 
 /**
- * Фоновая работа: отправка вкладов и докачка справочника.
+ * Фоновая работа: персонажи, отправка вкладов и докачка справочника.
  *
  * iOS не обещает времени запуска — `earliestBeginDate` это просьба, а не срок:
  * система решает сама, по батарее, сети и тому, как часто человек открывает
@@ -45,13 +45,22 @@ class BackgroundWork(private val container: AppContainer) {
         scheduler.registerForTaskWithIdentifier(TASK_SEED, usingQueue = null) { task ->
             task?.let { run(it) { updateSeed() } }
         }
+        scheduler.registerForTaskWithIdentifier(TASK_MASCOTS, usingQueue = null) { task ->
+            task?.let { run(it) { container.mascotRoutines.tick() } }
+        }
     }
 
     /**
-     * Попросить систему разбудить нас. Без адреса сервера просить не о чем:
+     * Попросить систему разбудить нас. Персонажам сервер не нужен — их будят всегда,
+     * как MascotWorker на Android. Без адреса сервера остальным просить не о чем:
      * вклады копятся, справочник не докачивается.
      */
     fun schedule() {
+        submit(
+            BGAppRefreshTaskRequest(TASK_MASCOTS).apply {
+                setEarliestBeginDate(NSDate().dateByAddingTimeInterval(MASCOTS_DELAY_SECONDS))
+            },
+        )
         if (!container.serverConfigured) return
         submit(BGProcessingTaskRequest(TASK_CONTRIBUTIONS).apply { setRequiresNetworkConnectivity(true) })
         submit(
@@ -127,6 +136,10 @@ class BackgroundWork(private val container: AppContainer) {
         const val TAG = "BackgroundWork"
         const val TASK_CONTRIBUTIONS = "n7.kcalai.contributions"
         const val TASK_SEED = "n7.kcalai.seed"
+        const val TASK_MASCOTS = "n7.kcalai.mascots"
+
+        /** Как период MascotWorker на Android. iOS всё равно решает сама — это просьба, а не срок. */
+        const val MASCOTS_DELAY_SECONDS = 30 * 60.0
 
         /** Справочник не срочен: раньше чем через час спрашивать сервер незачем. */
         const val SEED_DELAY_SECONDS = 3600.0

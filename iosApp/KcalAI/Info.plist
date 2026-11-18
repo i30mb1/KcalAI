@@ -48,13 +48,14 @@
 		<string>_kcalai._tcp</string>
 	</array>
 	<!--
-		Фоновая работа: отправка вкладов и докачка справочника. Идентификаторы
+		Фоновая работа: персонажи, отправка вкладов и докачка справочника. Идентификаторы
 		обязаны быть здесь — незаявленную задачу система поставить не даёт.
 	-->
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>n7.kcalai.contributions</string>
 		<string>n7.kcalai.seed</string>
+		<string>n7.kcalai.mascots</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>

@@ -1,5 +1,6 @@
 import SwiftUI
 import Shared
+import UserNotifications
 
 /// Оболочка: всё содержательное — в общем коде, вместе с Android.
 ///
@@ -29,11 +30,14 @@ struct KcalAIApp: App {
     }
 }
 
-private final class AppDelegate: NSObject, UIApplicationDelegate {
+private final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Нажатия в шторке приходят сюда — и сразу уходят в общий код.
+        // Делегат ставится до возврата: иначе нажатие, которым приложение запустили, потеряется.
+        UNUserNotificationCenter.current().delegate = self
         // Обработчики фоновых задач система требует зарегистрировать до возврата отсюда.
         // Нейросеть — только с iOS 26: раньше Foundation Models не существует,
         // и дневник живёт без неё, как на телефонах без Apple Intelligence.
@@ -43,6 +47,18 @@ private final class AppDelegate: NSObject, UIApplicationDelegate {
         }
         KcalApp.shared.onLaunch(model: model)
         return true
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        KcalApp.shared.onNotificationResponse(
+            action: response.actionIdentifier,
+            info: response.notification.request.content.userInfo,
+            done: completionHandler
+        )
     }
 }
 

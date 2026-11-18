@@ -14,6 +14,8 @@ kotlin {
             api(project(":core:database"))
             // Факты дня — из тех же моделей, что подсказывают еду: пропуск, остаток, раскладка.
             api(project(":core:personal"))
+            // «Записать» из шторки кладёт еду в дневник тем же кодом, что и экран.
+            implementation(project(":core:repositories"))
             api(libs.kotlinx.datetime)
             api(libs.kotlinx.coroutines.core)
         }

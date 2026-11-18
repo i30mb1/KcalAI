@@ -21,6 +21,7 @@ import n7.kcalai.fooddb.FoodDbFactory
 import n7.kcalai.fooddb.installSeed
 import n7.kcalai.mascot.FactsBuilder
 import n7.kcalai.mascot.MascotBrain
+import n7.kcalai.mascot.MascotRoutines
 import n7.kcalai.feature.diary.NearbyPeers
 import n7.kcalai.feature.diary.NearbyPeersOverLan
 import n7.kcalai.nearby.DatabaseOfferInbox
@@ -105,7 +106,7 @@ class AppContainer {
     }
 
     val diaryRepository: DiaryRepository by lazy {
-        DiaryRepository(database.diaryDao(), database.goalDao())
+        DiaryRepository(database.diaryDao(), database.goalDao(), database.contributionDao())
     }
 
     /**
@@ -180,6 +181,20 @@ class AppContainer {
             facts = FactsBuilder(database.diaryDao(), database.goalDao(), personalRepository, zone),
             diaryDao = database.diaryDao(),
             zone = zone,
+        )
+    }
+
+    /** Шторка: сообщения персонажей и ответы после «Записать». */
+    val notifier = MascotNotifier()
+
+    /** Что персонажи делают вне экрана — тот же общий код, что на Android. */
+    val mascotRoutines: MascotRoutines by lazy {
+        MascotRoutines(
+            brain = mascotBrain,
+            diary = diaryRepository,
+            personal = personalRepository,
+            shade = notifier,
+            zone = TimeZone.currentSystemDefault(),
         )
     }
 

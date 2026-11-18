@@ -1,7 +1,6 @@
 package n7.kcalai
 
 import android.content.Context
-import android.util.Log
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.datetime.TimeZone
 import kotlinx.coroutines.CoroutineDispatcher
@@ -12,8 +11,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -30,6 +27,8 @@ import n7.kcalai.fooddb.FoodDbFactory
 import n7.kcalai.fooddb.installSeed
 import n7.kcalai.mascot.FactsBuilder
 import n7.kcalai.mascot.MascotBrain
+import n7.kcalai.mascot.MascotRoutines
+import n7.kcalai.notify.MascotNotifier
 import n7.kcalai.feature.diary.NearbyPeers
 import n7.kcalai.feature.diary.NearbyPeersOverLan
 import n7.kcalai.nearby.DatabaseOfferInbox
@@ -37,7 +36,6 @@ import n7.kcalai.nearby.OfferReceiver
 import kotlinx.coroutines.flow.map
 import n7.kcalai.nearby.NsdDiscovery
 import n7.kcalai.model.BackgroundModel
-import n7.kcalai.model.ModelDelivery
 import n7.kcalai.personal.PersonalRepository
 import n7.kcalai.remote.ChainedProductSource
 import n7.kcalai.remote.ContributionUploader
@@ -227,53 +225,31 @@ class AppContainer(context: Context) {
     }
 
     /**
-     * Фоновая докачка — словами персонажей, в ленте дня. Слушает всю жизнь процесса:
-     * модель докачивается и без экрана, а сказанное лежит в базе и дождётся человека.
-     *
-     * Новость ждёт своей очереди — персонажи говорят по одному, см. [MascotBrain.report].
-     * Поэтому `collectLatest`: новый статус отменяет ожидание прошлого, и «докачиваю»
-     * не прозвучит, когда уже докачалось.
+     * Что персонажи делают вне экрана — общий с iOS код. Отсюда только шторка и то,
+     * когда его звать.
      */
-    fun reportBackgroundWork() {
-        appScope.launch {
-            embedder.delivery.collectLatest { report(BackgroundModel.SEARCH, it) }
-        }
-        appScope.launch {
-            nano.delivery.filterNotNull().collectLatest { report(BackgroundModel.ASSISTANT, it) }
-        }
+    val mascotRoutines: MascotRoutines by lazy {
+        MascotRoutines(
+            brain = mascotBrain,
+            diary = diaryRepository,
+            personal = personalRepository,
+            shade = MascotNotifier(appContext),
+            zone = TimeZone.currentSystemDefault(),
+        )
     }
 
     /**
-     * Один раз за всю жизнь Масло говорит, что приложение новое, и даёт почту разработчика.
-     * Ждёт своего дня и очереди — см. [MascotBrain.tellAppIsNew].
+     * Старт процесса: фоновая докачка словами персонажей и «приложение новое».
+     * Слушает всю жизнь процесса: модель докачивается и без экрана, а сказанное
+     * лежит в базе и дождётся человека.
      */
-    fun tellAppIsNew() {
-        appScope.launch {
-            try {
-                mascotBrain.tellAppIsNew()
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (error: Exception) {
-                Log.w(TAG, "не удалось сказать, что приложение новое", error)
-            }
-        }
-    }
-
-    private suspend fun report(model: BackgroundModel, delivery: ModelDelivery) {
-        try {
-            mascotBrain.report(model, delivery)
-        } catch (cancellation: CancellationException) {
-            // Пришёл новый статус — ожидание прошлого отменено, и это не сбой.
-            throw cancellation
-        } catch (error: Exception) {
-            // Реплика — надстройка: из-за неё нельзя ронять приложение на старте.
-            Log.w(TAG, "не удалось рассказать про $model: $delivery", error)
-        }
+    fun startMascots() {
+        appScope.launch { mascotRoutines.narrate(BackgroundModel.SEARCH, embedder.delivery) }
+        appScope.launch { mascotRoutines.narrate(BackgroundModel.ASSISTANT, nano.delivery.filterNotNull()) }
+        appScope.launch { mascotRoutines.onLaunch() }
     }
 
     private companion object {
-        const val TAG = "AppContainer"
-
         /** Debug — из `local.properties`, release — из `~/.gradle/gradle.properties` (`kcal.server=…`). Пусто — источника нет. */
         val SERVER_BASE_URL: String = BuildConfig.KCAL_SERVER
 

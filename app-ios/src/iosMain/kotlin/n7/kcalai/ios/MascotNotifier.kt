@@ -2,7 +2,8 @@ package n7.kcalai.ios
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.suspendCancellableCoroutine
-import n7.kcalai.database.MascotMessageEntity
+import n7.kcalai.mascot.MascotShade
+import n7.kcalai.mascot.ShadeReply
 import n7.kcalai.mascot.SuggestionExtras
 import n7.kcalai.mascot.Written
 import n7.kcalai.model.Log
@@ -15,7 +16,7 @@ import platform.UserNotifications.UNAuthorizationStatusAuthorized
 import platform.UserNotifications.UNAuthorizationStatusProvisional
 import platform.UserNotifications.UNMutableNotificationContent
 import platform.UserNotifications.UNNotificationAction
-import platform.UserNotifications.UNNotificationActionOptionForeground
+import platform.UserNotifications.UNNotificationActionOptionNone
 import platform.UserNotifications.UNNotificationCategory
 import platform.UserNotifications.UNNotificationCategoryOptionNone
 import platform.UserNotifications.UNNotificationRequest
@@ -34,7 +35,7 @@ import kotlin.coroutines.resume
  * персонажей: текст кнопки у каждого свой, а менять его на лету нельзя —
  * категории регистрируются заранее.
  */
-class MascotNotifier {
+class MascotNotifier : MascotShade {
 
     private val center = UNUserNotificationCenter.currentNotificationCenter()
 
@@ -44,7 +45,7 @@ class MascotNotifier {
      * Если нельзя — мозг не пишет вовсе: ненаписанное не тратит дневной бюджет
      * и не считается проигнорированным.
      */
-    suspend fun canPost(): Boolean = suspendCancellableCoroutine { continuation ->
+    override suspend fun canPost(): Boolean = suspendCancellableCoroutine { continuation ->
         center.getNotificationSettingsWithCompletionHandler { settings ->
             val status = settings?.authorizationStatus
             continuation.resume(
@@ -64,7 +65,7 @@ class MascotNotifier {
     }
 
     /** Сообщение персонажа: непрочитанное за сегодня — одной перепиской, с кнопкой, если есть что записать. */
-    suspend fun post(written: Written) {
+    override suspend fun post(written: Written) {
         if (!canPost()) return
         val mascot = written.message.mascot
 
@@ -81,14 +82,15 @@ class MascotNotifier {
     }
 
     /**
-     * Ответ в той же переписке.
+     * Ответ в той же переписке. Стопка персонажа уже держит его сообщение, а запись
+     * человек только что сделал сам — показывать стоит один ответ.
      *
      * Без звука: человек только что сам нажал кнопку и смотрит на шторку.
      */
-    suspend fun postReply(mascot: Mascot, reply: MascotMessageEntity?) {
+    override suspend fun postReply(reply: ShadeReply) {
         if (!canPost()) return
-        val text = reply?.text ?: return
-        show(mascot, base(mascot, text).also { it.setSound(null) })
+        val text = reply.reply?.text ?: return
+        show(reply.mascot, base(reply.mascot, text).also { it.setSound(null) })
     }
 
     /** Человек открыл приложение: всё написанное теперь стоит в ленте, а шторку пора освободить. */
@@ -127,8 +129,8 @@ class MascotNotifier {
         val action = UNNotificationAction.actionWithIdentifier(
             identifier = ACTION_LOG,
             title = "Записать: ${food.substringBefore(',').trim()}",
-            // Открывает приложение: записывает дневник тот же код, что и на экране.
-            options = UNNotificationActionOptionForeground,
+            // Не открывает приложение, как и на Android: человек мог быть посреди чего угодно.
+            options = UNNotificationActionOptionNone,
         )
         val category = UNNotificationCategory.categoryWithIdentifier(
             identifier = categoryId(mascot),

@@ -7,10 +7,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
-import kotlin.time.Clock
-import kotlin.time.ExperimentalTime
 import n7.kcalai.KcalApp
-import n7.kcalai.model.Log
 
 /**
  * Раз в полчаса: есть ли персонажам повод написать первыми.
@@ -21,21 +18,13 @@ import n7.kcalai.model.Log
  */
 class MascotWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
-    @OptIn(ExperimentalTime::class)
+    /** Решает и пишет общий с iOS код. Сбой повторять незачем: следующая попытка через полчаса. */
     override suspend fun doWork(): Result {
-        val notifier = MascotNotifier(applicationContext)
-        try {
-            val brain = (applicationContext as KcalApp).container.mascotBrain
-            brain.write(Clock.System.now(), notifier.canPost())?.let(notifier::post)
-        } catch (error: Exception) {
-            // Повтор не поможет: следующая попытка и так через полчаса, с новыми фактами.
-            Log.e(TAG, "персонажи не смогли написать", error)
-        }
+        (applicationContext as KcalApp).container.mascotRoutines.tick()
         return Result.success()
     }
 
     companion object {
-        private const val TAG = "MascotWorker"
         private const val NAME = "mascot-messages"
 
         /** Ставится на каждом старте; KEEP не сбивает уже идущее расписание. */
