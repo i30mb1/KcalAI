@@ -14,7 +14,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import n7.kcalai.ocr.LabelOcr
-import n7.kcalai.repositories.LabelParser
 import n7.kcalai.repositories.LabelReading
 import n7.kcalai.repositories.LabelTrace
 
@@ -69,15 +68,13 @@ internal class LabelAnalyzer(
     private val barcodes = BarcodeReader()
 
     private val busy = AtomicBoolean(false)
-    private val reportedUnavailable = AtomicBoolean(false)
 
     /**
-     * Несколько кадров вместо одного.
-     *
-     * Живёт здесь, а не в UI, потому что кадры сюда и приходят. Обращается к нему
-     * только тело корутины, которое [busy] держит в одном экземпляре за раз.
+     * Что делать с кадром — общий с iOS путь: мыло, отсутствие распознавания,
+     * голосование. Обращается к нему только тело корутины, которое [busy] держит
+     * в одном экземпляре за раз.
      */
-    private val consensus = LabelConsensus()
+    private val pipeline = LabelPipeline()
 
     /** Отпустить нативную модель разбора кода. Зовётся вместе с закрытием OCR. */
     fun close() {
@@ -90,9 +87,6 @@ internal class LabelAnalyzer(
     /** Последний пойманный код. Идёт в отчёт по кадру: ловится он редко и не в тот же миг. */
     @Volatile
     private var lastBarcode: String? = null
-
-    /** Последнее отданное наружу. Смазанный кадр повторяет его, чтобы счётчик кадров шёл. */
-    private var lastFrame: LabelFrame? = null
 
     override fun analyze(proxy: ImageProxy) {
         if (!busy.compareAndSet(false, true)) {
@@ -123,26 +117,15 @@ internal class LabelAnalyzer(
                 val started = SystemClock.elapsedRealtime()
                 val bitmap = frame.upright(rotation)
 
-                // Смазанный кадр не идёт ни в распознавание, ни в голосование.
-                // Распознаватель по нему отдаёт не пустоту, а кашу — «13010»
-                // вместо «1330 кДж/310 ккал», — и каша эта голосует наравне
-                // с честным чтением. Плюс шестьсот миллисекунд процессора
-                // на кадр, из которого заведомо ничего не выйдет.
+                // Мыльный кадр — см. LabelPipeline: шестьсот миллисекунд процессора
+                // на кадр, из которого заведомо ничего не выйдет, не тратятся.
                 val sharpness = bitmap.sharpness()
-                if (sharpness < FrameSharpness.MIN) {
+                if (!pipeline.isSharp(sharpness)) {
                     val note = "смазан · резкость ${sharpness.roundToInt()} < ${FrameSharpness.MIN.roundToInt()} · пропущен"
                     recorder?.add(bitmap, started, note, label = false)
-                    // Наружу уходит прошлый резкий кадр — голоса и поля не дёргаются, —
-                    // но с пометкой: карточка считает, сколько камера мылит подряд,
-                    // и после нескольких секунд одного мыла просит вписать руками.
-                    val shown = lastFrame ?: LabelFrame(LabelReading.EMPTY, 0)
-                    onFrame(shown.copy(elapsedMs = SystemClock.elapsedRealtime() - started, sharp = false))
-                    // Пропуск обязан стоить времени. Распознавание держит темп
-                    // в три кадра в секунду, а пропуск отпускал кадр за
-                    // миллисекунды — и шли все тридцать: тридцать JPEG в записи,
-                    // тридцать перерисовок. Пауза возвращает темп распознавания;
-                    // кадры за это время отбрасываются как обычно, см. [busy].
-                    delay(SKIP_PAUSE_MS)
+                    onFrame(pipeline.blurred(SystemClock.elapsedRealtime() - started))
+                    // Кадры за паузу отбрасываются как обычно, см. [busy].
+                    delay(LabelPipeline.SKIP_PAUSE_MS)
                     return@launch
                 }
 
@@ -152,9 +135,9 @@ internal class LabelAnalyzer(
                 // и сказать о нём надо один раз: дальше кадры пойдут те же.
                 val lines = ocr.read(bitmap)
                 if (lines == null) {
-                    if (reportedUnavailable.compareAndSet(false, true)) {
+                    pipeline.unavailable()?.let { frame ->
                         Log.w(TAG, "OCR недоступен — этикетку прочитать нечем")
-                        onFrame(LabelFrame(LabelReading.EMPTY, 0, available = false))
+                        onFrame(frame)
                     }
                     return@launch
                 }
@@ -167,9 +150,10 @@ internal class LabelAnalyzer(
                     onBarcode(code)
                 }
 
-                val verdict = consensus.add(LabelParser.parseLines(lines))
                 val elapsed = SystemClock.elapsedRealtime() - started
                 val size = "${bitmap.width}×${bitmap.height}"
+                val read = pipeline.read(lines, elapsed, size)
+                val verdict = read.verdict
 
                 // Кадр кладётся вместе с тем, что из него вышло: снимок без
                 // расшифровки говорит только «вот что было видно», а с ней —
@@ -181,17 +165,7 @@ internal class LabelAnalyzer(
                 )
 
                 log(verdict, elapsed, size)
-                val next = LabelFrame(
-                    reading = verdict.reading,
-                    elapsedMs = elapsed,
-                    size = size,
-                    fields = verdict.fields,
-                    frames = verdict.frames,
-                    names = verdict.names,
-                    name = verdict.name,
-                )
-                lastFrame = next
-                onFrame(next)
+                onFrame(read.frame)
             } finally {
                 busy.set(false)
             }
@@ -266,9 +240,6 @@ internal class LabelAnalyzer(
          * дают 19–30 строк, полки и ценники — от 1 до 12.
          */
         const val DENSE_LINES = 15
-
-        /** Сколько держать паузу после пропущенного кадра — примерно кадр распознавания. */
-        const val SKIP_PAUSE_MS = 300L
 
         /** Пауза между кадрами на шаге кода: около восьми кадров в секунду. */
         const val BARCODE_PAUSE_MS = 80L
