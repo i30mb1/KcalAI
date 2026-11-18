@@ -1,5 +1,6 @@
 package n7.kcalai.feature.diary
 
+import androidx.compose.ui.text.LinkAnnotation
 import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.MealType
 import n7.kcalai.personal.DayOutline
@@ -10,6 +11,18 @@ import kotlin.test.Test
 
 /** Русские формы в ленте: то, что человек прочтёт, а не то, что посчитано. */
 class FormatTest {
+
+    /** Почту в реплике не переписывают руками: тап открывает письмо. */
+    @Test
+    fun `почта в реплике — ссылка на письмо`() {
+        val text = "Пиши на fate.i30mb1@gmail.com, всё поправят."
+
+        val link = mailLinked(text).getLinkAnnotations(0, text.length).single()
+
+        assertEquals("mailto:fate.i30mb1@gmail.com", (link.item as LinkAnnotation.Url).url)
+        assertEquals("fate.i30mb1@gmail.com", text.substring(link.start, link.end))
+        assertTrue(mailLinked("Без почты.").getLinkAnnotations(0, "Без почты.".length).isEmpty())
+    }
 
     @Test
     fun `сотые грамма показываются с одной десятой`() {

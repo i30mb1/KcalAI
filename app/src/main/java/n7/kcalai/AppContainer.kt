@@ -243,6 +243,22 @@ class AppContainer(context: Context) {
         }
     }
 
+    /**
+     * Один раз за всю жизнь Масло говорит, что приложение новое, и даёт почту разработчика.
+     * Ждёт своего дня и очереди — см. [MascotBrain.tellAppIsNew].
+     */
+    fun tellAppIsNew() {
+        appScope.launch {
+            try {
+                mascotBrain.tellAppIsNew()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                Log.w(TAG, "не удалось сказать, что приложение новое", error)
+            }
+        }
+    }
+
     private suspend fun report(model: BackgroundModel, delivery: ModelDelivery) {
         try {
             mascotBrain.report(model, delivery)

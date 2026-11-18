@@ -1,5 +1,11 @@
 package n7.kcalai.feature.diary
 
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -154,6 +160,20 @@ fun notFoundText(query: String, assist: Assist = Assist.NONE): String = when (as
         "По запросу «$query» ничего не нашлось. Попробуй назвать блюдо иначе, " +
             "отсканируй штрих-код или сфотографируй этикетку — добавим в базу."
 }
+
+/** Реплика, в которой почта — ссылка на письмо: адрес не переписывают руками. */
+fun mailLinked(text: String): AnnotatedString = buildAnnotatedString {
+    append(text)
+    MAIL.findAll(text).forEach { match ->
+        addLink(
+            LinkAnnotation.Url("mailto:${match.value}", TextLinkStyles(SpanStyle(textDecoration = TextDecoration.Underline))),
+            match.range.first,
+            match.range.last + 1,
+        )
+    }
+}
+
+private val MAIL = Regex("""[\w.+-]+@[\w-]+(\.[\w-]+)+""")
 
 /** «2 сессии съёмки и 1 продукт» — что лежит в очереди отправки. */
 fun describeOutbox(scans: Int, products: Int): String {

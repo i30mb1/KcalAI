@@ -76,6 +76,9 @@ enum class Topic(val kind: TopicKind) {
     /** Нейросеть на месте: разбор фраз и вопросы к дневнику. */
     ASSISTANT_READY(TopicKind.ANSWER),
 
+    /** Приложение совсем новое: что не так или чего не хватает — пиши разработчику на почту. */
+    APP_NEW(TopicKind.ANSWER),
+
     /** Третий тык подряд. */
     POKE(TopicKind.SPEECH),
 

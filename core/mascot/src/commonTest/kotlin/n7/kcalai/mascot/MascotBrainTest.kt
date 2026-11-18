@@ -439,6 +439,48 @@ class MascotBrainTest {
         )
     }
 
+    // --- Приложение новое ---------------------------------------------------------------
+
+    /** Первый день занят знакомством, именем и вопросом про уведомления — ещё одно сообщение там лишнее. */
+    @Test
+    fun `в первый день о новизне приложения молчат`() = runTest {
+        eat("Гречка", now - 2.hours)
+
+        assertNull(brain().tellAppIsNew(at(now)))
+        assertTrue(mascots.messages.value.isEmpty())
+    }
+
+    @Test
+    fun `со второго дня Масло зовёт писать разработчику — в ленту и с почтой`() = runTest {
+        started()
+
+        val said = brain().tellAppIsNew(at(now))
+
+        assertNotNull(said)
+        assertEquals(Topic.APP_NEW.name, said.topic)
+        assertEquals(Mascot.BUTTER, said.mascot)
+        assertEquals(Delivery.FEED, said.delivery)
+        assertTrue(FEEDBACK_EMAIL in said.text, said.text)
+    }
+
+    @Test
+    fun `о новизне приложения говорят один раз за всю жизнь`() = runTest {
+        started()
+        brain().tellAppIsNew(at(now))
+
+        assertNull(brain().tellAppIsNew(at(now + 3.days)))
+    }
+
+    /** По немногу каждый день: сегодня персонажи уже говорили — скажут в другой день. */
+    @Test
+    fun `если сегодня уже говорили — ждут другого дня`() = runTest {
+        started()
+        mascots.insert(message(Mascot.EGG).copy(delivery = Delivery.FEED))
+
+        assertNull(brain().tellAppIsNew(at(now)))
+        assertNotNull(brain().tellAppIsNew(at(now + 1.days)))
+    }
+
     /** Нейросеть качает система, и ждать Wi-Fi там не о чем: своей такой темы у неё нет. */
     @Test
     fun `нейросеть про Wi-Fi не говорит`() = runTest {

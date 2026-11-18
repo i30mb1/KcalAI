@@ -47,6 +47,7 @@ class VoicesTest {
         put(Topic.ASSISTANT_LOADING, setOf(EGG))
         put(Topic.ASSISTANT_FAILED, setOf(BUTTER))
         put(Topic.ASSISTANT_READY, setOf(GRAIN))
+        put(Topic.APP_NEW, setOf(BUTTER))
     }
 
     /** Факты, при которых у каждой темы есть о чём сказать. */

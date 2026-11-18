@@ -301,7 +301,12 @@ private fun TimedText(text: String, time: String, modifier: Modifier = Modifier)
 
     Layout(
         content = {
-            Text(text, style = KcalTheme.type.body, color = colors.text, onTextLayout = { laidOut[0] = it })
+            Text(
+                remember(text) { mailLinked(text) },
+                style = KcalTheme.type.body,
+                color = colors.text,
+                onTextLayout = { laidOut[0] = it },
+            )
             Text(time, style = KcalTheme.type.time, color = colors.text3)
         },
         modifier = modifier,

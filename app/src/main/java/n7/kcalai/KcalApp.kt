@@ -27,5 +27,7 @@ class KcalApp : Application() {
         MascotWorker.schedule(this)
         // Докачка моделей идёт в фоне, и рассказывают о ней они же.
         container.reportBackgroundWork()
+        // Приложение новое: раз за всю жизнь Масло даст почту разработчика.
+        container.tellAppIsNew()
     }
 }

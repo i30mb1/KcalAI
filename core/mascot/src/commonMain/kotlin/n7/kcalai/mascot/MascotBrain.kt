@@ -200,6 +200,31 @@ class MascotBrain(
         return answer(topic, mascot, now)
     }
 
+    /**
+     * Приложение совсем новое — Масло зовёт написать разработчику, что поправить.
+     *
+     * Один раз за всю жизнь и по немногу: не в первый день — там знакомство, имя и
+     * вопрос про уведомления, и не в день, когда персонажи уже что-то сказали: тогда
+     * до другого дня. Очередь та же, что у новостей, — см. [awaitTurn].
+     *
+     * @return сказанное; `null` — не сегодня или уже говорили
+     */
+    suspend fun tellAppIsNew(clock: Clock = Clock.System): MascotMessageEntity? {
+        if (!appIsNewDue(clock.now())) return null
+        awaitTurn(clock)
+        val now = clock.now()
+        // Пока ждали очереди, сегодня могли заговорить другие — сверяемся заново.
+        if (!appIsNewDue(now)) return null
+        return answer(Topic.APP_NEW, Mascot.BUTTER, now)
+    }
+
+    private suspend fun appIsNewDue(now: Instant): Boolean {
+        if (dao.lastSaid(Topic.APP_NEW.name) != null) return false
+        val today = now.toLocalDateTime(zone).date.toEpochDays()
+        if (diaryDao.since(today - FOOD_LOOKBACK_DAYS).none { it.dateEpochDay < today }) return false
+        return dao.observeDay(today).first().isEmpty()
+    }
+
     /** Новость о докачке, если о ней ещё не рассказывали; `null` — говорить не о чем. */
     private suspend fun untold(model: BackgroundModel, delivery: ModelDelivery, now: Instant): Pair<Topic, Mascot>? {
         val news = news(model, delivery) ?: return null
@@ -448,6 +473,9 @@ private fun news(model: BackgroundModel, delivery: ModelDelivery): Pair<Topic, M
         ModelDelivery.READY -> Topic.ASSISTANT_READY to Mascot.GRAIN
     }
 }
+
+/** Почта разработчика: её называет Масло, когда зовёт рассказать, что поправить. */
+const val FEEDBACK_EMAIL = "fate.i30mb1@gmail.com"
 
 /** Ночь — персонажи спят: на экране их застают спящими, а встречать некому. */
 fun isNight(hour: Int): Boolean = hour >= 23 || hour < 6

@@ -114,13 +114,15 @@ internal fun Facts.value(key: String): String? = when (key) {
     "food" -> food?.let(::foodName)
     "foodRun" -> foodDaysInRow.takeIf { it >= 2 }?.let { "${ordinal(it)} день подряд" }
     "today" -> weekdayName(now.dayOfWeek)
+    // Цифры в вариантах запрещены, а в адресе они есть — поэтому плейсхолдером.
+    "mail" -> FEEDBACK_EMAIL
     else -> null
 }
 
 /** Все плейсхолдеры, которые знает [value]: опечатка в варианте ловится тестом, а не человеком. */
 internal val KNOWN_KEYS = setOf(
     "name", "gap", "last", "lastTime", "meal", "mealGen", "usualTime", "usual", "usualGrams",
-    "protLeft", "protIdea", "streak", "away", "absent", "fav", "food", "foodRun", "today",
+    "protLeft", "protIdea", "streak", "away", "absent", "fav", "food", "foodRun", "today", "mail",
 )
 
 private const val DAY_MINUTES = 24 * 60
