@@ -1,7 +1,6 @@
 package n7.kcalai.work
 
 import android.content.Context
-import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
@@ -10,17 +9,12 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.io.files.Path
-import kotlinx.io.files.SystemFileSystem
 import n7.kcalai.KcalApp
-import n7.kcalai.fooddb.SeedInstaller
+import n7.kcalai.remote.updateSeed
 
 /**
- * Докачка справочника с локального сервера.
- *
- * Скачанное не встаёт на место сразу: `FoodDb` держит соединение с текущим файлом,
- * и подменять его под ним нельзя. Файл ложится в `seed.db.next`, а при следующем
- * запуске `SeedInstaller.install` его продвигает. Никаких повторов: нет сети или
- * сервера — попробуем при следующем старте.
+ * Докачка справочника с сервера. Что и как качать — общий с iOS код ([updateSeed]),
+ * здесь только будильник.
  */
 class SeedUpdateWorker(
     context: Context,
@@ -28,34 +22,11 @@ class SeedUpdateWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val container = (applicationContext as KcalApp).container
-        val dir = Path(applicationContext.filesDir.absolutePath)
-
-        val manifest = container.seedSource.seedManifest() ?: return Result.success()
-        val installed = SeedInstaller.installedDigest(dir)
-        val staged = SeedInstaller.stagedDigest(dir)
-        if (manifest.sha256.equals(installed, ignoreCase = true) ||
-            manifest.sha256.equals(staged, ignoreCase = true)
-        ) {
-            return Result.success()
-        }
-
-        val tmp = Path(dir, "seed.db.download")
-        if (!container.seedSource.downloadSeed(manifest, tmp.toString())) {
-            SystemFileSystem.delete(tmp, mustExist = false)
-            return Result.success()
-        }
-        val ready = SeedInstaller.stage(dir, tmp, manifest.sha256)
-        Log.i(
-            TAG,
-            if (ready) "справочник v${manifest.version} докачан, встанет при следующем запуске"
-            else "закачка справочника битая, выброшена",
-        )
+        updateSeed(Path(applicationContext.filesDir.absolutePath), (applicationContext as KcalApp).container.seedSource)
         return Result.success()
     }
 
     companion object {
-        private const val TAG = "SeedUpdateWorker"
         private const val WORK_NAME = "seed-update"
 
         fun enqueue(context: Context) {

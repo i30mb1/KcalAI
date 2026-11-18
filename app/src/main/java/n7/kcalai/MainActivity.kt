@@ -25,7 +25,9 @@ import n7.kcalai.notify.MascotNotifier
 import n7.kcalai.shake.phoneShakes
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.work.ContributionWorker
-import n7.kcalai.work.Outbox
+import n7.kcalai.feature.diary.ServerOutbox
+import n7.kcalai.work.PrefsOutboxMemory
+import n7.kcalai.work.ScanUploads
 import n7.kcalai.work.ScanUploadWorker
 
 class MainActivity : ComponentActivity() {
@@ -52,7 +54,19 @@ class MainActivity : ComponentActivity() {
                     onContributionQueued = { if (container.silentUploads) ContributionWorker.enqueue(applicationContext) },
                     onScanFinished = { if (container.silentUploads) ScanUploadWorker.enqueue(applicationContext) },
                     // Предложение отправить — только когда есть куда отправлять.
-                    outbox = if (container.serverConfigured) Outbox(applicationContext, container) else null,
+                    outbox = if (container.serverConfigured) {
+                        ServerOutbox(
+                            contributions = container.database.contributionDao(),
+                            uploader = container.contributionUploader,
+                            probe = container.serverProbe,
+                            memory = PrefsOutboxMemory(applicationContext),
+                            // Съёмки этикеток — только у разработчика: людям обещано, что кадры остаются на телефоне.
+                            scans = if (container.silentUploads) ScanUploads(applicationContext, container) else null,
+                            retriesInBackground = container.silentUploads,
+                        )
+                    } else {
+                        null
+                    },
                     assistant = container.assistant,
                     // Предложения соседа: приходят в базу, лента берёт их оттуда.
                     peerOffers = container.database.peerOfferDao(),

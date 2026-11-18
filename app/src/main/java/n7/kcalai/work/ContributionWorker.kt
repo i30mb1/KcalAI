@@ -8,9 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import n7.kcalai.AppContainer
 import n7.kcalai.KcalApp
-import n7.kcalai.remote.UploadOutcome
 import n7.kcalai.remote.uploadPendingContributions
 
 /**
@@ -39,7 +37,7 @@ class ContributionWorker(
         // У людей фоном ничего не уходит: продукт отправляется по согласию, через Яйцо.
         if (!container.silentUploads) return Result.success()
 
-        val outcome = uploadPending(container)
+        val outcome = uploadPendingContributions(container.database.contributionDao(), container.contributionUploader)
         // Сервер недоступен или не принял ничего. Повтор с нарастающей
         // паузой этот случай переживает без вреда: строки просто ждут дальше.
         return if (outcome.reachable == false) Result.retry() else Result.success()
@@ -47,10 +45,6 @@ class ContributionWorker(
 
     companion object {
         private const val WORK_NAME = "contributions"
-
-        /** Отправить всё, что ждёт. Общая для воркера и кнопки на экране. */
-        suspend fun uploadPending(container: AppContainer): UploadOutcome =
-            uploadPendingContributions(container.database.contributionDao(), container.contributionUploader)
 
         /**
          * Ставится в двух местах: после сохранения продукта и один раз при старте

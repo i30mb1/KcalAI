@@ -48,19 +48,18 @@
 		<string>_kcalai._tcp</string>
 	</array>
 	<!--
-		Фоновая работа: персонажи, отправка вкладов и докачка справочника. Идентификаторы
-		обязаны быть здесь — незаявленную задачу система поставить не даёт.
+		Фоновая работа: персонажи и докачка справочника. Продукты фоном не уходят —
+		только с согласия, как на Android. Идентификаторы обязаны быть здесь —
+		незаявленную задачу система поставить не даёт.
 	-->
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>n7.kcalai.contributions</string>
 		<string>n7.kcalai.seed</string>
 		<string>n7.kcalai.mascots</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
-		<string>processing</string>
 	</array>
 	<!-- Адрес сервера. Пусто — источника нет, всё остаётся на устройстве. -->
 	<key>KcalServer</key>
