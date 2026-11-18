@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -793,11 +796,23 @@ fun NewProductSheet(
     onSave: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    Sheet(onDismiss) {
+        NewProductPanel(form, onChange, onScanCode, onSave)
+    }
+}
+
+/** Содержимое формы без шита вокруг — его же показывает превью: всплывающий шит оно не рисует. */
+@Composable
+fun NewProductPanel(
+    form: NewProductForm,
+    onChange: (NewProductForm) -> Unit,
+    onScanCode: () -> Unit,
+    onSave: () -> Unit,
+) {
     val colors = KcalTheme.colors
     val anchors = remember { MascotAnchors() }
     val pointer = remember { StagePointer() }
 
-    Sheet(onDismiss) {
     CompositionLocalProvider(LocalMascotAnchors provides anchors) {
     Box(Modifier.observeTouches(pointer)) {
         Column {
@@ -856,7 +871,6 @@ fun NewProductSheet(
         )
     }
     }
-    }
 }
 
 /** В форме своего продукта Яйцо у реплики, остальные за сценой. */
@@ -878,16 +892,19 @@ private fun BarcodeField(
     modifier: Modifier = Modifier,
 ) {
     val colors = KcalTheme.colors
-    val style = KcalTheme.type.number.copy(color = if (wrong) colors.error else colors.text)
+    val style = KcalTheme.type.macro.copy(color = if (wrong) colors.error else colors.text)
 
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+    // Высота — как у полей цифр над ним, и кнопка камеры ей в рост: форма одной сеткой.
+    Row(
+        modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(48.dp)
                 .clip(RoundedCornerShape(KcalShapes.tile))
                 .background(colors.bg)
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             BasicTextField(
@@ -899,11 +916,12 @@ private fun BarcodeField(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = "штрих-код" },
             )
-            if (value.isEmpty()) Text("штрих-код", style = KcalTheme.type.number, color = colors.text3)
+            if (value.isEmpty()) Text("штрих-код", style = KcalTheme.type.label, color = colors.text3)
         }
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .fillMaxHeight()
+                .aspectRatio(1f)
                 .clip(RoundedCornerShape(KcalShapes.tile))
                 .background(colors.chip)
                 .clickable(onClick = onScan),
@@ -913,7 +931,7 @@ private fun BarcodeField(
                 Icons.Default.QrCodeScanner,
                 contentDescription = "Снять штрих-код",
                 tint = colors.text,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(18.dp),
             )
         }
     }
