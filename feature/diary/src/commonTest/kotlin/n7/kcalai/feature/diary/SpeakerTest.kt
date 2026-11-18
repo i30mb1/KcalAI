@@ -62,7 +62,7 @@ class SpeakerTest {
 
     @Test
     fun `остальное говорит Яйцо`() {
-        assertEquals(Mascot.EGG, speakerOf(FeedItem.Summary("Доброе утро", weekLine = null, outline = null)))
+        assertEquals(Mascot.EGG, speakerOf(FeedItem.Summary("Доброе утро", outline = null)))
         assertEquals(Mascot.EGG, speakerOf(FeedItem.NotFound("хрючево")))
         assertEquals(Mascot.EGG, speakerOf(FeedItem.WeightLogged(id = 1, grams = 82_400, time = "08:00")))
         assertEquals(Mascot.EGG, speakerOf(FeedItem.Reply(id = 1, text = "Отправлено", time = "08:00")))

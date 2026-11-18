@@ -65,13 +65,12 @@ class FormatTest {
     }
 
     @Test
-    fun `счётное слово «день» склоняется по правилу`() {
-        assertEquals("день", daysWord(1))
-        assertEquals("дня", daysWord(3))
-        assertEquals("дней", daysWord(5))
-        assertEquals("дней", daysWord(11))
-        assertEquals("день", daysWord(21))
-        assertEquals("дней", daysWord(0))
+    fun `счётное слово в очереди отправки склоняется по правилу`() {
+        assertEquals("1 продукт", describeOutbox(scans = 0, products = 1))
+        assertEquals("3 продукта", describeOutbox(scans = 0, products = 3))
+        assertEquals("5 продуктов", describeOutbox(scans = 0, products = 5))
+        assertEquals("11 продуктов", describeOutbox(scans = 0, products = 11))
+        assertEquals("21 продукт", describeOutbox(scans = 0, products = 21))
     }
 
     @Test

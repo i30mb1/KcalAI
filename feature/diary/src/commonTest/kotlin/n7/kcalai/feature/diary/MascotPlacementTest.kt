@@ -22,8 +22,8 @@ import kotlin.test.Test
  */
 class MascotPlacementTest {
 
-    private val intro = FeedItem.Summary("Привет! Я Яйцо, слежу за белком", weekLine = null, outline = null, intro = true)
-    private val greeting = FeedItem.Summary("Доброе утро!", weekLine = null, outline = null)
+    private val intro = FeedItem.Summary("Привет! Я Яйцо, слежу за белком", outline = null, intro = true)
+    private val greeting = FeedItem.Summary("Доброе утро!", outline = null)
     private val over = FeedItem.Over(overKcal = 100)
     private val gap = FeedItem.Gap(MealGap(MealType.LUNCH, typicalHour = 13, suggestions = emptyList()))
 

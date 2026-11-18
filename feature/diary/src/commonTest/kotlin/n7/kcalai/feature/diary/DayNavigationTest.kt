@@ -86,7 +86,7 @@ class DayNavigationTest {
         assertNull(vm.state.value.pastMeal)
     }
 
-    /** Утреннее «Сегодня можно 2000 ккал» над вчерашним днём было бы неправдой. */
+    /** Утреннее «Доброе утро!» над вчерашним днём было бы неправдой. */
     @Test
     fun `в пустом прошлом дне нет утренней сводки — только приглашение дописать`() = runTest(dispatcher) {
         harness.goalDao.upsert(DailyGoalEntity(fromDateEpochDay = harness.today - 10, kcal = 2000, prot = 100, fat = 60, carb = 250))

@@ -1,8 +1,12 @@
 package n7.kcalai.feature.diary
 
+import n7.kcalai.model.MealType
+import n7.kcalai.personal.DayOutline
+import n7.kcalai.personal.TypicalMeal
 import n7.kcalai.repositories.DaySummary
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.Test
@@ -23,18 +27,29 @@ class SummaryTest {
     fun `новичок без цели — знакомство и кнопка цели`() {
         val summary = daySummary(goalKcal = null, week = week(0, 0, 0, 0, 0, 0, 0), outline = null, hour = 9)
 
+        assertNotNull(summary)
         assertTrue(summary.intro)
         assertTrue(summary.needsGoal)
         assertEquals("Привет! Я Яйцо, слежу за белком", summary.greeting)
     }
 
+    /** Остаток и так виден в шапке: повторять его репликой незачем. */
     @Test
-    fun `обычный день с целью — приветствие и сколько можно`() {
-        val summary = daySummary(goalKcal = 2100, week = week(1800, 2000, 0, goal = 2100), outline = null, hour = 9)
+    fun `обычный день с целью — приветствие и ритм дня без калорий цели`() {
+        val outline = DayOutline(listOf(TypicalMeal(MealType.BREAKFAST, hour = 8, kcal = 450)))
+        val summary = daySummary(goalKcal = 2100, week = week(1800, 2000, 0, goal = 2100), outline = outline, hour = 9)
 
+        assertNotNull(summary)
         assertFalse(summary.intro)
         assertFalse(summary.needsGoal)
-        assertEquals("Доброе утро! Сегодня можно 2100 ккал", summary.greeting)
+        assertEquals("Доброе утро!", summary.greeting)
+        assertEquals(outline, summary.outline)
+    }
+
+    /** Голое «Доброе утро!» — пустая реплика: сказать персонажу нечего, и он молчит. */
+    @Test
+    fun `с целью и без ритма дня — сводки нет`() {
+        assertNull(daySummary(goalKcal = 2100, week = week(1800, 2000, 0, goal = 2100), outline = null, hour = 9))
     }
 
     /** Старая фраза просила тапнуть «по остатку», которого без цели на экране нет. */
@@ -42,50 +57,10 @@ class SummaryTest {
     fun `без цели не новичок — просьба задать цель — не тап по остатку`() {
         val summary = daySummary(goalKcal = null, week = week(1500, 0), outline = null, hour = 14)
 
+        assertNotNull(summary)
         assertFalse(summary.intro)
         assertTrue(summary.needsGoal)
         assertEquals("Добрый день! Цель на сегодня не задана", summary.greeting)
-    }
-
-    @Test
-    fun `неделя считается только по дням с целью`() {
-        val days = listOf(
-            DaySummary(0, kcal = 1500, goalKcal = null),
-            DaySummary(1, kcal = 1900, goalKcal = 2000),
-            DaySummary(2, kcal = 2300, goalKcal = 2000),
-            // Сегодня: сводка видна, только пока записей нет.
-            DaySummary(3, kcal = 0, goalKcal = 2000),
-        )
-        val summary = daySummary(goalKcal = 2000, week = days, outline = null, hour = 9)
-
-        assertEquals("За неделю в цель: 1 день из 2", summary.weekLine)
-        assertNull(daySummary(goalKcal = null, week = week(0, 0), outline = null, hour = 9).weekLine)
-    }
-
-    /**
-     * Сводка стоит в ленте, только пока сегодня пусто, — значит, сегодня всегда
-     * «ноль из цели». Засчитать его значило бы хвалить новичка, который только
-     * что поставил цель и ещё ничего не съел: «уложились 1 день из 1».
-     */
-    @Test
-    fun `сегодняшний пустой день в счёт недели не идёт`() {
-        val summary = daySummary(goalKcal = 2100, week = week(0, 0, 0, 0, 0, 0, 0, goal = 2100), outline = null, hour = 9)
-
-        assertNull(summary.weekLine)
-    }
-
-    /** «Не записал» — не «уложился»: ноль в день без записей — пробел в дневнике, а не успех. */
-    @Test
-    fun `дни без записей уложившимися не считаются`() {
-        val days = listOf(
-            DaySummary(0, kcal = 1900, goalKcal = 2000),
-            DaySummary(1, kcal = 0, goalKcal = 2000),
-            DaySummary(2, kcal = 2300, goalKcal = 2000),
-            DaySummary(3, kcal = 0, goalKcal = 2000),
-        )
-        val summary = daySummary(goalKcal = 2000, week = days, outline = null, hour = 9)
-
-        assertEquals("За неделю в цель: 1 день из 2", summary.weekLine)
     }
 
     @Test

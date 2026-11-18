@@ -369,7 +369,6 @@ private fun SummaryText(item: FeedItem.Summary, onSetGoal: () -> Unit) {
                 Modifier.padding(top = 8.dp),
             )
         }
-        item.weekLine?.let { BubbleText(it, Modifier.padding(top = 4.dp)) }
         item.outline?.let { outline ->
             BubbleText(outlineSentence(outline), Modifier.padding(top = 4.dp))
             DayOutlineBar(outline, Modifier.padding(top = 8.dp))

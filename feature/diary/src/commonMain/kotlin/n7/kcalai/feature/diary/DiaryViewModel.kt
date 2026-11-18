@@ -696,10 +696,10 @@ class DiaryViewModel(
         val feed = mutableListOf<FeedItem>(FeedItem.DaySeparator(dayLabel(loaded.date, loaded.today)))
 
         if (dayTotals.entries.isEmpty()) {
-            feed += if (isToday) {
-                daySummary(goal?.kcal?.takeIf { it > 0 }, loaded.week, models.dayOutline, hour)
+            if (isToday) {
+                daySummary(goal?.kcal?.takeIf { it > 0 }, loaded.week, models.dayOutline, hour)?.let { feed += it }
             } else {
-                FeedItem.EmptyDay(formatDayFull(loaded.date))
+                feed += FeedItem.EmptyDay(formatDayFull(loaded.date))
             }
         }
 
