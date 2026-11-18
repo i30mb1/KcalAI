@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -775,6 +776,151 @@ internal fun entrySheetPlaces(productMode: Boolean): Map<Mascot, MascotPlace> =
     Mascot.entries.associateWith { mascot ->
         if (productMode && mascot == Mascot.EGG) MascotPlace.Reply(SHEET_SPEECH_ANCHOR) else MascotPlace.Offstage
     }
+
+/**
+ * Свой продукт из ненайденного слова — форма без камеры.
+ *
+ * Те же поля, что у правки продукта: название уже вписано тем, что набрано, дальше
+ * цифры на 100 г и штрих-код. Код необязателен — у маминого пирога его нет, — и вписывается
+ * руками или снимается камерой по кнопке рядом. Ведёт Яйцо — хозяин общей базы.
+ * Клавиатура сама не открывается: только по тапу в поле.
+ */
+@Composable
+fun NewProductSheet(
+    form: NewProductForm,
+    onChange: (NewProductForm) -> Unit,
+    onScanCode: () -> Unit,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = KcalTheme.colors
+    val anchors = remember { MascotAnchors() }
+    val pointer = remember { StagePointer() }
+
+    Sheet(onDismiss) {
+    CompositionLocalProvider(LocalMascotAnchors provides anchors) {
+    Box(Modifier.observeTouches(pointer)) {
+        Column {
+            SheetSpeech(newProductSpeech(form), Modifier.padding(bottom = 14.dp))
+            NameField(form.name, onValueChange = { onChange(form.copy(name = it)) })
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                NutrientField("ккал на 100 г", form.kcal, { onChange(form.copy(kcal = it)) }, Modifier.weight(2f), decimal = false)
+                // Клетчатку можно не знать: пустое поле — «неизвестно», а не ноль.
+                NutrientField(
+                    label = "",
+                    value = form.fiber,
+                    onValueChange = { onChange(form.copy(fiber = it)) },
+                    modifier = Modifier.weight(1f),
+                    icon = { SproutIcon(colors.fiber.fill, size = 12.dp) },
+                    placeholder = "–",
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                NutrientField("Б", form.prot, { onChange(form.copy(prot = it)) }, Modifier.weight(1f))
+                NutrientField("Ж", form.fat, { onChange(form.copy(fat = it)) }, Modifier.weight(1f))
+                NutrientField("У", form.carb, { onChange(form.copy(carb = it)) }, Modifier.weight(1f))
+            }
+
+            BarcodeField(
+                value = form.barcode,
+                wrong = form.barcodeWrong,
+                onValueChange = { onChange(form.copy(barcode = it)) },
+                onScan = onScanCode,
+                modifier = Modifier.padding(top = 7.dp),
+            )
+
+            WideButton(
+                text = "Сохранить",
+                enabled = form.canSave,
+                onClick = onSave,
+                modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
+            )
+        }
+        MascotStage(
+            places = newProductSheetPlaces(),
+            anchors = anchors,
+            pointer = pointer,
+            input = form.name,
+            speech = emptyList(),
+            cue = null,
+            night = false,
+            onEvent = {},
+            modifier = Modifier.matchParentSize(),
+        )
+    }
+    }
+    }
+}
+
+/** В форме своего продукта Яйцо у реплики, остальные за сценой. */
+internal fun newProductSheetPlaces(): Map<Mascot, MascotPlace> =
+    Mascot.entries.associateWith { mascot ->
+        if (mascot == Mascot.EGG) MascotPlace.Reply(SHEET_SPEECH_ANCHOR) else MascotPlace.Offstage
+    }
+
+/**
+ * Штрих-код: цифры руками или камерой по кнопке. Опечатка в контрольной цифре красит
+ * цифры, а не добавляет строку под полем: форма не прыгает, пока код набирают.
+ */
+@Composable
+private fun BarcodeField(
+    value: String,
+    wrong: Boolean,
+    onValueChange: (String) -> Unit,
+    onScan: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = KcalTheme.colors
+    val style = KcalTheme.type.number.copy(color = if (wrong) colors.error else colors.text)
+
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .clip(RoundedCornerShape(KcalShapes.tile))
+                .background(colors.bg)
+                .padding(horizontal = 12.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = { text -> onValueChange(text.filter(Char::isDigit).take(BARCODE_DIGITS)) },
+                textStyle = style,
+                cursorBrush = SolidColor(colors.text),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "штрих-код" },
+            )
+            if (value.isEmpty()) Text("штрих-код", style = KcalTheme.type.number, color = colors.text3)
+        }
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(KcalShapes.tile))
+                .background(colors.chip)
+                .clickable(onClick = onScan),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Default.QrCodeScanner,
+                contentDescription = "Снять штрих-код",
+                tint = colors.text,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+/** EAN-13 — самый длинный код на пачке; GTIN-14 — на коробке, и на него тоже хватит. */
+private const val BARCODE_DIGITS = 14
 
 /** Поле цифры на 100 г: подпись слева от значения, без рамки — как у веса. */
 @Composable

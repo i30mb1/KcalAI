@@ -540,22 +540,19 @@ fun EmptyDayBubble(item: FeedItem.EmptyDay) {
 }
 
 /**
- * Набранное не находится.
+ * Набранного нет в базе — Яйцо сразу предлагает добавить.
  *
- * Раньше это была серая строчка в композере — то есть сообщение о неудаче
- * в том самом месте, куда человек смотрит, пока печатает. Репликой оно
- * превращается в ответ собеседника и называет все три выхода.
+ * Тап открывает форму с уже вписанным названием: цифры на 100 г и, если есть, штрих-код.
+ * Реплика не исчезает, пока слово в строке ввода: закрыл форму — можно открыть снова.
  */
 @Composable
-fun NotFoundBubble(item: FeedItem.NotFound, onAsk: () -> Unit, onScan: () -> Unit) {
+fun NotFoundBubble(item: FeedItem.NotFound, onAsk: () -> Unit, onAdd: () -> Unit) {
     val colors = KcalTheme.colors
 
     IncomingBubble(item) {
         BubbleText(notFoundText(item.query, item.assist))
-        // Реплика советует сканировать, а кнопка у строки сейчас — «отправить»:
-        // сканер живёт там, только пока строка пуста.
-        KcalChip(onClick = onScan, background = colors.bubble, modifier = Modifier.padding(top = 8.dp)) {
-            Text("Сканировать", style = KcalTheme.type.chip, color = colors.onBubble)
+        KcalChip(onClick = onAdd, background = colors.bubble, modifier = Modifier.padding(top = 8.dp)) {
+            Text("Добавить", style = KcalTheme.type.chip, color = colors.onBubble)
         }
         // Нейросеть — четвёртый выход, и только по просьбе: разбор идёт секунды
         // и греет телефон, а запускать его на каждую паузу в наборе незачем.

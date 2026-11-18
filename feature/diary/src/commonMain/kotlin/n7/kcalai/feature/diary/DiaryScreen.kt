@@ -51,6 +51,7 @@ import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.mascot.MascotEvent
 import n7.kcalai.mascot.MascotQuestion
 import n7.kcalai.feature.scanner.LabelDebugDialog
+import n7.kcalai.feature.scanner.ScanStep
 import n7.kcalai.feature.scanner.ScannerDialog
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.MealType
@@ -99,6 +100,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         onSendOutbox = viewModel::onSendOutbox,
         onDeclineOutbox = viewModel::onDeclineOutbox,
         onAskAssistant = viewModel::onAskAssistant,
+        onAddProduct = viewModel::onAddProduct,
         onEditEntry = viewModel::onEditEntry,
         onUndoDelete = viewModel::onUndoDelete,
         onLogWeight = viewModel::onLogWeight,
@@ -154,6 +156,28 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
             frameStats = labelDebug,
         )
 
+        // Свой продукт из ненайденного слова. Камера — только ради штрих-кода и только
+        // по кнопке: пойманный код встаёт в форму, «Нет штрих-кода» возвращает к ней.
+        is Overlay.AddProduct -> if (overlay.scanning) {
+            ScannerDialog(
+                step = ScanStep.Barcode,
+                onScanned = viewModel::onProductCode,
+                onNoBarcode = viewModel::onCancelProductCode,
+                onSave = { _, _, _ -> },
+                findByName = { null },
+                onPickMatch = {},
+                onDismiss = viewModel::onCancelProductCode,
+            )
+        } else {
+            NewProductSheet(
+                form = overlay.form,
+                onChange = viewModel::onProductForm,
+                onScanCode = viewModel::onScanProductCode,
+                onSave = viewModel::onSaveAddedProduct,
+                onDismiss = viewModel::onDismissOverlay,
+            )
+        }
+
         Overlay.LabelDebug -> LabelDebugDialog(
             onRead = viewModel::onLabelDebugRead,
             onDismiss = viewModel::onDismissOverlay,
@@ -191,6 +215,8 @@ fun DiaryScreen(
     onDeclineOutbox: () -> Unit,
     /** «Разобрать» в реплике «не нашлось»: фразу разбирает нейросеть. */
     onAskAssistant: (String) -> Unit,
+    /** «Добавить» в реплике «не нашлось»: форма своего продукта с этим названием. */
+    onAddProduct: (String) -> Unit,
     onEditEntry: (DiaryEntryEntity) -> Unit,
     onUndoDelete: (FeedItem.Deleted) -> Unit,
     onLogWeight: () -> Unit,
@@ -306,8 +332,8 @@ fun DiaryScreen(
     var composerFocused by remember { mutableStateOf(false) }
     val row = visibleRow(state.composer, composerFocused)
     val owner by rememberUpdatedState(chipOwner(row))
-    // Шит цели со своими персонажами: на главном экране их на это время нет.
-    val offstage by rememberUpdatedState(state.overlay is Overlay.Goal)
+    // Шиты со своими персонажами: на главном экране их на это время нет.
+    val offstage by rememberUpdatedState(state.overlay is Overlay.Goal || state.overlay is Overlay.AddProduct)
     val places by remember(anchors) {
         derivedStateOf {
             mascotPlaces(feed, shownAnchors(anchors.rects, anchors.coverBottom, anchors.floorTop), owner, offstage)
@@ -337,7 +363,7 @@ fun DiaryScreen(
             onSendOutbox = onSendOutbox,
             onDeclineOutbox = onDeclineOutbox,
             onAskAssistant = onAskAssistant,
-            onOpenScan = onOpenScan,
+            onAddProduct = onAddProduct,
             onPickPlan = onPickPlan,
             onOpenGoal = onOpenGoal,
             onAnswerAsk = onAnswerAsk,
@@ -448,7 +474,7 @@ private fun Feed(
     onDeclineOutbox: () -> Unit,
     /** «Разобрать» в реплике «не нашлось»: фразу разбирает нейросеть. */
     onAskAssistant: (String) -> Unit,
-    onOpenScan: () -> Unit,
+    onAddProduct: (String) -> Unit,
     onPickPlan: (PlanOption) -> Unit,
     onOpenGoal: () -> Unit,
     onAnswerAsk: (MascotQuestion, Boolean) -> Unit,
@@ -590,7 +616,7 @@ private fun Feed(
                     is FeedItem.NotFound -> NotFoundBubble(
                         item = item,
                         onAsk = { onAskAssistant(item.query) },
-                        onScan = onOpenScan,
+                        onAdd = { onAddProduct(item.query) },
                     )
 
                     is FeedItem.WeightLogged -> WeightBubble(item)

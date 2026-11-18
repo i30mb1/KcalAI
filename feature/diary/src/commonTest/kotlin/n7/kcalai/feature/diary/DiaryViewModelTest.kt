@@ -590,6 +590,72 @@ class DiaryViewModelTest {
         assertEquals(Overlay.Scan(ScanStep.NewProduct(UNKNOWN_GTIN)), vm.state.value.overlay)
     }
 
+    // --- Свой продукт из ненайденного слова -------------------------------------------------
+
+    @Test
+    fun `не нашлось — добавить открывает форму с уже вписанным названием`() = runTest(dispatcher) {
+        val vm = screen()
+
+        vm.onAddProduct("мамин пирог")
+        advanceUntilIdle()
+
+        assertEquals(Overlay.AddProduct(NewProductForm(name = "Мамин пирог")), vm.state.value.overlay)
+    }
+
+    /** Камера включается только ради кода и возвращает к форме, не потеряв набранного. */
+    @Test
+    fun `штрих-код в форме снимается камерой и встаёт в поле`() = runTest(dispatcher) {
+        val vm = screen()
+        val typed = NewProductForm(name = "Творог", kcal = "121")
+        vm.onAddProduct("творог")
+        vm.onProductForm(typed)
+
+        vm.onScanProductCode()
+        advanceUntilIdle()
+        assertEquals(Overlay.AddProduct(typed, scanning = true), vm.state.value.overlay)
+
+        vm.onProductCode(GTIN)
+        advanceUntilIdle()
+        assertEquals(Overlay.AddProduct(typed.copy(barcode = GTIN)), vm.state.value.overlay)
+    }
+
+    @Test
+    fun `передумал снимать код — форма как была`() = runTest(dispatcher) {
+        val vm = screen()
+        vm.onAddProduct("мамин пирог")
+        vm.onScanProductCode()
+
+        vm.onCancelProductCode()
+        advanceUntilIdle()
+
+        assertEquals(Overlay.AddProduct(NewProductForm(name = "Мамин пирог")), vm.state.value.overlay)
+    }
+
+    /** Тот же путь, что после карточки сканера: продукт в строке ввода, чипс ждёт веса. */
+    @Test
+    fun `сохранённый продукт встаёт в строку ввода`() = runTest(dispatcher) {
+        val vm = screen()
+        vm.onAddProduct("мамин пирог")
+        vm.onProductForm(NewProductForm(name = "Мамин пирог", kcal = "320", prot = "6,5", fat = "14", carb = "42"))
+
+        vm.onSaveAddedProduct()
+        advanceUntilIdle()
+
+        assertEquals(Overlay.None, vm.state.value.overlay)
+        assertEquals("Мамин пирог ", vm.state.value.input)
+    }
+
+    @Test
+    fun `незаполненную форму не сохранить`() = runTest(dispatcher) {
+        val vm = screen()
+        vm.onAddProduct("мамин пирог")
+
+        vm.onSaveAddedProduct()
+        advanceUntilIdle()
+
+        assertEquals(Overlay.AddProduct(NewProductForm(name = "Мамин пирог")), vm.state.value.overlay)
+    }
+
     // --- Похожий продукт по названию с пачки ----------------------------------------------
 
     @Test

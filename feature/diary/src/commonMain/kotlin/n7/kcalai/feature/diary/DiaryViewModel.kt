@@ -94,6 +94,13 @@ sealed interface Overlay {
     data class Scan(val step: ScanStep = ScanStep.Barcode) : Overlay
 
     /**
+     * Свой продукт из ненайденного слова — форма без камеры.
+     *
+     * @param scanning поверх формы камера читает штрих-код; форма ждёт под ней и не теряет набранное
+     */
+    data class AddProduct(val form: NewProductForm, val scanning: Boolean = false) : Overlay
+
+    /**
      * Съёмка этикетки вхолостую — чтобы посмотреть, что вообще читается.
      *
      * Обычный путь к распознаванию идёт через промах штрих-кода, и проверить
@@ -1156,6 +1163,47 @@ class DiaryViewModel(
         if (overlay.value == Overlay.Scan(ScanStep.Barcode)) {
             overlay.value = Overlay.Scan(ScanStep.NewProduct())
         }
+    }
+
+    // --- Свой продукт из ненайденного слова ---------------------------------------------
+
+    /**
+     * «Добавить» на ненайденном слове: форма без камеры, название уже вписано.
+     *
+     * Домашнее и развесное снимать нечем, а цифры пирога человек знает сам — камера тут
+     * только мешала бы. Штрих-код снимается по кнопке в форме, см. [onScanProductCode].
+     */
+    fun onAddProduct(query: String) {
+        overlay.value = Overlay.AddProduct(newProductFormFor(query))
+    }
+
+    fun onProductForm(form: NewProductForm) {
+        val open = overlay.value as? Overlay.AddProduct ?: return
+        overlay.value = open.copy(form = form)
+    }
+
+    /** Камера поверх формы — только ради кода; набранное ждёт под ней. */
+    fun onScanProductCode() {
+        val open = overlay.value as? Overlay.AddProduct ?: return
+        overlay.value = open.copy(scanning = true)
+    }
+
+    fun onProductCode(gtin: String) {
+        val open = overlay.value as? Overlay.AddProduct ?: return
+        if (!open.scanning) return
+        overlay.value = Overlay.AddProduct(open.form.copy(barcode = gtin))
+    }
+
+    fun onCancelProductCode() {
+        val open = overlay.value as? Overlay.AddProduct ?: return
+        overlay.value = open.copy(scanning = false)
+    }
+
+    /** Тот же путь, что у карточки сканера: продукт оседает локально и встаёт в строку ввода. */
+    fun onSaveAddedProduct() {
+        val form = (overlay.value as? Overlay.AddProduct)?.form ?: return
+        val nutriments = form.nutriments?.takeIf { form.canSave } ?: return
+        onSaveNewProduct(form.gtin, form.name.trim(), nutriments)
     }
 
     // --- Проверка распознавания этикетки ----------------------------------------------
