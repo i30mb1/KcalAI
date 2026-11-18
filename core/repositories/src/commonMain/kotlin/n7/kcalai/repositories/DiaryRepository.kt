@@ -17,7 +17,6 @@ import n7.kcalai.model.Nutriments
 import n7.kcalai.model.parseFoodRef
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
-import n7.kcalai.model.Nutriments
 import n7.kcalai.model.plus
 import n7.kcalai.model.serialize
 
