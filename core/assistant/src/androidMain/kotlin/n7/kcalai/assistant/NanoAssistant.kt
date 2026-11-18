@@ -102,7 +102,7 @@ class NanoAssistant(
     override suspend fun propose(text: String): List<ResolvedItem> {
         val agent = Agent.builder()
             .setName("KcalParser")
-            .setInstructions(PARSE_INSTRUCTIONS)
+            .setInstructions(AssistantPrompts.PARSE_WITH_TOOLS)
             .addTools(tools(SEARCH, DiaryTools.PROPOSE))
             .setMaxTurns(PARSE_TURNS)
             .build()
@@ -122,7 +122,7 @@ class NanoAssistant(
     override fun answer(question: String): Flow<String> = flow {
         val agent = Agent.builder()
             .setName("KcalDiary")
-            .setInstructions(ANSWER_INSTRUCTIONS)
+            .setInstructions(AssistantPrompts.ANSWER_WITH_TOOLS)
             .addTools(tools(SEARCH, DIARY_DAYS, DAY_ENTRIES))
             .setMaxTurns(ANSWER_TURNS)
             .build()
@@ -162,32 +162,5 @@ class NanoAssistant(
         /** Поиск и предложение на каждое блюдо фразы — до четырёх блюд. */
         const val PARSE_TURNS = 9
         const val ANSWER_TURNS = 6
-
-        val PARSE_INSTRUCTIONS = """
-            You turn a phrase from a Russian food diary into diary entries.
-            For every dish or drink in the phrase:
-            1. Call search_food with a short Russian name of it: 1-3 words, nominative case.
-               If nothing is found, try once more with a simpler or more generic name.
-            2. Pick the best matching line. Its first field is the foodId.
-            3. Estimate how many grams were eaten from the phrase. Typical sizes:
-               tablespoon 15 g, teaspoon 5 g, glass or cup 200 g, mug 250 g,
-               plate of soup 300 g, plate of porridge or pasta 250 g, slice of bread 30 g,
-               piece of cake 100 g. "half" and "a bit" reduce the amount.
-               Without any hint, use the portion from the search line.
-            4. Call propose_food with that foodId, the grams, and phrase: the words of
-               the user text that describe this dish.
-            Use only foodIds returned by search_food. Never invent foodIds or nutrition.
-            If no line fits a dish, skip that dish. Do not write a text answer.
-        """.trimIndent()
-
-        val ANSWER_INSTRUCTIONS = """
-            You answer questions about the user's food diary. Reply in Russian,
-            in one to three short sentences, addressing the user informally ("ты").
-            Tools: diary_days gives totals per day and what is left of today's goal;
-            day_entries lists what was eaten on a day; search_food gives nutrition per 100 g.
-            Use only numbers returned by the tools. Do not compute calories yourself
-            beyond adding a few numbers. If the diary has no data for the question, say so.
-            Give no medical advice and no diets.
-        """.trimIndent()
     }
 }

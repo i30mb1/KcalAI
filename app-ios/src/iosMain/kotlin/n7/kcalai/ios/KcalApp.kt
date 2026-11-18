@@ -7,7 +7,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import n7.kcalai.assistant.AppleModelBridge
-import n7.kcalai.assistant.DiaryTools
 import n7.kcalai.feature.diary.DiaryRoute
 import n7.kcalai.feature.diary.DiaryViewModel
 import n7.kcalai.feature.diary.ServerOutbox
@@ -30,9 +29,6 @@ object KcalApp {
 
     /** Живёт весь процесс: персонажи ждут очереди дольше, чем открыт экран. */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-    /** Инструменты нейросети: их зовёт оболочка на Swift, где и живёт модель. */
-    val diaryTools: DiaryTools get() = container.diaryTools
 
     private val diary by lazy {
         DiaryViewModel(

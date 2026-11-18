@@ -43,7 +43,7 @@ private final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotifica
         // и дневник живёт без неё, как на телефонах без Apple Intelligence.
         var model: AssistantAppleModelBridge?
         if #available(iOS 26.0, *) {
-            model = AppleModel(tools: AssistantTools(tools: KcalApp.shared.diaryTools))
+            model = AppleModel()
         }
         KcalApp.shared.onLaunch(model: model)
         return true
