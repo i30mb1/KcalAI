@@ -26,55 +26,60 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
-import kotlinx.atomicfu.atomic
-import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.suspendCancellableCoroutine
 import n7.kcalai.model.FoodCandidate
-import n7.kcalai.model.Log
 import n7.kcalai.model.Nutriments
-import n7.kcalai.repositories.LabelReading
+import n7.kcalai.model.ProductDraft
 import n7.kcalai.ui.KcalTheme
-import platform.AVFoundation.AVAuthorizationStatusAuthorized
-import platform.AVFoundation.AVCaptureDevice
-import platform.AVFoundation.AVMediaTypeVideo
-import platform.AVFoundation.authorizationStatusForMediaType
-import platform.AVFoundation.requestAccessForMediaType
-import kotlin.coroutines.resume
 
 /**
- * Окно съёмки — от штрих-кода до карточки нового продукта.
+ * Окно съёмки — от штрих-кода до карточки нового продукта. Одно на Android и iOS:
+ * своя у платформ только камера, см. [ScanCamera].
  *
- * Устроено как на Android и из тех же частей: рамка, верхняя строка, полка
- * персонажей, карточка, раскладка и приближение — общие. Своё здесь только то,
- * чего общим не бывает: сессия камеры (AVFoundation), чтение кода (сама система)
- * и чтение этикетки (Vision).
+ * Шаги сменяют друг друга в одном окне, и камера между ними не гаснет:
  *
- * Отказ в доступе к камере — не тупик, а вторая дверь: цифры вписываются
- * с клавиатуры.
+ * - код: камера на весь экран, узкая рамка под штрих-код, внизу «Нет штрих-кода» —
+ *   для развесного и домашнего, сразу к карточке;
+ * - поиск: та же картинка, рамка зеленеет, внизу «Ищу товар…»;
+ * - новый продукт: камера плавно приближается к таблице и рамка вытягивается
+ *   под неё, сверху выходят трое — каждый просит своё, — снизу выезжает карточка.
  *
- * Опт-ин — из-за буферов кадров: они приходят указателями, а указатели
- * в cinterop ещё помечены экспериментальными.
+ * Отказ в доступе к камере — не тупик, а вторая дверь: цифры вписываются с клавиатуры.
+ *
+ * Шаг ведёт экранная модель — см. [ScanStep]. Окно показывает шаг и сообщает,
+ * что произошло: код прочитан, карточка заполнена и подтверждена, окно закрыли.
+ *
+ * @param onScanned код прочитан камерой или набран руками — уже нормализованный
+ *        до EAN-13. Отдаётся один раз за шаг кода.
+ * @param onNoBarcode «Нет штрих-кода» на шаге кода: развесное, домашнее — дальше
+ *        карточка без кода. Окно в дневнике одно, и других дверей к этикетке нет.
+ * @param onSave карточка заполнена и человек подтвердил её. Окно само ничего
+ *        не сохраняет: куда класть продукт, решает дневник.
+ * @param findByName название с пачки → похожий продукт справочника, `null` — такого нет.
+ *        Карточка его только предлагает, числа в поля не подставляет.
+ * @param onPickMatch человек взял похожий из справочника вместо того, чтобы
+ *        заводить продукт. Окно после этого закрывают снаружи, как после [onSave].
+ * @param frameStats над камерой — счётчик кадров и время разбора. Для
+ *        разработчика: человеку из магазина приложений он ничего не говорит.
  */
-@OptIn(ExperimentalForeignApi::class)
 @Composable
-actual fun ScannerDialog(
+fun ScannerDialog(
     step: ScanStep,
     onScanned: (String) -> Unit,
     onNoBarcode: () -> Unit,
@@ -82,73 +87,35 @@ actual fun ScannerDialog(
     findByName: suspend (String) -> FoodCandidate?,
     onPickMatch: (FoodCandidate) -> Unit,
     onDismiss: () -> Unit,
-    frameStats: Boolean,
+    frameStats: Boolean = false,
 ) {
-    var granted by remember { mutableStateOf(cameraAuthorized()) }
-    // Пока не спросили, показывать «доступа нет» рано: человек ещё не отвечал.
-    var answered by remember { mutableStateOf(granted) }
-    LaunchedEffect(Unit) {
-        if (!granted) {
-            granted = requestCamera()
-            answered = true
-        }
-    }
-
     val label = step is ScanStep.NewProduct
     val searching = step is ScanStep.Searching
     val card = (step as? ScanStep.NewProduct)?.let { rememberScanState(it.gtin, it.name) }
     var typingCode by rememberSaveable { mutableStateOf(false) }
 
+    val scanned by rememberUpdatedState(onScanned)
+    val router = remember { BarcodeRouter { code -> scanned(code) } }
+
+    // Камера собирается один раз за окно; шаг и карточка меняются у неё на глазах,
+    // поэтому она читает их свежими, а не те, что были при сборке.
+    val camera = rememberScanCamera(
+        reading = { label },
+        onBarcode = { code -> router.route(step, card, code) },
+        onFrame = { frame -> card?.onFrame(frame) },
+        outcome = { card?.let { it.outcome(it.saved) } },
+    )
+
     if (card != null) {
         CardClock(card)
+        ScanHaptics(card)
+        LabelSecondOpinion(card, camera.secondOpinion)
         LabelNameMatch(card, findByName)
-        LaunchedEffect(card, answered, granted) {
-            if (answered && !granted) card.withoutCamera()
+        LaunchedEffect(card, camera.answered, camera.granted) {
+            if (camera.answered && !camera.granted) card.withoutCamera()
         }
     }
-
-    // Код уходит наружу один раз: камера читает его десятки раз подряд, а набранный
-    // руками и пойманный камерой в ту же секунду — это всё ещё один товар.
-    val delivered = remember { atomic(false) }
-    val submit by rememberUpdatedState { code: String ->
-        if (delivered.compareAndSet(expect = false, update = true)) onScanned(code)
-    }
-
-    // Шаг и карточка меняются у анализа на глазах: он читает их свежими,
-    // а не те, что были при сборке сессии.
-    val currentStep by rememberUpdatedState(step)
-    val currentCard by rememberUpdatedState(card)
-    val reading = remember { atomic(label) }
-    SideEffect { reading.value = label }
-
-    val scope = rememberCoroutineScope()
-    val session = remember(granted) {
-        if (!granted) {
-            null
-        } else {
-            val analyzer = LabelAnalyzer(
-                scope = scope,
-                reading = { reading.value },
-                onFrame = { frame -> currentCard?.onFrame(frame) },
-            )
-            CameraSession(
-                onBarcode = { code ->
-                    when (currentStep) {
-                        ScanStep.Barcode -> submit(code)
-                        is ScanStep.Searching -> Unit
-                        is ScanStep.NewProduct -> currentCard?.onBarcode(code)
-                    }
-                },
-                onFrame = analyzer::analyze,
-            )
-        }
-    }
-    DisposableEffect(session) {
-        if (session != null && !session.start()) {
-            Log.w(TAG, "камера не открылась — остаётся ручной ввод")
-        }
-        onDispose { session?.stop() }
-    }
+    CaughtHaptic(searching)
 
     // Заполненную карточку крестик и «назад» не закрывают молча: камера минуту
     // набирала голоса, человек дописывал, и всё это уходило одним касанием.
@@ -160,7 +127,7 @@ actual fun ScannerDialog(
     val back: () -> Unit = {
         when {
             card?.typing != null -> card.stopTyping()
-            typingCode && granted -> typingCode = false
+            typingCode && camera.granted -> typingCode = false
             else -> requestClose()
         }
     }
@@ -171,14 +138,9 @@ actual fun ScannerDialog(
         fit.animateTo(if (label) 1f else 0f, tween(FIT_MS, easing = FastOutSlowInEasing))
     }
     var labelZoom by rememberSaveable { mutableFloatStateOf(LABEL_ZOOM) }
-    // Приближение растёт вместе с переходом к этикетке, а не скачком: скачок
-    // посреди движения рамки читался бы как сбой.
-    LaunchedEffect(session, labelZoom, fit.value) {
-        session?.zoom(1f + (labelZoom - 1f) * fit.value)
-    }
 
-    ScanDialog(onDismiss = back, onCamera = granted) {
-        Surface(Modifier.fillMaxSize(), color = if (granted) CAMERA_BACKDROP else KcalTheme.colors.bg) {
+    ScanDialog(onDismiss = back, onCamera = camera.granted) {
+        Surface(Modifier.fillMaxSize(), color = if (camera.granted) CAMERA_BACKDROP else KcalTheme.colors.bg) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val t = fit.value
                 val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -194,16 +156,20 @@ actual fun ScannerDialog(
                     fit = t,
                 )
 
-                if (session != null) {
-                    CameraPreview(
-                        session = session,
-                        modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                if (camera.granted) {
+                    camera.Preview(
+                        modifier = Modifier.pointerInput(Unit) {
                             // Тап по камере убирает клавиатуру: человек хочет ещё раз камерой.
                             detectTapGestures {
-                                currentCard?.stopTyping()
+                                card?.stopTyping()
                                 typingCode = false
                             }
                         },
+                        // Приближение растёт вместе с переходом к этикетке, а не скачком:
+                        // скачок зума посреди движения рамки читался бы как сбой.
+                        zoom = 1f + (labelZoom - 1f) * t,
+                        onPinch = if (label) { factor -> labelZoom = pinchedZoom(labelZoom, factor) } else null,
+                        fit = t,
                     )
                     Viewfinder(top = window.top, height = window.height, caught = searching)
                 }
@@ -214,14 +180,14 @@ actual fun ScannerDialog(
                         ?.let { "кадр ${it.seen} · ${it.frame.elapsedMs} мс" },
                     onDismiss = requestClose,
                     modifier = Modifier.align(Alignment.TopCenter),
-                    onCamera = granted,
+                    onCamera = camera.granted,
                     action = when {
-                        label && granted -> {
+                        label && camera.granted -> {
                             { ZoomPill(labelZoom) { labelZoom = nextZoomStop(labelZoom) } }
                         }
                         // Ручной ввод рядом с крестиком, а не вместо камеры: смазанный код
                         // на мятой пачке не читается никогда, и цифры под ним — рабочий путь.
-                        step == ScanStep.Barcode && granted && !typingCode -> {
+                        step == ScanStep.Barcode && camera.granted && !typingCode -> {
                             { PillButton("Ввести код", onClick = { typingCode = true }) }
                         }
                         else -> null
@@ -235,15 +201,11 @@ actual fun ScannerDialog(
                     )
                 }
 
-                val bottom: Bottom = when {
-                    card != null -> Bottom.Card(card)
-                    typingCode || (answered && !granted) -> Bottom.Code(searching)
-                    else -> Bottom.Hint(searching)
-                }
+                val bottom = scanBottom(card, typingCode, camera.answered, camera.granted, searching)
                 // Кадр 3:4 стоит по ширине от верха — ниже него только панель,
                 // и она обязана закрыть всё, что ниже кадра.
                 val cardMax = (maxHeight - (shelfTop + SHELF_HEIGHT + 8.dp)).coerceAtLeast(0.dp)
-                val cardMin = if (granted) (maxHeight - maxWidth * 4f / 3f).coerceIn(0.dp, cardMax) else 0.dp
+                val cardMin = if (camera.granted) (maxHeight - maxWidth * 4f / 3f).coerceIn(0.dp, cardMax) else 0.dp
 
                 AnimatedContent(
                     targetState = bottom,
@@ -263,14 +225,7 @@ actual fun ScannerDialog(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            HintPill(
-                                text = when {
-                                    shown.searching -> "Ищу товар…"
-                                    !answered -> "Запрашиваем доступ к камере…"
-                                    else -> "Наведите на штрих-код"
-                                },
-                                busy = shown.searching,
-                            )
+                            HintPill(text = scanHint(shown.searching, camera.answered), busy = shown.searching)
                             // Пока код ищется, кнопка гаснет, но место держит:
                             // подсказка над ней не прыгает.
                             val noCode by animateFloatAsState(if (shown.searching) 0f else 1f, label = "no-code")
@@ -283,21 +238,21 @@ actual fun ScannerDialog(
                         }
 
                         is Bottom.Code -> CodeEntry(
-                            title = if (granted) {
+                            title = if (camera.granted) {
                                 "Наберите цифры под штрих-кодом"
                             } else {
                                 "Доступ к камере не разрешён — наберите цифры под штрих-кодом"
                             },
                             searching = shown.searching,
-                            onSubmit = { code -> submit(code) },
+                            onSubmit = router::submit,
                             onNoCode = onNoBarcode,
                         )
 
                         is Bottom.Card -> ProductCard(
                             state = shown.state,
                             hint = panelHint(
-                                camera = granted,
-                                answered = answered,
+                                camera = camera.granted,
+                                answered = camera.answered,
                                 ocr = shown.state.frame.available,
                                 manual = shown.state.manual,
                                 numbersMissing = shown.state.missing.isNotEmpty(),
@@ -330,16 +285,6 @@ actual fun ScannerDialog(
     }
 }
 
-/**
- * Отладка разбора этикетки — инструмент под Android: там он показывает, что
- * прочёл свой движок и где разошлись кадры. Здесь читает Vision, своего движка нет,
- * и показывать нечего.
- */
-@Composable
-actual fun LabelDebugDialog(onRead: (LabelReading) -> Unit, onDismiss: () -> Unit) {
-    LaunchedEffect(Unit) { onDismiss() }
-}
-
 /** Раз в секунду — не пора ли просить вписать руками. Не анимация: ничего не перерисовывает. */
 @Composable
 private fun CardClock(card: ScanState) {
@@ -351,24 +296,75 @@ private fun CardClock(card: ScanState) {
     }
 }
 
-/** Название с пачки -> похожий продукт справочника. Пауза, чтобы не дёргать базу на каждый кадр. */
+/**
+ * Нейросеть читает этикетку, когда камера восемь секунд не прибавляет чисел.
+ *
+ * Один раз на карточку и только по последнему резкому кадру. Ответ встаёт
+ * в пустые поля, если сходится по Этуотеру, — решает карточка, а не здесь.
+ * Без читателя на телефоне ничего не происходит: карточка ждёт камеру и человека.
+ */
+@Composable
+private fun LabelSecondOpinion(card: ScanState, read: (suspend () -> ProductDraft?)?) {
+    if (read == null) return
+    val due = card.visionDue
+    LaunchedEffect(card, due) {
+        if (!due) return@LaunchedEffect
+        card.onVision(read())
+    }
+}
+
+/**
+ * Справочник ищется по названию с пачки — с паузой. Кандидаты в названия
+ * сменяются от кадра к кадру, человек набирает название по букве, а поиск
+ * по смыслу считает отпечаток запроса моделью: искать каждую промежуточную
+ * строку незачем, нужна та, на которой остановились.
+ */
 @Composable
 private fun LabelNameMatch(card: ScanState, findByName: suspend (String) -> FoodCandidate?) {
     val query = card.nameQuery
+    val find by rememberUpdatedState(findByName)
     LaunchedEffect(card, query) {
         if (query == null) return@LaunchedEffect
         delay(MATCH_DELAY_MS)
-        card.onMatch(query, findByName(query))
+        card.onMatch(query, find(query))
     }
 }
 
-private fun cameraAuthorized(): Boolean =
-    AVCaptureDevice.authorizationStatusForMediaType(AVMediaTypeVideo) == AVAuthorizationStatusAuthorized
-
-private suspend fun requestCamera(): Boolean = suspendCancellableCoroutine { continuation ->
-    AVCaptureDevice.requestAccessForMediaType(AVMediaTypeVideo) { granted ->
-        continuation.resume(granted)
+/** Код пойман — ладонь это чувствует: человек смотрит на пачку, а не на экран. */
+@Composable
+private fun CaughtHaptic(caught: Boolean) {
+    val haptic = LocalHapticFeedback.current
+    LaunchedEffect(caught) {
+        if (caught) haptic.performHapticFeedback(HapticFeedbackType.Confirm)
     }
 }
 
-private const val TAG = "ScannerDialog"
+/**
+ * Отклик ладони на то, что происходит на экране.
+ *
+ * Человек смотрит на пачку, а не на экран: он держит камеру над строчками
+ * и ждёт. Экран показывает, как заполняются поля и когда четыре числа
+ * сошлись, но глаза в этот момент не на нём — а ладонь чувствует.
+ *
+ * Два уровня. Едва заметный тик — камера заполнила ещё одно поле; этого
+ * достаточно, чтобы знать «идёт», не глядя. Мягкое подтверждение — таблица
+ * сошлась целиком. Когда четвёрка сходится тем же кадром, что и последнее
+ * поле, тика нет: подтверждение его перекрывает, и два толчка подряд
+ * читались бы как сбой. Считаются только поля, заполненные камерой:
+ * набранное руками ладонь и так знает.
+ */
+@Composable
+private fun ScanHaptics(state: ScanState) {
+    val haptic = LocalHapticFeedback.current
+    val confident = state.frame.reading.confident
+    LaunchedEffect(confident) {
+        if (confident) haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+    }
+
+    val filled = state.cameraFilled
+    var seen by remember { mutableIntStateOf(filled) }
+    LaunchedEffect(filled) {
+        if (filled > seen && !confident) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        seen = filled
+    }
+}
