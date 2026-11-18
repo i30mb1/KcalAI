@@ -1,0 +1,2 @@
+# Ktor 3.6 спрашивает у JVM про отладчик через java.lang.management, на Android этого пакета нет.
+-dontwarn java.lang.management.**

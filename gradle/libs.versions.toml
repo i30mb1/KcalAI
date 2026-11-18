@@ -1,20 +1,20 @@
 [versions]
-agp = "9.3.2"
+agp = "9.5.1"
 # Новее встроенного в AGP 9.3.2 (2.2.10): iOS-клибы Compose Multiplatform 1.12 собраны 2.3.20,
 # и Kotlin/Native 2.2 их не читает.
 # Подменяется в build-logic, номер обязан совпадать с тамошним. Сам
 # org.jetbrains.kotlin.android применять нельзя — он сломает сборку.
-kotlin = "2.3.21"
+kotlin = "2.4.21"
 # AGP 9.3.2 тянет 2.2.10-2.0.2, но та падает на KMP-цели android
 # (ClassCastException KotlinMultiplatformAndroidCompilationImpl). С 2.3 версия KSP
 # не привязана к версии Kotlin, и явная 2.3.x перекрывает транзитивную.
-ksp = "2.3.10"
+ksp = "2.3.14"
 room = "2.8.5"
 sqlite = "2.7.1"
-coroutines = "1.10.2"
-ktor = "3.3.0"
-# JsonElement API без компиляторного плагина. 1.9.0 — та, что тянет Ktor 3.3.0.
-serializationJson = "1.9.0"
+coroutines = "1.11.0"
+ktor = "3.6.1"
+# JsonElement API без компиляторного плагина. Не ниже той, что тянет Ktor.
+serializationJson = "1.13.0"
 # Compose Multiplatform 1.12: MeshGradientPainter в общем коде. Material3 у JetBrains
 # стабилен только в 1.9.0, lifecycle — 2.9.x. На Android артефакты JetBrains ведут
 # на androidx, и BOM приложения поднимает их до своих версий.
@@ -22,19 +22,19 @@ cmp = "1.12.2"
 cmpMaterial3 = "1.9.0"
 # Иконки после 1.7.3 не выпускаются: набор заморожен и живёт как есть.
 cmpIcons = "1.7.3"
-cmpLifecycle = "2.9.6"
+cmpLifecycle = "2.11.0"
 cmpNavigationEvent = "1.1.0"
 # 0.7.x: Instant и Clock переехали в kotlin.time, здесь — зоны и календарь.
-datetime = "0.7.1"
-# Файлы в общем коде: та же версия, что уже тянет Ktor 3.3.0 — двух разных в сборке быть не должно.
-io = "0.8.0"
+datetime = "0.8.0"
+# Файлы в общем коде: не ниже той, что тянет Ktor (3.6.1 — 0.9.1), в сборке остаётся одна.
+io = "0.9.3"
 # Compose 1.12 — пара к CMP 1.12. Требует compileSdk 37.
 composeBom = "2026.09.00"
 activityCompose = "1.13.0"
 # Не ниже той, что требует CMP 1.12 (androidx lifecycle-viewmodel-compose 2.11.0).
 lifecycle = "2.11.0"
-coreKtx = "1.18.0"
-material = "1.10.0"
+coreKtx = "1.19.1"
+material = "1.14.0"
 # Морфинг форм (RoundedPolygon, Morph): мультиплатформенная, iOS включительно.
 graphicsShapes = "1.1.0"
 camerax = "1.6.2"
@@ -46,7 +46,7 @@ mlkitBarcode = "17.3.0"
 # в AAR нет prefab, а публичные исходники не совпадают с этим бинарником.
 # Меняя версию здесь, надо сверить заголовки.
 litert = "2.1.0"
-work = "2.11.2"
+work = "2.12.0"
 junit = "4.13.2"
 # Gemini Nano на телефоне через AICore: агент с инструментами и Prompt API с типизированным
 # ответом. Агент в alpha, Prompt API в beta — API может меняться между версиями.
@@ -59,16 +59,16 @@ appfunctions = "1.0.0-beta01"
 # Поиск по смыслу: отпечаток запроса считает EmbeddingGemma через LiteRT-LM (до 1.0,
 # API меняется). Та же версия litertlm-jvm в tools/embeddb — отпечатки справочника
 # и запроса обязаны считаться одним движком.
-litertlm = "0.19.0"
+litertlm = "0.19.1"
 # Модель поиска по смыслу (165 МБ) приезжает fast-follow паком сразу после установки.
 playAssetDelivery = "2.3.0"
-junitVersion = "1.1.5"
+junitVersion = "1.3.0"
 # Раннер отдельной зависимостью: androidx.test.ext:junit его за собой не тянет,
 # а без него инструментальный запуск падает на ClassNotFoundException.
-testRunner = "1.5.2"
-espressoCore = "3.5.1"
-# Пара к раннеру 1.5.x: водит собранное приложение снаружи, как человек пальцем.
-uiautomator = "2.3.0"
+testRunner = "1.7.0"
+espressoCore = "3.7.0"
+# Пара к раннеру 1.7.x: водит собранное приложение снаружи, как человек пальцем.
+uiautomator = "2.4.1"
 
 [libraries]
 litertlm-android = { group = "com.google.ai.edge.litertlm", name = "litertlm-android", version.ref = "litertlm" }
@@ -156,4 +156,4 @@ room = { id = "androidx.room", version.ref = "room" }
 # Начиная с Kotlin 2.0 AGP требует его явно при buildFeatures.compose = true.
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 # Публикация в Google Play: :app:publishReleaseBundle.
-play-publisher = { id = "com.github.triplet.play", version = "4.1.1" }
+play-publisher = { id = "com.github.triplet.play", version = "4.1.2" }
