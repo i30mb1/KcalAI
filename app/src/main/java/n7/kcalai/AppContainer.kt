@@ -1,188 +1,64 @@
 package n7.kcalai
 
 import android.content.Context
-import androidx.sqlite.driver.bundled.BundledSQLiteDriver
-import kotlinx.datetime.TimeZone
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.datetime.todayIn
-import n7.kcalai.assistant.DiaryTools
 import n7.kcalai.assistant.FoodAssistant
 import n7.kcalai.assistant.NanoAssistant
 import n7.kcalai.assistant.NanoLabelReader
-import n7.kcalai.feature.scanner.LabelVision
 import n7.kcalai.database.KcalDatabase
 import n7.kcalai.database.buildKcalDatabase
-import n7.kcalai.fooddb.FoodDb
-import n7.kcalai.fooddb.FoodDbFactory
+import n7.kcalai.feature.diary.OutboxMemory
+import n7.kcalai.feature.diary.ScanQueue
+import n7.kcalai.feature.scanner.LabelVision
 import n7.kcalai.fooddb.installSeed
-import n7.kcalai.mascot.FactsBuilder
-import n7.kcalai.mascot.MascotBrain
-import n7.kcalai.mascot.MascotRoutines
-import n7.kcalai.notify.MascotNotifier
-import n7.kcalai.feature.diary.NearbyPeers
-import n7.kcalai.feature.diary.NearbyPeersOverLan
-import n7.kcalai.nearby.DatabaseOfferInbox
-import n7.kcalai.nearby.OfferReceiver
-import kotlinx.coroutines.flow.map
-import n7.kcalai.nearby.NsdDiscovery
+import n7.kcalai.graph.AppGraph
+import n7.kcalai.mascot.MascotShade
 import n7.kcalai.model.BackgroundModel
-import n7.kcalai.personal.PersonalRepository
-import n7.kcalai.remote.ChainedProductSource
-import n7.kcalai.remote.ContributionUploader
-import n7.kcalai.remote.KcalServerSource
-import n7.kcalai.remote.OffProductSource
-import n7.kcalai.remote.VkusVillProductSource
-import n7.kcalai.remote.ScanUploader
-import n7.kcalai.remote.SeedSource
-import n7.kcalai.remote.ServerProbe
-import n7.kcalai.repositories.DiaryRepository
-import n7.kcalai.repositories.FoodDbSource
-import n7.kcalai.repositories.FoodRepository
-import n7.kcalai.repositories.PersonalSemantic
-import n7.kcalai.repositories.RemoteProductSource
-import n7.kcalai.resolver.TextFoodResolver
-import n7.kcalai.resolver.parseSegment
+import n7.kcalai.nearby.NearbyDiscovery
+import n7.kcalai.nearby.NsdDiscovery
+import n7.kcalai.notify.MascotNotifier
 import n7.kcalai.semantic.EmbeddingModelInfo
 import n7.kcalai.semantic.LiteRtQueryEmbedder
+import n7.kcalai.work.PrefsOutboxMemory
+import n7.kcalai.work.ScanUploads
 
 /**
- * Ручная сборка зависимостей.
- *
- * Dagger из дизайна появится, когда резолверов станет больше одного и понадобится
- * мультибиндинг. Пока граф — пять объектов, и контейнер честнее генерации кода.
+ * Граф приложения на Android. Что с чем соединено — общий с iOS [AppGraph]; здесь
+ * только то, чего на iOS нет или что там своё: база и справочник из контекста,
+ * Gemini Nano, поиск по смыслу на LiteRT, шторка, WorkManager-флаги.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
-class AppContainer(context: Context) {
+class AppContainer(context: Context) : AppGraph() {
 
     private val appContext = context.applicationContext
 
-    /**
-     * Справочник живёт на одном соединении SQLite, а оно не потокобезопасно.
-     * Один поток — единственная дисциплина, которая это гарантирует.
-     */
-    private val foodDbDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1)
+    override fun openDatabase(): KcalDatabase = buildKcalDatabase(appContext)
+    override fun seedPath(): String = installSeed(appContext).toString()
 
-    private val foodDbLock = Mutex()
-    private var openedFoodDb: FoodDb? = null
+    /** Debug — из `local.properties`, release — из `~/.gradle/gradle.properties` (`kcal.server=…`). */
+    override val serverBaseUrl: String = BuildConfig.KCAL_SERVER
 
-    private val foodDbSource = FoodDbSource {
-        openedFoodDb ?: foodDbLock.withLock {
-            openedFoodDb ?: FoodDbFactory.open(
-                driver = BundledSQLiteDriver(),
-                seedPath = installSeed(appContext).toString(),
-                // Полный срез Open Food Facts докачивается в Плане 4.
-                foodPath = null,
-            ).also { openedFoodDb = it }
-        }
-    }
+    override val userAgent = "KcalAI/1.0 (Android; n7.kcalai)"
 
-    val database: KcalDatabase by lazy { buildKcalDatabase(appContext) }
+    override fun discovery(): NearbyDiscovery = NsdDiscovery(appContext)
+    override fun shade(): MascotShade = MascotNotifier(appContext)
+    override fun outboxMemory(): OutboxMemory = PrefsOutboxMemory(appContext)
 
-    /**
-     * Свой сервер. Пока пуст — источник просто пропускается, и цепочка идёт в OFF.
-     *
-     * Сервер пишется отдельно и клиент не блокирует: весь путь до него уже написан
-     * и проверяется на OFF, а появление адреса здесь ничего больше не потребует.
-     */
-    private val kcalServer by lazy { KcalServerSource(baseUrl = SERVER_BASE_URL, userAgent = USER_AGENT) }
+    override fun semantic(): Semantic = Semantic(embedder, EmbeddingModelInfo.ID, EmbeddingModelInfo.DIM)
 
-    /**
-     * Свой сервер спрашивается раньше Open Food Facts.
-     *
-     * Порядок содержательный: в своём пуле лежат российские товары, заведённые
-     * людьми вручную, — тех самых, которых в OFF нет и не появится. И только ответ
-     * своего сервера мы вправе раздавать дальше: OFF лежит под ODbL.
-     *
-     * ВкусВилл последний: его каталог спрашивается, только когда чисел не нашлось
-     * ни у себя, ни в OFF, — чужому серверу достаются одни настоящие промахи.
-     */
-    val remoteProductSource: RemoteProductSource by lazy {
-        ChainedProductSource(listOf(kcalServer, OffProductSource(USER_AGENT), VkusVillProductSource(USER_AGENT)))
-    }
+    /** Съёмки этикеток — только у разработчика: людям обещано, что кадры остаются на телефоне. */
+    override fun scanQueue(): ScanQueue? = if (silentUploads) ScanUploads(appContext, this) else null
 
-    val contributionUploader: ContributionUploader get() = kcalServer
-    val seedSource: SeedSource get() = kcalServer
-    val scanUploader: ScanUploader get() = kcalServer
-    val serverProbe: ServerProbe get() = kcalServer
-
-    /** Задан ли адрес сервера. Без него вклады и сессии копятся и ждут, справочник не докачивается. */
-    val serverConfigured: Boolean get() = SERVER_BASE_URL.isNotBlank()
-
-    /**
-     * Уходит ли всё само, в фоне. Только у разработчика: в сборке для людей продукт
-     * уходит с согласия, по предложению Яйца, а съёмки этикеток не уходят вовсе.
-     */
-    val silentUploads: Boolean get() = serverConfigured && BuildConfig.KCAL_SILENT_UPLOADS
+    override val silentUploads: Boolean get() = serverConfigured && BuildConfig.KCAL_SILENT_UPLOADS
 
     /** Модель поиска по смыслу: и отпечатки запросов, и докачка её пака. */
     private val embedder: LiteRtQueryEmbedder by lazy { LiteRtQueryEmbedder(appContext) }
 
-    val foodRepository: FoodRepository by lazy {
-        FoodRepository(
-            foodDb = foodDbSource,
-            userFoodDao = database.userFoodDao(),
-            cachedProductDao = database.cachedProductDao(),
-            contributionDao = database.contributionDao(),
-            remote = remoteProductSource,
-            dispatcher = foodDbDispatcher,
-            embedder = embedder,
-            personal = PersonalSemantic(
-                dao = database.semanticDao(),
-                model = EmbeddingModelInfo.ID,
-                dim = EmbeddingModelInfo.DIM,
-                queryOf = { logged -> parseSegment(logged)?.name },
-            ),
-        )
-    }
-
-    val diaryRepository: DiaryRepository by lazy {
-        DiaryRepository(database.diaryDao(), database.goalDao(), database.contributionDao())
-    }
-
-    /**
-     * Зона нужна моделям: `createdAt` хранится в UTC, а привычки у человека
-     * в местном времени — завтрак в восемь утра остаётся завтраком и после перелёта.
-     */
-    val personalRepository: PersonalRepository by lazy {
-        PersonalRepository(
-            diaryDao = database.diaryDao(),
-            personalDao = database.personalDao(),
-            bodyMetricDao = database.bodyMetricDao(),
-            goalDao = database.goalDao(),
-            zone = TimeZone.currentSystemDefault(),
-        )
-    }
-
-    val textResolver: TextFoodResolver by lazy {
-        TextFoodResolver(foodRepository, personalRepository)
-    }
-
     /** Живёт дольше экрана: докачка модели не должна обрываться вместе с ним. */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-    /**
-     * Инструменты нейросети: поиск по той же базе, что у строки ввода, и итоги
-     * дневника. Один экземпляр на приложение — его зовёт служба AppFunctions, а
-     * предложения проверяет экран, и помнить, что поиск показывал, они должны общее.
-     */
-    val diaryTools: DiaryTools by lazy {
-        DiaryTools(
-            search = { query, limit -> foodRepository.search(query, limit) },
-            day = { epochDay -> diaryRepository.observeDay(epochDay).first().entries },
-            goal = { epochDay -> diaryRepository.goalFor(epochDay) },
-            today = { Clock.System.todayIn(TimeZone.currentSystemDefault()).toEpochDays() },
-        )
-    }
 
     private val nano: NanoAssistant by lazy { NanoAssistant(appContext, diaryTools, appScope) }
 
@@ -196,49 +72,6 @@ class AppContainer(context: Context) {
     }
 
     /**
-     * Телефоны рядом: кому предложить еду и чем её отправить.
-     *
-     * Приёмник и объявление живут, пока открыт дневник, — этим распоряжается
-     * сам [NearbyPeersOverLan] по подписке. Имя берётся из профиля: пока человек
-     * не назвался, фича молчит.
-     */
-    val nearbyPeers: NearbyPeers by lazy {
-        NearbyPeersOverLan(
-            discovery = NsdDiscovery(appContext),
-            receiver = OfferReceiver(DatabaseOfferInbox(database.peerOfferDao())),
-            myName = mascotBrain.profile.map { it.name },
-        )
-    }
-
-    /**
-     * Мозг Яйца, Масла и Зёрнышка: когда написать первыми, что ответить, как
-     * отозваться на касание. Всё — по дневнику и на телефоне: факты в сеть не уходят.
-     */
-    val mascotBrain: MascotBrain by lazy {
-        val zone = TimeZone.currentSystemDefault()
-        MascotBrain(
-            dao = database.mascotDao(),
-            facts = FactsBuilder(database.diaryDao(), database.goalDao(), personalRepository, zone),
-            diaryDao = database.diaryDao(),
-            zone = zone,
-        )
-    }
-
-    /**
-     * Что персонажи делают вне экрана — общий с iOS код. Отсюда только шторка и то,
-     * когда его звать.
-     */
-    val mascotRoutines: MascotRoutines by lazy {
-        MascotRoutines(
-            brain = mascotBrain,
-            diary = diaryRepository,
-            personal = personalRepository,
-            shade = MascotNotifier(appContext),
-            zone = TimeZone.currentSystemDefault(),
-        )
-    }
-
-    /**
      * Старт процесса: фоновая докачка словами персонажей и «приложение новое».
      * Слушает всю жизнь процесса: модель докачивается и без экрана, а сказанное
      * лежит в базе и дождётся человека.
@@ -247,18 +80,5 @@ class AppContainer(context: Context) {
         appScope.launch { mascotRoutines.narrate(BackgroundModel.SEARCH, embedder.delivery) }
         appScope.launch { mascotRoutines.narrate(BackgroundModel.ASSISTANT, nano.delivery.filterNotNull()) }
         appScope.launch { mascotRoutines.onLaunch() }
-    }
-
-    private companion object {
-        /** Debug — из `local.properties`, release — из `~/.gradle/gradle.properties` (`kcal.server=…`). Пусто — источника нет. */
-        val SERVER_BASE_URL: String = BuildConfig.KCAL_SERVER
-
-        /**
-         * Open Food Facts режет запросы без описательного User-Agent — это их прямое
-         * требование к клиентам, а не рекомендация. Когда появится публичный адрес
-         * проекта или почта для связи, их стоит подставить сюда: так у OFF будет
-         * кого спросить, если наш клиент начнёт вести себя неправильно.
-         */
-        const val USER_AGENT = "KcalAI/1.0 (Android; n7.kcalai)"
     }
 }

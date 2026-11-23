@@ -25,11 +25,10 @@ kotlin {
             implementation(project(":core:mascot"))
             implementation(project(":core:ui"))
             implementation(project(":feature:diary"))
+            // Граф зависимостей — общий с Android; здесь только то, что у iOS своё.
+            implementation(project(":core:graph"))
 
-            // Драйвер справочника создаётся здесь, в месте сборки графа — как в `:app`.
-            implementation(libs.androidx.sqlite.bundled)
             implementation(libs.kotlinx.coroutines.core)
-            implementation(libs.kotlinx.datetime)
             implementation(libs.cmp.ui)
         }
     }

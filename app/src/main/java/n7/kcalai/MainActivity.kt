@@ -15,7 +15,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import kotlin.time.ExperimentalTime
 import kotlinx.coroutines.launch
 import n7.kcalai.feature.diary.DiaryRoute
 import n7.kcalai.feature.diary.DiaryViewModel
@@ -25,9 +24,6 @@ import n7.kcalai.notify.MascotNotifier
 import n7.kcalai.shake.phoneShakes
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.work.ContributionWorker
-import n7.kcalai.feature.diary.ServerOutbox
-import n7.kcalai.work.PrefsOutboxMemory
-import n7.kcalai.work.ScanUploads
 import n7.kcalai.work.ScanUploadWorker
 
 class MainActivity : ComponentActivity() {
@@ -38,39 +34,15 @@ class MainActivity : ComponentActivity() {
      * Экранная модель — у активности, а не внутри экрана: по её просьбе активность
      * спрашивает у телефона разрешение на уведомления и отдаёт ей ответ.
      */
-    // Конструктор дневника принимает kotlin.time.Clock — в Kotlin 2.2 он ещё экспериментальный.
-    @OptIn(ExperimentalTime::class)
     private val diary: DiaryViewModel by viewModels {
         viewModelFactory {
             initializer {
-                DiaryViewModel(
-                    diary = container.diaryRepository,
-                    resolver = container.textResolver,
-                    personal = container.personalRepository,
-                    food = container.foodRepository,
-                    brain = container.mascotBrain,
-                    // Продукт сохранён локально и уже работает; у разработчика отправку
-                    // берёт на себя WorkManager, когда появится сеть. У людей её предлагает Яйцо.
+                // Сборка — общая с iOS. Своё здесь только WorkManager: у разработчика он шлёт
+                // сам, когда появится сеть; у людей отправить предлагает Яйцо.
+                container.diaryViewModel(
+                    assistant = container.assistant,
                     onContributionQueued = { if (container.silentUploads) ContributionWorker.enqueue(applicationContext) },
                     onScanFinished = { if (container.silentUploads) ScanUploadWorker.enqueue(applicationContext) },
-                    // Предложение отправить — только когда есть куда отправлять.
-                    outbox = if (container.serverConfigured) {
-                        ServerOutbox(
-                            contributions = container.database.contributionDao(),
-                            uploader = container.contributionUploader,
-                            probe = container.serverProbe,
-                            memory = PrefsOutboxMemory(applicationContext),
-                            // Съёмки этикеток — только у разработчика: людям обещано, что кадры остаются на телефоне.
-                            scans = if (container.silentUploads) ScanUploads(applicationContext, container) else null,
-                            retriesInBackground = container.silentUploads,
-                        )
-                    } else {
-                        null
-                    },
-                    assistant = container.assistant,
-                    // Предложения соседа: приходят в базу, лента берёт их оттуда.
-                    peerOffers = container.database.peerOfferDao(),
-                    peers = container.nearbyPeers,
                 )
             }
         }

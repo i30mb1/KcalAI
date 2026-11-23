@@ -43,6 +43,8 @@ include(":core:remote")
 // Телефон рядом: обнаружение в общей сети и предложение записи соседу.
 include(":core:nearby")
 include(":feature:diary")
+// Граф зависимостей — один на Android и iOS; приложения дают только своё.
+include(":core:graph")
 include(":feature:scanner")
 include(":smoke")
 

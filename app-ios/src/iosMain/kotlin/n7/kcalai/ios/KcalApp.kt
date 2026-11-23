@@ -8,8 +8,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import n7.kcalai.assistant.AppleModelBridge
 import n7.kcalai.feature.diary.DiaryRoute
-import n7.kcalai.feature.diary.DiaryViewModel
-import n7.kcalai.feature.diary.ServerOutbox
 import n7.kcalai.ui.KcalTheme
 import platform.UIKit.UIViewController
 import platform.UserNotifications.UNNotificationDefaultActionIdentifier
@@ -30,31 +28,8 @@ object KcalApp {
     /** Живёт весь процесс: персонажи ждут очереди дольше, чем открыт экран. */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private val diary by lazy {
-        DiaryViewModel(
-            diary = container.diaryRepository,
-            resolver = container.textResolver,
-            personal = container.personalRepository,
-            food = container.foodRepository,
-            brain = container.mascotBrain,
-            assistant = container.assistant,
-            // Отправить продукты Яйцо предлагает в ленте — тот же код, что на Android.
-            // Съёмок этикеток на iOS нет, и фоном ничего не уходит.
-            outbox = if (container.serverConfigured) {
-                ServerOutbox(
-                    contributions = container.database.contributionDao(),
-                    uploader = container.contributionUploader,
-                    probe = container.serverProbe,
-                    memory = DefaultsOutboxMemory(),
-                )
-            } else {
-                null
-            },
-            // Предложения соседа: приходят в базу, лента берёт их оттуда.
-            peerOffers = container.database.peerOfferDao(),
-            peers = container.nearbyPeers,
-        )
-    }
+    /** Сборка — общая с Android. Съёмок этикеток на iOS нет, и фоном ничего не уходит. */
+    private val diary by lazy { container.diaryViewModel(assistant = container.assistant) }
 
     /**
      * Зовётся из `didFinishLaunching` — до его возврата: обработчики фоновых

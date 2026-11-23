@@ -157,8 +157,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)
     implementation(libs.kotlinx.coroutines.android)
-    // Драйвер справочника создаётся здесь, в месте сборки графа зависимостей.
-    implementation(libs.androidx.sqlite.bundled)
+    // Граф зависимостей — общий с iOS; здесь только то, что у Android своё.
+    implementation(project(":core:graph"))
     // Отправка вкладов переживает потерю сети, закрытие приложения и перезагрузку.
     implementation(libs.androidx.work.runtime.ktx)
 
