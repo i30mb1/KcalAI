@@ -2,7 +2,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@500;600;700;800&family=Oswald:wght@700&family=Montserrat:wght@900&display=swap">
 <style>
   /* Одна колонка-телефон: вкладка выбирает, что растёт; сцена — дорожка слева, растение справа;
      под сценой неделя. Симулятор прибит к низу. Палитра KcalAI. */
@@ -107,6 +107,20 @@
   .night7 svg { width: 100%; height: auto; }
   .moons span, .night7 span { font: 600 11px/1 var(--font-data); color: #B5AB96; }
   .moons .today span, .night7 .today span { color: #FDFBF5; }
+  .stage3d.punk { background: #F4EFE4; }
+  .stage3d.punk > * { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .slap { animation: slap .25s steps(3) both; transform-box: fill-box; transform-origin: 50% 50%; }
+  @keyframes slap { from { transform: scale(1.9) rotate(14deg); } 66% { transform: scale(1.15) rotate(-3deg); } }
+  .big.ransom { font-size: clamp(44px, 12.5vw, 62px); display: flex; flex-wrap: nowrap; align-items: center; }
+  .big.ransom span { display: inline-block; padding: .02em .07em; margin-right: .04em; font-weight: 900; line-height: 1; letter-spacing: 0; box-shadow: 2px 3px 0 rgba(0,0,0,.35); }
+  .big.ransom .gap { width: .22em; padding: 0; box-shadow: none; }
+  .panels { display: grid; grid-template-columns: repeat(7, 1fr); gap: 7px; padding: 0 4px; }
+  .panel { position: relative; height: 104px; border: 3px solid #121012; background: #FFFFFF radial-gradient(#F3289733 1.4px, transparent 1.6px) 0 0 / 7px 7px; transform: skewX(-6deg); overflow: hidden; }
+  .panel i { position: absolute; left: 0; right: 0; bottom: 18px; background: #F32897 radial-gradient(#B8156E 1.4px, transparent 1.6px) 0 0 / 6px 6px; }
+  .panel.goal { background-color: #C8F53C; }
+  .panel b { position: absolute; top: 4px; left: 0; right: 0; text-align: center; font: 700 15px/1 'Oswald', Impact, sans-serif; color: #121012; text-shadow: 1px 1px 0 #FFF, -1px -1px 0 #FFF; }
+  .panel span { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; display: grid; place-items: center; background: #121012; color: #FFFFFF; font: 600 10px/1 var(--font-data); }
+  .panel.today { border-color: #F32897; box-shadow: 3px 3px 0 #121012; }
   .sim {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
     padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
@@ -130,6 +144,8 @@
     <button role="tab" data-v="night">Звёзды</button>
     <button role="tab" data-v="planet">Планета</button>
     <button role="tab" data-v="cubes">Кубики</button>
+    <button role="tab" data-v="punk">Панк</button>
+    <button role="tab" data-v="melt">Масло</button>
   </nav>
   <section id="view"></section>
 </main>
@@ -995,6 +1011,293 @@ const Night = {
 };
 Object.assign(VARIANTS, { night: Night, planet: Planet, cubes: Cubes });
 
+// --- 9. Панк: стиль трейлера — 3D-герой с чёрно-розовой обводкой поверх 2D-графики, всё на двойках ---
+const PK = { pink: '#F32897', pink2: '#FD3ED2', lime: '#C8F53C', purple: '#5B2BC4', black: '#121012', white: '#FFFFFF', paper: '#F4EFE4', yellow: '#FFD236' };
+// Фон по темпу: стоим — бумага, идём — розовый, быстро — фиолетовый, бегом — чёрный с лаймом.
+const PUNK_BG = [
+  { fill: PK.paper, dots: PK.pink, lines: PK.pink },
+  { fill: PK.pink, dots: '#B8156E', lines: PK.white },
+  { fill: PK.pink, dots: '#B8156E', lines: PK.lime },
+  { fill: PK.purple, dots: '#3A1A8A', lines: PK.pink2 },
+  { fill: PK.black, dots: '#3A2A3A', lines: PK.lime },
+];
+const RANSOM = [[PK.black, PK.white, "'Oswald'"], [PK.pink, PK.white, "'Montserrat'"], [PK.white, PK.black, 'Georgia, serif'], [PK.lime, PK.black, "'Oswald'"], [PK.yellow, PK.black, "'Montserrat'"], [PK.purple, PK.white, "'Oswald'"]];
+// Число журнальными буквами: у каждой цифры свой вырезок, но тот же, пока цифра на месте.
+function ransom(text) {
+  return [...text].map((ch, i) => {
+    if (/\s/.test(ch)) return '<span class="gap"></span>';
+    const c = ch.charCodeAt(0), [bg, fg, ff] = RANSOM[(c * 7 + i * 13) % RANSOM.length];
+    return `<span style="background:${bg};color:${fg};font-family:${ff};transform:rotate(${((c * 31 + i * 17) % 13) - 6}deg)">${ch}</span>`;
+  }).join('');
+}
+function torn(w, h, seed) {
+  const r = rng(seed), pts = [];
+  for (let x = 0; x <= w; x += 6) pts.push([x, (r() - 0.5) * 3]);
+  for (let y = 6; y <= h; y += 6) pts.push([w + (r() - 0.5) * 3, y]);
+  for (let x = w; x >= 0; x -= 6) pts.push([x, h + (r() - 0.5) * 3]);
+  for (let y = h - 6; y > 0; y -= 6) pts.push([(r() - 0.5) * 3, y]);
+  return pts.map(([x, y]) => `${f1(x - w / 2)},${f1(y - h / 2)}`).join(' ');
+}
+const STICKER_SLOTS = [[54, 46, -12], [346, 44, 9], [44, 252, 8], [356, 248, -7], [118, 24, 4], [284, 22, -5], [30, 150, -9], [370, 150, 8], [140, 276, -4], [262, 278, 6], [84, 104, 10], [318, 100, -10]];
+const STICKER_INK = [[PK.white, PK.black], [PK.lime, PK.black], [PK.yellow, PK.black], [PK.pink, PK.white], [PK.black, PK.lime]];
+function sticker(k, label, cls = '') {
+  const [x, y, rot] = STICKER_SLOTS[k % STICKER_SLOTS.length], [bg, fg] = STICKER_INK[k % STICKER_INK.length];
+  const w = 18 + label.length * 13;
+  return `<g transform="translate(${x} ${y}) rotate(${rot})"><g${cls ? ` class="${cls}"` : ''}>
+    <polygon points="${torn(w, 34, 50 + k)}" fill="#000" opacity=".35" transform="translate(2 3)"/>
+    <polygon points="${torn(w, 34, 50 + k)}" fill="${bg}"/>
+    <rect x="-9" y="-22" width="18" height="9" fill="#FFFFFF" opacity=".55" transform="rotate(-8)"/>
+    <text text-anchor="middle" y="8" fill="${fg}" style="font:700 22px 'Oswald', Impact, sans-serif;letter-spacing:.02em">${label}</text></g></g>`;
+}
+function scribble(seed, d) {
+  // Каракуля в две руки: на двойках чередуются два почерка, как ap_doodle_a/b.
+  const r = rng(seed);
+  return d.replace(/-?\d+(\.\d+)?/g, (n) => f1(+n + (r() - 0.5) * 3));
+}
+const ORBIT = 'M80,150 C80,118 320,112 322,148 C324,182 84,186 82,152 C80,124 300,116 316,140';
+const ANARCHY = 'M330,186 a24,24 0 1 0 0.1,0 M316,226 L330,180 L344,226 M318,206 L346,206';
+const ZIGZAG = 'M52,176 L78,190 L56,204 L84,218 L60,232';
+const CROWN = 'M174,44 L182,22 L192,38 L200,16 L208,38 L218,22 L226,44 Z';
+const star4 = (x, y, s, c) => `<path transform="translate(${x} ${y}) scale(${s})" d="M0,-10 C1.5,-2 2,-1.5 10,0 C2,1.5 1.5,2 0,10 C-1.5,2 -2,1.5 -10,0 C-2,-1.5 -1.5,-2 0,-10 Z" fill="${c}"/>`;
+const punkStickers = (steps) => Math.min(Math.floor(steps / 1000), STICKER_SLOTS.length);
+
+function toonMap() {
+  const t = new THREE.DataTexture(new Uint8Array([70, 70, 70, 165, 165, 165, 255, 255, 255]), 3, 1, THREE.RGBFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true;
+  return t;
+}
+// Мультяшная заливка в три тона и обводка оболочкой: тонкая чёрная вплотную, толстый розовый пояс снаружи.
+function toonify(root, map) {
+  const meshes = [];
+  root.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  for (const m of meshes) {
+    const c = m.material.color.clone();
+    m.material = new THREE.MeshToonMaterial({ color: c, gradientMap: map });
+    if (c.getHex() === 0x2C2618) continue;
+    for (const [w, col] of [[0.1, 0xF32897], [0.03, 0x121012]]) {
+      const g = m.geometry.clone(), pos = g.attributes.position, nor = g.attributes.normal;
+      for (let i = 0; i < pos.count; i++) pos.setXYZ(i, pos.getX(i) + nor.getX(i) * w, pos.getY(i) + nor.getY(i) * w, pos.getZ(i) + nor.getZ(i) * w);
+      m.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: col, side: THREE.BackSide })));
+    }
+  }
+}
+const PUNK_CAMS = [
+  { p: [1.7, -1.1, 5.4], l: [0, 0.1, 0] },                 // снизу, герой
+  { p: [6.2, 0.2, 0.3], l: [0, -0.1, 0] },                 // профиль
+  { p: [0.8, 0.6, 3.1], l: [0, 0.35, 0] },                 // крупно
+  { p: [-3.2, 4.2, 4.4], l: [0, -0.2, 0] },                // сверху
+  { p: [-2.6, 0.3, 4.8], l: [0, 0, 0], up: [0.28, 1, 0] }, // голландский угол
+];
+const Punk = {
+  custom: true, cls: 'punk', ransom: true, walk: 'Погнали!', lines: ['', '', 'Жёстко!', 'Вжух — на всю!', 'ПАНК-РОК!'],
+  idle: 'Сцена пустая. Врубаем дорожку?',
+  rest: (s) => (s >= GOAL ? 'ЦЕЛЬ! Стена в наклейках.' : 'Наклейки копятся — стена всё панковее.'),
+  marks(prev, now) {
+    if (prev < GOAL && now >= GOAL) return 'ЦЕЛЬ! Вспышка!';
+    return punkStickers(now) > punkStickers(prev) ? `Наклейка «${punkStickers(now)}К»!` : null;
+  },
+  fresh: () => ({}),
+  async mount(el) {
+    el.innerHTML = `<svg class="pk-bg" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice"></svg><div class="pk-3d"></div><svg class="pk-fg" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice"></svg>`;
+    this.bg = el.querySelector('.pk-bg'); this.fg = el.querySelector('.pk-fg'); this.host = el.querySelector('.pk-3d');
+    this.tickN = 0; this.flash = -1; this.cam = 0; this.lastCut = 0; this.newSticker = -1;
+    this.drawBg(); this.drawFg();
+    await loadThree();
+    if (cur !== Punk || !el.isConnected) return;
+    const st = this.st = new Stage3D(this.host), sc = st.scene;
+    sc.add(new THREE.AmbientLight(0xFFFFFF, 0.5));
+    const key = new THREE.DirectionalLight(0xFFFFFF, 0.9); key.position.set(2.5, 3, 4); sc.add(key);
+    st.camera = new THREE.PerspectiveCamera(30, 4 / 3, 0.1, 100);
+    st.onResize = (w, h) => { st.camera.aspect = w / h; st.camera.updateProjectionMatrix(); };
+    this.grain = makeGrain3D(); toonify(this.grain, toonMap()); sc.add(this.grain);
+    this.setCam(0);
+    this.stickers = punkStickers(state.steps);
+    this.wasGoal = state.steps >= GOAL;
+    el.addEventListener('click', () => this.cut(true));
+    st.resize();
+    this.render();
+  },
+  setCam(i) {
+    const c = PUNK_CAMS[i], cam = this.st.camera;
+    cam.position.set(...c.p); cam.up.set(...(c.up || [0, 1, 0])).normalize(); cam.lookAt(...c.l);
+  },
+  // Склейка: вспышка на три кадра — силуэт на розовом, инверсия, белое — и новый ракурс.
+  cut(full) {
+    if (!this.st) return;
+    this.flash = full ? 0 : 2;
+    this.cam = (this.cam + 1) % PUNK_CAMS.length;
+    if (state.speed <= 0) this.playTicks(full ? 4 : 2);
+  },
+  playTicks(n) {
+    clearTimeout(this.tickTimer);
+    const go = (left) => { this.tick(); if (left > 1) this.tickTimer = setTimeout(() => go(left - 1), 83); };
+    go(n);
+  },
+  tick() {
+    this.tickN++;
+    const canvas = this.host.querySelector('canvas');
+    let bgOverride = null, filter = '';
+    if (this.flash >= 0) {
+      if (this.flash === 0) { bgOverride = PK.pink; filter = 'brightness(0)'; }
+      if (this.flash === 1) { bgOverride = PK.black; filter = 'brightness(0) invert(1)'; }
+      if (this.flash === 2) { bgOverride = PK.white; this.setCam(this.cam); }
+      this.flash = this.flash >= 2 ? -1 : this.flash + 1;
+    }
+    if (canvas) canvas.style.filter = filter;
+    this.drawBg(bgOverride);
+    this.drawFg(bgOverride);
+    this.st?.draw();
+  },
+  drawBg(override) {
+    const tier = tierOf(state.speed), pal = PUNK_BG[tier], boil = this.tickN % 2;
+    const fill = override || pal.fill;
+    let s = `<defs><pattern id="pkdots" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r="1.7" fill="${pal.dots}"/></pattern>
+      <radialGradient id="pkr"><stop offset=".35" stop-color="#000"/><stop offset="1" stop-color="#FFF"/></radialGradient>
+      <mask id="pkm"><rect width="400" height="300" fill="url(#pkr)"/></mask></defs>
+      <rect width="400" height="300" fill="${fill}"/>`;
+    if (!override) s += `<rect width="400" height="300" fill="url(#pkdots)" mask="url(#pkm)" opacity=".8"/>`;
+    if (!override && state.speed > 0) {
+      const r = rng(this.tickN * 7 + 1), n = Math.round(10 + state.speed * 6);
+      for (let i = 0; i < n; i++) {
+        const a = r() * Math.PI * 2, w = 0.012 + r() * 0.03, r0 = 105 + r() * 50, R = 320;
+        const p = (ang, rad) => `${f1(200 + Math.cos(ang) * rad)},${f1(150 + Math.sin(ang) * rad * 0.8)}`;
+        s += `<polygon points="${p(a, r0)} ${p(a - w, R)} ${p(a + w, R)}" fill="${pal.lines}" opacity=".85"/>`;
+      }
+    }
+    if (!override) {
+      s += `<polygon points="${torn(470, 46, 7 + boil)}" transform="translate(200 270) rotate(-4)" fill="${PK.white}"/>
+        <path d="M-30,262 L430,234 M-30,272 L430,244" stroke="${PK.black}" stroke-width="2"/>`;
+      for (const [x, y, sc] of [[64, 78, 0.9], [338, 92, 0.7], [300, 206, 0.6], [96, 214, 0.75], [210, 30, 0.55]]) s += star4(x, y, sc * (boil && state.speed > 0 ? 1.25 : 1), tier >= 3 ? PK.lime : PK.purple);
+    }
+    this.bg.innerHTML = s;
+  },
+  drawFg(override) {
+    if (override) { this.fg.innerHTML = override === PK.black ? `<circle cx="200" cy="150" r="${60 + (this.tickN % 2) * 30}" fill="none" stroke="${PK.white}" stroke-width="10"/>` : ''; return; }
+    const tier = tierOf(state.speed), boil = this.tickN % 2, n = punkStickers(state.steps);
+    let s = '';
+    const ink = tier >= 3 ? PK.lime : tier >= 1 ? PK.white : PK.black;
+    if (tier >= 2) s += `<path d="${scribble(11 + boil, ORBIT)}" transform="rotate(-10 200 150)" fill="none" stroke="${PK.lime}" stroke-width="4" stroke-linecap="round"/>`;
+    if (tier >= 3) s += `<path d="${scribble(21 + boil, ANARCHY)}" fill="none" stroke="${ink}" stroke-width="4" stroke-linecap="round"/><path d="${scribble(31 + boil, ZIGZAG)}" fill="none" stroke="${PK.yellow}" stroke-width="5" stroke-linejoin="round"/>`;
+    if (state.steps >= GOAL) s += `<path d="${scribble(41 + (state.speed > 0 ? boil : 0), CROWN)}" fill="${PK.yellow}" stroke="${PK.black}" stroke-width="3" stroke-linejoin="round"/>`;
+    for (let k = 0; k < n; k++) s += sticker(k, `${k + 1}К`, k === this.newSticker ? 'slap' : '');
+    if (state.steps >= GOAL) s += `<g transform="translate(200 250) rotate(-6)"><g${this.goalNew ? ' class="slap"' : ''}>
+      <polygon points="${torn(150, 52, 99)}" fill="#000" opacity=".4" transform="translate(3 4)"/><polygon points="${torn(150, 52, 99)}" fill="${PK.pink}"/>
+      <text text-anchor="middle" y="15" fill="${PK.white}" stroke="${PK.black}" stroke-width="1.5" paint-order="stroke" style="font:700 40px 'Oswald', Impact, sans-serif">ЦЕЛЬ!</text></g></g>`;
+    this.fg.innerHTML = s;
+  },
+  render() {
+    const n = punkStickers(state.steps), goal = state.steps >= GOAL;
+    if (this.st && (n > this.stickers || (goal && !this.wasGoal))) {
+      this.newSticker = n > this.stickers ? n - 1 : -1;
+      this.goalNew = goal && !this.wasGoal;
+      this.cut(true);
+    } else if (n < this.stickers) this.newSticker = -1;
+    this.stickers = n; this.wasGoal = goal;
+    if (this.flash < 0 && state.speed <= 0) { this.drawBg(); this.drawFg(); this.st?.draw(); }
+  },
+  frame(dt, t) {
+    if (!this.st) return;
+    stepGrain3D(this.grain, dt, state.speed);
+    if (t - this.lastCut > 6000) { this.lastCut = t; if (this.flash < 0) this.cut(false); }
+    const k = Math.floor(t / 83);
+    if (k !== this.lastK) { this.lastK = k; this.tick(); }
+  },
+  still() {
+    if (!this.st) return;
+    stepGrain3D(this.grain, 0, 0);
+    if (this.flash < 0) { this.newSticker = -1; this.goalNew = false; this.drawBg(); this.drawFg(); this.st.draw(); }
+  },
+  unmount() { clearTimeout(this.tickTimer); this.st?.dispose(); this.st = null; },
+  below: (days) => `<div class="panels">${days.map((d) => `<div class="panel${d.steps >= GOAL ? ' goal' : ''}${d.today ? ' today' : ''}">
+      <i style="height:${f1(growth(d.steps) * 100)}%"></i><b>${d.steps > 0 ? (d.steps / 1000).toFixed(1).replace('.', ',') + 'К' : '—'}</b><span>${d.today ? '•' : d.label}</span></div>`).join('')}</div>`,
+};
+VARIANTS.punk = Punk;
+
+// --- 10. Масло тает: жир без тела и без веса — брусок на сковородке, шаги его топят ---
+const meltPops = (steps) => Math.min(Math.floor(Math.max(0, steps - GOAL) / 1000), 8);
+const POP_SPOTS = [[246, 214], [352, 210], [270, 200], [334, 196], [226, 226], [372, 222], [300, 190], [258, 186]];
+function popcorn(x, y, cls = '') {
+  return `<g transform="translate(${x} ${y})"${cls ? ` class="${cls}"` : ''}><circle cx="-3" cy="0" r="4.2" fill="#FFF8E6" stroke="#E9DEC6"/><circle cx="3" cy="-1" r="4" fill="#FFF8E6" stroke="#E9DEC6"/><circle cx="0" cy="-5" r="4.2" fill="#FFF8E6" stroke="#E9DEC6"/><circle cx="0.5" cy="-1" r="1.6" fill="#F0C077"/></g>`;
+}
+function butterBar(g, cx, base, k = 1) {
+  const w = 64 * (1 - 0.35 * g) * k, h = Math.max(1.5, 40 * (1 - 0.92 * g)) * k, d = 10 * (1 - 0.4 * g) * k, x = cx - w / 2, top = base - h, rx = (2 + 10 * g) * k;
+  let s = `<ellipse cx="${f1(cx + d / 2)}" cy="${f1(base)}" rx="${f1(w / 2 + 6 * k)}" ry="${f1(4 * k)}" fill="#F6D77A"/>`;
+  s += `<path d="M${f1(x + w)},${f1(top + rx * 0.4)} L${f1(x + w + d)},${f1(top - d * 0.8 + rx * 0.4)} L${f1(x + w + d)},${f1(base - d * 0.8)} L${f1(x + w)},${f1(base)} Z" fill="#E9C45E"/>`;
+  s += `<path d="M${f1(x + rx * 0.5)},${f1(top)} L${f1(x + d + rx * 0.5)},${f1(top - d * 0.8)} L${f1(x + w + d - rx * 0.5)},${f1(top - d * 0.8)} L${f1(x + w - rx * 0.5)},${f1(top)} Z" fill="#FBE7A1"/>`;
+  s += `<rect x="${f1(x)}" y="${f1(top)}" width="${f1(w)}" height="${f1(h + 2 * k)}" rx="${f1(Math.min(rx, h / 2 + 1))}" fill="#F6D77A"/>`;
+  return s;
+}
+function melt(steps, t = 0, fresh = {}) {
+  const g = growth(steps);
+  let s = '<rect width="400" height="270" fill="#F7F1E4"/>';
+  for (let y = 18; y < 252; y += 26) s += `<path d="M0,${y} L400,${y}" stroke="#E9DFCB" stroke-width="1.5"/>`;
+  for (let r = 0; r < 10; r++) for (let x = (r % 2) * 13; x < 400; x += 26) s += `<path d="M${x},${r * 26 - 8} L${x},${r * 26 + 18}" stroke="#E9DFCB" stroke-width="1.5"/>`;
+  s += `<rect x="196" y="250" width="204" height="20" fill="#B08452"/><rect x="196" y="248" width="204" height="5" fill="#C8955A"/>`;
+  s += `<ellipse cx="300" cy="251" rx="52" ry="5" fill="#2C2618"/>`;
+  const tier = tierOf(state.speed);
+  if (tier > 0) {
+    for (let i = 0; i < 13; i++) {
+      const x = 222 + i * 13, edge = Math.abs(i - 6) / 6, fl = (5 + tier * 3.2) * (0.6 + edge) + Math.sin(t * 14 + i * 1.7) * 2;
+      s += `<path d="M${x - 3.5},250 Q${x},${f1(250 - fl * 1.6)} ${x + 3.5},250 Z" fill="${tier >= 3 ? '#E08A3C' : '#7FA8E0'}"/>`;
+      if (tier >= 3) s += `<path d="M${x - 2},250 Q${x},${f1(250 - fl)} ${x + 2},250 Z" fill="#F0C077"/>`;
+    }
+  }
+  s += `<path d="M366,232 L398,224 Q402,224 401,229 L370,240 Z" fill="#2C2618"/>`;
+  s += `<ellipse cx="300" cy="238" rx="76" ry="17" fill="#2C2618"/><ellipse cx="300" cy="234" rx="68" ry="13" fill="#3E3830"/>`;
+  if (steps > 0) {
+    s += `<ellipse cx="300" cy="235" rx="${f1(16 + 46 * g)}" ry="${f1(3.5 + 8.5 * g)}" fill="#F0C077"/>`;
+    s += `<ellipse cx="${f1(292 - 8 * g)}" cy="${f1(233 - 2 * g)}" rx="${f1(8 + 20 * g)}" ry="${f1(1.5 + 3 * g)}" fill="#F8DE9A"/>`;
+  }
+  if (g < 1) {
+    s += butterBar(g, 296, 234);
+    const h = Math.max(1.5, 40 * (1 - 0.92 * g)), w = 64 * (1 - 0.35 * g), top = 234 - h;
+    [[0.2, 1], [0.55, 0.7], [0.8, 1.2]].forEach(([u, k], i) => {
+      if (g < 0.05 + i * 0.12 || h < 8) return;
+      const x = 296 - w / 2 + w * u, L = Math.min(h - 3, (4 + 16 * g) * k) + Math.sin(t * 2 + i) * (state.speed > 0 ? 1.2 : 0);
+      s += `<path d="M${f1(x - 2.5)},${f1(top)} L${f1(x - 2.5)},${f1(top + L)} A2.5,2.5 0 0 0 ${f1(x + 2.5)},${f1(top + L)} L${f1(x + 2.5)},${f1(top)} Z" fill="#FBE7A1"/>`;
+    });
+  } else {
+    s += `<g${fresh.melted ? ' class="pop"' : ''}><circle cx="300" cy="232" r="3" fill="#FDFBF5" opacity=".9"/><circle cx="318" cy="236" r="2" fill="#FDFBF5" opacity=".8"/></g>`;
+  }
+  for (let i = 0; i < meltPops(steps); i++) s += popcorn(...POP_SPOTS[i], fresh.pop === i ? 'pop' : '');
+  return s;
+}
+function meltMini(steps) {
+  const g = growth(steps);
+  return `<svg viewBox="-34 -46 68 52"><ellipse cx="0" cy="0" rx="30" ry="7" fill="#2C2618"/><ellipse cx="0" cy="-1.5" rx="26" ry="5" fill="#3E3830"/>
+    ${steps > 0 ? `<ellipse cx="0" cy="-1" rx="${f1(6 + 18 * g)}" ry="${f1(1.5 + 3 * g)}" fill="#F0C077"/>` : ''}
+    ${g < 1 ? `<g transform="translate(0 -1)">${butterBar(g, -2, 0, 0.38)}</g>` : ''}</svg>`;
+}
+const Melt = {
+  walk: 'Топлю масло!', lines: ['', '', 'Шкворчит!', 'Огонь прибавили!', 'Бегом — масло кипит!'],
+  idle: 'Масло холодное. Пройдёмся — растопим!',
+  rest: (s) => (s >= GOAL ? 'Растопили! Сковородка шкворчит.' : 'Тает потихоньку — каждый шаг греет.'),
+  marks(prev, now) {
+    for (const [s, text] of [[100, 'Потекло!'], [1500, 'Капает!'], [4000, 'Половина растаяла!'], [GOAL, 'Растопили!']]) if (prev < s && now >= s) return text;
+    return meltPops(now) > meltPops(prev) ? 'Зёрнышко лопнуло — попкорн!' : null;
+  },
+  fresh(prev, now) { return { melted: prev < GOAL && now >= GOAL, pop: meltPops(now) > meltPops(prev) ? meltPops(now) - 1 : -1 }; },
+  draw(t, fresh) { return melt(state.steps, t, fresh); },
+  init() { this.bubbles = []; },
+  fx(dt) {
+    const g = growth(state.steps);
+    if (state.speed <= 0 || state.steps <= 0) { this.bubbles = []; $('#fx').innerHTML = ''; return; }
+    const rx = 16 + 46 * g, ry = 3.5 + 8.5 * g, want = Math.round(state.speed * 1.6);
+    while (this.bubbles.length < want) { const a = Math.random() * 6.28, q = Math.sqrt(Math.random()) * 0.85; this.bubbles.push({ x: 300 + Math.cos(a) * rx * q, y: 235 + Math.sin(a) * ry * q, life: Math.random() }); }
+    this.bubbles.length = Math.min(this.bubbles.length, want);
+    for (const b of this.bubbles) { b.life += dt * (0.8 + state.speed * 0.15); if (b.life > 1) { const a = Math.random() * 6.28, q = Math.sqrt(Math.random()) * 0.85; Object.assign(b, { x: 300 + Math.cos(a) * rx * q, y: 235 + Math.sin(a) * ry * q, life: 0 }); } }
+    const t = Weather.t, waves = Math.min(2 + tierOf(state.speed), 6);
+    let s = this.bubbles.map((b) => `<circle cx="${f1(b.x)}" cy="${f1(b.y)}" r="${f1(0.6 + b.life * 2.2)}" fill="none" stroke="#FDFBF5" stroke-width="1" opacity="${f1(1 - b.life)}"/>`).join('');
+    for (let i = 0; i < waves; i++) {
+      const x = 262 + i * (76 / Math.max(1, waves - 1)), ph = t * 3 + i;
+      s += `<path d="M${f1(x)},212 C${f1(x + 7 * Math.sin(ph))},196 ${f1(x - 7 * Math.sin(ph))},180 ${f1(x)},164 C${f1(x + 6 * Math.sin(ph + 1))},150 ${f1(x)},140 ${f1(x)},132" stroke="#D9A04A" stroke-width="2" fill="none" stroke-linecap="round" opacity=".35"/>`;
+    }
+    $('#fx').innerHTML = s;
+  },
+  below: (days) => `<div class="shelf">${days.map((d) => `<div class="slot${d.today ? ' today' : ''}">${meltMini(d.steps)}<span>${d.today ? '•' : d.label}</span></div>`).join('')}</div>`,
+};
+VARIANTS.melt = Melt;
+
 // ================= оркестр =================
 // Тем много, данные одни: шаги дня и скорость. Тема — только как их показать.
 let cur = null, curName = '', grain = null, lastSteps = state.steps, fresh = {}, freshUntil = 0, shelfKey = '';
@@ -1008,7 +1311,7 @@ function show(name) {
     if (b.dataset.v === name) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   });
   $('#view').innerHTML = `
-    <div class="head"><div class="big" id="n">0</div><div class="sub"><b id="km">0,00 км</b><span id="min">0 мин</span></div></div>
+    <div class="head"><div class="big${cur.ransom ? ' ransom' : ''}" id="n">0</div><div class="sub"><b id="km">0,00 км</b><span id="min">0 мин</span></div></div>
     <div class="bubble${cur.custom ? ' center' : ''}" id="say">…</div>
     ${cur.custom ? `<div class="stage3d ${cur.cls}" id="stage" title="Тап — другой ракурс"></div>` : sceneSVG(cur)}
     <div class="week"><div id="below"></div><div class="week-total" id="weekTotal"></div></div>`;
@@ -1037,7 +1340,7 @@ function render(force = false) {
     lastSteps = now;
   }
   if (performance.now() > freshUntil) fresh = {};
-  setText($('#n'), fmt(now));
+  if (cur.ransom) { const txt = fmt(now); if ($('#n').dataset.v !== txt) { $('#n').dataset.v = txt; $('#n').innerHTML = ransom(txt); } } else setText($('#n'), fmt(now));
   setText($('#km'), `${km(state.distance)} км`);
   setText($('#min'), `${fmt(state.distance / 1000 / 3.6 * 60)} мин`);
   const tier = tierOf(state.speed);
