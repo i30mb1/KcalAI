@@ -1,0 +1,607 @@
+<title>Дорожка Зёрнышка</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+  /* Одна колонка-телефон: число дня, сцена с дорожкой, итоги, день по часам, неделя, прогулки.
+     Палитра и шрифты — из KcalAI (KcalColors, KcalType). */
+  :root {
+    --bg: #F4EFE4; --surface: #FDFBF5; --chip: #F0E9D9; --line: #E5DCC9;
+    --text: #2C2618; --text2: #6B6250; --text3: #8D8370;
+    --bubble: #2C2618; --on-bubble: #F4EFE4;
+    --go: #4C8F5A; --go-tile: #DDEBD8; --go-text: #2F5E36;
+    --deck: #2C2618; --slat: #8D8370; --lcd-bg: #1E2A1F; --lcd-fg: #A9D88A;
+    --shadow: rgba(44, 38, 24, 0.10);
+    --font-ui: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-data: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1C1914; --surface: #26221B; --chip: #332D23; --line: #3A3428;
+      --text: #F4EFE4; --text2: #B5AB96; --text3: #8D8370;
+      --bubble: #F4EFE4; --on-bubble: #1C1914;
+      --go: #5FA56E; --go-tile: #22331F; --go-text: #93CCA0;
+      --deck: #0E0C09; --slat: #6B6250; --lcd-bg: #16201A; --lcd-fg: #A9D88A;
+      --shadow: rgba(0, 0, 0, 0.35);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1C1914; --surface: #26221B; --chip: #332D23; --line: #3A3428;
+    --text: #F4EFE4; --text2: #B5AB96; --text3: #8D8370;
+    --bubble: #F4EFE4; --on-bubble: #1C1914;
+    --go: #5FA56E; --go-tile: #22331F; --go-text: #93CCA0;
+    --deck: #0E0C09; --slat: #6B6250; --lcd-bg: #16201A; --lcd-fg: #A9D88A;
+    --shadow: rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+
+  html, body { background: var(--bg); color: var(--text); }
+  body {
+    font: 500 16px/1.4 var(--font-ui);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 20px 40px;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--go); outline-offset: 3px; border-radius: 6px; }
+
+  .app { max-width: 440px; margin: 0 auto; display: grid; gap: 22px; }
+
+  .top { display: flex; justify-content: space-between; align-items: center; min-height: 24px; color: var(--text2); font-weight: 600; }
+  .chip { font: 600 11px/1 var(--font-data); letter-spacing: .08em; text-transform: uppercase; color: var(--go-text); background: var(--go-tile); padding: 5px 8px; border-radius: 99px; }
+
+  .hero { display: grid; gap: 10px; }
+  .steps {
+    justify-self: start; text-align: left;
+    font: 800 clamp(64px, 19vw, 92px)/0.9 var(--font-ui);
+    letter-spacing: -0.035em; font-variant-numeric: tabular-nums;
+  }
+  .goal { color: var(--text3); font-weight: 600; }
+  .ruler { position: relative; height: 12px; border-radius: 99px; background: var(--chip); overflow: hidden; }
+  .ruler-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--go); border-radius: 99px; transition: width .6s cubic-bezier(.2,.8,.2,1); }
+  .ruler-ticks { position: absolute; inset: 0; background-image: repeating-linear-gradient(90deg, transparent 0 calc(var(--tick) - 2px), var(--bg) calc(var(--tick) - 2px) var(--tick)); opacity: .55; }
+
+  .stage { display: grid; gap: 4px; }
+  .bubble {
+    position: relative; justify-self: center; max-width: 100%;
+    min-height: 3.1em; display: flex; align-items: center;
+    background: var(--bubble); color: var(--on-bubble);
+    font-weight: 700; font-size: 15px; line-height: 1.35;
+    padding: 9px 16px; border-radius: 18px;
+    text-wrap: balance; text-align: center;
+  }
+  .bubble::after {
+    content: ""; position: absolute; left: 50%; bottom: -6px; width: 14px; height: 14px;
+    background: var(--bubble); transform: translateX(-50%) rotate(45deg); border-radius: 0 0 3px 0;
+  }
+  .scene { width: 100%; height: auto; display: block; overflow: visible; }
+  #grain { cursor: pointer; outline: none; }
+  #grain:focus-visible .body-paper { stroke: var(--go); stroke-width: 2; }
+  .hop { transform-box: fill-box; transform-origin: 50% 100%; }
+  .hop.go { animation: hop .42s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes hop { 0% { transform: translateY(0) } 40% { transform: translateY(-10px) scale(1.04, .97) } 100% { transform: translateY(0) } }
+
+  .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .total { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 12px 10px; display: grid; gap: 2px; }
+  .total b { font: 600 22px/1.1 var(--font-data); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .total span { color: var(--text3); font-size: 13px; font-weight: 600; }
+
+  .ribbon { display: grid; gap: 6px; }
+  .track { position: relative; height: 14px; border-radius: 99px; background: var(--chip); overflow: hidden; }
+  .seg { position: absolute; top: 0; bottom: 0; min-width: 3px; background: var(--go); border-radius: 99px; }
+  .now { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); border-radius: 2px; }
+  .hours { display: flex; justify-content: space-between; font: 400 11px/1 var(--font-data); color: var(--text3); }
+
+  .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; position: relative; }
+  .day { display: grid; grid-template-rows: 96px auto; gap: 6px; justify-items: center; }
+  .col { position: relative; width: 100%; height: 96px; display: flex; align-items: flex-end; justify-content: center; }
+  .bar { width: 100%; max-width: 34px; min-height: 4px; border-radius: 8px 8px 4px 4px; background: var(--line); transition: height .5s cubic-bezier(.2,.8,.2,1); }
+  .bar.met { background: var(--go); }
+  .day.sel .bar { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text); }
+  .dow { font: 600 12px/1 var(--font-data); color: var(--text3); }
+  .day.sel .dow { color: var(--text); }
+  .goal-line { position: absolute; left: 0; right: 0; border-top: 1.5px dashed var(--text3); opacity: .6; pointer-events: none; }
+
+  .walks { display: grid; gap: 0; }
+  .walk { display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: baseline; padding: 11px 2px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .walk:last-child { border-bottom: 1px solid var(--line); }
+  .walk .when { font: 600 15px/1.2 var(--font-data); }
+  .walk .min, .walk .km { font: 400 14px/1.2 var(--font-data); color: var(--text2); text-align: right; }
+  .walk.live .when::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 8px; border-radius: 50%; background: var(--go); vertical-align: 2px; }
+
+  dialog {
+    border: 0; padding: 20px; width: min(400px, calc(100vw - 32px));
+    background: var(--surface); color: var(--text); border-radius: 22px;
+    box-shadow: 0 20px 60px var(--shadow);
+  }
+  dialog::backdrop { background: rgba(28, 25, 20, .45); }
+  .sheet { display: grid; gap: 16px; }
+  .sheet .bubble { justify-self: stretch; }
+  .sheet .bubble::after { display: none; }
+  .field { display: flex; align-items: baseline; gap: 10px; border-bottom: 2px solid var(--line); padding-bottom: 6px; }
+  .field:focus-within { border-color: var(--go); }
+  .field input { flex: 1; min-width: 0; border: 0; background: none; color: var(--text); font: 600 28px/1.1 var(--font-data); outline: none; font-variant-numeric: tabular-nums; }
+  .field span { color: var(--text3); font-weight: 600; }
+  .done { justify-self: end; background: var(--text); color: var(--bg); font-weight: 700; padding: 10px 22px; border-radius: 99px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ruler-fill, .bar { transition: none; }
+    .hop.go { animation: none; }
+  }
+</style>
+
+<main class="app">
+  <div class="top">
+    <span id="dayLabel">сегодня</span>
+    <span class="chip" id="demoChip" hidden>демо</span>
+  </div>
+
+  <section class="hero">
+    <button class="steps" id="steps" aria-label="Шаги за день, цель">0</button>
+    <div class="goal" id="goalText">из 8 000</div>
+    <div class="ruler"><div class="ruler-fill" id="rulerFill"></div><div class="ruler-ticks" id="rulerTicks"></div></div>
+  </section>
+
+  <section class="stage">
+    <div class="bubble" id="say" aria-live="polite">…</div>
+    <svg class="scene" viewBox="0 0 360 172">
+      <ellipse cx="180" cy="167" rx="152" ry="4" fill="var(--shadow)"/>
+      <!-- стойка и консоль спереди: человек идёт вправо, к ней -->
+      <path d="M302,150 L322,66" stroke="var(--deck)" stroke-width="7" stroke-linecap="round" fill="none"/>
+      <path d="M318,76 L284,84" stroke="var(--deck)" stroke-width="5" stroke-linecap="round" fill="none"/>
+      <rect x="296" y="40" width="58" height="30" rx="7" fill="var(--deck)"/>
+      <rect x="302" y="46" width="46" height="18" rx="3" fill="var(--lcd-bg)"/>
+      <text id="lcd" x="325" y="59.5" text-anchor="middle" fill="var(--lcd-fg)" style="font: 600 12px var(--font-data)">0.0</text>
+      <!-- полотно -->
+      <rect x="26" y="146" width="288" height="15" rx="7.5" fill="var(--deck)"/>
+      <line id="slats" x1="40" y1="149.5" x2="300" y2="149.5" stroke="var(--slat)" stroke-width="2" stroke-dasharray="2 12" stroke-linecap="round"/>
+      <circle cx="34" cy="153.5" r="3" fill="var(--slat)"/>
+      <circle cx="306" cy="153.5" r="3" fill="var(--slat)"/>
+      <rect x="48" y="160" width="16" height="5" rx="2.5" fill="var(--deck)"/>
+      <rect x="276" y="160" width="16" height="5" rx="2.5" fill="var(--deck)"/>
+
+      <!-- Зёрнышко: контуры из Grain.kt, ноги — только для дорожки -->
+      <g id="grain" role="button" tabindex="0" aria-label="Зёрнышко" transform="translate(105 13) scale(1.25)">
+        <g class="hop" id="hop">
+          <g id="legL" transform="rotate(0 52 86)">
+            <path d="M52,86 L52,105" stroke="#4C8F5A" stroke-width="10" stroke-linecap="round"/>
+            <path d="M52,86 L52,105" stroke="#7FBF8C" stroke-width="5.5" stroke-linecap="round"/>
+          </g>
+          <g id="legR" transform="rotate(0 68 86)">
+            <path d="M68,86 L68,105" stroke="#4C8F5A" stroke-width="10" stroke-linecap="round"/>
+            <path d="M68,86 L68,105" stroke="#7FBF8C" stroke-width="5.5" stroke-linecap="round"/>
+          </g>
+          <g id="upper">
+            <g id="armL" transform="rotate(0 32 70)">
+              <path d="M32,70 C24,76 22,84 26,90" fill="none" stroke="#4C8F5A" stroke-width="13" stroke-linecap="round"/>
+              <path d="M32,70 C24,76 22,84 26,90" fill="none" stroke="#7FBF8C" stroke-width="8" stroke-linecap="round"/>
+            </g>
+            <g id="armR" transform="rotate(0 88 70)">
+              <path d="M88,70 C96,76 98,84 94,90" fill="none" stroke="#4C8F5A" stroke-width="13" stroke-linecap="round"/>
+              <path d="M88,70 C96,76 98,84 94,90" fill="none" stroke="#7FBF8C" stroke-width="8" stroke-linecap="round"/>
+            </g>
+            <g transform="rotate(4 60 60)">
+              <g transform="translate(0.6 1.8)" opacity=".35">
+                <path d="M60,22 L53,6 M60,22 L60,2 M60,22 L67,6" stroke="#3B2A12" stroke-width="4" stroke-linecap="round" fill="none"/>
+                <path d="M60,20 C80,20 90,46 90,64 C90,84 76,94 60,94 C44,94 30,84 30,64 C30,46 40,20 60,20 Z" fill="#3B2A12"/>
+              </g>
+              <path d="M60,22 L53,6 M60,22 L60,2 M60,22 L67,6" stroke="#4C8F5A" stroke-width="4" stroke-linecap="round" fill="none"/>
+              <path class="body-paper" d="M60,20 C80,20 90,46 90,64 C90,84 76,94 60,94 C44,94 30,84 30,64 C30,46 40,20 60,20 Z" fill="#7FBF8C"/>
+              <path d="M60,28 C57,42 54,52 56,62 C57,72 58,80 60,88" stroke="#3E7A4B" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+            </g>
+            <g id="face" fill="none" stroke="#2C2618" stroke-width="2.2" stroke-linecap="round"></g>
+          </g>
+        </g>
+      </g>
+    </svg>
+  </section>
+
+  <section class="totals">
+    <div class="total"><b id="km">0,00</b><span>км</span></div>
+    <div class="total"><b id="min">0</b><span>мин</span></div>
+    <div class="total"><b id="kcal">0</b><span>ккал</span></div>
+  </section>
+
+  <section class="ribbon" aria-label="Прогулки по часам">
+    <div class="track" id="track"></div>
+    <div class="hours"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div>
+  </section>
+
+  <section class="week" id="week" aria-label="Неделя"></section>
+
+  <section class="walks" id="walks"></section>
+</main>
+
+<dialog id="sheet">
+  <form class="sheet" method="dialog" id="sheetForm">
+    <div class="bubble">Сколько шагов в день — цель? И рост: по нему меряю шаг!</div>
+    <label class="field"><input id="goalInput" type="number" inputmode="numeric" min="1000" step="500"><span>шагов</span></label>
+    <label class="field"><input id="heightInput" type="number" inputmode="numeric" min="100" max="230"><span>см</span></label>
+    <button class="done" id="sheetDone" autofocus>Готово</button>
+  </form>
+</dialog>
+
+<script type="module">
+import {
+  FTMS_SERVICE, TREADMILL_DATA, parseTreadmillData, encodeTreadmillData,
+  track, dayTotals, dayKey, strideMeters,
+} from './treadmill.js';
+
+const $ = (id) => document.getElementById(id);
+const DAY = 86_400_000;
+const STORE_KEY = 'kcalai.treadmill.v1';
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- хранение ----------
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) ?? {}; } catch { return {}; }
+}
+function persist() {
+  if (demo) return;
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch {}
+}
+let saveTimer = 0;
+function persistSoon() {
+  if (saveTimer) return;
+  saveTimer = setTimeout(() => { saveTimer = 0; persist(); }, 3000);
+}
+
+// ---------- состояние ----------
+const bt = navigator.bluetooth;
+const realBluetooth = !!bt && window.isSecureContext && window.self === window.top;
+const demo = location.hash === '#demo' || !realBluetooth;
+
+let store = { sessions: [], goal: 8000, height: 175, deviceId: null, ...(demo ? {} : load()) };
+if (demo) store.sessions = demoHistory();
+
+const live = { speed: 0, walking: false, link: 'idle', justSaved: null, error: false };
+let selectedDay = dayKey(Date.now());
+
+// ---------- данные дорожки ----------
+function onPacket(bytes, now = Date.now()) {
+  const d = parseTreadmillData(bytes);
+  const wasWalking = live.walking;
+  live.speed = d.speed;
+  live.walking = d.speed > 0;
+  store.sessions = track(store.sessions, d, now, store.height);
+  if (wasWalking && !live.walking) noteSaved();
+  if (live.walking) live.justSaved = null;
+  persistSoon();
+  render();
+  animate();
+}
+
+function noteSaved() {
+  const last = store.sessions[store.sessions.length - 1];
+  if (last && Date.now() - last.seenAt < 10 * 60_000) live.justSaved = last;
+  persist();
+}
+
+// ---------- Bluetooth ----------
+let device = null;
+let watchAbort = null;
+
+async function startReal() {
+  if (!bt.getDevices) { live.link = 'needTap'; render(); return; }
+  const devices = await bt.getDevices().catch(() => []);
+  const known = devices.find((d) => d.id === store.deviceId) ?? devices[0];
+  if (!known) { live.link = 'needPair'; render(); return; }
+  waitFor(known);
+}
+
+async function waitFor(d) {
+  device = d;
+  hook(d);
+  live.link = 'waiting';
+  render();
+  if (!d.watchAdvertisements) { live.link = 'needTap'; render(); return; }
+  watchAbort?.abort();
+  watchAbort = new AbortController();
+  d.addEventListener('advertisementreceived', () => {
+    watchAbort?.abort();
+    connect(d);
+  }, { once: true });
+  try { await d.watchAdvertisements({ signal: watchAbort.signal }); }
+  catch { live.link = 'needTap'; render(); }
+}
+
+const hooked = new WeakSet();
+function hook(d) {
+  if (hooked.has(d)) return;
+  hooked.add(d);
+  d.addEventListener('gattserverdisconnected', () => {
+    noteSaved();
+    live.speed = 0; live.walking = false;
+    render(); animate();
+    waitFor(d);
+  });
+}
+
+async function connect(d) {
+  hook(d);
+  live.link = 'connecting'; live.error = false; render();
+  try {
+    const server = await d.gatt.connect();
+    const service = await server.getPrimaryService(FTMS_SERVICE);
+    const ch = await service.getCharacteristic(TREADMILL_DATA);
+    ch.addEventListener('characteristicvaluechanged', (e) => {
+      const v = e.target.value;
+      onPacket(new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
+    });
+    await ch.startNotifications();
+    store.deviceId = d.id; persist();
+    live.link = 'connected';
+  } catch {
+    live.link = 'needTap'; live.error = true;
+  }
+  render();
+}
+
+async function pair() {
+  try {
+    const d = await bt.requestDevice({ filters: [{ services: [FTMS_SERVICE] }] });
+    device = d;
+    await connect(d);
+  } catch (e) {
+    if (e?.name !== 'NotFoundError') { live.error = true; render(); }
+  }
+}
+
+// ---------- демо ----------
+let demoTimer = 0;
+const demoRun = { speed: 0, distance: 0, elapsed: 0, start: 0 };
+const DEMO_SECONDS_PER_TICK = 30;
+
+function toggleDemo() {
+  if (demoTimer) {
+    clearInterval(demoTimer); demoTimer = 0;
+    live.speed = 0; live.walking = false; noteSaved(); live.link = 'connected';
+    render(); animate();
+    return;
+  }
+  live.link = 'connected';
+  Object.assign(demoRun, { speed: 1, distance: 0, elapsed: 0, start: Date.now() });
+  demoTimer = setInterval(() => {
+    demoRun.speed = Math.min(3.8, +(demoRun.speed + 0.4).toFixed(1));
+    demoRun.elapsed += DEMO_SECONDS_PER_TICK;
+    demoRun.distance += Math.round((demoRun.speed / 3.6) * DEMO_SECONDS_PER_TICK);
+    const pkt = encodeTreadmillData({
+      speed: demoRun.speed, distance: demoRun.distance,
+      kcal: Math.round(demoRun.distance * 0.055), elapsed: demoRun.elapsed,
+    });
+    onPacket(pkt, demoRun.start + demoRun.elapsed * 1000);
+  }, 1000);
+}
+
+function demoHistory() {
+  const out = [];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  // [дней назад, час начала, метров, минут]
+  const walks = [[6, 19.5, 3200, 52], [5, 8, 1400, 25], [5, 20, 3900, 61], [3, 18.2, 4400, 70],
+    [2, 7.5, 2100, 34], [2, 21, 4800, 74], [1, 19, 2600, 44], [0, 9.2, 1800, 31]];
+  for (const [ago, hour, distance, minutes] of walks) {
+    const startedAt = today.getTime() - ago * DAY + hour * 3_600_000;
+    const elapsed = minutes * 60;
+    out.push({
+      id: startedAt, startedAt, seenAt: startedAt + elapsed * 1000, distance, elapsed,
+      kcal: Math.round(distance * 0.055),
+      steps: distance / strideMeters((distance / elapsed) * 3.6, 175), topSpeed: 4,
+    });
+  }
+  return out;
+}
+
+// ---------- реплика Зёрнышка ----------
+function line() {
+  const today = dayTotals(store.sessions, dayKey(Date.now()));
+  const left = Math.round(store.goal - today.steps);
+  const met = left <= 0;
+  if (live.walking) {
+    if (met) return 'Цель закрыта! Дальше — бонус!';
+    if (left <= 1000) return `Ещё ${fmtInt(left)} шагов до цели!`;
+    return 'Топаем!';
+  }
+  if (live.justSaved) return `Записал прогулку: ${fmtKm(live.justSaved.distance)} км. Не потеряется!`;
+  if (live.error) return 'Не вышло подключиться. Тапни меня ещё раз!';
+  if (demo) return live.link === 'connected' ? 'Тапни меня — пройдёмся ещё!' : 'Это демо. Тапни меня — пройдёмся!';
+  switch (live.link) {
+    case 'needPair': return 'Включи дорожку и тапни меня — найду её!';
+    case 'needTap': return 'Тапни меня — подцеплюсь к дорожке!';
+    case 'waiting': return met ? `${fmtInt(today.steps)} шагов сегодня. Цель есть!` : 'Жду дорожку. Включишь — сам подключусь!';
+    case 'connecting': return 'Цепляюсь к дорожке…';
+    case 'connected': return 'Дорожка на связи! Погнали?';
+    default: return '…';
+  }
+}
+
+// ---------- лицо ----------
+function faceKind() {
+  const today = dayTotals(store.sessions, dayKey(Date.now()));
+  if (today.steps >= store.goal && !live.walking) return 'happy';
+  if (live.link === 'waiting' || live.link === 'needPair') return 'asleep';
+  return 'calm';
+}
+let shownFace = '';
+let eyesShift = 0;
+let blink = false;
+function drawFace() {
+  const kind = faceKind();
+  const key = `${kind}|${eyesShift}|${blink}`;
+  if (key === shownFace) return;
+  shownFace = key;
+  const x = eyesShift;
+  const eye = (cx) => {
+    if (kind === 'happy') return `<path d="M${cx - 5 + x},63 Q${cx + x},56.5 ${cx + 5 + x},63"/>`;
+    if (kind === 'asleep' || blink) return `<path d="M${cx - 5 + x},61 Q${cx + x},66 ${cx + 5 + x},61"/>`;
+    return `<circle cx="${cx + x}" cy="62" r="5.5" fill="#2C2618" stroke="none"/>`;
+  };
+  const m = x / 2;
+  const mouth = kind === 'happy'
+    ? `<path d="M${51 + m},74 C${56 + m},81 ${64 + m},81 ${69 + m},74"/>`
+    : `<path d="M${54 + m},75 C${57 + m},79 ${63 + m},79 ${66 + m},75"/>`;
+  $('face').innerHTML = eye(48) + eye(72) + mouth;
+}
+
+// ---------- шаг на дорожке ----------
+let raf = 0, lastT = 0, belt = 0, phase = 0, nextBlink = 0;
+function animate() {
+  const moving = live.speed > 0 && !reducedMotion;
+  if (moving && !raf) { lastT = 0; raf = requestAnimationFrame(frame); }
+  if (!moving) rest();
+}
+function frame(t) {
+  if (!(live.speed > 0) || reducedMotion) { raf = 0; rest(); return; }
+  const dt = lastT ? Math.min((t - lastT) / 1000, 0.1) : 0;
+  lastT = t;
+  const mps = live.speed / 3.6;
+  belt += mps * 38 * dt;
+  $('slats').setAttribute('stroke-dashoffset', belt.toFixed(1));
+  phase += Math.PI * (mps / strideMeters(live.speed, store.height)) * dt;
+  const amp = Math.min(14 + live.speed * 3, 30);
+  const a = Math.sin(phase) * amp;
+  $('legL').setAttribute('transform', `rotate(${a.toFixed(1)} 52 86)`);
+  $('legR').setAttribute('transform', `rotate(${(-a).toFixed(1)} 68 86)`);
+  $('armL').setAttribute('transform', `rotate(${(a * 0.5).toFixed(1)} 32 70)`);
+  $('armR').setAttribute('transform', `rotate(${(-a * 0.5).toFixed(1)} 88 70)`);
+  $('upper').setAttribute('transform', `translate(0 ${(-(1 - Math.abs(Math.sin(phase))) * 2.4).toFixed(2)})`);
+  eyesShift = 2;
+  if (t > nextBlink) { blink = !blink; nextBlink = t + (blink ? 130 : 2500 + Math.random() * 3000); }
+  drawFace();
+  raf = requestAnimationFrame(frame);
+}
+function rest() {
+  for (const [id, p] of [['legL', '52 86'], ['legR', '68 86'], ['armL', '32 70'], ['armR', '88 70']]) {
+    $(id).setAttribute('transform', `rotate(0 ${p})`);
+  }
+  $('upper').removeAttribute('transform');
+  eyesShift = 0; blink = false;
+  drawFace();
+}
+
+// ---------- вид ----------
+const nf = new Intl.NumberFormat('ru-RU');
+const fmtInt = (n) => nf.format(Math.max(0, Math.round(n)));
+const fmtKm = (m) => (m / 1000).toFixed(2).replace('.', ',');
+const hhmm = (ts) => new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+const DOW = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+
+function setText(el, text) { if (el.textContent !== text) el.textContent = text; }
+
+function render() {
+  const todayKey = dayKey(Date.now());
+  const t = dayTotals(store.sessions, selectedDay);
+  const isToday = selectedDay === todayKey;
+  const sel = new Date(`${selectedDay}T12:00:00`);
+  const date = sel.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+  setText($('dayLabel'), isToday ? `сегодня, ${date}` : sel.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' }));
+  $('demoChip').hidden = !demo;
+
+  setText($('steps'), fmtInt(t.steps));
+  setText($('goalText'), `из ${fmtInt(store.goal)}`);
+  $('rulerFill').style.width = `${Math.min(100, (t.steps / store.goal) * 100)}%`;
+  $('rulerTicks').style.setProperty('--tick', `${(1000 / store.goal) * 100}%`);
+
+  setText($('say'), line());
+  setText($('lcd'), live.speed.toFixed(1));
+  setText($('km'), fmtKm(t.distance));
+  setText($('min'), fmtInt(t.elapsed / 60));
+  setText($('kcal'), fmtInt(t.kcal));
+
+  renderTrack(isToday);
+  renderWeek(todayKey);
+  renderWalks();
+  drawFace();
+}
+
+function renderTrack(isToday) {
+  const start = new Date(`${selectedDay}T00:00:00`).getTime();
+  const pct = (ts) => Math.min(100, Math.max(0, ((ts - start) / DAY) * 100));
+  let html = '';
+  for (const s of store.sessions) {
+    if (dayKey(s.startedAt) !== selectedDay) continue;
+    html += `<div class="seg" style="left:${pct(s.startedAt)}%;width:${pct(s.seenAt) - pct(s.startedAt)}%"></div>`;
+  }
+  if (isToday) html += `<div class="now" style="left:${pct(Date.now())}%"></div>`;
+  $('track').innerHTML = html;
+}
+
+function renderWeek(todayKey) {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const ts = Date.now() - i * DAY;
+    const key = dayKey(ts);
+    days.push({ key, dow: DOW[new Date(ts).getDay()], steps: dayTotals(store.sessions, key).steps });
+  }
+  const top = Math.max(store.goal * 1.15, ...days.map((d) => d.steps));
+  const h = (v) => (v / top) * 96;
+  $('week').innerHTML = days.map((d) => `
+    <button class="day${d.key === selectedDay ? ' sel' : ''}" data-day="${d.key}" aria-label="${d.dow}: ${fmtInt(d.steps)} шагов">
+      <div class="col"><div class="bar${d.steps >= store.goal ? ' met' : ''}" style="height:${Math.max(4, h(d.steps))}px"></div></div>
+      <span class="dow">${d.key === todayKey ? '•' : d.dow}</span>
+    </button>`).join('')
+    + `<div class="goal-line" style="top:${96 - h(store.goal)}px"></div>`;
+}
+
+function renderWalks() {
+  const list = store.sessions.filter((s) => dayKey(s.startedAt) === selectedDay).reverse();
+  const lastId = store.sessions[store.sessions.length - 1]?.id;
+  $('walks').innerHTML = list.map((s) => `
+    <div class="walk${live.walking && s.id === lastId ? ' live' : ''}">
+      <span class="when">${hhmm(s.startedAt)}–${hhmm(s.seenAt)}</span>
+      <span class="min">${fmtInt(s.elapsed / 60)} мин</span>
+      <span class="km">${fmtKm(s.distance)} км</span>
+    </div>`).join('');
+}
+
+// ---------- касания ----------
+function hop() {
+  const g = $('hop');
+  g.classList.remove('go'); void g.getBBox(); g.classList.add('go');
+}
+function tapGrain() {
+  hop();
+  const failedBefore = live.error;
+  live.justSaved = null; live.error = false;
+  if (demo) { toggleDemo(); return; }
+  if (live.link === 'connected' || live.link === 'connecting') { render(); return; }
+  // Знакомую дорожку пробуем без окна выбора; не вышло — следующий тап откроет выбор.
+  if (device && !failedBefore) { connect(device); return; }
+  pair();
+}
+$('grain').addEventListener('click', tapGrain);
+$('grain').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapGrain(); } });
+
+$('week').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-day]');
+  if (!b) return;
+  selectedDay = b.dataset.day;
+  render();
+});
+
+$('steps').addEventListener('click', () => {
+  $('goalInput').value = store.goal;
+  $('heightInput').value = store.height;
+  $('sheet').showModal();
+});
+$('sheet').addEventListener('click', (e) => { if (e.target === $('sheet')) $('sheet').close(); });
+$('sheetForm').addEventListener('submit', () => {
+  const g = parseInt($('goalInput').value, 10);
+  const h = parseInt($('heightInput').value, 10);
+  if (g >= 500 && g <= 100000) store.goal = g;
+  if (h >= 100 && h <= 230) store.height = h;
+  persist();
+  render();
+});
+
+addEventListener('pagehide', persist);
+document.addEventListener('visibilitychange', () => { if (document.hidden) persist(); else render(); });
+setInterval(render, 60_000);
+
+render();
+rest();
+if (demo) live.link = 'idle'; else startReal();
+render();
+</script>
