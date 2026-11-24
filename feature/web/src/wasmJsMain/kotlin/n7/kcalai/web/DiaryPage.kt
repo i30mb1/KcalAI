@@ -1,10 +1,13 @@
 package n7.kcalai.web
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -56,6 +60,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.browser.document
@@ -97,6 +102,7 @@ import n7.kcalai.webapi.arrivals
 import n7.kcalai.webapi.byMeal
 import n7.kcalai.webapi.defaultMeal
 import n7.kcalai.webapi.line
+import n7.kcalai.webapi.offlineLine
 import n7.kcalai.webapi.peersLine
 import n7.kcalai.webapi.totals
 
@@ -108,6 +114,11 @@ private const val SEARCH_DEBOUNCE_MS = 200L
 
 /** Число калорий доезжает до нового — но быстро: это ответ на действие, а не заставка. */
 private const val NUMBER_MS = 280
+
+/** Насколько приглушить неживой дневник: читается, но видно, что сейчас он не отвечает. */
+private val OFFLINE_BLUR = 6.dp
+private const val OFFLINE_SCRIM = 0.35f
+private const val OFFLINE_MS = 300
 
 /** Подсветка под курсором — едва заметная: она говорит «нажимается», а не кричит. */
 private const val HOVER_ALPHA = 0.08f
@@ -135,10 +146,13 @@ fun DiaryPage(link: PhoneLink) {
         document.title = diary?.day?.owner?.takeIf { it.isNotBlank() }?.let { "$it · дневник" } ?: "Дневник"
     }
     var settings by remember { mutableStateOf(false) }
+    // Связь пропала — дневник остаётся как был, только приглушённый: видно, что он неживой.
+    val offline = diary?.offline == true
+    val blur by animateDpAsState(if (offline) OFFLINE_BLUR else 0.dp, tween(OFFLINE_MS, easing = EaseOutStrong))
 
     Box(Modifier.fillMaxSize().background(colors.bg), contentAlignment = Alignment.TopCenter) {
         Column(
-            modifier = Modifier.widthIn(max = COLUMN_MAX).fillMaxSize().padding(20.dp),
+            modifier = Modifier.widthIn(max = COLUMN_MAX).fillMaxSize().blur(blur).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             if (diary == null) {
@@ -155,8 +169,44 @@ fun DiaryPage(link: PhoneLink) {
                 Composer(diary, link)
             }
         }
-        if (settings && diary != null) {
+        if (diary != null && offline) {
+            OfflineOverlay(diary.offlineLine())
+        } else if (settings && diary != null) {
             SettingsPanel(diary.day, link, onClose = { settings = false })
+        }
+    }
+}
+
+/**
+ * Поверх неживого дневника — Масло и что сделать. Дымка забирает клики: писать
+ * некуда, пока телефон не ответит, а страница подключится сама.
+ */
+@Composable
+private fun OfflineOverlay(line: PageLine) {
+    val colors = KcalTheme.colors
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(colors.bg.copy(alpha = OFFLINE_SCRIM))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.enter().widthIn(max = 360.dp).padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            MascotFigure(line.mascot, MascotPose.WAVE, Modifier.size(120.dp, 100.dp))
+            Text(
+                line.text,
+                style = KcalTheme.type.body,
+                color = colors.text,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(KcalShapes.bubble))
+                    .background(colors.surface)
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+            )
         }
     }
 }

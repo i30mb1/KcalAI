@@ -14,6 +14,7 @@ import n7.kcalai.webapi.ToPage
 import n7.kcalai.webapi.ToPhone
 import n7.kcalai.webapi.WEB_SOCKET_PATH
 import n7.kcalai.webapi.after
+import n7.kcalai.webapi.lost
 import n7.kcalai.webapi.encode
 import n7.kcalai.webapi.parseToPage
 import org.w3c.dom.MessageEvent
@@ -72,8 +73,8 @@ class PhoneLink(private val scope: CoroutineScope) {
         opened.onclose = {
             if (socket === opened && !left) {
                 socket = null
-                // Отказ и очередь — ответы, а не обрыв: их и оставляем на экране.
-                current.update { if (it is PageState.Denied || it is PageState.Busy) it else PageState.Lost }
+                // Что было на экране, остаётся: дневник — неживым, отказ — отказом.
+                current.update { it.lost() }
                 scope.launch {
                     delay(RETRY_MS)
                     connect()

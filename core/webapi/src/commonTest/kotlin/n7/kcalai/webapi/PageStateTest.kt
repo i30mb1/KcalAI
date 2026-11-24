@@ -4,6 +4,7 @@ import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -44,12 +45,40 @@ class PageStateTest {
         assertEquals(Mascot.EGG, PageState.Connecting.after(ToPage.Busy).line()?.mascot)
     }
 
-    /** Связь пропала — утешает Масло и объясняет, что сделать: страница переподключится сама. */
+    /** Связь пропала до дневника — утешает Масло и объясняет, что сделать: страница переподключится сама. */
     @Test
     fun `связь пропала — Масло говорит, что сделать`() {
-        val line = PageState.Lost.line()!!
+        val line = PageState.Connecting.lost().line()!!
         assertEquals(Mascot.BUTTER, line.mascot)
         assertTrue("дневник" in line.text, line.text)
+    }
+
+    /**
+     * Связь пропала посреди дневника — дневник остаётся как был, только неживой:
+     * страница его приглушает, а Масло говорит поверх, что сделать. Вернулась связь —
+     * дневник снова живой, с теми же подсказками.
+     */
+    @Test
+    fun `обрыв не стирает дневник — он остаётся, но неживой`() {
+        val found = ToPage.Suggestions("гречка", listOf(WebSuggestion("Гречка отварная", 200, 220, Mascot.GRAIN)))
+        val open = PageState.Diary(day).after(found)
+
+        val offline = assertIs<PageState.Diary>(open.lost())
+        assertEquals(day, offline.day)
+        assertTrue(offline.offline)
+        assertEquals(Mascot.BUTTER, offline.offlineLine().mascot)
+
+        val back = assertIs<PageState.Diary>(offline.after(ToPage.Day(day)))
+        assertFalse(back.offline)
+        assertEquals(found.items, back.suggestionsFor("гречка"))
+    }
+
+    /** Отказ и очередь — ответы, а не обрыв: при закрытом сокете они остаются на экране. */
+    @Test
+    fun `отказ остаётся отказом и после обрыва`() {
+        assertEquals(PageState.Denied, PageState.Denied.lost())
+        assertEquals(PageState.Busy, PageState.Busy.lost())
+        assertEquals(PageState.Left, PageState.Left.lost())
     }
 
     /** Вышел сам — страница больше не стучится в телефон, а Яйцо говорит, как вернуться. */

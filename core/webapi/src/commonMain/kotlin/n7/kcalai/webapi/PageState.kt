@@ -28,8 +28,15 @@ sealed interface PageState {
     /** Браузер вышел сам: телефон его забыл, и страница больше не стучится. */
     data object Left : PageState
 
-    /** @param suggestions последний ответ поиска — к какому запросу он, проверяет [suggestionsFor] */
-    data class Diary(val day: WebDay, val suggestions: ToPage.Suggestions? = null) : PageState {
+    /**
+     * @param suggestions последний ответ поиска — к какому запросу он, проверяет [suggestionsFor]
+     * @param offline связь с телефоном пропала: дневник остаётся как был, но неживой — см. [offlineLine]
+     */
+    data class Diary(
+        val day: WebDay,
+        val suggestions: ToPage.Suggestions? = null,
+        val offline: Boolean = false,
+    ) : PageState {
 
         /** Подсказки к тому, что сейчас в строке; ответ на старый запрос сюда не годится. */
         fun suggestionsFor(input: String): List<WebSuggestion> =
@@ -49,9 +56,25 @@ fun PageState.after(message: ToPage): PageState = when (message) {
     is ToPage.Pairing -> PageState.Pairing(message.code)
     ToPage.Denied -> PageState.Denied
     ToPage.Busy -> PageState.Busy
-    is ToPage.Day -> PageState.Diary(message.day, (this as? PageState.Diary)?.suggestions)
+    is ToPage.Day -> PageState.Diary(message.day, (this as? PageState.Diary)?.suggestions, offline = false)
     is ToPage.Suggestions -> (this as? PageState.Diary)?.copy(suggestions = message) ?: this
 }
+
+/**
+ * Связь с телефоном пропала. Открытый дневник не стирается — он остаётся как был,
+ * только неживой, и вернётся живым на первое же слово телефона. Отказ, очередь
+ * и выход — ответы, а не обрыв: они остаются на экране.
+ */
+fun PageState.lost(): PageState = when (this) {
+    is PageState.Diary -> copy(offline = true)
+    PageState.Denied, PageState.Busy, PageState.Left -> this
+    else -> PageState.Lost
+}
+
+/** Что сказать поверх неживого дневника: связь пропала — утешает Масло и говорит, что сделать. */
+fun PageState.Diary.offlineLine(): PageLine = LOST_LINE
+
+private val LOST_LINE = PageLine(Mascot.BUTTER, "Телефон не отвечает. Открой на нём дневник — подключусь сам.")
 
 /**
  * Что сказать человеку. Пускает Яйцо — оно и спрашивает на телефоне; пропавшую
@@ -62,7 +85,7 @@ fun PageState.line(): PageLine? = when (this) {
     is PageState.Pairing -> PageLine(Mascot.EGG, "Код $code — такой же сейчас на телефоне. Нажми там «Пустить».")
     PageState.Denied -> PageLine(Mascot.EGG, "На телефоне сказали «нет». Попросить ещё раз?")
     PageState.Busy -> PageLine(Mascot.EGG, "В дневник просятся слишком многие. Ответь им на телефоне — и попробуем снова.")
-    PageState.Lost -> PageLine(Mascot.BUTTER, "Телефон не отвечает. Открой на нём дневник — подключусь сам.")
+    PageState.Lost -> LOST_LINE
     PageState.Left -> PageLine(Mascot.EGG, "Вышли. Чтобы вернуться, обнови страницу — и пусти браузер на телефоне снова.")
     is PageState.Diary -> if (day.entries.isEmpty()) PageLine(Mascot.EGG, "Пока пусто. Напиши, что было, — найду.") else null
 }
