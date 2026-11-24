@@ -11,6 +11,8 @@ kotlin {
             implementation(project(":core:webapi"))
             implementation(libs.kotlinx.browser)
             implementation(libs.cmp.material3)
+            // Иконки — векторами: символы вроде «⚙» браузер рисует цветным эмодзи.
+            implementation(libs.cmp.material.icons.core)
         }
     }
 }

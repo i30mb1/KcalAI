@@ -92,6 +92,7 @@ cmp-foundation = { group = "org.jetbrains.compose.foundation", name = "foundatio
 cmp-ui = { group = "org.jetbrains.compose.ui", name = "ui", version.ref = "cmp" }
 cmp-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "cmpMaterial3" }
 cmp-material-icons-extended = { group = "org.jetbrains.compose.material", name = "material-icons-extended", version.ref = "cmpIcons" }
+cmp-material-icons-core = { group = "org.jetbrains.compose.material", name = "material-icons-core", version.ref = "cmpIcons" }
 cmp-resources = { group = "org.jetbrains.compose.components", name = "components-resources", version.ref = "cmp" }
 # Системное «назад» в общем коде: из прошлого дня возвращает к сегодня.
 # Версия — та, что тянет Compose Multiplatform 1.12.

@@ -26,6 +26,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -62,6 +65,8 @@ import kotlinx.coroutines.launch
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
+import kotlinx.datetime.LocalDate
+import n7.kcalai.model.dayLabel
 import n7.kcalai.model.formatCentigrams
 import n7.kcalai.model.formatGrams
 import n7.kcalai.model.title
@@ -90,6 +95,7 @@ import n7.kcalai.webapi.WebMacros
 import n7.kcalai.webapi.WebSuggestion
 import n7.kcalai.webapi.arrivals
 import n7.kcalai.webapi.byMeal
+import n7.kcalai.webapi.defaultMeal
 import n7.kcalai.webapi.line
 import n7.kcalai.webapi.peersLine
 import n7.kcalai.webapi.totals
@@ -128,6 +134,7 @@ fun DiaryPage(link: PhoneLink) {
     LaunchedEffect(diary?.day?.owner) {
         document.title = diary?.day?.owner?.takeIf { it.isNotBlank() }?.let { "$it · дневник" } ?: "Дневник"
     }
+    var settings by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize().background(colors.bg), contentAlignment = Alignment.TopCenter) {
         Column(
@@ -138,7 +145,7 @@ fun DiaryPage(link: PhoneLink) {
                 // До пуска на странице только разговор: код, отказ или пропавшая связь.
                 Line(state.line(), action = if (state == PageState.Denied) ("Попросить" to link::askAgain) else null)
             } else {
-                Header(diary.day, puppets, onLeave = link::leave)
+                Header(diary.day, puppets, onSettings = { settings = true }, onOpen = { link.send(ToPhone.Open(it)) })
                 Meals(diary.day, link, Modifier.weight(1f))
                 // Реплики — у строки ввода, как в переписке: там, куда человек и смотрит.
                 diary.line()?.let { Line(it) }
@@ -147,6 +154,9 @@ fun DiaryPage(link: PhoneLink) {
                 }
                 Composer(diary, link)
             }
+        }
+        if (settings && diary != null) {
+            SettingsPanel(diary.day, link, onClose = { settings = false })
         }
     }
 }
@@ -157,7 +167,7 @@ fun DiaryPage(link: PhoneLink) {
  * взгляда: имя хозяина стоит сверху.
  */
 @Composable
-private fun Header(day: WebDay, puppets: Map<Mascot, MascotPuppet>, onLeave: () -> Unit) {
+private fun Header(day: WebDay, puppets: Map<Mascot, MascotPuppet>, onSettings: () -> Unit, onOpen: (Long) -> Unit) {
     val colors = KcalTheme.colors
     val type = KcalTheme.type
     val totals = day.totals()
@@ -166,19 +176,33 @@ private fun Header(day: WebDay, puppets: Map<Mascot, MascotPuppet>, onLeave: () 
     val over = goal != null && totals.kcal > goal
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val past = day.date < day.today
+        val label = dayLabel(LocalDate.fromEpochDays(day.date), LocalDate.fromEpochDays(day.today))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            CapsLabel(if (day.owner.isBlank()) "сегодня" else "${day.owner} · сегодня", modifier = Modifier.weight(1f))
-            // Действие не назвать данными — поэтому словом, и тихо: главное на странице не оно.
-            Text(
-                "Выйти",
-                style = type.chip,
-                color = colors.text3,
+            // Чей дневник и какой день. Прошлый день — тапом обратно в сегодня, как в шапке приложения.
+            CapsLabel(
+                text = listOfNotNull(day.owner.takeIf { it.isNotBlank() }, if (past) "← $label" else label).joinToString(" · "),
+                color = if (past) colors.text else colors.text3,
                 modifier = Modifier
-                    .press(RoundedCornerShape(8.dp), colors.text.copy(alpha = HOVER_ALPHA), onLeave)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .then(if (past) Modifier.press(RoundedCornerShape(8.dp), colors.text.copy(alpha = HOVER_ALPHA)) { onOpen(day.today) } else Modifier)
+                    .padding(vertical = 4.dp),
+            )
+            Spacer(Modifier.weight(1f))
+            Icon(
+                Icons.Default.Settings,
+                contentDescription = "Настройки",
+                tint = colors.text3,
+                modifier = Modifier
+                    .press(RoundedCornerShape(10.dp), colors.text.copy(alpha = HOVER_ALPHA), onSettings)
+                    .padding(8.dp)
+                    .size(20.dp),
             )
         }
-        Row(verticalAlignment = Alignment.Bottom) {
+        // Тап по итогу — к цели, как в приложении: подпись «задать цель» не нужна.
+        Row(
+            Modifier.press(RoundedCornerShape(KcalShapes.tile), colors.text.copy(alpha = HOVER_ALPHA), onSettings).padding(end = 6.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
             Text("$kcal", style = type.hero, color = if (over) colors.error else colors.text)
             Text(
                 if (goal != null) "из $goal ккал" else "ккал",
@@ -195,6 +219,7 @@ private fun Header(day: WebDay, puppets: Map<Mascot, MascotPuppet>, onLeave: () 
             Spacer(Modifier.height(6.dp))
         }
         MacroTiles(totals, day.goalMacros, puppets)
+        WeekStrip(day, onOpen)
     }
 }
 
@@ -500,6 +525,9 @@ private fun Composer(diary: PageState.Diary, link: PhoneLink) {
     var focused by remember { mutableStateOf(false) }
     val found = diary.suggestionsFor(input)
     var selected by remember(found) { mutableStateOf(0) }
+    // В прошлый день «сейчас» нет: приём выбирает человек, по умолчанию — первый незаписанный.
+    val past = diary.day.date < diary.day.today
+    var meal by remember(diary.day.date) { mutableStateOf(diary.day.defaultMeal()) }
 
     LaunchedEffect(input) {
         if (input.isBlank()) return@LaunchedEffect
@@ -509,11 +537,18 @@ private fun Composer(diary: PageState.Diary, link: PhoneLink) {
 
     fun add(index: Int) {
         val item = found.getOrNull(index) ?: return
-        link.send(ToPhone.Add(query = input.trim(), index = index, grams = item.grams))
+        link.send(ToPhone.Add(query = input.trim(), index = index, grams = item.grams, meal = meal.takeIf { past }))
         input = ""
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (past) {
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                MealType.entries.forEach { option ->
+                    PageChip(option.title, primary = option == meal, onClick = { meal = option })
+                }
+            }
+        }
         // Место под подсказки держится всегда: появление чипсов не двигает строку ввода.
         FlowRow(
             Modifier.fillMaxWidth().heightIn(min = 38.dp),
