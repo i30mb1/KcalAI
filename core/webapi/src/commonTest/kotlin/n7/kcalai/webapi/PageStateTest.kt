@@ -32,6 +32,14 @@ class PageStateTest {
         assertTrue("4821" in line.text, line.text)
     }
 
+    /** Пока стучимся в телефон, страница не пустая: Яйцо говорит, что происходит. */
+    @Test
+    fun `подключение — Яйцо говорит, что стучится`() {
+        val line = PageState.Connecting.line()!!
+        assertEquals(Mascot.EGG, line.mascot)
+        assertTrue("телефон" in line.text, line.text)
+    }
+
     @Test
     fun `пустили — виден дневник`() {
         val state = PageState.Pairing("4821").after(ToPage.Day(day))

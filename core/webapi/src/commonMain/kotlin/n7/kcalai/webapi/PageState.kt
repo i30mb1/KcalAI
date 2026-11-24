@@ -81,7 +81,7 @@ private val LOST_LINE = PageLine(Mascot.BUTTER, "Телефон не отвеч�
  * связь объясняет Масло: оно утешает, когда что-то не так.
  */
 fun PageState.line(): PageLine? = when (this) {
-    PageState.Connecting -> null
+    PageState.Connecting -> PageLine(Mascot.EGG, "Стучусь в телефон… Дневник на нём должен быть открыт.")
     is PageState.Pairing -> PageLine(Mascot.EGG, "Код $code — такой же сейчас на телефоне. Нажми там «Пустить».")
     PageState.Denied -> PageLine(Mascot.EGG, "На телефоне сказали «нет». Попросить ещё раз?")
     PageState.Busy -> PageLine(Mascot.EGG, "В дневник просятся слишком многие. Ответь им на телефоне — и попробуем снова.")

@@ -1,5 +1,6 @@
 package n7.kcalai.web
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -29,8 +30,10 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.datetime.LocalDate
+import n7.kcalai.model.formatWeekRange
 import n7.kcalai.model.formatWeekdayShort
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.webapi.WebDay
@@ -55,8 +58,30 @@ fun WeekStrip(day: WebDay, onOpen: (Long) -> Unit) {
         day.week.maxOfOrNull { it.kcal } ?: 0,
     ).coerceAtLeast(1)
 
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // Какая это неделя — датами, между стрелками, которые её листают.
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Arrow(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Неделя назад", enabled = true) { onOpen(day.date - DAYS_IN_WEEK) }
+        Crossfade(
+            targetState = formatWeekRange(LocalDate.fromEpochDays(week.first), LocalDate.fromEpochDays(week.last)),
+            animationSpec = tween(NUMBER_MS),
+            modifier = Modifier.weight(1f),
+            label = "week",
+        ) { range ->
+            Text(
+                range,
+                style = KcalTheme.type.caps,
+                color = KcalTheme.colors.text2,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        // Неделя с сегодняшним днём — последняя: дальше листать некуда.
+        Arrow(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Неделя вперёд", enabled = day.today !in week) {
+            onOpen((day.date + DAYS_IN_WEEK).coerceAtMost(day.today))
+        }
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             week.forEach { date ->
                 DayColumn(
@@ -71,10 +96,7 @@ fun WeekStrip(day: WebDay, onOpen: (Long) -> Unit) {
                 )
             }
         }
-        // Неделя с сегодняшним днём — последняя: дальше листать некуда.
-        Arrow(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Неделя вперёд", enabled = day.today !in week) {
-            onOpen((day.date + DAYS_IN_WEEK).coerceAtMost(day.today))
-        }
+    }
     }
 }
 
@@ -94,7 +116,8 @@ private fun DayColumn(
     val goal = summary?.goalKcal
     val over = goal != null && kcal > goal
     val fraction by animateFloatAsState((kcal.toFloat() / scale).coerceIn(0f, 1f), tween(NUMBER_MS, easing = EaseOutStrong))
-    val goalLine = goal?.let { (it.toFloat() / scale).coerceIn(0f, 1f) }
+    // У будущего дня цели не видно: пунктир над пустым днём — шум, а не ориентир.
+    val goalLine = goal?.takeUnless { future }?.let { (it.toFloat() / scale).coerceIn(0f, 1f) }
 
     Column(
         modifier = modifier
@@ -151,14 +174,21 @@ private fun DayColumn(
                     ),
             )
         }
+        val weekday = LocalDate.fromEpochDays(date)
         Text(
-            formatWeekdayShort(LocalDate.fromEpochDays(date)),
+            formatWeekdayShort(weekday),
             style = KcalTheme.type.caps,
             color = when {
                 selected -> colors.text
                 today -> colors.text2
                 else -> colors.text3
             },
+        )
+        // Число месяца под днём недели: «пн» прошлой недели и этой — разные дни.
+        Text(
+            "${weekday.day}",
+            style = KcalTheme.type.time,
+            color = if (selected) colors.text else colors.text3,
         )
         // Точка под сегодняшним днём: видно, где «сейчас», даже когда открыт другой.
         Box(Modifier.size(4.dp).clip(RoundedCornerShape(2.dp)).background(if (today) colors.text2 else colors.text.copy(alpha = 0f)))

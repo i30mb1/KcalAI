@@ -40,6 +40,16 @@ class TileSpeechTest {
         assertTrue("клетчатка" in tileSpeech(WebTile.FIBER, 600, 28, fiber, tap = 1).text.lowercase())
     }
 
+    /** Открыт прошлый день — «сегодня» было бы неправдой. */
+    @Test
+    fun `в прошлом дне — «в тот день», а не «сегодня»`() {
+        val egg = tileSpeech(WebTile.PROTEIN, 3_500, 120, FiberTotal.ZERO, tap = 0, past = true).text
+        val fiber = tileSpeech(WebTile.FIBER, 600, 25, FiberTotal(600, 0), tap = 0, past = true).text
+
+        assertTrue("В тот день 35 из 120" in egg, egg)
+        assertTrue("сегодня" !in fiber.lowercase() && "В тот день" in fiber, fiber)
+    }
+
     @Test
     fun `тапают снова — другая фраза, по кругу`() {
         WebTile.entries.forEach { tile ->

@@ -18,6 +18,14 @@ private val MONTHS_SHORT =
 private val LocalDate.weekdayIndex: Int get() = dayOfWeek.ordinal
 private val LocalDate.monthShort: String get() = MONTHS_SHORT[month.ordinal]
 
+/** «16–22 нояб», а через границу месяца — «27 окт – 2 нояб»: какая это неделя, видно сразу. */
+fun formatWeekRange(first: LocalDate, last: LocalDate): String =
+    if (first.month == last.month) {
+        "${first.day}–${last.day} ${last.monthShort}"
+    } else {
+        "${first.day} ${first.monthShort} – ${last.day} ${last.monthShort}"
+    }
+
 /** «пн», «вт» — ось графика за неделю: полное название дня туда семь раз не помещается. */
 fun formatWeekdayShort(date: LocalDate): String =
     WEEKDAYS_SHORT[date.weekdayIndex]

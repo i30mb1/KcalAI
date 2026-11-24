@@ -23,28 +23,30 @@ const val TILE_LINES = 3
  * Клетчатка первой фразой говорит то же, что по тапу в шапке приложения, — см. [fiberSpeech].
  *
  * @param tap который это тап по плитке подряд, с нуля
+ * @param past открыт прошлый день: «сегодня» было бы неправдой
  */
-fun tileSpeech(tile: WebTile, eatenCg: Int, goalGrams: Int?, fiber: FiberTotal, tap: Int): PageLine {
+fun tileSpeech(tile: WebTile, eatenCg: Int, goalGrams: Int?, fiber: FiberTotal, tap: Int, past: Boolean = false): PageLine {
     val amount = eatenCg / CG_PER_G
-    val today = if (goalGrams != null) "$amount из $goalGrams г" else "$amount г"
+    val when_ = if (past) "В тот день" else "Сегодня"
+    val today = "$when_ " + if (goalGrams != null) "$amount из $goalGrams г" else "$amount г"
     val lines = when (tile) {
         WebTile.PROTEIN -> listOf(
-            "Я Яйцо, слежу за белком. Сегодня $today.",
+            "Я Яйцо, слежу за белком. $today.",
             "Белок держит сытость и мышцы. Добрать помогут творог, яйца и рыба.",
             "Аккуратнее, тут скорлупа!",
         )
         WebTile.FAT -> listOf(
-            "Я Масло, отвечаю за жиры. Сегодня $today.",
+            "Я Масло, отвечаю за жиры. $today.",
             "Жиры нужны, но понемножку: орехи, рыба, ложка масла в салат.",
             "Тихонько, я таю…",
         )
         WebTile.CARB -> listOf(
-            "Я Зёрнышко, углеводы — мои! Сегодня $today.",
+            "Я Зёрнышко, углеводы — мои! $today.",
             "Углеводы — это энергия: крупы, хлеб, фрукты. Погнали!",
             "Хохолок торчит — значит, всё по плану!",
         )
         WebTile.FIBER -> listOf(
-            fiberSpeech(fiber, goalGrams ?: 0),
+            fiberSpeech(fiber, goalGrams ?: 0, past),
             "Я клетчатка — росток Зёрнышка. Держу сытость и кормлю полезные бактерии.",
             "Овощи, ягоды, цельные крупы — и я расту!",
         )

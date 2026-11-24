@@ -17,6 +17,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -107,6 +109,9 @@ internal const val CENTIGRAMS_PER_GRAM = 100
 private const val DAY_SLIDE = 6
 private const val DAY_IN_MS = 260
 private const val DAY_OUT_MS = 180
+
+/** Уже этого — экран телефона: плитки встают в две строки. */
+private val NARROW = 520.dp
 
 /** Сколько облачко хозяина плитки висит над ней. */
 private const val SPEECH_MS = 4_000L
@@ -216,6 +221,11 @@ private fun Header(day: WebDay, puppets: Map<Mascot, MascotPuppet>, onSettings: 
                 )
             }
             Spacer(Modifier.weight(1f))
+            // Прошлый день — кнопка обратно, на виду: стрелку в подписи находят не сразу.
+            if (past) {
+                PageChip("Сегодня", primary = true, onClick = { onOpen(day.today) })
+                Spacer(Modifier.width(4.dp))
+            }
             Icon(
                 Icons.Default.Settings,
                 contentDescription = "Настройки",
@@ -248,7 +258,7 @@ private fun Header(day: WebDay, puppets: Map<Mascot, MascotPuppet>, onSettings: 
                 Spacer(Modifier.height(6.dp))
             }
         }
-        MacroTiles(totals, day.goalMacros, day.fiber(), day.fiberGoal, puppets)
+        MacroTiles(totals, day.goalMacros, day.fiber(), day.fiberGoal, puppets, past)
         WeekStrip(day, onOpen)
     }
 }
@@ -260,6 +270,7 @@ private fun MacroTiles(
     fiber: FiberTotal,
     fiberGoal: Int?,
     puppets: Map<Mascot, MascotPuppet>,
+    past: Boolean,
 ) {
     val scope = rememberCoroutineScope()
     // Кто сейчас говорит и сколько раз подряд тапали по каждой плитке: фразы идут по кругу.
@@ -271,13 +282,19 @@ private fun MacroTiles(
         speaking = null
     }
 
+    val tiles = listOf(
+        Triple(WebTile.PROTEIN, totals.protCg, goal?.prot),
+        Triple(WebTile.FAT, totals.fatCg, goal?.fat),
+        Triple(WebTile.CARB, totals.carbCg, goal?.carb),
+        Triple(WebTile.FIBER, fiber.cg, fiberGoal),
+    )
+    // На узком экране — браузер телефона — четыре плитки в ряд не влезают: две строки по две.
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val rows = if (maxWidth < NARROW) tiles.chunked(2) else listOf(tiles)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    rows.forEach { row ->
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(
-            Triple(WebTile.PROTEIN, totals.protCg, goal?.prot),
-            Triple(WebTile.FAT, totals.fatCg, goal?.fat),
-            Triple(WebTile.CARB, totals.carbCg, goal?.carb),
-            Triple(WebTile.FIBER, fiber.cg, fiberGoal),
-        ).forEach { (tile, eatenCg, goalGrams) ->
+        row.forEach { (tile, eatenCg, goalGrams) ->
             val macro = tile.macro
             val puppet = macro?.let { puppets.getValue(it.mascot) }
             Tile(
@@ -290,7 +307,7 @@ private fun MacroTiles(
                 onTap = {
                     val tap = taps[tile] ?: 0
                     taps[tile] = tap + 1
-                    speaking = tile to tileSpeech(tile, eatenCg, goalGrams, fiber, tap)
+                    speaking = tile to tileSpeech(tile, eatenCg, goalGrams, fiber, tap, past)
                     puppet?.let { scope.launch { it.play(MascotAct.SHAKE) } }
                 },
                 modifier = Modifier.weight(1f),
@@ -304,6 +321,9 @@ private fun MacroTiles(
                     }
                 }
             }
+        }
+    }
+    }
         }
     }
 }
@@ -326,8 +346,12 @@ private fun Tile(
     val type = KcalTheme.type
     val eaten by animateIntAsState(eatenCg / CENTIGRAMS_PER_GRAM, tween(NUMBER_MS, easing = EaseOutStrong))
 
+    // Облачко — в обёртке, а не в колонке: колонка добавила бы отступ и для невидимого
+    // окна, и плитка подрастала бы на тап, сдвигая неделю под ней.
+    Box(modifier) {
     Column(
-        modifier = modifier
+        modifier = Modifier
+            .fillMaxWidth()
             .press(RoundedCornerShape(KcalShapes.tile), KcalTheme.colors.text.copy(alpha = HOVER_ALPHA), onTap)
             .background(palette.tile)
             .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 10.dp),
@@ -351,25 +375,29 @@ private fun Tile(
         } else {
             Spacer(Modifier.height(4.dp))
         }
-        // Внутри плитки, а не рядом: облачко встаёт над той плиткой, по которой тапнули.
-        if (speech != null) {
-            key(speech) { SpeechPopup(speech, palette) }
-        }
+    }
+    // Внутри обёртки плитки: облачко встаёт над той плиткой, по которой тапнули.
+    if (speech != null) {
+        key(speech) { SpeechPopup(speech, palette) }
+    }
     }
 }
 
-/** Облачко над плиткой — цвета её хозяина, растёт из плитки вверх. */
+/**
+ * Облачко хозяина плитки — цвета плитки, поверх самого верха страницы, над своей плиткой:
+ * ничего не сдвигает и не закрывает итог дня, на который смотрят.
+ */
 @Composable
 private fun SpeechPopup(line: PageLine, palette: MacroColors) {
-    Popup(popupPositionProvider = AboveAnchor) {
+    Popup(popupPositionProvider = AtTopOverAnchor) {
         Text(
             line.text,
             style = KcalTheme.type.body,
             color = KcalTheme.colors.text,
             modifier = Modifier
-                .padding(bottom = 6.dp)
-                .widthIn(max = 260.dp)
-                .enter(origin = TransformOrigin(0.5f, 1f))
+                .padding(top = 8.dp, start = 8.dp, end = 8.dp)
+                .widthIn(max = 320.dp)
+                .enter(origin = TransformOrigin(0.5f, 0f))
                 .clip(RoundedCornerShape(KcalShapes.bubble))
                 .background(palette.tile)
                 .border(1.dp, palette.fill.copy(alpha = 0.5f), RoundedCornerShape(KcalShapes.bubble))
@@ -378,8 +406,8 @@ private fun SpeechPopup(line: PageLine, palette: MacroColors) {
     }
 }
 
-/** Над якорем, по центру, не за краем окна. */
-private object AboveAnchor : PopupPositionProvider {
+/** У верхнего края окна, по центру над якорем, не за краем. */
+private object AtTopOverAnchor : PopupPositionProvider {
     override fun calculatePosition(
         anchorBounds: IntRect,
         windowSize: IntSize,
@@ -387,10 +415,7 @@ private object AboveAnchor : PopupPositionProvider {
         popupContentSize: IntSize,
     ): IntOffset {
         val x = anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2
-        return IntOffset(
-            x.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)),
-            (anchorBounds.top - popupContentSize.height).coerceAtLeast(0),
-        )
+        return IntOffset(x.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)), 0)
     }
 }
 

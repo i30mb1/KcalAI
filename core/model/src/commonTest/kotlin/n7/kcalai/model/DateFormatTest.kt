@@ -24,6 +24,13 @@ class DateFormatTest {
         assertEquals(listOf("пн", "вт", "ср", "чт", "пт", "сб", "вс"), week)
     }
 
+    /** Неделя над столбиками — датами: листая прошлое, видно, какая это неделя. */
+    @Test
+    fun `неделя — диапазоном дат, месяц один раз`() {
+        assertEquals("16–22 нояб", formatWeekRange(LocalDate(2026, 11, 16), LocalDate(2026, 11, 22)))
+        assertEquals("27 окт – 2 нояб", formatWeekRange(LocalDate(2025, 10, 27), LocalDate(2025, 11, 2)))
+    }
+
     @Test
     fun `день ленты называется словом пока это возможно`() {
         val today = kotlinx.datetime.LocalDate(2026, 10, 31)
