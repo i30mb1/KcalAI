@@ -654,10 +654,10 @@ class DiaryViewModel(
                     // на полуслове.
                     // И по вопросу, когда на него есть кому ответить: «сколько я
                     // съел вчера?» — не блюдо, и «ничего не нашлось» было бы глупостью.
-                    // И по просьбе об адресе страницы, когда страница поднята: «компьютер» — не еда.
+                    // И по просьбе об адресе страницы: «компьютер» — не еда.
                     if (text.isBlank() || parseWeight(text) != null || text.continuesScan() ||
                         text.none(Char::isLetter) || (assist.value.ready && isQuestion(text)) ||
-                        (pageAddress.value != null && asksForPage(text))
+                        (peers != null && asksForPage(text))
                     ) {
                         null
                     } else {
@@ -1428,8 +1428,8 @@ class DiaryViewModel(
                 onLogWeight()
                 true
             }
-            pageAddress.value != null && asksForPage(text) -> {
-                tellPageAddress(checkNotNull(pageAddress.value))
+            peers != null && asksForPage(text) -> {
+                tellPageAddress(pageAddress.value)
                 true
             }
             assist.value.ready && isQuestion(text) -> {
@@ -1671,11 +1671,16 @@ class DiaryViewModel(
         viewModelScope.launch { dao.answer(id, if (yes) Choice.YES else Choice.NO) }
     }
 
-    /** Человек спросил адрес страницы — Зёрнышко называет его в ленте. */
-    private fun tellPageAddress(address: String) {
+    /**
+     * Человек спросил адрес страницы — Зёрнышко называет его в ленте. Адреса нет —
+     * телефон не в Wi-Fi, и Зёрнышко говорит, что сделать, а не «не нашлось».
+     */
+    private fun tellPageAddress(address: String?) {
         input.value = ""
         answer.value = null
-        viewModelScope.launch { brain.answerWebAddress(address, clock.now()) }
+        viewModelScope.launch {
+            if (address != null) brain.answerWebAddress(address, clock.now()) else brain.answerNoWifi(clock.now())
+        }
     }
 
     /**

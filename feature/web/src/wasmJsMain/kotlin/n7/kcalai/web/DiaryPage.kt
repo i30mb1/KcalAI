@@ -126,7 +126,7 @@ fun DiaryPage(link: PhoneLink) {
         seen = day
     }
     LaunchedEffect(diary?.day?.owner) {
-        document.title = diary?.day?.owner?.let { "$it · дневник" } ?: "Дневник"
+        document.title = diary?.day?.owner?.takeIf { it.isNotBlank() }?.let { "$it · дневник" } ?: "Дневник"
     }
 
     Box(Modifier.fillMaxSize().background(colors.bg), contentAlignment = Alignment.TopCenter) {
@@ -167,7 +167,7 @@ private fun Header(day: WebDay, puppets: Map<Mascot, MascotPuppet>, onLeave: () 
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            CapsLabel("${day.owner} · сегодня", modifier = Modifier.weight(1f))
+            CapsLabel(if (day.owner.isBlank()) "сегодня" else "${day.owner} · сегодня", modifier = Modifier.weight(1f))
             // Действие не назвать данными — поэтому словом, и тихо: главное на странице не оно.
             Text(
                 "Выйти",

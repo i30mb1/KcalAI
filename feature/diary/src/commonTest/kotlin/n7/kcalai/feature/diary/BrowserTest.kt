@@ -167,6 +167,40 @@ class BrowserTest {
         assertTrue(said.filterNot { PAGE in it.text }.all { it.share == null }, "делиться — только адресом страницы")
     }
 
+    /** Знакомство учит, как вернуть адрес: иначе его не найти, когда он понадобится. */
+    @Test
+    fun `знакомство со страницей говорит, как спросить адрес снова`() = runTest(dispatcher) {
+        harness.addEntry("Гречка отварная", grams = 200, meal = MealType.BREAKFAST, daysAgo = 1)
+
+        screen()
+        advanceUntilIdle()
+
+        val intro = harness.mascotDao.messages.value.single { it.topic == Topic.WEB_ADDRESS.name }
+        assertTrue("«компьютер»" in intro.text, intro.text)
+    }
+
+    /** Адреса нет — телефон не в Wi-Fi. Это не еда, и «не нашлось» тут сбивает с толку: Зёрнышко объясняет. */
+    @Test
+    fun `адреса нет — Зёрнышко объясняет, что сделать`() = runTest(dispatcher) {
+        harness.addEntry("Гречка отварная", grams = 200, meal = MealType.BREAKFAST, daysAgo = 1)
+        val vm = harness.viewModel(dispatcher, browsers = Browsers(requests, online), peers = NoWifi()).also { vm ->
+            backgroundScope.launch { vm.state.collect {} }
+            advanceUntilIdle()
+        }
+
+        vm.onInputChange("компьютер")
+        advanceUntilIdle()
+        assertTrue(vm.state.value.feed.none { it is FeedItem.NotFound })
+
+        assertTrue(vm.onSubmit())
+        advanceUntilIdle()
+
+        val said = harness.mascotDao.messages.value.single { it.topic == Topic.WEB_NO_WIFI.name }
+        assertEquals(Mascot.GRAIN, said.mascot)
+        assertTrue("Wi-Fi" in said.text, said.text)
+        assertEquals("", vm.state.value.input)
+    }
+
     @Test
     fun `просьбы о странице — словами, а не еда`() {
         listOf("компьютер", "Ноутбук", "с компьютера", "адрес?", "сайт", "браузер").forEach {
@@ -180,6 +214,11 @@ class BrowserTest {
     private class PagePeers : NearbyPeers {
         override fun nearby(): Flow<List<NearbyPerson>> = flowOf(emptyList())
         override fun address(): Flow<String?> = flowOf(PAGE)
+        override suspend fun send(id: String, food: String, grams: Int, nutriments: Nutriments) = false
+    }
+
+    private class NoWifi : NearbyPeers {
+        override fun nearby(): Flow<List<NearbyPerson>> = flowOf(emptyList())
         override suspend fun send(id: String, food: String, grams: Int, nutriments: Nutriments) = false
     }
 

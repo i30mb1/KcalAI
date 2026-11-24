@@ -8,10 +8,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import n7.kcalai.model.Nutriments
 import n7.kcalai.nearby.NearbyDiscovery
 import n7.kcalai.nearby.OfferPacket
@@ -32,9 +32,10 @@ import n7.kcalai.nearby.pageUrl
  * платформы и так позволяют: на Android фоновая служба намеренно исключена,
  * а iOS сокет в фоне не держит.
  *
- * Пока человек не назвал имя, фича молчит: соседу нужно видеть, кто ему пишет,
+ * Пока человек не назвал имя, соседи молчат: соседу нужно видеть, кто ему пишет,
  * а «кто-то» в ленте — не предложение. Имя спрашивает Яйцо, и до ответа
- * ни объявления, ни поиска нет.
+ * ни объявления, ни поиска нет. Сервер при этом поднят: страница дневника
+ * в браузере имени не требует — свой дневник открывают и без него.
  *
  * @param myName имя владельца; `null` — ещё не назвал
  */
@@ -63,22 +64,21 @@ class NearbyPeersOverLan(
         // а перезапуск здесь — это новый сокет на новом порту. Сосед, успевший
         // узнать прошлый порт, стучался бы в закрытую дверь.
         .distinctUntilChanged()
-        .flatMapLatest { name ->
-            if (name.isNullOrBlank()) {
-                // Назваться нечем — ни объявляемся, ни ищем.
-                flowOf(emptyList())
-            } else {
-                running(name)
-            }
-        }
+        .flatMapLatest { name -> running(name?.takeIf { it.isNotBlank() }) }
 
-    private fun running(name: String): Flow<List<NearbyPerson>> = flow {
+    /** @param name как объявиться соседям; `null` — назваться нечем: ни объявляемся, ни ищем */
+    private fun running(name: String?): Flow<List<NearbyPerson>> = flow {
         val port = receiver.start()
-        discovery.advertise(name, port)
+        if (name != null) discovery.advertise(name, port)
         // Страница дневника — на том же сервере: её адрес живёт, пока он поднят.
         page.value = discovery.localAddress()?.let { pageUrl(it, port) }
         try {
-            emitAll(discovery.peers())
+            if (name != null) {
+                emitAll(discovery.peers())
+            } else {
+                emit(emptyList())
+                awaitCancellation()
+            }
         } finally {
             page.value = null
             around.value = emptyList()

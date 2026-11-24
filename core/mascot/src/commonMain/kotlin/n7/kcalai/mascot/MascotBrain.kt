@@ -249,6 +249,9 @@ class MascotBrain(
         return save(Mascot.GRAIN, Topic.WEB_ADDRESS, said, Delivery.FEED, facts.now.date.toEpochDays(), now)
     }
 
+    /** Адрес спросили, а его нет — телефон не в Wi-Fi: Зёрнышко говорит, что сделать. */
+    suspend fun answerNoWifi(now: Instant): MascotMessageEntity? = answer(Topic.WEB_NO_WIFI, Mascot.GRAIN, now)
+
     private suspend fun appIsNewDue(now: Instant): Boolean {
         if (dao.lastSaid(Topic.APP_NEW.name) != null) return false
         val today = now.toLocalDateTime(zone).date.toEpochDays()

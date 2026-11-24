@@ -37,7 +37,7 @@ fun interface WebBundle {
  * не уходит дальше домашней сети. Разговор — по WebSocket, каждый браузер — своя
  * [WebSession]: пока человек не пустил его тапом, он не видит ничего.
  *
- * @param owner имя хозяина телефона; пока его нет, сервер и не поднят — см. `NearbyPeersOverLan`
+ * @param owner имя хозяина телефона; `null` — не назвался
  */
 class DiaryWebHost(
     private val clients: WebClientDao,
@@ -52,7 +52,8 @@ class DiaryWebHost(
         install(WebSockets)
         routing {
             webSocket(WEB_SOCKET_PATH) {
-                val name = owner.first() ?: return@webSocket
+                // Имя не обязательно: свой дневник открывают и без него, подпись тогда пустая.
+                val name = owner.first().orEmpty()
                 WebSession(
                     clients = clients,
                     diary = diary,

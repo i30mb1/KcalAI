@@ -49,6 +49,7 @@ class VoicesTest {
         put(Topic.ASSISTANT_READY, setOf(GRAIN))
         put(Topic.APP_NEW, setOf(BUTTER))
         put(Topic.WEB_ADDRESS, setOf(GRAIN))
+        put(Topic.WEB_NO_WIFI, setOf(GRAIN))
     }
 
     /** Факты, при которых у каждой темы есть о чём сказать. */

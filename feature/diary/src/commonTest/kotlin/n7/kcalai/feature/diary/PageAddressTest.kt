@@ -30,7 +30,12 @@ import kotlin.test.assertTrue
 class PageAddressTest {
 
     private class Discovery(private val local: String?) : NearbyDiscovery {
-        override suspend fun advertise(name: String, port: Int) = Unit
+        val advertised = mutableListOf<String>()
+
+        override suspend fun advertise(name: String, port: Int) {
+            advertised += name
+        }
+
         override fun peers(): Flow<List<Peer>> = flow { awaitCancellation() }
         override fun localAddress(): String? = local
         override fun stop() = Unit
@@ -53,6 +58,24 @@ class PageAddressTest {
 
         assertTrue(address.startsWith("http://192.168.1.5:"), address)
         assertNull(lan.address().first(), "страница гаснет вместе с экраном")
+    }
+
+    /**
+     * Имя нужно соседям — им видно, кто пишет. Странице оно не нужно: свой дневник
+     * открывают и без него, а после «Не скажу» Яйцо имя больше не спрашивает.
+     */
+    @Test
+    fun `без имени страница поднимается, но себя соседям не объявляет`() = runTest {
+        val discovery = Discovery("192.168.1.5")
+        val lan = NearbyPeersOverLan(discovery, OfferReceiver(NoOffers), myName = MutableStateFlow(null))
+
+        val address = withContext(Dispatchers.Default) {
+            val running = launch { lan.nearby().collect {} }
+            lan.address().filterNotNull().first().also { running.cancelAndJoin() }
+        }
+
+        assertTrue(address.startsWith("http://192.168.1.5:"), address)
+        assertTrue(discovery.advertised.isEmpty(), "без имени соседям объявлять нечего")
     }
 
     /** Не в Wi-Fi — адреса, по которому браузер достучался бы, нет: молчим, а не врём. */
