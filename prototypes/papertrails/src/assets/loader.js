@@ -372,6 +372,8 @@ export async function loadAssets({ materials, renderer, quality } = {}) {
   }
   const travFromGltf = !!traveller;
   if (!traveller) traveller = buildPlaceholderTraveller(materials);
+  // KcalAI: герой — Зёрнышко (kcal/hero.js), бумажная модель с теми же частями
+  if (typeof window !== 'undefined' && window.__ptHero) { try { traveller = window.__ptHero({ materials, height: CONFIG.TRAVELLER_HEIGHT }); } catch (err) { warn('kcal hero failed:', err && err.message); } }
 
   const n = MODEL_IDS.length;
   const source = fromGltf === n && travFromGltf ? 'gltf' : (fromGltf === 0 && !travFromGltf ? 'placeholder' : 'mixed');
