@@ -1,0 +1,674 @@
+<title>Сады Зёрнышка</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+  /* Одна колонка-телефон: вкладка выбирает, что растёт; сцена — дорожка слева, растение справа;
+     под сценой неделя. Симулятор прибит к низу. Палитра KcalAI. */
+  :root {
+    --bg: #F4EFE4; --surface: #FDFBF5; --chip: #F0E9D9; --line: #E5DCC9;
+    --text: #2C2618; --text2: #6B6250; --text3: #8D8370;
+    --bubble: #2C2618; --on-bubble: #F4EFE4;
+    --carb: #4C8F5A; --shadow: rgba(44, 38, 24, 0.12);
+    --font-ui: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-data: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1C1914; --surface: #26221B; --chip: #332D23; --line: #3A3428;
+      --text: #F4EFE4; --text2: #B5AB96; --text3: #8D8370;
+      --bubble: #F4EFE4; --on-bubble: #1C1914;
+      --carb: #5FA56E; --shadow: rgba(0, 0, 0, 0.4);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1C1914; --surface: #26221B; --chip: #332D23; --line: #3A3428;
+    --text: #F4EFE4; --text2: #B5AB96; --text3: #8D8370;
+    --bubble: #F4EFE4; --on-bubble: #1C1914;
+    --carb: #5FA56E; --shadow: rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+  }
+  html, body { background: var(--bg); color: var(--text); }
+  body {
+    font: 500 16px/1.4 var(--font-ui);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 16px 150px;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--carb); outline-offset: 3px; border-radius: 6px; }
+  svg { display: block; }
+
+  .app { max-width: 440px; margin: 0 auto; display: grid; gap: 16px; }
+  .tabs { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--chip); border-radius: 99px; padding: 4px; }
+  .tabs button { padding: 9px 0; border-radius: 99px; font-weight: 700; font-size: 13px; color: var(--text2); transition: background .2s, color .2s; min-width: 0; }
+  .tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px var(--shadow); }
+
+  #view { display: grid; gap: 14px; }
+  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .big { font: 800 clamp(56px, 16vw, 80px)/0.9 var(--font-ui); letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+  .sub { color: var(--text3); font-weight: 600; text-align: right; }
+  .sub b { display: block; color: var(--text); font: 600 20px/1.2 var(--font-data); font-variant-numeric: tabular-nums; }
+
+  .bubble {
+    position: relative; justify-self: center; max-width: 100%;
+    min-height: 3.1em; display: flex; align-items: center; justify-content: center;
+    background: var(--bubble); color: var(--on-bubble);
+    font-weight: 700; font-size: 15px; line-height: 1.35;
+    padding: 9px 16px; border-radius: 18px; text-wrap: balance; text-align: center;
+  }
+  .bubble::after {
+    content: ""; position: absolute; left: 24%; bottom: -8px; width: 18px; height: 9px;
+    background: var(--bubble); transform: translateX(-50%); clip-path: polygon(0 0, 100% 0, 50% 100%);
+  }
+  .scene { width: 100%; height: auto; border-radius: 22px; overflow: hidden; }
+  .g-hop { transform-box: fill-box; transform-origin: 50% 100%; }
+  .g-hop.go { animation: hop .45s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes hop { 40% { transform: translateY(-10px) scale(1.04, .97) } }
+  .fade { transition: opacity .6s; }
+  .pop { animation: pop .7s cubic-bezier(.3,1.5,.5,1); transform-box: fill-box; transform-origin: 50% 50%; }
+  @keyframes pop { from { transform: scale(0) rotate(-60deg) } }
+
+  .week { display: grid; gap: 10px; }
+  .week-total { font: 600 12px/1 var(--font-data); color: var(--text3); text-align: center; }
+  .shelf { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; align-items: end; padding: 0 6px; position: relative; }
+  .shelf::after { content: ""; position: absolute; left: 0; right: 0; bottom: 18px; height: 7px; border-radius: 4px; background: #B08452; box-shadow: 0 3px 0 #8A6A45; }
+  .shelf .slot { display: grid; justify-items: center; gap: 10px; }
+  .shelf svg { width: 100%; height: auto; }
+  .shelf span, .crate span { font: 600 11px/1 var(--font-data); color: var(--text3); }
+  .shelf .today span, .crate .today span { color: var(--text); }
+  .street { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; align-items: end; position: relative; padding: 0 4px; }
+  .street::after { content: ""; position: absolute; left: 0; right: 0; bottom: 18px; height: 6px; border-radius: 3px; background: #A8C48E; }
+  .street .slot, .sky7 .slot { display: grid; justify-items: center; gap: 10px; }
+  .street svg, .sky7 svg { width: 100%; height: auto; }
+  .street span, .sky7 span { font: 600 11px/1 var(--font-data); color: var(--text3); }
+  .street .today span, .sky7 .today span { color: var(--text); }
+  .sky7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding: 8px 4px 0; border-radius: 16px; background: linear-gradient(#DCEBF2, #F6F1E6); }
+  .sim {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+    padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+    background: var(--surface); border-top: 1.5px dashed var(--line);
+  }
+  .sim-in { max-width: 440px; margin: 0 auto; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; align-items: center; }
+  .sim .play { grid-row: span 2; width: 52px; height: 52px; border-radius: 50%; background: var(--text); color: var(--bg); display: grid; place-items: center; }
+  .sim label { display: grid; grid-template-columns: 58px 1fr 76px; align-items: center; gap: 10px; font: 600 12px/1 var(--font-data); color: var(--text3); }
+  .sim output { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+  .sim input[type=range] { width: 100%; accent-color: var(--carb); }
+  @media (prefers-reduced-motion: reduce) { .g-hop.go, .pop { animation: none; } .fade { transition: none; } }
+</style>
+
+<main class="app">
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-v="flower">Цветок</button>
+    <button role="tab" data-v="tree">Яблоня</button>
+    <button role="tab" data-v="jar">Банка</button>
+    <button role="tab" data-v="house">Домик</button>
+    <button role="tab" data-v="balloon">Шар</button>
+  </nav>
+  <section id="view"></section>
+</main>
+
+<div class="sim" aria-label="Симулятор дорожки">
+  <div class="sim-in">
+    <button class="play" id="play" aria-label="Идти или стоять"><svg width="20" height="20" viewBox="0 0 20 20" id="playIcon"></svg></button>
+    <label>скорость<input type="range" id="spd" min="0" max="10" step="0.1"><output id="spdOut">0.0 км/ч</output></label>
+    <label>сегодня<input type="range" id="stp" min="0" max="14000" step="50"><output id="stpOut">0</output></label>
+  </div>
+</div>
+
+<script>
+// ================= общее =================
+const $ = (s, r = document) => r.querySelector(s);
+const nf = new Intl.NumberFormat('ru-RU');
+const fmt = (n) => nf.format(Math.max(0, Math.round(n)));
+const km = (m) => (m / 1000).toFixed(2).replace('.', ',');
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const f1 = (x) => x.toFixed(1);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const strideM = (v, h = 175) => (h / 100) * (0.26 + 0.035 * clamp(v, 1, 12));
+const tierOf = (v) => (v <= 0 ? 0 : v < 3.5 ? 1 : v < 5.5 ? 2 : v < 7.5 ? 3 : 4);
+const SIM_X = 30;
+const GOAL = 8000;
+// Рост по корню: первая тысяча шагов — уже треть растения. Мало ходить не стыдно, заметно сразу.
+const growth = (steps) => (steps <= 0 ? 0 : Math.min(1, Math.sqrt(steps / GOAL)));
+
+const state = { speed: 0, lastSpeed: 3.6, steps: 4300, distance: 3010 };
+const PAST = [3200, 5100, 800, 6900, 8400, 10200]; // пример прошлых дней, не данные человека
+const DOW = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+function week() {
+  const out = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86_400_000);
+    out.push({ label: DOW[d.getDay()], dow: d.getDay(), steps: i === 0 ? state.steps : PAST[6 - i], today: i === 0 });
+  }
+  return out;
+}
+function rng(seed) {
+  return () => {
+    seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function mix(a, b, t) {
+  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [x, y] = [p(a), p(b)];
+  return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+const quad = (p0, c, p1, u) => ({ x: (1 - u) ** 2 * p0.x + 2 * (1 - u) * u * c.x + u * u * p1.x, y: (1 - u) ** 2 * p0.y + 2 * (1 - u) * u * c.y + u * u * p1.y });
+function setText(el, s) { if (el && el.textContent !== s) el.textContent = s; }
+
+// Реплика держится, пока не сменится; новость (новый листик) звучит 4 секунды.
+const say = { el: null, news: '', until: 0 };
+function news(text) { say.news = text; say.until = performance.now() + 4000; }
+function speak(base) { setText(say.el, performance.now() < say.until ? say.news : base); }
+
+// ================= Зёрнышко =================
+const LIMB = (d, w1, w2) => `<path d="${d}" fill="none" stroke="#4C8F5A" stroke-width="${w1}" stroke-linecap="round"/><path d="${d}" fill="none" stroke="#7FBF8C" stroke-width="${w2}" stroke-linecap="round"/>`;
+const BODY = 'M60,20 C80,20 90,46 90,64 C90,84 76,94 60,94 C44,94 30,84 30,64 C30,46 40,20 60,20 Z';
+const TUFT = 'M60,22 L53,6 M60,22 L60,2 M60,22 L67,6';
+class Grain {
+  constructor(root) {
+    root.innerHTML = `<g class="g-hop">
+      <g class="g-lines" opacity="0" stroke="#8D8370" stroke-width="3" stroke-linecap="round"><path d="M22,50 L-8,50"/><path d="M18,64 L-20,64"/><path d="M22,78 L-4,78"/></g>
+      <g class="g-legL">${LIMB('M52,86 L52,105', 10, 5.5)}</g><g class="g-legR">${LIMB('M68,86 L68,105', 10, 5.5)}</g>
+      <g class="g-upper">
+        <g class="g-armL">${LIMB('M32,70 C24,76 22,84 26,90', 13, 8)}</g><g class="g-armR">${LIMB('M88,70 C96,76 98,84 94,90', 13, 8)}</g>
+        <g transform="rotate(4 60 60)">
+          <g class="g-tuft"><path d="${TUFT}" transform="translate(.6 1.8)" stroke="#3B2A12" stroke-opacity=".35" stroke-width="4" stroke-linecap="round" fill="none"/><path d="${TUFT}" stroke="#4C8F5A" stroke-width="4" stroke-linecap="round" fill="none"/></g>
+          <path d="${BODY}" transform="translate(.6 1.8)" fill="#3B2A12" fill-opacity=".35"/><path d="${BODY}" fill="#7FBF8C"/>
+          <path d="M60,28 C57,42 54,52 56,62 C57,72 58,80 60,88" stroke="#3E7A4B" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+          <g class="g-band fade" opacity="0"><g class="g-tails" stroke="#C2456F" stroke-width="4" stroke-linecap="round" fill="none"><path d="M37,47 C30,44 24,42 17,44"/><path d="M37,47 C30,50 25,53 18,55"/></g><path d="M37,47 C50,40 70,40 83,47" stroke="#C2456F" stroke-width="6.5" stroke-linecap="round" fill="none"/></g>
+        </g>
+        <g class="g-blush fade" opacity="0"><circle cx="40" cy="73" r="5" fill="#F3B5C8"/><circle cx="80" cy="73" r="5" fill="#F3B5C8"/></g>
+        <g class="g-face" fill="none" stroke="#2C2618" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></g>
+        <path class="g-sweat fade" opacity="0" d="M27,28 C30,33 31,36 28,38 C25,38 24,34 27,28 Z" fill="#A8D2EE" stroke="#5E8FB0" stroke-width=".8"/>
+      </g></g>`;
+    for (const k of ['hop', 'lines', 'legL', 'legR', 'upper', 'armL', 'armR', 'tuft', 'band', 'tails', 'blush', 'face', 'sweat']) this[k] = $(`.g-${k}`, root);
+    this.phase = 0; this.tuftA = 0; this.blink = false; this.nextBlink = 0; this.faceKey = '';
+    root.style.cursor = 'pointer';
+    root.addEventListener('click', () => this.jump());
+  }
+  jump() { this.hop.classList.remove('go'); void this.hop.getBBox(); this.hop.classList.add('go'); }
+  gear(speed, happy) {
+    const tier = tierOf(speed);
+    this.band.setAttribute('opacity', tier >= 2 ? 1 : 0);
+    this.sweat.setAttribute('opacity', tier >= 3 ? 1 : 0);
+    this.blush.setAttribute('opacity', tier >= 4 ? 1 : 0);
+    this.lines.setAttribute('opacity', clamp((speed - 5) / 3, 0, 1).toFixed(2));
+    const kind = this.blink ? 'blink' : tier >= 4 ? 'run' : tier === 3 ? 'push' : happy ? 'happy' : 'calm';
+    this.drawFace(kind, tier > 0 ? 2 : 0);
+  }
+  drawFace(kind, x) {
+    if (kind + x === this.faceKey) return;
+    this.faceKey = kind + x;
+    const m = x / 2;
+    const dot = (cx, r = 5.5) => `<circle cx="${cx + x}" cy="62" r="${r}" fill="#2C2618" stroke="none"/>`;
+    const arcUp = (cx) => `<path d="M${cx - 5 + x},63 Q${cx + x},56.5 ${cx + 5 + x},63"/>`;
+    const arcDown = (cx) => `<path d="M${cx - 5 + x},61 Q${cx + x},66 ${cx + 5 + x},61"/>`;
+    const smile = `<path d="M${54 + m},75 C${57 + m},79 ${63 + m},79 ${66 + m},75"/>`;
+    this.face.innerHTML = {
+      calm: dot(48) + dot(72) + smile,
+      happy: arcUp(48) + arcUp(72) + `<path d="M${51 + m},74 C${56 + m},81 ${64 + m},81 ${69 + m},74"/>`,
+      blink: arcDown(48) + arcDown(72) + smile,
+      push: dot(48, 5) + dot(72, 5) + `<ellipse cx="${60 + m}" cy="77" rx="3.4" ry="4" fill="#2C2618" stroke="none"/>`,
+      run: `<path d="M${43 + x},58.5 L${52 + x},62 L${43 + x},65.5"/><path d="M${77 + x},58.5 L${68 + x},62 L${77 + x},65.5"/><path d="M${53 + m},74 Q${60 + m},85 ${67 + m},74 Z" fill="#2C2618"/>`,
+    }[kind];
+  }
+  step(dt, t, speed, happy) {
+    const mps = speed / 3.6;
+    this.phase += Math.PI * (mps / strideM(speed)) * dt;
+    const amp = Math.min(14 + speed * 3.2, 40), a = Math.sin(this.phase) * amp, arm = a * (speed > 6 ? 0.9 : 0.55);
+    this.legL.setAttribute('transform', `rotate(${f1(a)} 52 86)`);
+    this.legR.setAttribute('transform', `rotate(${f1(-a)} 68 86)`);
+    this.armL.setAttribute('transform', `rotate(${f1(arm)} 32 70)`);
+    this.armR.setAttribute('transform', `rotate(${f1(-arm)} 88 70)`);
+    const bob = -(1 - Math.abs(Math.sin(this.phase))) * (2 + speed * 0.4);
+    this.upper.setAttribute('transform', `translate(0 ${bob.toFixed(2)}) rotate(${f1(speed * 0.9)} 60 96)`);
+    this.tuftA += (-Math.min(speed * 7, 62) - this.tuftA) * Math.min(1, dt * 5);
+    this.tuft.setAttribute('transform', `rotate(${f1(this.tuftA + Math.sin(t / 1000 * (4 + speed)) * speed * 0.7)} 60 22)`);
+    this.tails.setAttribute('transform', `rotate(${f1(Math.sin(this.phase * 2) * 12 - speed * 3)} 37 47)`);
+    if (t > this.nextBlink) { this.blink = !this.blink; this.nextBlink = t + (this.blink ? 130 : 2400 + Math.random() * 3000); }
+    this.gear(speed, happy);
+  }
+  still(happy) {
+    for (const [el, p] of [[this.legL, '52 86'], [this.legR, '68 86'], [this.armL, '32 70'], [this.armR, '88 70'], [this.tuft, '60 22'], [this.tails, '37 47']]) el.setAttribute('transform', `rotate(0 ${p})`);
+    this.upper.removeAttribute('transform');
+    this.tuftA = 0; this.blink = false;
+    this.gear(0, happy);
+  }
+}
+
+// ================= общая сцена: небо, погода от скорости, дорожка =================
+function sceneSVG(extraDefs = '') {
+  const cloudPart = (cx, cy, r) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#FDFBF5" stroke="#D9CFBC" stroke-width="1.5"/>`;
+  return `<svg class="scene" viewBox="0 0 400 300">
+    <defs><linearGradient id="gsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E4EFE7"/><stop offset="1" stop-color="#FBF7EE"/></linearGradient>${extraDefs}</defs>
+    <rect width="400" height="300" fill="url(#gsky)"/>
+    <g id="sun" class="fade" opacity="0" transform="translate(372 36)"><g id="rays" stroke="#F0C077" stroke-width="3" stroke-linecap="round">${Array.from({ length: 10 }, (_, k) => `<path d="M0,-25 L0,-33" transform="rotate(${k * 36})"/>`).join('')}</g><circle r="18" fill="#F0C077"/></g>
+    <g id="rainbow" class="fade" opacity="0" fill="none" stroke-width="7">${['#C2456F', '#C8862B', '#F0C077', '#7FBF8C', '#7FB5C9'].map((c, k) => `<path d="M${200 + k * 7},272 A${100 - k * 7},${100 - k * 7} 0 0 1 ${400 - k * 7},272" stroke="${c}" opacity=".5"/>`).join('')}</g>
+    <rect y="270" width="400" height="30" fill="#E9DEC6"/>
+    <g id="back"></g>
+    <g id="grow"></g>
+    <g id="fx"></g>
+    <g id="cloud" class="fade" opacity="0" transform="translate(296 26)">
+      <ellipse rx="40" ry="15" fill="#FDFBF5" stroke="#D9CFBC" stroke-width="1.5"/>${cloudPart(-16, -9, 15)}${cloudPart(12, -13, 18)}<ellipse cy="2" rx="38" ry="11" fill="#FDFBF5"/>
+    </g>
+    <g id="rain"></g>
+    <ellipse cx="88" cy="273" rx="80" ry="3" fill="rgba(44,38,24,.12)"/>
+    <path d="M160,264 L176,198" stroke="#2C2618" stroke-width="6" stroke-linecap="round"/>
+    <rect x="164" y="180" width="38" height="21" rx="5" fill="#2C2618"/><rect x="168" y="184" width="30" height="13" rx="2" fill="#1E2A1F"/>
+    <text id="lcd" x="183" y="193.8" text-anchor="middle" fill="#A9D88A" style="font:600 9.5px var(--font-data)">0.0</text>
+    <rect x="10" y="258" width="158" height="12" rx="6" fill="#2C2618"/>
+    <line id="slats" x1="18" y1="261" x2="160" y2="261" stroke="#8D8370" stroke-width="2" stroke-dasharray="2 11" stroke-linecap="round"/>
+    <g id="grain" transform="translate(30 150) scale(1.02)"></g>
+  </svg>`;
+}
+const Weather = {
+  drops: [], t: 0, belt: 0,
+  reset() { this.drops = []; $('#rain').innerHTML = ''; },
+  render() {
+    const tier = tierOf(state.speed);
+    $('#cloud').setAttribute('opacity', cur.rain && tier > 0 ? 1 : 0);
+    $('#sun').setAttribute('opacity', tier >= 3 ? 1 : 0);
+    $('#rainbow').setAttribute('opacity', tier >= 4 ? 1 : 0);
+    setText($('#lcd'), state.speed.toFixed(1));
+  },
+  frame(dt, area = [255, 345]) {
+    this.t += dt;
+    this.belt += (state.speed / 3.6) * 36 * dt;
+    $('#slats').setAttribute('stroke-dashoffset', f1(this.belt));
+    const want = cur.rain ? Math.round(state.speed * 3.2) : 0;
+    const nx = () => area[0] + Math.random() * (area[1] - area[0]);
+    while (this.drops.length < want) this.drops.push({ x: nx(), y: 40 + Math.random() * 200 });
+    this.drops.length = Math.min(this.drops.length, want);
+    for (const d of this.drops) { d.y += (170 + state.speed * 25) * dt; if (d.y > 262) { d.y = 40; d.x = nx(); } }
+    $('#rain').innerHTML = this.drops.map((d) => `<path d="M${f1(d.x)},${f1(d.y)} l-1.5,7" stroke="#7FB5C9" stroke-width="2.2" stroke-linecap="round"/>`).join('');
+    $('#rays').setAttribute('transform', `rotate(${f1(this.t * 30)})`);
+  },
+};
+const swayOf = (t, k = 1) => Math.sin(t * (1.2 + state.speed * 0.25)) * state.speed * 1.5 * k;
+
+// ================= растения =================
+const LEAF = 'M0,0 C8,-11 24,-11 32,0 C24,7 8,7 0,0 Z';
+const leafAt = (x, y, side, s, rot = -28, len = 1) => `<g transform="translate(${f1(x)} ${f1(y)}) scale(${(side * s * len).toFixed(2)} ${(s * len).toFixed(2)}) rotate(${rot})"><path d="${LEAF}" fill="#7FBF8C"/><path d="M2,0 L28,0" stroke="#4C8F5A" stroke-width="1.2"/></g>`;
+function daisy(x, y, color, r = 6, cls = '') {
+  let p = '';
+  for (let k = 0; k < 6; k++) p += `<ellipse cx="0" cy="${-r}" rx="${r * 0.5}" ry="${r}" fill="${color}" transform="rotate(${k * 60})"/>`;
+  return `<g transform="translate(${f1(x)} ${f1(y)})"${cls ? ` class="${cls}"` : ''}>${p}<circle r="${r * 0.58}" fill="#F0C077"/></g>`;
+}
+
+// --- 1. Цветок в горшке ---
+function sunflower(steps, sway = 0, fresh = {}) {
+  const g = growth(steps);
+  if (steps <= 0) return `<ellipse cx="0" cy="-2" rx="5" ry="3.5" fill="#C8862B"/>`;
+  const H = 16 + 124 * g, p0 = { x: 0, y: 0 }, c = { x: sway * 0.35, y: -H * 0.5 }, tip = { x: sway, y: -H };
+  let out = `<path d="M0,0 Q${f1(c.x)},${f1(c.y)} ${f1(tip.x)},${f1(tip.y)}" stroke="#4C8F5A" stroke-width="${f1(3 + g * 3)}" stroke-linecap="round" fill="none"/>`;
+  const extra = Math.min(Math.floor(Math.max(0, steps - GOAL) / 1000), 6);
+  for (let i = 0; i < extra; i++) {
+    const p = quad(p0, c, tip, 0.3 + i * 0.09), side = i % 2 ? 1 : -1, ex = p.x + side * 30, ey = p.y - 14;
+    out += `<path d="M${f1(p.x)},${f1(p.y)} Q${f1(p.x + side * 18)},${f1(p.y - 2)} ${f1(ex)},${f1(ey)}" stroke="#4C8F5A" stroke-width="2.4" fill="none"/>${daisy(ex, ey, i % 2 ? '#F09BB6' : '#FDFBF5', 6, fresh.extra === i ? 'pop' : '')}`;
+  }
+  [0.22, 0.36, 0.5, 0.62, 0.74, 0.84].forEach((u, i) => {
+    const s = clamp((g - (0.12 + i * 0.1)) / 0.07, 0, 1);
+    if (s > 0) { const p = quad(p0, c, tip, u); out += leafAt(p.x, p.y, i % 2 ? 1 : -1, s); }
+  });
+  if (g >= 0.72 && g < 1) out += `<g transform="translate(${f1(tip.x)} ${f1(tip.y)}) scale(${clamp((g - 0.72) / 0.22, 0.2, 1).toFixed(2)})"><ellipse cy="-8" rx="9" ry="12" fill="#4C8F5A"/><path d="M-6,-14 Q0,-26 6,-14" fill="#F0C077"/></g>`;
+  if (g >= 1) {
+    let petals = '', seeds = '';
+    for (let k = 0; k < 14; k++) petals += `<ellipse cy="-17" rx="5.5" ry="12" fill="#F0C077" stroke="#C8862B" stroke-width=".8" transform="rotate(${f1(k * 360 / 14)})"/>`;
+    for (let k = 0; k < 8; k++) seeds += `<circle cx="${f1(Math.cos(k) * 6)}" cy="${f1(Math.sin(k * 1.7) * 6)}" r="1.3" fill="#4A3006"/>`;
+    out += `<g transform="translate(${f1(tip.x)} ${f1(tip.y - 6)})"><g${fresh.bloom ? ' class="pop"' : ''}>${petals}<circle r="13" fill="#7A5008"/>${seeds}</g></g>`;
+  }
+  return out;
+}
+const POT = (x, y, w = 1) => `<path d="M${x - 34 * w},${y} L${x + 34 * w},${y} L${x + 26 * w},${y + 38 * w} L${x - 26 * w},${y + 38 * w} Z" fill="#C8763F"/><rect x="${x - 38 * w}" y="${y - 8 * w}" width="${76 * w}" height="${12 * w}" rx="3" fill="#B5652F"/><ellipse cx="${x}" cy="${y}" rx="${32 * w}" ry="${4 * w}" fill="#6B4A2A"/>`;
+
+// --- 2. Яблоня недели: ветка на каждый день, сегодня — верхняя ---
+function tree(days, sway = 0, fresh = {}) {
+  const X = 300, top = 92;
+  let out = `<path d="M291,270 C293,220 296,150 298,${top} L302,${top} C304,150 307,220 309,270 Z" fill="#8A6A45"/>
+    <path d="M298,240 q2,-8 0,-16 M302,200 q-2,-8 0,-16 M299,160 q2,-8 0,-14" stroke="#6E5233" stroke-width="1.4" fill="none"/>
+    ${leafAt(X, top + 2, -1, 0.55, -60)}${leafAt(X, top + 2, 1, 0.55, -60)}`;
+  days.forEach((d, i) => {
+    const y = 254 - i * 24, side = i % 2 ? 1 : -1, g = growth(d.steps);
+    const L = d.steps > 0 ? 14 + 64 * g : 7;
+    const s = sway * (0.35 + i * 0.12);
+    const p0 = { x: X + side * 4, y }, c = { x: X + side * L * 0.55, y: y - 3 }, tip = { x: X + side * L + s * 0.4, y: y - L * 0.3 };
+    out += `<path d="M${p0.x},${p0.y} Q${f1(c.x)},${f1(c.y)} ${f1(tip.x)},${f1(tip.y)}" stroke="#8A6A45" stroke-width="${f1(2.4 + g * 2.6)}" stroke-linecap="round" fill="none"/>`;
+    const n = d.steps > 0 ? Math.ceil(g * 6) : 0;
+    for (let k = 0; k < n; k++) {
+      const p = quad(p0, c, tip, (k + 1) / (n + 1));
+      out += leafAt(p.x, p.y, side, 0.55, k % 2 ? -50 : 20);
+    }
+    if (d.steps >= GOAL) {
+      const apples = Math.min(1 + Math.floor((d.steps - GOAL) / 2000), 3);
+      for (let a = 0; a < apples; a++) {
+        const p = quad(p0, c, tip, 0.95 - a * 0.28), cls = d.today && fresh.fruit === a ? ' class="pop"' : '';
+        out += `<g transform="translate(${f1(p.x)} ${f1(p.y + 11)})"><g${cls}><path d="M0,-9 L0,-5" stroke="#6E5233" stroke-width="1.6"/><circle r="7" fill="#D2483E"/><circle cx="-2.5" cy="-2.5" r="1.8" fill="#FDFBF5" opacity=".6"/></g></g>`;
+      }
+    } else if (g >= 0.75) {
+      out += daisy(tip.x + side * 3, tip.y - 2, '#F6D3DC', 5);
+    }
+    out += `<text x="${X - side * 14}" y="${y + 4}" text-anchor="${side > 0 ? 'end' : 'start'}" fill="${d.today ? '#2C2618' : '#8D8370'}" style="font:${d.today ? 700 : 600} 9.5px var(--font-data)">${d.today ? 'сегодня' : d.label}</text>`;
+  });
+  return out;
+}
+
+// --- 3. Банка: зёрнышки копятся, неделя — банки на полке ---
+const GRAIN_COLORS = ['#E2B65A', '#C8862B', '#F0C077', '#D9A04A'];
+const JAR_SLOTS = (() => {
+  const r = rng(77), out = [];
+  for (let row = 0; row < 30; row++) {
+    const y = 264 - row * 4.4, off = row % 2 ? 3 : 0;
+    for (let c = 0; c < 14; c++) {
+      const x = 260 + off + c * 6 + (r() - 0.5) * 1.6;
+      if (x > 341) continue;
+      out.push({ x, y: y + (r() - 0.5) * 1.2, rot: (r() - 0.5) * 90, col: r() < 0.03 ? '#7FBF8C' : GRAIN_COLORS[Math.floor(r() * 4)] });
+    }
+  }
+  return out;
+})();
+const jarCount = (steps) => Math.min(JAR_SLOTS.length, Math.round(growth(steps) * 0.86 * JAR_SLOTS.length) + Math.floor(Math.max(0, steps - GOAL) / 60));
+const jarSurface = (steps) => { const n = jarCount(steps); return n ? JAR_SLOTS[n - 1].y - 2 : 266; };
+const GLASS = 'M254,126 L254,258 Q254,270 266,270 L334,270 Q346,270 346,258 L346,126 Z';
+const BOW_SHAPE = '<path d="M0,0 C-11,-12 -24,-4 -15,4 Z M0,0 C11,-12 24,-4 15,4 Z" fill="#C2456F"/><circle r="3.6" fill="#8E2F4E"/>';
+function jar(steps, fresh = {}) {
+  const n = jarCount(steps);
+  let out = `<path d="${GLASS}" fill="#FFFFFF" fill-opacity=".4"/>`;
+  for (let i = 0; i < n; i++) {
+    const s = JAR_SLOTS[i];
+    out += `<ellipse cx="${f1(s.x)}" cy="${f1(s.y)}" rx="3.2" ry="2.1" fill="${s.col}" transform="rotate(${f1(s.rot)} ${f1(s.x)} ${f1(s.y)})"/>`;
+  }
+  out += `<path d="${GLASS}" fill="none" stroke="#9FB7BE" stroke-width="2.5"/>
+    <rect x="262" y="112" width="76" height="15" rx="3" fill="#FFFFFF" fill-opacity=".3" stroke="#9FB7BE" stroke-width="2.5"/>
+    <path d="M263,142 L263,250" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity=".75"/>`;
+  if (steps >= GOAL) out += `<g transform="translate(300 120)"${fresh.full ? ' class="pop"' : ''}><path d="M0,0 L-8,15 M0,0 L8,15" stroke="#C2456F" stroke-width="3" stroke-linecap="round"/>${BOW_SHAPE}</g>`;
+  return out;
+}
+const SACK = '<g transform="translate(330 52) rotate(-38)"><path d="M-15,-20 L15,-20 L20,14 Q0,23 -20,14 Z" fill="#C8955A"/><path d="M-15,-20 Q0,-27 15,-20" stroke="#8A6A45" stroke-width="2.2" fill="none"/><path d="M-6,-4 l12,0 M-4,4 l8,0" stroke="#B08452" stroke-width="1.6"/></g>';
+function jarMini(steps) {
+  const frac = jarCount(steps) / JAR_SLOTS.length, h = 40 * frac, r = rng(5);
+  let dots = '';
+  for (let i = 0; i < Math.round(frac * 26); i++) dots += `<circle cx="${f1(-11 + r() * 22)}" cy="${f1(-2 - r() * Math.max(0, h - 3))}" r="1.3" fill="#C8862B"/>`;
+  return `<svg viewBox="-20 -60 40 64"><rect x="-14" y="-42" width="28" height="42" rx="5" fill="#FFFFFF" fill-opacity=".4"/>
+    ${h > 0 ? `<rect x="-13" y="${f1(-1 - h)}" width="26" height="${f1(h)}" rx="4" fill="#E2B65A"/>${dots}` : ''}
+    <rect x="-14" y="-42" width="28" height="42" rx="5" fill="none" stroke="#9FB7BE" stroke-width="1.8"/><rect x="-10" y="-48" width="20" height="6" rx="1.5" fill="none" stroke="#9FB7BE" stroke-width="1.8"/>
+    ${steps >= GOAL ? `<g transform="translate(0 -44) scale(.45)">${BOW_SHAPE}</g>` : ''}</svg>`;
+}
+
+// --- 4. Домик: кирпич за кирпичом, неделя — улица ---
+const BRICKS = (() => {
+  const out = [];
+  for (let row = 0; row < 7; row++) {
+    const y = -6 - (row + 1) * 10, off = row % 2 ? -10 : 0;
+    for (let x = -56 + off; x < 56; x += 20) {
+      const x0 = Math.max(-56, x), x1 = Math.min(56, x + 19);
+      if (x1 - x0 >= 4) out.push({ x: x0, y, w: x1 - x0, c: (row + Math.round(x / 20)) % 3 ? '#D9876A' : '#C9765A' });
+    }
+  }
+  return out;
+})();
+const HOUSE_EXTRAS = ['Забор!', 'Клумба!', 'Почтовый ящик!', 'Деревце!', 'Кот на крыше!', 'Флажок!'];
+const houseExtras = (steps) => (steps >= GOAL ? Math.min(Math.floor((steps - GOAL) / 1000), 6) : 0);
+const houseBricks = (steps) => Math.floor(clamp(growth(steps) / 0.7, 0, 1) * BRICKS.length);
+function house(steps, t = 0, fresh = {}) {
+  const b = growth(steps), done = steps >= GOAL;
+  if (steps <= 0) return `<path d="M-30,0 L30,0" stroke="#A9A49A" stroke-width="3" stroke-dasharray="4 4"/><path d="M0,0 L0,-28" stroke="#8A6A45" stroke-width="3"/><path d="M1.5,-28 L16,-23 L1.5,-18 Z" fill="#C2456F"/>`;
+  const extra = houseExtras(steps);
+  const pop = (i) => (fresh.extra === i ? ' class="pop"' : '');
+  let out = '';
+  if (extra > 3) out += `<g transform="translate(-84 0)"><g${pop(3)}><rect x="-3" y="-34" width="6" height="34" fill="#8A6A45"/><circle cy="-46" r="18" fill="#7FBF8C"/><circle cx="-11" cy="-36" r="11" fill="#6CAE7A"/><circle cx="11" cy="-38" r="12" fill="#6CAE7A"/></g></g>`;
+  out += `<rect x="-62" y="-6" width="124" height="6" rx="2" fill="#A9A49A"/>`;
+  const n = houseBricks(steps);
+  for (let i = 0; i < n; i++) { const k = BRICKS[i]; out += `<rect x="${k.x}" y="${k.y}" width="${k.w}" height="9" rx="1.5" fill="${k.c}"/>`; }
+  if (b >= 0.7) out += `<path d="M-11,-6 L-11,-30 Q-11,-41 0,-41 Q11,-41 11,-30 L11,-6 Z" fill="#8A6A45"/><circle cx="6" cy="-22" r="1.7" fill="#F0C077"/>`;
+  if (b >= 0.75) for (const wx of [-34, 34]) out += `<rect x="${wx - 10}" y="-60" width="20" height="18" rx="2" fill="${done ? '#F0C077' : '#CFE6EE'}" stroke="#FDFBF5" stroke-width="2.2"/><path d="M${wx},-60 L${wx},-42 M${wx - 10},-51 L${wx + 10},-51" stroke="#FDFBF5" stroke-width="1.8"/>`;
+  if (done) {
+    out += `<rect x="24" y="-122" width="14" height="36" fill="#A9A49A"/>`;
+    for (let k = 0; k < 3; k++) {
+      const ph = (t * 0.45 + k / 3) % 1;
+      out += `<circle cx="${f1(31 + Math.sin(ph * 6) * 4 + ph * 10)}" cy="${f1(-128 - ph * 44)}" r="${f1(4 + ph * 7)}" fill="#FDFBF5" stroke="#D9CFBC" stroke-width="1.2" opacity="${f1((1 - ph) * 0.9)}"/>`;
+    }
+  }
+  if (b >= 0.85) out += `<g${fresh.roof ? ' class="pop"' : ''}><path d="M-72,-74 L72,-74 L0,-128 Z" fill="#C2456F"/><path d="M-50,-90 L50,-90 M-28,-107 L28,-107" stroke="#8E2F4E" stroke-width="1.6"/></g>`;
+  if (extra > 0) out += `<g${pop(0)} stroke="#B08452" stroke-width="3" stroke-linecap="round"><path d="M-104,0 L-104,-20 M-92,0 L-92,-20 M-80,0 L-80,-20 M-68,0 L-68,-20 M-108,-8 L-66,-8 M-108,-16 L-66,-16"/></g>`;
+  if (extra > 1) out += `<g${pop(1)}>${daisy(-44, -4, '#F09BB6', 4)}${daisy(-30, -3, '#FDFBF5', 4)}${daisy(32, -3, '#F0C077', 4)}${daisy(46, -4, '#F09BB6', 4)}</g>`;
+  if (extra > 2) out += `<g transform="translate(84 0)"><g${pop(2)}><rect x="-1.5" y="-26" width="3" height="26" fill="#8A6A45"/><path d="M-9,-26 L9,-26 L9,-38 Q0,-44 -9,-38 Z" fill="#4C8F5A"/><path d="M9,-36 L9,-46 L16,-43 L9,-40" fill="#C2456F"/></g></g>`;
+  if (extra > 4) out += `<g transform="translate(-22 -101)"><g${pop(4)}><ellipse rx="9" ry="6" fill="#2C2618"/><circle cx="8" cy="-6" r="5" fill="#2C2618"/><path d="M5,-10 L6,-15 L9,-11 L12,-15 L12,-9 Z" fill="#2C2618"/><path d="M-8,-2 Q-16,-6 -14,-14" stroke="#2C2618" stroke-width="2.4" fill="none" stroke-linecap="round"/></g></g>`;
+  if (extra > 5) out += `<g${pop(5)}><path d="M0,-128 L0,-146" stroke="#2C2618" stroke-width="2"/><path d="M1,-146 L15,-141 L1,-136 Z" fill="#F0C077"/></g>`;
+  return out;
+}
+function houseNextSpot(steps) {
+  const n = houseBricks(steps);
+  if (n < BRICKS.length) { const k = BRICKS[n]; return { x: k.x + k.w / 2, y: k.y + 4 }; }
+  return growth(steps) < 0.85 ? { x: 0, y: -80 } : null;
+}
+
+// --- 5. Воздушный шар: шаги — высота, неделя — шары на своей высоте ---
+const ALT = (steps) => 270 - 150 * growth(steps);
+function balloon(c = ['#F0C077', '#C2456F', '#FDFBF5'], flame = 0) {
+  return `<ellipse cy="-62" rx="31" ry="35" fill="${c[0]}"/><ellipse cy="-62" rx="19" ry="35" fill="${c[1]}"/><ellipse cy="-62" rx="7" ry="35" fill="${c[2]}"/>
+    <path d="M-17,-33 L17,-33 L9,-23 L-9,-23 Z" fill="${c[1]}"/>
+    <path d="M-8,-23 L-7,-11 M8,-23 L7,-11" stroke="#6E5233" stroke-width="1.2"/>
+    ${flame > 0 ? `<path d="M0,${f1(-15 - flame * 11)} C5,-18 4,-13 0,-12 C-4,-13 -5,-18 0,${f1(-15 - flame * 11)} Z" fill="#E08A3C"/><path d="M0,${f1(-14 - flame * 6)} C2.5,-16 2,-13 0,-12.5 C-2,-13 -2.5,-16 0,${f1(-14 - flame * 6)} Z" fill="#F0C077"/>` : ''}
+    <rect x="-9" y="-12" width="18" height="12" rx="2" fill="#A0743F"/><path d="M-9,-6 L9,-6 M-3,-12 L-3,0 M3,-12 L3,0" stroke="#7E5A2E" stroke-width="1"/>`;
+}
+const FRIENDS = [[-62, -30, ['#7FB5C9', '#FDFBF5', '#7FB5C9']], [58, -64, ['#7FBF8C', '#4C8F5A', '#FDFBF5']], [-46, -112, ['#F09BB6', '#FDFBF5', '#C2456F']], [64, 6, ['#9C84C9', '#FDFBF5', '#9C84C9']]];
+const balloonExtras = (steps) => Math.min(Math.floor(Math.max(0, steps - GOAL) / 1000), 4);
+function sky(steps, t = 0, fresh = {}) {
+  const y = ALT(steps), x = 300;
+  let out = `<path d="M232,190 q4,-5 8,0 q4,-5 8,0 M252,206 q3,-4 6,0 q3,-4 6,0" stroke="#6B6250" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
+  out += `<path d="M394,270 L394,120" stroke="#B5AB96" stroke-width="1.5"/>`;
+  for (let k = 1; k <= 8; k++) { const ty = ALT(k * 1000); out += `<path d="M389,${f1(ty)} L394,${f1(ty)}" stroke="#B5AB96" stroke-width="1.5"/><text x="386" y="${f1(ty + 3)}" text-anchor="end" fill="#8D8370" style="font:600 8px var(--font-data)">${k}к</text>`; }
+  out += `<path d="M397,${f1(y - 4)} L389,${f1(y)} L397,${f1(y + 4)} Z" fill="#C2456F"/>`;
+  if (steps < GOAL) out += `<path d="M${x},${f1(y)} Q${x + 14},${f1((y + 270) / 2 + 12)} ${x + 34},266" stroke="#8A6A45" stroke-width="1.3" fill="none" stroke-dasharray="3 2"/><path d="M${x + 34},270 L${x + 34},262" stroke="#6E5233" stroke-width="3" stroke-linecap="round"/>`;
+  const extra = balloonExtras(steps);
+  for (let i = 0; i < extra; i++) {
+    const [dx, dy, c] = FRIENDS[i], bob = Math.sin(t * 1.4 + i) * 2;
+    out += `<g transform="translate(${x + dx} ${f1(y + dy + bob)}) scale(.45)"><g${fresh.extra === i ? ' class="pop"' : ''}>${balloon(c)}</g></g>`;
+  }
+  const sway = Math.sin(t * 1.3) * (0.6 + state.speed * 0.5);
+  out += `<g transform="translate(${x} ${f1(y)}) rotate(${f1(sway)} 0 -62)"><g${fresh.top ? ' class="pop"' : ''}>${balloon(undefined, state.speed > 0 ? clamp(state.speed / 8, 0.2, 1) : 0)}</g>
+    ${steps >= GOAL ? '<path d="M9,-12 L9,-26" stroke="#2C2618" stroke-width="1.4"/><path d="M10,-26 L20,-22.5 L10,-19 Z" fill="#4C8F5A"/>' : ''}</g>`;
+  return out;
+}
+const SKY_CLOUDS = [{ x: 230, y: 150, s: 0.7, f: 0.6 }, { x: 350, y: 96, s: 0.9, f: 1 }, { x: 180, y: 60, s: 0.6, f: 0.45 }];
+const cloudShape = (x, y, s) => `<g transform="translate(${f1(x)} ${f1(y)}) scale(${s})"><ellipse rx="30" ry="10" fill="#FDFBF5"/><circle cx="-12" cy="-6" r="11" fill="#FDFBF5"/><circle cx="8" cy="-10" r="14" fill="#FDFBF5"/></g>`;
+function skyMini(steps) {
+  const y = -6 - 78 * growth(steps);
+  return `<svg viewBox="-22 -134 44 138"><path d="M0,0 L0,${f1(y)}" stroke="#8A6A45" stroke-width="1" stroke-dasharray="2 2"/>
+    <g transform="translate(0 ${f1(y)}) scale(${steps > 0 ? 0.42 : 0.3})">${balloon(steps >= GOAL ? ['#F0C077', '#C2456F', '#FDFBF5'] : ['#E9DEC6', '#D8C6A7', '#FDFBF5'])}</g></svg>`;
+}
+
+// ================= варианты =================
+// Вехи — по шагам сегодня; каждая звучит один раз, когда её прошли.
+function milestones(list, every) {
+  return (from, to) => {
+    for (const [s, text] of list) if (from < s && to >= s) return text;
+    if (every && to > every.from) {
+      const a = Math.floor((from - every.from) / every.step), b = Math.floor((to - every.from) / every.step);
+      if (b > a && b > 0) return every.text;
+    }
+    return null;
+  };
+}
+const WALK_LINES = ['', '', 'Хороший темп!', 'Солнце вышло!', 'Бегом — и радуга!'];
+const ICON_SHELF = (days) => `<div class="shelf">${days.map((d) => `<div class="slot${d.today ? ' today' : ''}"><svg viewBox="-36 -112 72 130"><g transform="translate(0 -8) scale(.55)">${sunflower(d.steps)}</g>${POT(0, -8, 0.5)}</svg><span>${d.today ? '•' : d.label}</span></div>`).join('')}</div>`;
+
+const VARIANTS = {
+  flower: {
+    rain: true, walk: 'Поливаю!',
+    idle: 'Посадил зёрнышко. Пара минут — и проклюнется!',
+    rest: (s) => (s >= GOAL ? 'Цветёт! Хороший день.' : 'Подрос! Сколько прошли — всё в дело.'),
+    marks: milestones([[100, 'Проклюнулся!'], [1200, 'Первый листик!'], [4200, 'Бутон!'], [GOAL, 'Расцвёл!']], { from: GOAL, step: 1000, text: 'Ещё цветочек!' }),
+    fresh(prev, now) { const e = (s) => Math.min(Math.floor(Math.max(0, s - GOAL) / 1000), 6); return { bloom: prev < GOAL && now >= GOAL, extra: e(now) > e(prev) ? e(now) - 1 : -1 }; },
+    draw(t, fresh) { return `<g transform="translate(300 232)">${sunflower(state.steps, swayOf(t), fresh)}</g>${POT(300, 232)}`; },
+    below: ICON_SHELF,
+  },
+  tree: {
+    rain: true, walk: 'Поливаю!', area: [220, 380],
+    idle: 'Новая веточка ждёт. Пройдёмся — проклюнется!',
+    rest: (s) => (s >= GOAL ? 'Сегодняшняя ветка — с яблоком!' : 'Сегодняшняя веточка — вон та, сверху.'),
+    marks: milestones([[100, 'Веточка проклюнулась!'], [1500, 'Листочки!'], [4500, 'Зацвела!'], [GOAL, 'Яблоко поспело!']], { from: GOAL, step: 2000, text: 'Ещё яблоко!' }),
+    fresh(prev, now) { const a = (s) => (s >= GOAL ? Math.min(1 + Math.floor((s - GOAL) / 2000), 3) : 0); return { fruit: a(now) > a(prev) ? a(now) - 1 : -1 }; },
+    draw(t, fresh) { return tree(week(), swayOf(t), fresh); },
+    below: () => '',
+  },
+  jar: {
+    walk: 'Сыплю зёрнышки!',
+    idle: 'Банка пустая. Пройдёмся — насыплю зёрнышек!',
+    rest: (s) => (s >= GOAL ? 'Полная банка! Хороший день.' : 'Зёрнышки копятся — каждый шаг в банку.'),
+    marks: milestones([[100, 'Первые зёрнышки!'], [2700, 'Полбанки!'], [GOAL, 'Полная банка — с бантиком!']], { from: GOAL, step: 1500, text: 'С горкой!' }),
+    fresh(prev, now) { return { full: prev < GOAL && now >= GOAL }; },
+    draw(t, fresh) { return jar(state.steps, fresh); },
+    init() { this.falling = []; },
+    fx(dt) {
+      if (state.speed <= 0) { this.falling = []; $('#fx').innerHTML = ''; return; }
+      const floor = jarSurface(state.steps), want = Math.round(state.speed * 2.5);
+      while (this.falling.length < want) this.falling.push({ x: 296 + Math.random() * 10, y: 66 + Math.random() * Math.max(1, floor - 66), r: Math.random() * 180, c: GRAIN_COLORS[Math.floor(Math.random() * 4)] });
+      this.falling.length = Math.min(this.falling.length, want);
+      for (const p of this.falling) { p.y += (150 + state.speed * 20) * dt; p.r += 400 * dt; if (p.y > floor) { p.y = 66; p.x = 296 + Math.random() * 10; } }
+      $('#fx').innerHTML = SACK + this.falling.map((p) => `<ellipse cx="${f1(p.x)}" cy="${f1(p.y)}" rx="3.2" ry="2.1" fill="${p.c}" transform="rotate(${f1(p.r)} ${f1(p.x)} ${f1(p.y)})"/>`).join('');
+    },
+    below: (days) => `<div class="shelf">${days.map((d) => `<div class="slot${d.today ? ' today' : ''}">${jarMini(d.steps)}<span>${d.today ? '•' : d.label}</span></div>`).join('')}</div>`,
+  },
+  house: {
+    walk: 'Строим!',
+    idle: 'Участок ждёт. Пройдёмся — заложим фундамент!',
+    rest: (s) => (s >= GOAL ? 'Дом готов. Уютно!' : 'Стройка идёт — кирпичик за кирпичиком.'),
+    marks(prev, now) {
+      for (const [s, text] of [[100, 'Фундамент!'], [700, 'Первые кирпичи!'], [3920, 'Дверь и окна!'], [5780, 'Крыша!'], [GOAL, 'Дом готов — дым из трубы!']]) if (prev < s && now >= s) return text;
+      return houseExtras(now) > houseExtras(prev) ? HOUSE_EXTRAS[houseExtras(now) - 1] : null;
+    },
+    fresh(prev, now) { return { roof: prev < 5780 && now >= 5780, extra: houseExtras(now) > houseExtras(prev) ? houseExtras(now) - 1 : -1 }; },
+    draw(t, fresh) { return `<g transform="translate(306 270)">${house(state.steps, t, fresh)}</g>`; },
+    fx(dt, t) {
+      const spot = state.speed > 0 ? houseNextSpot(state.steps) : null;
+      if (!spot) { $('#fx').innerHTML = ''; return; }
+      let s = '';
+      for (let k = 0; k < 3; k++) {
+        const ph = (t / 1000 * 1.6 + k / 3) % 1, a = k * 2.1, r = 4 * (1 - ph);
+        const x = 306 + spot.x + Math.cos(a) * (6 + ph * 14), y = 270 + spot.y + Math.sin(a) * (4 + ph * 10) - ph * 8;
+        s += `<path transform="translate(${f1(x)} ${f1(y)})" d="M0,${f1(-r)} L${f1(r * 0.3)},${f1(-r * 0.3)} L${f1(r)},0 L${f1(r * 0.3)},${f1(r * 0.3)} L0,${f1(r)} L${f1(-r * 0.3)},${f1(r * 0.3)} L${f1(-r)},0 L${f1(-r * 0.3)},${f1(-r * 0.3)} Z" fill="#F0C077"/>`;
+      }
+      $('#fx').innerHTML = s;
+    },
+    below: (days) => `<div class="street">${days.map((d) => `<div class="slot${d.today ? ' today' : ''}"><svg viewBox="-112 -150 224 156">${house(d.steps)}</svg><span>${d.today ? '•' : d.label}</span></div>`).join('')}</div>`,
+  },
+  balloon: {
+    walk: 'Поддаём жару!',
+    idle: 'Шар на земле. Пройдёмся — поднимемся!',
+    rest: (s) => (s >= GOAL ? 'Мы на самом верху!' : 'Летим потихоньку — вид уже красивый.'),
+    marks: milestones([[100, 'Отрываемся!'], [2000, 'Выше деревьев!'], [4500, 'Выше облаков!'], [GOAL, 'Вершина! Вот это вид!']], { from: GOAL, step: 1000, text: 'Ещё шарик прилетел!' }),
+    fresh(prev, now) { return { top: prev < GOAL && now >= GOAL, extra: balloonExtras(now) > balloonExtras(prev) ? balloonExtras(now) - 1 : -1 }; },
+    draw(t, fresh) { return sky(state.steps, t, fresh); },
+    init() { this.clouds = SKY_CLOUDS.map((c) => ({ ...c })); },
+    back(dt) {
+      for (const c of this.clouds) { c.x -= (4 + state.speed * 9) * c.f * dt; if (c.x < 150) c.x = 430; }
+      $('#back').innerHTML = this.clouds.map((c) => cloudShape(c.x, c.y, c.s)).join('');
+    },
+    below: (days) => `<div class="sky7">${days.map((d) => `<div class="slot${d.today ? ' today' : ''}">${skyMini(d.steps)}<span>${d.today ? '•' : d.label}</span></div>`).join('')}</div>`,
+  },
+};
+
+// ================= оркестр =================
+let cur = null, curName = '', grain = null, lastSteps = state.steps, fresh = {}, freshUntil = 0, shelfKey = '';
+
+function show(name) {
+  if (!VARIANTS[name]) name = 'flower';
+  curName = name; cur = VARIANTS[name];
+  document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.v === name));
+  $('#view').innerHTML = `
+    <div class="head"><div class="big" id="n">0</div><div class="sub"><b id="km">0,00 км</b><span id="min">0 мин</span></div></div>
+    <div class="bubble" id="say">…</div>
+    ${sceneSVG()}
+    <div class="week"><div id="below"></div><div class="week-total" id="weekTotal"></div></div>`;
+  cur.init?.();
+  say.el = $('#say'); say.until = 0;
+  grain = new Grain($('#grain'));
+  Weather.reset();
+  shelfKey = '';
+  render(true);
+  grain.still(state.steps >= GOAL);
+  cur.back?.(0);
+  loop();
+}
+
+function render(force = false) {
+  const now = state.steps;
+  if (now !== lastSteps) {
+    const m = cur.marks(lastSteps, now);
+    if (m && now > lastSteps) { news(m); grain.jump(); }
+    const f = cur.fresh(lastSteps, now);
+    if (Object.values(f).some((v) => v === true || v >= 0)) { fresh = f; freshUntil = performance.now() + 800; }
+    lastSteps = now;
+  }
+  if (performance.now() > freshUntil) fresh = {};
+  setText($('#n'), fmt(now));
+  setText($('#km'), `${km(state.distance)} км`);
+  setText($('#min'), `${fmt(state.distance / 1000 / 3.6 * 60)} мин`);
+  Weather.render();
+  const tier = tierOf(state.speed);
+  speak(now <= 0 && tier === 0 ? cur.idle : tier === 1 ? cur.walk : tier > 1 ? WALK_LINES[tier] : cur.rest(now));
+  $('#grow').innerHTML = cur.draw(Weather.t, fresh);
+  const days = week();
+  const key = curName + days.map((d) => Math.floor(d.steps / 250)).join();
+  if (key !== shelfKey || force) {
+    shelfKey = key;
+    $('#below').innerHTML = cur.below(days);
+    setText($('#weekTotal'), `за неделю ${fmt(days.reduce((s, d) => s + d.steps, 0))} шагов`);
+  }
+}
+
+let raf = 0, lastT = 0, lastRender = 0;
+function loop() { if (!raf && state.speed > 0) { lastT = 0; raf = requestAnimationFrame(frame); } }
+function frame(t) {
+  if (state.speed <= 0) { raf = 0; Weather.reset(); cur.fx?.(0, t); render(); grain.still(state.steps >= GOAL); syncSim(); return; }
+  const dt = lastT ? Math.min((t - lastT) / 1000, 0.1) : 0;
+  lastT = t;
+  const mps = state.speed / 3.6;
+  state.steps = Math.min(14000, state.steps + (mps / strideM(state.speed)) * dt * SIM_X);
+  state.distance += mps * dt * SIM_X;
+  if (!reduced) {
+    Weather.frame(dt, cur.area);
+    grain.step(dt, t, state.speed, state.steps >= GOAL);
+    $('#grow').innerHTML = cur.draw(Weather.t, fresh);
+    cur.back?.(dt);
+    cur.fx?.(dt, t);
+  }
+  if (t - lastRender > (reduced ? 400 : 120)) { render(); syncSim(); lastRender = t; }
+  if (state.steps >= 14000) setSpeed(0);
+  raf = requestAnimationFrame(frame);
+}
+function setSpeed(v) {
+  if (v > 0) state.lastSpeed = v;
+  state.speed = v;
+  syncSim(); render();
+  if (v > 0) loop(); else { Weather.reset(); cur.fx?.(0, 0); grain.still(state.steps >= GOAL); }
+}
+function syncSim() {
+  $('#spd').value = state.speed;
+  $('#spdOut').textContent = `${state.speed.toFixed(1)} км/ч`;
+  $('#stp').value = Math.round(state.steps);
+  $('#stpOut').textContent = fmt(state.steps);
+  $('#playIcon').innerHTML = state.speed > 0
+    ? '<rect x="4" y="3" width="4.5" height="14" rx="1" fill="currentColor"/><rect x="11.5" y="3" width="4.5" height="14" rx="1" fill="currentColor"/>'
+    : '<path d="M5,3 L17,10 L5,17 Z" fill="currentColor"/>';
+}
+$('#play').addEventListener('click', () => setSpeed(state.speed > 0 ? 0 : state.lastSpeed));
+$('#spd').addEventListener('input', (e) => setSpeed(+e.target.value));
+$('#stp').addEventListener('input', (e) => {
+  state.steps = +e.target.value;
+  state.distance = state.steps * strideM(state.lastSpeed);
+  syncSim(); render();
+});
+document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => { location.hash = b.dataset.v; }));
+addEventListener('hashchange', () => show(location.hash.slice(1)));
+syncSim();
+show(location.hash.slice(1));
+</script>
