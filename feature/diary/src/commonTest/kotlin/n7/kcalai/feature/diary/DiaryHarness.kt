@@ -87,6 +87,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
         assistant: FoodAssistant? = null,
         peerOffers: PeerOfferDao? = null,
         peers: NearbyPeers? = null,
+        browsers: Browsers? = null,
     ): DiaryViewModel {
         val personal = PersonalRepository(diaryDao, FakePersonalDao(), bodyMetricDao, goalDao, zone)
         val food = FoodRepository(
@@ -113,6 +114,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
             outbox = outbox,
             peerOffers = peerOffers,
             peers = peers,
+            browsers = browsers,
             assistant = assistant,
             clock = clock,
             zone = zone,

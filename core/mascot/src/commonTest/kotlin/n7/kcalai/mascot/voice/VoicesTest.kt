@@ -48,6 +48,7 @@ class VoicesTest {
         put(Topic.ASSISTANT_FAILED, setOf(BUTTER))
         put(Topic.ASSISTANT_READY, setOf(GRAIN))
         put(Topic.APP_NEW, setOf(BUTTER))
+        put(Topic.WEB_ADDRESS, setOf(GRAIN))
     }
 
     /** Факты, при которых у каждой темы есть о чём сказать. */
@@ -79,6 +80,7 @@ class VoicesTest {
         absentMinutes = 300,
         food = food,
         foodDaysInRow = 3,
+        address = "http://192.168.100.200:47800/",
     )
 
     /** Самые длинные факты, какие бывают: имя в двадцать букв, название — в предел. */

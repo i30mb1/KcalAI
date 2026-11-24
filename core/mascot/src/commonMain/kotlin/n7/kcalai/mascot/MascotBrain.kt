@@ -10,6 +10,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.datetime.TimeZone
@@ -60,6 +61,12 @@ class MascotBrain(
     private val diaryDao: DiaryDao,
     private val zone: TimeZone,
     private val random: Random = Random.Default,
+    /**
+     * Когда пришли сегодняшние просьбы, ждущие ответа, — от соседа и от браузера.
+     * Они такие же вопросы, как вопросы персонажей: пока ждут, новость молчит.
+     * Функцией, а не таблицами: что считать просьбой, мозгу знать незачем.
+     */
+    private val asking: (dateEpochDay: Long) -> Flow<List<Long>> = { flowOf(emptyList()) },
 ) {
 
     /** Профиль; пока его строки нет — профиль по умолчанию: ничего не спрашивали, ничего не знаем. */
@@ -218,6 +225,30 @@ class MascotBrain(
         return answer(Topic.APP_NEW, Mascot.BUTTER, now)
     }
 
+    /**
+     * Дневник открывается и с компьютера — Зёрнышко называет адрес страницы.
+     *
+     * Сам — один раз за всю жизнь: это знакомство с возможностью, а не напоминание.
+     * Очередь та же, что у новостей, — см. [awaitTurn]. Дальше адрес — по просьбе,
+     * см. [answerWebAddress].
+     *
+     * @return сказанное; `null` — уже говорили
+     */
+    suspend fun tellWebAddress(address: String, clock: Clock = Clock.System): MascotMessageEntity? {
+        if (dao.lastSaid(Topic.WEB_ADDRESS.name) != null) return null
+        awaitTurn(clock)
+        // Пока ждали очереди, адрес могли назвать по просьбе — второй раз не нужно.
+        if (dao.lastSaid(Topic.WEB_ADDRESS.name) != null) return null
+        return answerWebAddress(address, clock.now())
+    }
+
+    /** Человек спросил адрес страницы — отвечают сразу и сколько угодно раз. */
+    suspend fun answerWebAddress(address: String, now: Instant): MascotMessageEntity? {
+        val facts = lightFacts(now).copy(address = address)
+        val said = Voices.of(Mascot.GRAIN).compose(Topic.WEB_ADDRESS, facts, dao.recent(MEMORY).memory(), random) ?: return null
+        return save(Mascot.GRAIN, Topic.WEB_ADDRESS, said, Delivery.FEED, facts.now.date.toEpochDays(), now)
+    }
+
     private suspend fun appIsNewDue(now: Instant): Boolean {
         if (dao.lastSaid(Topic.APP_NEW.name) != null) return false
         val today = now.toLocalDateTime(zone).date.toEpochDays()
@@ -254,10 +285,13 @@ class MascotBrain(
             // Знакомство — пока за неделю ни одной записи: так же решает сводка дня.
             diaryDao.observeSince(today - INTRO_DAYS + 1),
             profile,
-        ) { said, eaten, profile -> Triple(said, eaten, profile) }
-            .mapLatest { (said, eaten, profile) ->
+            asking(today),
+        ) { said, eaten, profile, asked -> Turn(said, eaten, profile, asked) }
+            .mapLatest { (said, eaten, profile, asked) ->
                 val lastEntryAt = eaten.maxOfOrNull { it.createdAt } ?: return@mapLatest false
                 if (awaitsAnswer(said, lastEntryAt)) return@mapLatest false
+                // Просьба держит слово, как и вопрос: пришла после последней записи — ждём ответа.
+                if (asked.any { it >= lastEntryAt }) return@mapLatest false
                 val lastActivity = maxOf(lastEntryAt, said.maxOfOrNull { it.createdAt } ?: 0L, profile.lastOpenAt ?: 0L)
                 val wait = lastActivity + PAUSE_MS - clock.now().toEpochMilliseconds()
                 if (wait > 0) delay(wait)
@@ -265,6 +299,14 @@ class MascotBrain(
             }
             .first { it }
     }
+
+    /** Всё, от чего зависит очередь заговорить: у типизированного combine нет четвёрки-кортежа. */
+    private data class Turn(
+        val said: List<MascotMessageEntity>,
+        val eaten: List<DiaryEntryEntity>,
+        val profile: MascotProfileEntity,
+        val asked: List<Long>,
+    )
 
     // --- Отзывается -----------------------------------------------------------------------
 

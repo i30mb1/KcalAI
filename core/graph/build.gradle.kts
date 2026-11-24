@@ -26,6 +26,8 @@ kotlin {
             api(project(":core:assistant"))
             api(project(":core:mascot"))
             api(project(":core:nearby"))
+            // Страница дневника для браузера — на том же сервере, что приёмник соседей.
+            api(project(":core:webhost"))
             api(project(":feature:diary"))
             implementation(libs.androidx.sqlite.bundled)
             api(libs.kotlinx.coroutines.core)

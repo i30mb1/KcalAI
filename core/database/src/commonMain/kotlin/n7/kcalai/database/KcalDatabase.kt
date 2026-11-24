@@ -26,6 +26,7 @@ import kotlinx.coroutines.IO
         MascotProfileEntity::class,
         TextEmbeddingEntity::class,
         PeerOfferEntity::class,
+        WebClientEntity::class,
     ],
     version = KCAL_DB_VERSION,
     exportSchema = true,
@@ -42,6 +43,8 @@ import kotlinx.coroutines.IO
         AutoMigration(from = 8, to = 9),
         // Клетчатка во вкладах — новый столбец; у старых вкладов она неизвестна.
         AutoMigration(from = 9, to = 10),
+        // Браузеры, пущенные в дневник, — новая таблица, дневник не трогается.
+        AutoMigration(from = 10, to = 11),
     ],
 )
 @ConstructedBy(KcalDatabaseConstructor::class)
@@ -56,10 +59,11 @@ abstract class KcalDatabase : RoomDatabase() {
     abstract fun mascotDao(): MascotDao
     abstract fun semanticDao(): SemanticDao
     abstract fun peerOfferDao(): PeerOfferDao
+    abstract fun webClientDao(): WebClientDao
 }
 
 /** Версия схемы базы. Константой — её читают тесты обновления и выгрузки схемы. */
-const val KCAL_DB_VERSION = 10
+const val KCAL_DB_VERSION = 11
 
 /** Реализацию для каждой платформы генерирует Room. */
 @Suppress("KotlinNoActualForExpect")

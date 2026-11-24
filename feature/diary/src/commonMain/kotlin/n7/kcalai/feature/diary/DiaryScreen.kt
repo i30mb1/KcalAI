@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
@@ -117,8 +118,16 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
             }
         },
         onAnswerOffer = viewModel::onAnswerOffer,
+        onAnswerBrowser = viewModel::onAnswerBrowser,
         onSendToPeer = viewModel::onSendToPeer,
     )
+
+    // Пущенный браузер на связи — экрану гаснуть нельзя: страница живёт, пока открыт дневник.
+    val screen = LocalScreenAwake.current
+    DisposableEffect(state.keepScreenOn) {
+        screen.keep(state.keepScreenOn)
+        onDispose { screen.keep(false) }
+    }
 
     when (val overlay = state.overlay) {
         Overlay.None -> Unit
@@ -229,6 +238,7 @@ fun DiaryScreen(
     /** Ответ на вопрос персонажа: `true` — «Сказать» / «Пишите», `false` — «Не скажу» / «Не надо». */
     onAnswerAsk: (MascotQuestion, Boolean) -> Unit,
     onAnswerOffer: (Long, Boolean) -> Unit,
+    onAnswerBrowser: (Long, Boolean) -> Unit,
     onSendToPeer: (String) -> Unit,
     /** С персонажем что-то сделали: ткнули, взяли в руку, погладили, разбудили. */
     onMascotEvent: (MascotEvent) -> Unit,
@@ -368,6 +378,7 @@ fun DiaryScreen(
             onOpenGoal = onOpenGoal,
             onAnswerAsk = onAnswerAsk,
             onAnswerOffer = onAnswerOffer,
+            onAnswerBrowser = onAnswerBrowser,
             onSendToPeer = onSendToPeer,
             modifier = Modifier.fillMaxSize().nestedScroll(expandOnPull),
         )
@@ -479,6 +490,7 @@ private fun Feed(
     onOpenGoal: () -> Unit,
     onAnswerAsk: (MascotQuestion, Boolean) -> Unit,
     onAnswerOffer: (Long, Boolean) -> Unit,
+    onAnswerBrowser: (Long, Boolean) -> Unit,
     onSendToPeer: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -636,6 +648,11 @@ private fun Feed(
                         item = item,
                         onYes = { onAnswerOffer(item.id, true) },
                         onNo = { onAnswerOffer(item.id, false) },
+                    )
+                    is FeedItem.Browser -> BrowserBubble(
+                        item = item,
+                        onYes = { onAnswerBrowser(item.id, true) },
+                        onNo = { onAnswerBrowser(item.id, false) },
                     )
                 }
             }

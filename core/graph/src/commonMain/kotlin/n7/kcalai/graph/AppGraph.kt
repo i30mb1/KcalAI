@@ -6,7 +6,10 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -15,6 +18,7 @@ import kotlinx.datetime.todayIn
 import n7.kcalai.assistant.DiaryTools
 import n7.kcalai.assistant.FoodAssistant
 import n7.kcalai.database.KcalDatabase
+import n7.kcalai.feature.diary.Browsers
 import n7.kcalai.feature.diary.DiaryOutbox
 import n7.kcalai.feature.diary.DiaryViewModel
 import n7.kcalai.feature.diary.NearbyPeers
@@ -29,6 +33,8 @@ import n7.kcalai.mascot.MascotBrain
 import n7.kcalai.mascot.MascotRoutines
 import n7.kcalai.mascot.MascotShade
 import n7.kcalai.nearby.DatabaseOfferInbox
+import n7.kcalai.nearby.LAN_PORT
+import n7.kcalai.nearby.pageUrl
 import n7.kcalai.nearby.NearbyDiscovery
 import n7.kcalai.nearby.OfferReceiver
 import n7.kcalai.personal.PersonalRepository
@@ -48,6 +54,11 @@ import n7.kcalai.repositories.QueryEmbedder
 import n7.kcalai.repositories.RemoteProductSource
 import n7.kcalai.resolver.TextFoodResolver
 import n7.kcalai.resolver.parseSegment
+import n7.kcalai.webapi.WebPeer
+import n7.kcalai.webhost.DiaryWebHost
+import n7.kcalai.webhost.RepositoryWebDiary
+import n7.kcalai.webhost.ResourceWebBundle
+import n7.kcalai.webhost.WebPresence
 
 /**
  * Граф зависимостей приложения — один на Android и iOS.
@@ -206,6 +217,13 @@ abstract class AppGraph {
             facts = FactsBuilder(database.diaryDao(), database.goalDao(), personalRepository, zone),
             diaryDao = database.diaryDao(),
             zone = zone,
+            // Просьбы соседа и браузера ждут ответа так же, как вопросы персонажей: новость молчит.
+            asking = { day ->
+                combine(database.peerOfferDao().observeDay(day), database.webClientDao().observeDay(day)) { offers, browsers ->
+                    offers.filter { it.choice == null }.map { it.createdAt } +
+                        browsers.filter { it.choice == null }.map { it.createdAt }
+                }
+            },
         )
     }
 
@@ -222,13 +240,42 @@ abstract class AppGraph {
 
     /**
      * Телефоны рядом. Приёмник и объявление живут, пока открыт дневник; имя — из профиля:
-     * пока человек не назвался, фича молчит.
+     * пока человек не назвался, фича молчит. На том же сервере — страница дневника.
      */
-    val nearbyPeers: NearbyPeers by lazy {
+    private val lan: NearbyPeersOverLan by lazy {
         NearbyPeersOverLan(
             discovery = discovery(),
-            receiver = OfferReceiver(DatabaseOfferInbox(database.peerOfferDao())),
+            receiver = OfferReceiver(
+                inbox = DatabaseOfferInbox(database.peerOfferDao()),
+                port = LAN_PORT,
+                routes = diaryWebHost,
+            ),
             myName = mascotBrain.profile.map { it.name },
+        )
+    }
+
+    val nearbyPeers: NearbyPeers get() = lan
+
+    /** Сколько пущенных браузеров на связи со страницей дневника. */
+    private val webPresence = WebPresence()
+
+    /**
+     * Страница дневника для браузера в той же сети. Пишет тем же путём, что строка ввода:
+     * тот же поиск, тот же снимок КБЖУ, та же память порций при правке граммов.
+     */
+    private val diaryWebHost: DiaryWebHost by lazy {
+        DiaryWebHost(
+            clients = database.webClientDao(),
+            diary = RepositoryWebDiary(
+                diary = diaryRepository,
+                suggestFood = { query -> textResolver.suggest(query) },
+                regram = personalRepository::onGramsEdited,
+            ),
+            owner = mascotBrain.profile.map { it.name },
+            // Лениво: соседей знает сервер, который эту страницу и отдаёт.
+            peers = flow { emitAll(lan.lanPeers) }.map { peers -> peers.map { WebPeer(it.name, pageUrl(it.host, it.port)) } },
+            presence = webPresence,
+            bundle = ResourceWebBundle,
         )
     }
 
@@ -271,6 +318,8 @@ abstract class AppGraph {
         // Предложения соседа: приходят в базу, лента берёт их оттуда.
         peerOffers = database.peerOfferDao(),
         peers = nearbyPeers,
+        // Браузеры у страницы дневника: просьбы пустить — в ленту, кто на связи — держит экран.
+        browsers = Browsers(database.webClientDao(), webPresence.admitted),
         assistant = assistant,
     )
 }

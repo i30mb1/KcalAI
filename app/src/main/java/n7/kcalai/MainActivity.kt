@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,6 +18,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.launch
 import n7.kcalai.feature.diary.DiaryRoute
+import n7.kcalai.feature.diary.LocalScreenAwake
+import n7.kcalai.feature.diary.ScreenAwake
 import n7.kcalai.feature.diary.DiaryViewModel
 import n7.kcalai.feature.scanner.LocalLabelVision
 import androidx.compose.runtime.CompositionLocalProvider
@@ -73,11 +76,23 @@ class MainActivity : ComponentActivity() {
         setContent {
             KcalTheme {
                 // Нейросеть читает этикетку, когда камера застряла, — если она есть на телефоне.
-                CompositionLocalProvider(LocalLabelVision provides container.labelVision) {
+                CompositionLocalProvider(
+                    LocalLabelVision provides container.labelVision,
+                    // Браузер на связи со страницей дневника — окно не даёт экрану гаснуть.
+                    LocalScreenAwake provides screenAwake,
+                ) {
                     // Отладка разбора этикетки — инструмент разработчика.
                     DiaryRoute(labelDebug = BuildConfig.DEBUG, viewModel = diary)
                 }
             }
+        }
+    }
+
+    private val screenAwake = ScreenAwake { on ->
+        if (on) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 

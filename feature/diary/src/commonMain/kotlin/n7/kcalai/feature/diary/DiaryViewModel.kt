@@ -69,6 +69,7 @@ import n7.kcalai.database.MascotMessageEntity
 import n7.kcalai.database.Choice
 import n7.kcalai.database.PeerOfferDao
 import n7.kcalai.database.PeerOfferEntity
+import n7.kcalai.database.WebClientEntity
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.channels.Channel
@@ -197,6 +198,11 @@ data class DiaryUiState(
     /** Ночь: персонажей застают спящими. */
     val night: Boolean = false,
     /**
+     * Пущенный браузер на связи со страницей дневника: экрану гаснуть нельзя —
+     * страница живёт, пока открыт дневник, и отвалилась бы посреди ввода.
+     */
+    val keepScreenOn: Boolean = false,
+    /**
      * База ответила: день, цель и неделя прочитаны.
      *
      * До этого экран не рисует ничего — ни нулей в шапке, ни сводки «цель
@@ -236,6 +242,8 @@ class DiaryViewModel(
      * Телефоны рядом. `null` — фича выключена: ни соседей в ленте, ни отправки.
      */
     private val peers: NearbyPeers? = null,
+    /** Браузеры у страницы дневника. `null` — страницы нет, и просьб в ленте не бывает. */
+    private val browsers: Browsers? = null,
     private val assistant: FoodAssistant? = null,
     private val clock: Clock = Clock.System,
     /** Зона, в которой считаются день и час: `createdAt` хранится в UTC. */
@@ -330,13 +338,15 @@ class DiaryViewModel(
         .distinctUntilChanged()
         .flatMapLatest { (now, day) ->
             // Сказанное и предложенное — одним потоком: у типизированного combine
-            // потолок в пять, а дню нужно шесть.
+            // потолок в пять, а дню нужно больше.
             val saidAndOffered = combine(
                 // Что персонажи написали в этот день — из шторки или ответом в ленте.
                 brain.messages(day.toEpochDays()),
                 // Что предложили с телефона рядом; без шва предложений не бывает.
                 peerOffers?.observeDay(day.toEpochDays()) ?: flowOf(emptyList()),
-                ::Pair,
+                // Какие браузеры просились в дневник; без страницы их не бывает.
+                browsers?.requests?.observeDay(day.toEpochDays()) ?: flowOf(emptyList()),
+                ::Said,
             )
             combine(
                 diary.observeDay(day.toEpochDays()),
@@ -345,8 +355,8 @@ class DiaryViewModel(
                 diary.observeWeek(now.toEpochDays()),
                 diary.observeGoal(now.toEpochDays()),
                 saidAndOffered,
-            ) { dayTotals, goal, week, todayGoal, (said, offers) ->
-                DayData(day, now, dayTotals, goal, week, todayGoal, said, offers)
+            ) { dayTotals, goal, week, todayGoal, (said, offers, asked) ->
+                DayData(day, now, dayTotals, goal, week, todayGoal, said, offers, asked)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -386,14 +396,22 @@ class DiaryViewModel(
     private val nearby = combine(
         (peers?.nearby() ?: flowOf(emptyList())).onStart { emit(emptyList()) },
         sendingTo,
-        ::Pair,
+        browsers?.online ?: flowOf(0),
+        ::Triple,
     )
+
+    /**
+     * Адрес страницы дневника — пока сервер поднят и телефон в Wi-Fi. Нужен сразу,
+     * в момент «Отправить», поэтому держится состоянием.
+     */
+    private val pageAddress = (peers?.address() ?: flowOf(null))
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val state = combine(typingAndReplies, data, personalState, stage, nearby) { session, loaded, models, scene, near ->
         val (typed, replies, pending, meal) = session
-        val (people, writingTo) = near
+        val (people, writingTo, browsersOnline) = near
         if (loaded == null) {
-            return@combine DiaryUiState(input = typed.input, overlay = typed.overlay)
+            return@combine DiaryUiState(input = typed.input, overlay = typed.overlay, keepScreenOn = browsersOnline > 0)
         }
         val day = loaded.date.toEpochDays()
         val pastMeal = if (loaded.date < loaded.today) meal ?: defaultPastMeal(loaded.day.entries) else null
@@ -429,6 +447,7 @@ class DiaryViewModel(
             speech = scene.first,
             cue = scene.second,
             night = isNight(hourNow()),
+            keepScreenOn = browsersOnline > 0,
             loaded = true,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiaryUiState())
@@ -535,6 +554,14 @@ class DiaryViewModel(
         val todayGoal: DailyGoalEntity?,
         val said: List<MascotMessageEntity>,
         val offers: List<PeerOfferEntity> = emptyList(),
+        val browsers: List<WebClientEntity> = emptyList(),
+    )
+
+    /** Что в переписке дня сказали не записи: персонажи, соседи и браузеры. */
+    private data class Said(
+        val said: List<MascotMessageEntity>,
+        val offers: List<PeerOfferEntity>,
+        val browsers: List<WebClientEntity>,
     )
 
     /** Реплика сессии и день, в переписке которого она стоит. */
@@ -594,6 +621,11 @@ class DiaryViewModel(
     }
 
     init {
+        // Страница дневника поднялась — Зёрнышко расскажет о ней. Один раз за всю жизнь
+        // и в свою очередь: когда и сколько, решает мозг персонажей.
+        viewModelScope.launch {
+            brain.tellWebAddress(pageAddress.filterNotNull().first(), clock)
+        }
         // Предложения пересобираются на паузу в наборе, а не на каждый символ:
         // поиск ходит в базу, и дёргать её на «г», «гр», «гре» незачем.
         viewModelScope.launch {
@@ -611,8 +643,10 @@ class DiaryViewModel(
                     // на полуслове.
                     // И по вопросу, когда на него есть кому ответить: «сколько я
                     // съел вчера?» — не блюдо, и «ничего не нашлось» было бы глупостью.
+                    // И по просьбе об адресе страницы, когда страница поднята: «компьютер» — не еда.
                     if (text.isBlank() || parseWeight(text) != null || text.continuesScan() ||
-                        text.none(Char::isLetter) || (assist.value.ready && isQuestion(text))
+                        text.none(Char::isLetter) || (assist.value.ready && isQuestion(text)) ||
+                        (pageAddress.value != null && asksForPage(text))
                     ) {
                         null
                     } else {
@@ -714,9 +748,15 @@ class DiaryViewModel(
         // Предложение соседа держит слово наравне с вопросом персонажа: и то и другое
         // ждёт ответа, а персонажи говорят по одному.
         val waiting = isToday &&
-            (awaitsAnswer(loaded.said, lastEntryAt) || awaitsOffer(loaded.offers, lastEntryAt))
+            (
+                awaitsAnswer(loaded.said, lastEntryAt) ||
+                    awaitsOffer(loaded.offers, lastEntryAt) ||
+                    awaitsBrowser(loaded.browsers, lastEntryAt)
+                )
         val bubbles = groupIntoBubbles(dayTotals.entries, zone, now, activeMeal = pastMeal)
-        val said = loaded.said.map { it.toFeedItem() } + loaded.offers.map { it.toFeedItem() }
+        val said = loaded.said.map { it.toFeedItem() } +
+            loaded.offers.map { it.toFeedItem() } +
+            loaded.browsers.map { it.toFeedItem() }
         val body = interleave(bubbles, said, zone).toMutableList()
         // Отвеченный «Обед был?» стоит там же, где был задан; новый — только когда слово свободно.
         val answered = replies.filterIsInstance<FeedItem.Gap>()
@@ -1376,6 +1416,10 @@ class DiaryViewModel(
                 onLogWeight()
                 true
             }
+            pageAddress.value != null && asksForPage(text) -> {
+                tellPageAddress(checkNotNull(pageAddress.value))
+                true
+            }
             assist.value.ready && isQuestion(text) -> {
                 askDiary(text)
                 true
@@ -1588,6 +1632,38 @@ class DiaryViewModel(
             // Ссылку на продукт не кладём: на чужом телефоне она указывает на другую еду.
             reactToMeal(entryId, before, today)
         }
+    }
+
+    // --- Страница дневника в браузере ------------------------------------------------------
+
+    /** Просьба браузера в переписке — с кнопками ответа, как вопрос персонажа. */
+    private fun WebClientEntity.toFeedItem(): FeedItem.Browser {
+        val local = Instant.fromEpochMilliseconds(createdAt).toLocalDateTime(zone)
+        return FeedItem.Browser(
+            id = id,
+            label = label,
+            code = code,
+            time = formatTime(createdAt, zone),
+            minute = local.hour * 60 + local.minute,
+            at = createdAt,
+            choice = choice,
+        )
+    }
+
+    /**
+     * Пустить браузер или нет. Ответ — один раз: второй тап базе отвечать уже не на что,
+     * и проверка — в запросе, а не только в погасших кнопках.
+     */
+    fun onAnswerBrowser(id: Long, yes: Boolean) {
+        val dao = browsers?.requests ?: return
+        viewModelScope.launch { dao.answer(id, if (yes) Choice.YES else Choice.NO) }
+    }
+
+    /** Человек спросил адрес страницы — Зёрнышко называет его в ленте. */
+    private fun tellPageAddress(address: String) {
+        input.value = ""
+        answer.value = null
+        viewModelScope.launch { brain.answerWebAddress(address, clock.now()) }
     }
 
     /**

@@ -1,0 +1,76 @@
+package n7.kcalai.feature.diary
+
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.yield
+import n7.kcalai.database.PeerOfferEntity
+import n7.kcalai.nearby.NearbyDiscovery
+import n7.kcalai.nearby.OfferInbox
+import n7.kcalai.nearby.OfferReceiver
+import n7.kcalai.nearby.Peer
+import n7.kcalai.nearby.pageUrl
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/**
+ * Адрес страницы дневника — тот же сервер, что принимает соседей: есть, пока он поднят
+ * и телефон в Wi-Fi, и пропадает вместе с ним.
+ */
+class PageAddressTest {
+
+    private class Discovery(private val local: String?) : NearbyDiscovery {
+        override suspend fun advertise(name: String, port: Int) = Unit
+        override fun peers(): Flow<List<Peer>> = flow { awaitCancellation() }
+        override fun localAddress(): String? = local
+        override fun stop() = Unit
+    }
+
+    private object NoOffers : OfferInbox {
+        override suspend fun waiting(): Int = 0
+        override suspend fun receive(offer: PeerOfferEntity) = Unit
+    }
+
+    @Test
+    fun `пока сервер поднят — адрес есть, ушёл экран — адреса нет`() = runTest {
+        val lan = NearbyPeersOverLan(Discovery("192.168.1.5"), OfferReceiver(NoOffers), myName = MutableStateFlow("Женя"))
+
+        // Сокет настоящий: ждём его на настоящих потоках, а не на виртуальном времени теста.
+        val address = withContext(Dispatchers.Default) {
+            val running = launch { lan.nearby().collect {} }
+            lan.address().filterNotNull().first().also { running.cancelAndJoin() }
+        }
+
+        assertTrue(address.startsWith("http://192.168.1.5:"), address)
+        assertNull(lan.address().first(), "страница гаснет вместе с экраном")
+    }
+
+    /** Не в Wi-Fi — адреса, по которому браузер достучался бы, нет: молчим, а не врём. */
+    @Test
+    fun `не в Wi-Fi адреса нет`() = runTest {
+        val lan = NearbyPeersOverLan(Discovery(null), OfferReceiver(NoOffers), myName = MutableStateFlow("Женя"))
+
+        val running = launch { lan.nearby().collect {} }
+        yield()
+        val address = lan.address().first()
+        running.cancel()
+
+        assertNull(address)
+    }
+
+    @Test
+    fun `адрес страницы по IP и порту`() {
+        assertEquals("http://192.168.1.5:47800/", pageUrl("192.168.1.5", 47800))
+        assertEquals("http://[fe80::1]:47800/", pageUrl("fe80::1", 47800), "IPv6 в адресе — в квадратных скобках")
+    }
+}

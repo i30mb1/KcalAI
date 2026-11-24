@@ -21,7 +21,8 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             // Приёмник — на самом телефоне: сосед шлёт ему напрямую, минуя наши серверы.
             // CIO и на Kotlin/Native собирается, так что приёмник общий.
-            implementation(libs.ktor.server.core)
+            // api: страница дневника ставит свои маршруты на этот же сервер — см. LanRoutes.
+            api(libs.ktor.server.core)
             implementation(libs.ktor.server.cio)
             implementation(libs.ktor.client.core)
         }

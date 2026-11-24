@@ -79,6 +79,9 @@ enum class Topic(val kind: TopicKind) {
     /** Приложение совсем новое: что не так или чего не хватает — пиши разработчику на почту. */
     APP_NEW(TopicKind.ANSWER),
 
+    /** Дневник открывается и с компьютера: адрес страницы на телефоне — один раз сам, дальше по просьбе. */
+    WEB_ADDRESS(TopicKind.ANSWER),
+
     /** Третий тык подряд. */
     POKE(TopicKind.SPEECH),
 

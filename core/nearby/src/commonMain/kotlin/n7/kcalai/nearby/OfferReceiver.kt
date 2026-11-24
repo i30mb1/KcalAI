@@ -1,6 +1,7 @@
 package n7.kcalai.nearby
 
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.Application
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
@@ -8,9 +9,15 @@ import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.network.selector.SelectorManager
+import io.ktor.network.sockets.aSocket
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import n7.kcalai.database.PeerOfferEntity
+import n7.kcalai.model.Log
 import kotlin.time.Clock
 
 /** Куда приёмник кладёт пришедшее. Базу он не знает — её подставляет приложение. */
@@ -21,6 +28,23 @@ interface OfferInbox {
 
     suspend fun receive(offer: PeerOfferEntity)
 }
+
+/**
+ * Ещё что-то, что телефон отдаёт в домашней сети, — на том же порту, что приёмник.
+ *
+ * Сервер у телефона один: так его адрес, объявленный соседям, — это и адрес
+ * страницы дневника, и браузеру по ссылке соседа не нужно знать второй порт.
+ */
+fun interface LanRoutes {
+    fun Application.install()
+}
+
+/**
+ * Порт приёмника, пока он свободен. Постоянный, а не случайный: адрес страницы
+ * дневника человек кладёт в закладки браузера. Из незанятого диапазона: стандартные
+ * для разработки 8080 и 3000 вечно кем-то заняты.
+ */
+const val LAN_PORT = 47800
 
 /** Путь, по которому сосед присылает предложение. Он же объявляется в сети. */
 const val OFFER_PATH = "/offer"
@@ -43,13 +67,18 @@ const val OFFERS_WAITING_MAX = 10
  * приёмник живёт ровно столько, сколько открыт экран. Это не ограничение
  * реализации, а сценарий: оба человека рядом и оба смотрят в телефон.
  *
- * Порт выбирает система (`port = 0`): фиксированный заняли бы другие приложения,
- * а искать соседа всё равно по имени, а не по номеру.
+ * Порт — [port], а занят он — любой, какой даст система: соседи находят телефон
+ * по имени, а не по номеру, и только закладка в браузере попросит обновиться.
+ *
+ * @param port какой порт занять, если он свободен; `0` — любой
+ * @param routes что ещё отдать на этом же порту — страницу дневника
  */
 class OfferReceiver(
     private val inbox: OfferInbox,
     private val clock: Clock = Clock.System,
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
+    private val port: Int = 0,
+    private val routes: LanRoutes? = null,
 ) {
 
     private var server: EmbeddedServer<*, *>? = null
@@ -57,7 +86,31 @@ class OfferReceiver(
     /** @return порт, на котором слушаем — его объявляют соседям */
     suspend fun start(): Int {
         stop()
-        val started = embeddedServer(CIO, port = 0) {
+        // Порт заняло другое приложение — не повод оставаться без приёмника.
+        return listen(if (port != 0 && isFree(port)) port else 0)
+    }
+
+    /**
+     * Свободен ли порт — пробной привязкой. Сервер CIO о занятом порте сообщает отменой
+     * и неперехваченным исключением где-то в своих корутинах, а не ошибкой старта,
+     * поэтому спрашиваем заранее. Между пробой и стартом порт могут занять — тогда
+     * приёмник не встанет, как не встал бы и без пробы; такого совпадения не ждём.
+     */
+    private suspend fun isFree(port: Int): Boolean = SelectorManager(Dispatchers.IO).use { selector ->
+        try {
+            aSocket(selector).tcp().bind(port = port).close()
+            true
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (busy: Exception) {
+            Log.i(TAG, "порт $port занят, беру любой: $busy")
+            false
+        }
+    }
+
+    private suspend fun listen(port: Int): Int {
+        val started = embeddedServer(CIO, port = port) {
+            routes?.run { install() }
             routing {
                 post(OFFER_PATH) {
                     val body = call.receiveText()
@@ -87,6 +140,7 @@ class OfferReceiver(
     }
 
     private companion object {
+        const val TAG = "OfferReceiver"
         const val STOP_TIMEOUT_MS = 500L
     }
 }

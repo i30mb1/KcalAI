@@ -1,6 +1,8 @@
 package n7.kcalai.nearby
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
@@ -8,6 +10,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import n7.kcalai.model.Log
+import java.net.Inet4Address
 
 /**
  * Поиск соседей через системный mDNS.
@@ -24,6 +27,7 @@ class NsdDiscovery(context: Context) : NearbyDiscovery {
     private val appContext = context.applicationContext
     private val nsd = appContext.getSystemService(NsdManager::class.java)
     private val wifi = appContext.getSystemService(WifiManager::class.java)
+    private val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
 
     private var registration: NsdManager.RegistrationListener? = null
 
@@ -99,6 +103,21 @@ class NsdDiscovery(context: Context) : NearbyDiscovery {
             runCatching { manager.stopServiceDiscovery(listener) }
             runCatching { lock?.release() }
         }
+    }
+
+    /**
+     * Адрес из сети Wi-Fi, а не из «активной»: активной бывает сотовая, когда у Wi-Fi
+     * нет интернета, а страницу дневника открывают именно по Wi-Fi.
+     */
+    @Suppress("DEPRECATION") // allNetworks: замена через NetworkCallback — ради одного чтения незачем.
+    override fun localAddress(): String? {
+        val manager = connectivity ?: return null
+        return manager.allNetworks.asSequence()
+            .filter { manager.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true }
+            .flatMap { manager.getLinkProperties(it)?.linkAddresses.orEmpty().asSequence() }
+            .map { it.address }
+            .firstOrNull { it is Inet4Address && !it.isLoopbackAddress }
+            ?.hostAddress
     }
 
     override fun stop() {

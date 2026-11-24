@@ -1,5 +1,6 @@
 plugins {
     id("n7.kcalai.kmp-compose")
+    id("n7.kcalai.web-target")
 }
 
 kotlin {

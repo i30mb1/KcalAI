@@ -1,6 +1,7 @@
 package n7.kcalai.feature.diary
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import n7.kcalai.model.Nutriments
 
 /**
@@ -23,6 +24,12 @@ interface NearbyPeers {
 
     /** Кто рядом. Поиск идёт, пока на поток подписаны: в кармане искать некого. */
     fun nearby(): Flow<List<NearbyPerson>>
+
+    /**
+     * Адрес страницы дневника для браузера в той же сети — на том же сервере, что
+     * принимает соседей. `null` — сервер не поднят или телефон не в Wi-Fi.
+     */
+    fun address(): Flow<String?> = flowOf(null)
 
     /** @return приняли ли. `false` — не ушло: сосед молчит или отказал. */
     suspend fun send(id: String, food: String, grams: Int, nutriments: Nutriments): Boolean

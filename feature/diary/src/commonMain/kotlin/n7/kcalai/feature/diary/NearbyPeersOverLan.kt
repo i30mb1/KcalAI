@@ -1,6 +1,9 @@
 package n7.kcalai.feature.diary
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.emitAll
@@ -15,6 +18,7 @@ import n7.kcalai.nearby.OfferPacket
 import n7.kcalai.nearby.OfferReceiver
 import n7.kcalai.nearby.OfferSender
 import n7.kcalai.nearby.Peer
+import n7.kcalai.nearby.pageUrl
 
 /**
  * Соседи по общей сети — для экрана.
@@ -44,6 +48,15 @@ class NearbyPeersOverLan(
     /** Адреса соседей: экран знает только имя и ключ, адрес — дело этого класса. */
     private var known = emptyMap<String, Peer>()
 
+    private val page = MutableStateFlow<String?>(null)
+
+    private val around = MutableStateFlow<List<Peer>>(emptyList())
+
+    /** Соседи с адресами — для страницы дневника: у каждого из них своя страница. */
+    val lanPeers: StateFlow<List<Peer>> = around.asStateFlow()
+
+    override fun address(): Flow<String?> = page
+
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun nearby(): Flow<List<NearbyPerson>> = myName
         // Профиль приходит потоком из базы и повторяет себя на каждое её изменение,
@@ -62,14 +75,19 @@ class NearbyPeersOverLan(
     private fun running(name: String): Flow<List<NearbyPerson>> = flow {
         val port = receiver.start()
         discovery.advertise(name, port)
+        // Страница дневника — на том же сервере: её адрес живёт, пока он поднят.
+        page.value = discovery.localAddress()?.let { pageUrl(it, port) }
         try {
             emitAll(discovery.peers())
         } finally {
+            page.value = null
+            around.value = emptyList()
             discovery.stop()
             receiver.stop()
         }
     }.map { peers ->
         known = peers.associateBy { it.key }
+        around.value = peers
         peers.map { NearbyPerson(id = it.key, name = it.name) }
     }
 

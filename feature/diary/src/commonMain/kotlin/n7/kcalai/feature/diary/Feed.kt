@@ -274,6 +274,23 @@ sealed interface FeedItem {
     ) : Message {
         override val key get() = "offer-$id"
     }
+
+    /**
+     * Браузер просится в дневник со страницы на телефоне — ответ одним тапом.
+     *
+     * @param code тот же, что на экране браузера: по нему видно, что пускаешь свой
+     */
+    data class Browser(
+        val id: Long,
+        val label: String,
+        val code: String,
+        val time: String,
+        override val minute: Int,
+        override val at: Long = Long.MAX_VALUE,
+        val choice: Choice? = null,
+    ) : Message {
+        override val key get() = "browser-$id"
+    }
 }
 
 
@@ -350,6 +367,8 @@ fun speakerOf(item: FeedItem): Mascot? = when (item) {
     is FeedItem.Deleted,
     // Еду приносит Яйцо — и чужую тоже.
     is FeedItem.Offer,
+    // Кого пускать в дневник, спрашивает тоже Яйцо: оно хозяин ленты.
+    is FeedItem.Browser,
     is FeedItem.Outbox -> Mascot.EGG
 }
 

@@ -16,6 +16,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -47,12 +48,16 @@ class MascotBrainTest {
     private val goals = FakeGoalDao()
     private val mascots = FakeMascotDao()
 
+    /** Когда пришли просьбы, ждущие ответа: браузер просится в дневник, сосед предлагает еду. */
+    private val asking = MutableStateFlow<List<Long>>(emptyList())
+
     private fun brain(zone: TimeZone = this.zone) = MascotBrain(
         dao = mascots,
         facts = FactsBuilder(diary, goals, PersonalRepository(diary, FakePersonalDao(), FakeBodyMetricDao(), goals, zone), zone),
         diaryDao = diary,
         zone = zone,
         random = Random(1),
+        asking = { asking },
     )
 
     /** Пятница, 16:00. */
@@ -341,6 +346,23 @@ class MascotBrainTest {
         assertEquals(Topic.SEARCH_READY.name, said.await()?.topic)
     }
 
+    /** Просьба браузера пустить в дневник — тоже вопрос: новость его не перебивает. */
+    @Test
+    fun `пока просьба ждёт ответа новость ждёт тоже`() = runTest {
+        val brain = brain()
+        eat("Гречка", now - 10.minutes)
+        asking.value = listOf((now - 5.minutes).toEpochMilliseconds())
+
+        val said = async { brain.tellWebAddress(PAGE, at(now)) }
+        advanceUntilIdle()
+        assertFalse(said.isCompleted)
+
+        asking.value = emptyList()
+        advanceUntilIdle()
+
+        assertEquals(Topic.WEB_ADDRESS.name, said.await()?.topic)
+    }
+
     /** Ответ Яйца на имя и новость о поиске в одну секунду — два сообщения разом. */
     @Test
     fun `новость не приходит вслед за другим сообщением — сначала пауза`() = runTest {
@@ -481,6 +503,42 @@ class MascotBrainTest {
         assertNotNull(brain().tellAppIsNew(at(now + 1.days)))
     }
 
+    // --- Страница дневника в браузере ----------------------------------------------------
+
+    @Test
+    fun `адрес страницы Зёрнышко называет в ленте`() = runTest {
+        started()
+
+        val said = brain().tellWebAddress(PAGE, at(now))
+
+        assertNotNull(said)
+        assertEquals(Topic.WEB_ADDRESS.name, said.topic)
+        assertEquals(Mascot.GRAIN, said.mascot)
+        assertEquals(Delivery.FEED, said.delivery)
+        assertTrue(PAGE in said.text, said.text)
+    }
+
+    /** Знакомит один раз: дальше адрес — по просьбе. */
+    @Test
+    fun `сам об адресе страницы говорит один раз`() = runTest {
+        started()
+        brain().tellWebAddress(PAGE, at(now))
+
+        assertNull(brain().tellWebAddress(PAGE, at(now + 3.days)))
+    }
+
+    /** Человек спросил — отвечают сразу и сколько угодно раз: он хочет освежить в памяти. */
+    @Test
+    fun `по просьбе адрес называют снова`() = runTest {
+        started()
+        brain().tellWebAddress(PAGE, at(now))
+
+        val again = brain().answerWebAddress(PAGE, now + 1.hours)
+
+        assertEquals(Topic.WEB_ADDRESS.name, again?.topic)
+        assertTrue(PAGE in again!!.text)
+    }
+
     /** Нейросеть качает система, и ждать Wi-Fi там не о чем: своей такой темы у неё нет. */
     @Test
     fun `нейросеть про Wi-Fi не говорит`() = runTest {
@@ -562,6 +620,8 @@ class MascotBrainTest {
     }
 
     /** Часы, стоящие на [instant]: паузу между сообщениями отсчитывает виртуальное время теста. */
+    private val PAGE = "http://192.168.1.5:47800/"
+
     private fun at(instant: Instant): Clock = object : Clock {
         override fun now(): Instant = instant
     }

@@ -1,5 +1,6 @@
 package n7.kcalai.ios
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.window.ComposeUIViewController
 import kotlinx.coroutines.CoroutineScope
@@ -8,7 +9,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import n7.kcalai.assistant.AppleModelBridge
 import n7.kcalai.feature.diary.DiaryRoute
+import n7.kcalai.feature.diary.LocalScreenAwake
+import n7.kcalai.feature.diary.ScreenAwake
 import n7.kcalai.ui.KcalTheme
+import platform.UIKit.UIApplication
 import platform.UIKit.UIViewController
 import platform.UserNotifications.UNNotificationDefaultActionIdentifier
 
@@ -90,7 +94,12 @@ object KcalApp {
                     diary.onNotificationsResult(container.notifier.requestPermission())
                 }
             }
-            DiaryRoute(viewModel = diary)
+            // Браузер на связи со страницей дневника — таймер простоя не гасит экран.
+            CompositionLocalProvider(
+                LocalScreenAwake provides ScreenAwake { on -> UIApplication.sharedApplication.idleTimerDisabled = on },
+            ) {
+                DiaryRoute(viewModel = diary)
+            }
         }
     }
 }

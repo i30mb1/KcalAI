@@ -28,6 +28,8 @@ cmpNavigationEvent = "1.1.0"
 datetime = "0.8.0"
 # Файлы в общем коде: не ниже той, что тянет Ktor (3.6.1 — 0.9.1), в сборке остаётся одна.
 io = "0.9.3"
+# Окно браузера, WebSocket и localStorage для страницы дневника на Kotlin/Wasm. Та же, что тянет Compose.
+kotlinxBrowser = "0.5.0"
 # Compose 1.12 — пара к CMP 1.12. Требует compileSdk 37.
 composeBom = "2026.09.00"
 activityCompose = "1.13.0"
@@ -105,6 +107,10 @@ ktor-client-darwin = { group = "io.ktor", name = "ktor-client-darwin", version.r
 # Netty на iOS не живёт, а приёмник обязан быть на обеих платформах.
 ktor-server-core = { group = "io.ktor", name = "ktor-server-core", version.ref = "ktor" }
 ktor-server-cio = { group = "io.ktor", name = "ktor-server-cio", version.ref = "ktor" }
+ktor-server-websockets = { group = "io.ktor", name = "ktor-server-websockets", version.ref = "ktor" }
+ktor-client-cio = { group = "io.ktor", name = "ktor-client-cio", version.ref = "ktor" }
+ktor-client-websockets = { group = "io.ktor", name = "ktor-client-websockets", version.ref = "ktor" }
+kotlinx-browser = { group = "org.jetbrains.kotlinx", name = "kotlinx-browser", version.ref = "kotlinxBrowser" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJson" }
 kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "datetime" }
 kotlinx-io-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-io-core", version.ref = "io" }

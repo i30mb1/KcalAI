@@ -752,6 +752,28 @@ fun OfferBubble(item: FeedItem.Offer, onYes: () -> Unit, onNo: () -> Unit) {
 }
 
 /**
+ * Браузер просится в дневник — Яйцо спрашивает, пустить ли. Теми же кнопками,
+ * что вопрос персонажа: отвеченное остаётся в переписке с отметкой выбора.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun BrowserBubble(item: FeedItem.Browser, onYes: () -> Unit, onNo: () -> Unit) {
+    val answered = item.choice
+
+    IncomingBubble(item) {
+        BubbleText(browserAsks(item.label, item.code), time = item.time)
+        FlowRow(
+            modifier = Modifier.padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            AnswerChip("Пустить", chosen = answered?.let { it == Choice.YES }, primary = true, onClick = onYes)
+            AnswerChip("Нет", chosen = answered?.let { it == Choice.NO }, primary = false, onClick = onNo)
+        }
+    }
+}
+
+/**
  * Кнопка ответа в реплике.
  *
  * Пока ответа нет — живая. Ответили — гаснут все, а выбранная отмечена галочкой:

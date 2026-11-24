@@ -42,9 +42,18 @@ interface NearbyDiscovery {
      */
     fun peers(): Flow<List<Peer>>
 
+    /**
+     * Свой IPv4-адрес в Wi-Fi — по нему браузер в той же сети откроет страницу дневника.
+     * `null` — телефон не в Wi-Fi: адреса, по которому до него достучатся, нет.
+     */
+    fun localAddress(): String?
+
     /** Перестать объявлять себя и искать. */
     fun stop()
 }
+
+/** Адрес страницы дневника: IPv6 в URL — в квадратных скобках. */
+fun pageUrl(host: String, port: Int): String = if (':' in host) "http://[$host]:$port/" else "http://$host:$port/"
 
 /**
  * Тип службы в сети. Подчёркивание и `_tcp` — требование DNS-SD, а не украшение;

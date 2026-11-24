@@ -1,7 +1,17 @@
 package n7.kcalai.nearby
 
+import kotlinx.cinterop.ByteVar
+import kotlinx.cinterop.CPointerVar
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.alloc
+import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.convert
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.pointed
+import kotlinx.cinterop.ptr
+import kotlinx.cinterop.reinterpret
+import kotlinx.cinterop.toKString
+import kotlinx.cinterop.value
 import kotlinx.cinterop.ObjCSignatureOverride
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -12,6 +22,13 @@ import platform.Foundation.NSNetServiceBrowser
 import platform.Foundation.NSNetServiceBrowserDelegateProtocol
 import platform.Foundation.NSNetServiceDelegateProtocol
 import platform.darwin.NSObject
+import platform.darwin.freeifaddrs
+import platform.darwin.getifaddrs
+import platform.darwin.ifaddrs
+import platform.posix.AF_INET
+import platform.posix.INET_ADDRSTRLEN
+import platform.posix.inet_ntop
+import platform.posix.sockaddr_in
 
 /**
  * Поиск соседей через Bonjour.
@@ -124,6 +141,30 @@ class BonjourDiscovery : NearbyDiscovery {
         }
     }
 
+    /** Адрес на `en0` — это Wi-Fi у iPhone; сотовая связь живёт на других интерфейсах. */
+    override fun localAddress(): String? = memScoped {
+        val list = alloc<CPointerVar<ifaddrs>>()
+        if (getifaddrs(list.ptr) != 0) return null
+        try {
+            var cursor = list.value
+            while (cursor != null) {
+                val entry = cursor.pointed
+                val address = entry.ifa_addr
+                if (entry.ifa_name?.toKString() == WIFI_INTERFACE && address != null &&
+                    address.pointed.sa_family.toInt() == AF_INET
+                ) {
+                    val text = allocArray<ByteVar>(INET_ADDRSTRLEN)
+                    inet_ntop(AF_INET, address.reinterpret<sockaddr_in>().pointed.sin_addr.ptr, text, INET_ADDRSTRLEN.convert())
+                    return text.toKString()
+                }
+                cursor = entry.ifa_next
+            }
+            null
+        } finally {
+            freeifaddrs(list.value)
+        }
+    }
+
     override fun stop() {
         published?.stop()
         published = null
@@ -132,6 +173,8 @@ class BonjourDiscovery : NearbyDiscovery {
 
     private companion object {
         const val TAG = "BonjourDiscovery"
+
+        const val WIFI_INTERFACE = "en0"
 
         /** Дольше ждать соседа незачем: он либо рядом, либо уже ушёл. */
         const val RESOLVE_TIMEOUT_SECONDS = 5.0

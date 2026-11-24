@@ -69,6 +69,8 @@ data class Facts(
     val food: String? = null,
     /** Сколько дней подряд человек ест [food], включая сегодня. */
     val foodDaysInRow: Int = 0,
+    /** Адрес страницы дневника на телефоне — для браузера в той же сети. */
+    val address: String? = null,
 ) {
     val partOfDay: PartOfDay
         get() = when (now.hour) {
@@ -116,6 +118,7 @@ internal fun Facts.value(key: String): String? = when (key) {
     "today" -> weekdayName(now.dayOfWeek)
     // Цифры в вариантах запрещены, а в адресе они есть — поэтому плейсхолдером.
     "mail" -> FEEDBACK_EMAIL
+    "address" -> address
     else -> null
 }
 
@@ -123,6 +126,7 @@ internal fun Facts.value(key: String): String? = when (key) {
 internal val KNOWN_KEYS = setOf(
     "name", "gap", "last", "lastTime", "meal", "mealGen", "usualTime", "usual", "usualGrams",
     "protLeft", "protIdea", "streak", "away", "absent", "fav", "food", "foodRun", "today", "mail",
+    "address",
 )
 
 private const val DAY_MINUTES = 24 * 60
