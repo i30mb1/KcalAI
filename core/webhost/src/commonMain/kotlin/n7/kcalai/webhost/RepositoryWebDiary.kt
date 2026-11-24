@@ -14,10 +14,12 @@ import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.totals
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.forGrams
+import n7.kcalai.model.owner
 import n7.kcalai.personal.mealForHour
 import n7.kcalai.repositories.DiaryRepository
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.webapi.WebEntry
+import n7.kcalai.webapi.WebMacros
 import n7.kcalai.webapi.WebSuggestion
 import kotlin.time.Clock
 
@@ -50,14 +52,23 @@ class RepositoryWebDiary(
         val day = todayEpochDay()
         emitAll(
             combine(diary.observeDay(day), diary.observeGoal(day)) { totals, goal ->
-                WebToday(entries = totals.entries.map { it.toWeb() }, goalKcal = goal?.kcal?.takeIf { it > 0 })
+                WebToday(
+                    entries = totals.entries.map { it.toWeb() },
+                    goalKcal = goal?.kcal?.takeIf { it > 0 },
+                    goalMacros = goal?.takeIf { it.prot > 0 && it.fat > 0 && it.carb > 0 }?.let { WebMacros(it.prot, it.fat, it.carb) },
+                )
             }
         )
     }
 
     override suspend fun suggest(query: String): List<WebSuggestion> = found(query).map { item ->
         val candidate = checkNotNull(item.candidate)
-        WebSuggestion(name = candidate.displayName, grams = item.grams, kcal = candidate.nutriments.forGrams(item.grams).kcal)
+        WebSuggestion(
+            name = candidate.displayName,
+            grams = item.grams,
+            kcal = candidate.nutriments.forGrams(item.grams).kcal,
+            mascot = candidate.nutriments.owner(),
+        )
     }
 
     override suspend fun add(query: String, index: Int, grams: Int) {

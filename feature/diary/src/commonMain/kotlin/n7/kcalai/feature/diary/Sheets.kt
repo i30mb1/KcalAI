@@ -4,8 +4,6 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,9 +11,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -23,9 +21,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -58,30 +58,31 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.totals
-import n7.kcalai.model.MealType
 import n7.kcalai.model.FoodRef
+import n7.kcalai.model.Mascot
+import n7.kcalai.model.MealType
 import n7.kcalai.model.Nutriments
+import n7.kcalai.model.Sex
+import n7.kcalai.model.formatCentigrams
 import n7.kcalai.model.parseFoodRef
+import n7.kcalai.model.title
 import n7.kcalai.personal.TdeeEstimate
 import n7.kcalai.ui.CapsLabel
 import n7.kcalai.ui.KcalChip
+import n7.kcalai.ui.KcalShapes
+import n7.kcalai.ui.KcalTheme
 import n7.kcalai.ui.Macro
 import n7.kcalai.ui.MacroDot
 import n7.kcalai.ui.SproutIcon
 import n7.kcalai.ui.WideButton
 import n7.kcalai.ui.colors
 import n7.kcalai.ui.letter
-import n7.kcalai.ui.tileLabel
-import n7.kcalai.ui.KcalShapes
-import n7.kcalai.ui.KcalTheme
-import n7.kcalai.model.Mascot
 import n7.kcalai.ui.mascot.mascot
-import kotlin.math.roundToInt
-import n7.kcalai.model.Sex
-import n7.kcalai.model.title
+import n7.kcalai.ui.tileLabel
 
 /**
  * Цель на день: белки, жиры и углеводы. Калории из них складываются сами.

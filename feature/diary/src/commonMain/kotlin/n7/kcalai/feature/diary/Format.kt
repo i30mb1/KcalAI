@@ -11,6 +11,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import n7.kcalai.model.FiberTotal
+import n7.kcalai.model.formatCentigrams
 import n7.kcalai.model.MealType
 import n7.kcalai.model.title
 import n7.kcalai.personal.DayOutline
@@ -30,13 +31,6 @@ private val LocalDate.monthShort: String get() = MONTHS_SHORT[month.ordinal]
 
 private fun Int.twoDigits(): String = toString().padStart(2, '0')
 
-/** Сотые грамма -> «4,6». Целые значения показываются без хвоста. */
-fun formatCentigrams(cg: Int): String {
-    val whole = cg / 100
-    val tenths = (cg % 100) / 10
-    return if (tenths == 0) whole.toString() else "$whole,$tenths"
-}
-
 /**
  * Клетчатка целыми граммами — как числа плиток.
  *
@@ -53,10 +47,6 @@ fun formatFiber(fiber: FiberTotal): String? {
 }
 
 private const val CENTIGRAMS_IN_GRAM = 100
-
-/** «200 г» / «1,2 кг» — вес записи. */
-fun formatGrams(grams: Int): String =
-    if (grams >= 1000) "${formatCentigrams(grams / 10)} кг" else "$grams г"
 
 /** «пн», «вт» — ось графика за неделю: полное название дня туда семь раз не помещается. */
 fun formatWeekdayShort(date: LocalDate): String =

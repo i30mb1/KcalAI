@@ -1,6 +1,8 @@
 package n7.kcalai.webapi
 
+import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
+import n7.kcalai.model.NutrimentTotals
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -22,6 +24,7 @@ class WebMessageTest {
         ),
         goalKcal = 2_100,
         peers = listOf(WebPeer(name = "Аня", url = "http://192.168.1.7:47800/")),
+        goalMacros = WebMacros(prot = 120, fat = 70, carb = 230),
     )
 
     @Test
@@ -46,8 +49,11 @@ class WebMessageTest {
             ToPage.Denied,
             ToPage.Busy,
             ToPage.Day(day),
-            ToPage.Day(day.copy(goalKcal = null, peers = emptyList(), entries = emptyList())),
-            ToPage.Suggestions(query = "гречка", items = listOf(WebSuggestion(name = "Гречка отварная", grams = 200, kcal = 220))),
+            ToPage.Day(day.copy(goalKcal = null, goalMacros = null, peers = emptyList(), entries = emptyList())),
+            ToPage.Suggestions(
+                query = "гречка",
+                items = listOf(WebSuggestion(name = "Гречка отварная", grams = 200, kcal = 220, mascot = Mascot.GRAIN)),
+            ),
         )
 
         sent.forEach { message -> assertEquals(message, parseToPage(encode(message))) }
@@ -56,6 +62,7 @@ class WebMessageTest {
     @Test
     fun `итог дня складывается из записей`() {
         assertEquals(320, day.kcal)
+        assertEquals(NutrimentTotals(kcal = 320, protCg = 1_590, fatCg = 470, carbCg = 5_260), day.totals())
     }
 
     /** Чужая версия, мусор и сообщение не той стороны — молча мимо, без падения. */

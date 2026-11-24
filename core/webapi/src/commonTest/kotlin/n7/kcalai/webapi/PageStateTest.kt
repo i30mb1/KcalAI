@@ -62,7 +62,7 @@ class PageStateTest {
 
     @Test
     fun `подсказки — только к тому, что сейчас в строке`() {
-        val found = ToPage.Suggestions("гречка", listOf(WebSuggestion("Гречка отварная", 200, 220)))
+        val found = ToPage.Suggestions("гречка", listOf(WebSuggestion("Гречка отварная", 200, 220, Mascot.GRAIN)))
         val state = assertIs<PageState.Diary>(PageState.Diary(day).after(found))
 
         assertEquals(found.items, state.suggestionsFor("гречка"))
@@ -72,7 +72,7 @@ class PageStateTest {
 
     @Test
     fun `обновлённый дневник подсказки не сбрасывает`() {
-        val found = ToPage.Suggestions("гречка", listOf(WebSuggestion("Гречка отварная", 200, 220)))
+        val found = ToPage.Suggestions("гречка", listOf(WebSuggestion("Гречка отварная", 200, 220, Mascot.GRAIN)))
         val state = PageState.Diary(day).after(found).after(ToPage.Day(day.copy(entries = listOf(buckwheat))))
 
         assertEquals(found.items, assertIs<PageState.Diary>(state).suggestionsFor("гречка"))
@@ -90,6 +90,26 @@ class PageStateTest {
             listOf(MealType.BREAKFAST to listOf(kefir), MealType.LUNCH to listOf(buckwheat)),
             day.byMeal(),
         )
+    }
+
+    /**
+     * Новая запись — хозяин её макроса подпрыгивает в своей плитке, как в приложении.
+     * Первый показ дневника — не новость: подпрыгивать не за что.
+     */
+    @Test
+    fun `новые записи — хозяева подпрыгивают`() {
+        val fish = WebEntry(11, "Треска", 150, MealType.DINNER, 120, 2_600, 100, 0)
+        val later = day.copy(entries = day.entries + fish)
+
+        assertEquals(listOf(Mascot.EGG), later.arrivals(since = day))
+        assertTrue(day.arrivals(since = null).isEmpty(), "первый показ — не новость")
+        assertTrue(day.arrivals(since = day).isEmpty())
+        assertEquals(Mascot.GRAIN, buckwheat.owner, "у гречки больше всего углеводов")
+    }
+
+    @Test
+    fun `итоги приёма — из его записей`() {
+        assertEquals(220, listOf(buckwheat).totals().kcal)
     }
 
     @Test

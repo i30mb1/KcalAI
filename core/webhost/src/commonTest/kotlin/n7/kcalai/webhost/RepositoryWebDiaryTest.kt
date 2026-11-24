@@ -17,10 +17,12 @@ import n7.kcalai.database.GoalDao
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.FoodRef
+import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.Nutriments
 import n7.kcalai.repositories.DiaryRepository
 import n7.kcalai.resolver.ResolvedItem
+import n7.kcalai.webapi.WebMacros
 import n7.kcalai.webapi.WebSuggestion
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -66,7 +68,10 @@ class RepositoryWebDiaryTest {
     @Test
     fun `подсказки — с калориями на свою порцию, без неопознанного`() = runTest {
         assertEquals(
-            listOf(WebSuggestion("Гречка отварная", 200, 220), WebSuggestion("Гречка ядрица", 60, 188)),
+            listOf(
+                WebSuggestion("Гречка отварная", 200, 220, Mascot.GRAIN),
+                WebSuggestion("Гречка ядрица", 60, 188, Mascot.GRAIN),
+            ),
             web.suggest("гречка"),
         )
     }
@@ -119,6 +124,7 @@ class RepositoryWebDiaryTest {
         val shown = web.today().first()
 
         assertEquals(2_100, shown.goalKcal)
+        assertEquals(WebMacros(prot = 100, fat = 70, carb = 250), shown.goalMacros)
         val only = shown.entries.single()
         assertEquals(220, only.kcal)
         assertEquals(840, only.protCg)

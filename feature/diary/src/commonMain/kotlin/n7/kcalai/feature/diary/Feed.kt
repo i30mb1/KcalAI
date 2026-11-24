@@ -229,6 +229,8 @@ sealed interface FeedItem {
         val time: String,
         override val minute: Int,
         override val at: Long = Long.MAX_VALUE,
+        /** Ссылка, которой можно поделиться, — адрес страницы дневника; `null` — делиться нечем. */
+        val share: String? = null,
     ) : Message {
         override val key get() = "said-$id"
     }

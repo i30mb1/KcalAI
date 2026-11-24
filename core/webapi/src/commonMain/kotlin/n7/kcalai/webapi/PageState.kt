@@ -75,6 +75,16 @@ fun PageState.Diary.peersLine(): PageLine? {
     }
 }
 
+/**
+ * Кто подпрыгивает: хозяева макросов записей, которых не было в [since].
+ * Первый показ ([since] — `null`) — не новость, подпрыгивать не за что.
+ */
+fun WebDay.arrivals(since: WebDay?): List<Mascot> {
+    if (since == null) return emptyList()
+    val known = since.entries.map { it.id }.toSet()
+    return entries.filter { it.id !in known }.map { it.owner }.distinct()
+}
+
 /** Записи по приёмам в порядке дня; пустые приёмы не показываются. */
 fun WebDay.byMeal(): List<Pair<MealType, List<WebEntry>>> =
     MEAL_ORDER.mapNotNull { meal -> entries.filter { it.meal == meal }.takeIf { it.isNotEmpty() }?.let { meal to it } }

@@ -20,10 +20,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -32,36 +32,38 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.LastBaseline
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
 import kotlin.math.ceil
-import androidx.compose.ui.text.font.FontWeight
+import n7.kcalai.database.Choice
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.fiber
 import n7.kcalai.database.totals
+import n7.kcalai.mascot.MascotQuestion
 import n7.kcalai.model.FoodCandidate
+import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
+import n7.kcalai.model.formatCentigrams
+import n7.kcalai.model.formatGrams
+import n7.kcalai.model.genitive
+import n7.kcalai.model.title
 import n7.kcalai.personal.DayOutline
 import n7.kcalai.personal.MealGap
 import n7.kcalai.personal.PlanOption
 import n7.kcalai.ui.CapsLabel
 import n7.kcalai.ui.ChipNumbers
 import n7.kcalai.ui.KcalChip
+import n7.kcalai.ui.KcalShapes
+import n7.kcalai.ui.KcalTheme
 import n7.kcalai.ui.Macro
 import n7.kcalai.ui.MacroDot
 import n7.kcalai.ui.SproutIcon
-import n7.kcalai.model.Mascot
 import n7.kcalai.ui.colors
 import n7.kcalai.ui.letter
-import n7.kcalai.ui.KcalShapes
-import n7.kcalai.ui.KcalTheme
-import n7.kcalai.model.genitive
-import n7.kcalai.model.title
-import n7.kcalai.database.Choice
-import n7.kcalai.mascot.MascotQuestion
 
 /** Доля ширины, которую пузырёк не переступает: лента должна читаться как диалог. */
 private const val BUBBLE_WIDTH = 0.88f
@@ -668,8 +670,15 @@ fun DeletedBubble(item: FeedItem.Deleted, onUndo: () -> Unit) {
  */
 @Composable
 fun SaidBubble(item: FeedItem.Said) {
+    val share = LocalShareText.current
     IncomingBubble(item) {
         BubbleText(item.text, time = item.time)
+        // Не ответ, а действие: кнопка не гаснет, и делиться можно сколько угодно раз.
+        item.share?.let { link ->
+            Row(Modifier.padding(top = 8.dp)) {
+                AnswerChip("Поделиться", chosen = null, primary = true, onClick = { share.share(link) })
+            }
+        }
     }
 }
 

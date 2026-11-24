@@ -19,7 +19,9 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.launch
 import n7.kcalai.feature.diary.DiaryRoute
 import n7.kcalai.feature.diary.LocalScreenAwake
+import n7.kcalai.feature.diary.LocalShareText
 import n7.kcalai.feature.diary.ScreenAwake
+import n7.kcalai.feature.diary.ShareText
 import n7.kcalai.feature.diary.DiaryViewModel
 import n7.kcalai.feature.scanner.LocalLabelVision
 import androidx.compose.runtime.CompositionLocalProvider
@@ -80,6 +82,8 @@ class MainActivity : ComponentActivity() {
                     LocalLabelVision provides container.labelVision,
                     // Браузер на связи со страницей дневника — окно не даёт экрану гаснуть.
                     LocalScreenAwake provides screenAwake,
+                    // Адрес страницы дневника — себе в мессенджер, через системное окно выбора.
+                    LocalShareText provides shareText,
                 ) {
                     // Отладка разбора этикетки — инструмент разработчика.
                     DiaryRoute(labelDebug = BuildConfig.DEBUG, viewModel = diary)
@@ -94,6 +98,11 @@ class MainActivity : ComponentActivity() {
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
+    }
+
+    private val shareText = ShareText { text ->
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+        startActivity(Intent.createChooser(send, null))
     }
 
     override fun onNewIntent(intent: Intent) {

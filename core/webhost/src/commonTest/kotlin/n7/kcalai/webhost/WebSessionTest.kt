@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.TimeZone
 import n7.kcalai.database.Choice
+import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.webapi.ToPage
 import n7.kcalai.webapi.ToPhone
@@ -255,7 +256,7 @@ class WebSessionTest {
 
 private class FakeWebDiary : WebDiary {
     val entries = MutableStateFlow<List<WebEntry>>(emptyList())
-    val found = listOf(WebSuggestion("Гречка отварная", 200, 220), WebSuggestion("Гречка ядрица", 60, 188))
+    val found = listOf(WebSuggestion("Гречка отварная", 200, 220, Mascot.GRAIN), WebSuggestion("Гречка ядрица", 60, 188, Mascot.GRAIN))
     val added = mutableListOf<Triple<String, Int, Int>>()
     val regrammed = mutableListOf<Pair<Long, Int>>()
     val deleted = mutableListOf<Long>()

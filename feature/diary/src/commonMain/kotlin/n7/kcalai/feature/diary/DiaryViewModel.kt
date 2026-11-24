@@ -62,6 +62,7 @@ import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.resolver.TextFoodResolver
 import n7.kcalai.model.Sex
 import n7.kcalai.mascot.MascotBrain
+import n7.kcalai.mascot.voice.Topic
 import n7.kcalai.mascot.MascotEvent
 import n7.kcalai.mascot.awaitsAnswer
 import n7.kcalai.mascot.question
@@ -393,13 +394,6 @@ class DiaryViewModel(
      * а `combine` не отдаёт состояние, пока не отозвался каждый поток. Без этого
      * экран оставался пустым целиком — при живом приложении и работающем поиске.
      */
-    private val nearby = combine(
-        (peers?.nearby() ?: flowOf(emptyList())).onStart { emit(emptyList()) },
-        sendingTo,
-        browsers?.online ?: flowOf(0),
-        ::Triple,
-    )
-
     /**
      * Адрес страницы дневника — пока сервер поднят и телефон в Wi-Fi. Нужен сразу,
      * в момент «Отправить», поэтому держится состоянием.
@@ -407,9 +401,25 @@ class DiaryViewModel(
     private val pageAddress = (peers?.address() ?: flowOf(null))
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    private val nearby = combine(
+        (peers?.nearby() ?: flowOf(emptyList())).onStart { emit(emptyList()) },
+        sendingTo,
+        browsers?.online ?: flowOf(0),
+        pageAddress,
+        ::Around,
+    )
+
+    /** Что вокруг телефона: соседи, кому пишем, браузеры на связи и адрес страницы. */
+    private data class Around(
+        val people: List<NearbyPerson>,
+        val writingTo: NearbyPerson?,
+        val browsersOnline: Int,
+        val address: String?,
+    )
+
     val state = combine(typingAndReplies, data, personalState, stage, nearby) { session, loaded, models, scene, near ->
         val (typed, replies, pending, meal) = session
-        val (people, writingTo, browsersOnline) = near
+        val (people, writingTo, browsersOnline, address) = near
         if (loaded == null) {
             return@combine DiaryUiState(input = typed.input, overlay = typed.overlay, keepScreenOn = browsersOnline > 0)
         }
@@ -429,6 +439,7 @@ class DiaryViewModel(
                 // Соседи — разговор о сейчас: во вчерашней переписке им не место,
                 // как и очереди отправки.
                 nearby = people.takeIf { pastMeal == null && writingTo == null }.orEmpty(),
+                address = address,
             ),
             composer = row,
             action = composerAction(typed.input),
@@ -728,6 +739,7 @@ class DiaryViewModel(
         pending: FeedItem.Outbox?,
         pastMeal: MealType?,
         nearby: List<NearbyPerson> = emptyList(),
+        address: String? = null,
     ): List<FeedItem> {
         val now = nowMillis()
         val hour = hourNow()
@@ -754,7 +766,7 @@ class DiaryViewModel(
                     awaitsBrowser(loaded.browsers, lastEntryAt)
                 )
         val bubbles = groupIntoBubbles(dayTotals.entries, zone, now, activeMeal = pastMeal)
-        val said = loaded.said.map { it.toFeedItem() } +
+        val said = loaded.said.map { it.toFeedItem(address) } +
             loaded.offers.map { it.toFeedItem() } +
             loaded.browsers.map { it.toFeedItem() }
         val body = interleave(bubbles, said, zone).toMutableList()
@@ -1708,7 +1720,8 @@ class DiaryViewModel(
     // --- Персонажи: имя и разрешение писать ---------------------------------------------
 
     /** Сообщение персонажа в переписке: вопрос — с кнопками ответа, остальное — словами. */
-    private fun MascotMessageEntity.toFeedItem(): FeedItem.Message {
+    /** @param address адрес страницы сейчас: делятся живым адресом, а не тем, что был в тексте */
+    private fun MascotMessageEntity.toFeedItem(address: String?): FeedItem.Message {
         val local = Instant.fromEpochMilliseconds(createdAt).toLocalDateTime(zone)
         val minute = local.hour * 60 + local.minute
         val time = formatTime(createdAt, zone)
@@ -1716,7 +1729,15 @@ class DiaryViewModel(
         return if (asked != null) {
             FeedItem.Ask(id, asked, text, time, minute, at = createdAt, choice = choice)
         } else {
-            FeedItem.Said(id, mascot, text, time, minute, at = createdAt)
+            FeedItem.Said(
+                id,
+                mascot,
+                text,
+                time,
+                minute,
+                at = createdAt,
+                share = address?.takeIf { topic == Topic.WEB_ADDRESS.name },
+            )
         }
     }
 

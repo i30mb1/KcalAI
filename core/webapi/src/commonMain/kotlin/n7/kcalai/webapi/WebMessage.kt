@@ -12,7 +12,10 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
+import n7.kcalai.model.NutrimentTotals
+import n7.kcalai.model.owner
 
 /*
  * Разговор страницы дневника в браузере с телефоном — по WebSocket в домашней сети.
@@ -90,15 +93,22 @@ sealed interface ToPage {
  * @param owner как назвался хозяин телефона — чей это дневник, видно во вкладке
  * @param goalKcal цель дня; `null` — не задана
  * @param peers телефоны рядом: у каждого своя страница
+ * @param goalMacros цель по белкам, жирам и углеводам — полосы в плитках; `null` — не задана
  */
 data class WebDay(
     val owner: String,
     val entries: List<WebEntry>,
     val goalKcal: Int?,
     val peers: List<WebPeer>,
+    val goalMacros: WebMacros? = null,
 ) {
     val kcal: Int get() = entries.sumOf { it.kcal }
+
+    fun totals(): NutrimentTotals = entries.totals()
 }
+
+/** Цель дня в граммах. */
+data class WebMacros(val prot: Int, val fat: Int, val carb: Int)
 
 /** Запись дневника: числа уже посчитаны телефоном на её вес. Белки, жиры и углеводы — в сотых грамма. */
 data class WebEntry(
@@ -110,9 +120,23 @@ data class WebEntry(
     val protCg: Int,
     val fatCg: Int,
     val carbCg: Int,
+) {
+    val totals: NutrimentTotals get() = NutrimentTotals(kcal, protCg, fatCg, carbCg)
+
+    /** Чей это макрос — по тому же правилу, что точка на чипсе в приложении. */
+    val owner: Mascot get() = totals.owner()
+}
+
+/** Сумма записей — дня или приёма. */
+fun List<WebEntry>.totals(): NutrimentTotals = NutrimentTotals(
+    kcal = sumOf { it.kcal },
+    protCg = sumOf { it.protCg },
+    fatCg = sumOf { it.fatCg },
+    carbCg = sumOf { it.carbCg },
 )
 
-data class WebSuggestion(val name: String, val grams: Int, val kcal: Int)
+/** @param mascot хозяин макроса продукта — цвет точки на подсказке */
+data class WebSuggestion(val name: String, val grams: Int, val kcal: Int, val mascot: Mascot)
 
 /** Телефон рядом. Имя объявлено его владельцем и ничем не подтверждено. */
 data class WebPeer(val name: String, val url: String)
@@ -165,6 +189,11 @@ fun encode(message: ToPage): String = envelope(
             val day = message.day
             put("owner", day.owner)
             day.goalKcal?.let { put("goal", it) }
+            day.goalMacros?.let { goal ->
+                put("goalProt", goal.prot)
+                put("goalFat", goal.fat)
+                put("goalCarb", goal.carb)
+            }
             put("entries", buildJsonArray { day.entries.forEach { add(it.toJson()) } })
             put("peers", buildJsonArray { day.peers.forEach { add(it.toJson()) } })
         }
@@ -201,6 +230,7 @@ private fun WebSuggestion.toJson() = buildJsonObject {
     put("name", name)
     put("grams", grams)
     put("kcal", kcal)
+    put("mascot", mascot.name)
 }
 
 // --- Из текста -------------------------------------------------------------------------
@@ -236,6 +266,7 @@ fun parseToPage(text: String): ToPage? {
                 entries = json.list("entries") { it.toEntry() } ?: return null,
                 goalKcal = json.long("goal")?.toInt(),
                 peers = json.list("peers") { it.toPeer() } ?: return null,
+                goalMacros = json.macros(),
             )
         )
         "suggestions" -> ToPage.Suggestions(
@@ -276,6 +307,14 @@ private fun JsonObject.toSuggestion(): WebSuggestion? = WebSuggestion(
     name = text("name") ?: return null,
     grams = long("grams")?.toInt() ?: return null,
     kcal = long("kcal")?.toInt() ?: return null,
+    mascot = text("mascot")?.let { name -> Mascot.entries.firstOrNull { it.name == name } } ?: return null,
+)
+
+/** Цель целиком или никак: полоса без одной из трёх целей врала бы. */
+private fun JsonObject.macros(): WebMacros? = WebMacros(
+    prot = long("goalProt")?.toInt() ?: return null,
+    fat = long("goalFat")?.toInt() ?: return null,
+    carb = long("goalCarb")?.toInt() ?: return null,
 )
 
 private fun JsonObject.grams(): Int? = long("grams")?.takeIf { it in 1..WEB_GRAMS_MAX }?.toInt()

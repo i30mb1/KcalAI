@@ -24,6 +24,7 @@ import n7.kcalai.webapi.ToPage
 import n7.kcalai.webapi.ToPhone
 import n7.kcalai.webapi.WebDay
 import n7.kcalai.webapi.WebEntry
+import n7.kcalai.webapi.WebMacros
 import n7.kcalai.webapi.WebPeer
 import n7.kcalai.webapi.WebSuggestion
 import kotlin.random.Random
@@ -40,7 +41,7 @@ import kotlin.uuid.Uuid
 const val WEB_WAITING_MAX = 3
 
 /** Сегодняшний дневник для страницы: записи и цель. */
-data class WebToday(val entries: List<WebEntry>, val goalKcal: Int?)
+data class WebToday(val entries: List<WebEntry>, val goalKcal: Int?, val goalMacros: WebMacros? = null)
 
 /**
  * Дневник, каким его видит и правит страница. Всё — о сегодняшнем дне.
@@ -144,7 +145,7 @@ class WebSession(
     private suspend fun showDiary(send: suspend (ToPage) -> Unit) {
         presence.enter()
         try {
-            combine(diary.today(), peers) { today, near -> WebDay(owner, today.entries, today.goalKcal, near) }
+            combine(diary.today(), peers) { today, near -> WebDay(owner, today.entries, today.goalKcal, near, today.goalMacros) }
                 .distinctUntilChanged()
                 .collect { send(ToPage.Day(it)) }
         } finally {

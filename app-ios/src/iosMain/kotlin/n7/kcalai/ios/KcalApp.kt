@@ -10,8 +10,11 @@ import kotlinx.coroutines.launch
 import n7.kcalai.assistant.AppleModelBridge
 import n7.kcalai.feature.diary.DiaryRoute
 import n7.kcalai.feature.diary.LocalScreenAwake
+import n7.kcalai.feature.diary.LocalShareText
 import n7.kcalai.feature.diary.ScreenAwake
+import n7.kcalai.feature.diary.ShareText
 import n7.kcalai.ui.KcalTheme
+import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
 import platform.UIKit.UIViewController
 import platform.UserNotifications.UNNotificationDefaultActionIdentifier
@@ -97,9 +100,19 @@ object KcalApp {
             // Браузер на связи со страницей дневника — таймер простоя не гасит экран.
             CompositionLocalProvider(
                 LocalScreenAwake provides ScreenAwake { on -> UIApplication.sharedApplication.idleTimerDisabled = on },
+                // Адрес страницы дневника — себе в мессенджер, через лист «Поделиться».
+                LocalShareText provides ShareText(::shareText),
             ) {
                 DiaryRoute(viewModel = diary)
             }
         }
     }
+}
+
+/** Лист «Поделиться» поверх того, что сейчас на экране. */
+private fun shareText(text: String) {
+    val sheet = UIActivityViewController(activityItems = listOf(text), applicationActivities = null)
+    var top = UIApplication.sharedApplication.keyWindow?.rootViewController
+    while (top?.presentedViewController != null) top = top.presentedViewController
+    top?.presentViewController(sheet, animated = true, completion = null)
 }

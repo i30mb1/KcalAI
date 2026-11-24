@@ -155,6 +155,18 @@ class BrowserTest {
         assertEquals(1, harness.mascotDao.messages.value.count { it.topic == Topic.WEB_ADDRESS.name })
     }
 
+    /** Ссылку удобно скинуть себе в мессенджер и открыть на компьютере: у адреса — «Поделиться». */
+    @Test
+    fun `у адреса страницы — ссылка, которой можно поделиться`() = runTest(dispatcher) {
+        harness.addEntry("Гречка отварная", grams = 200, meal = MealType.BREAKFAST, daysAgo = 1)
+        val vm = screen()
+        advanceUntilIdle()
+
+        val said = vm.state.value.feed.filterIsInstance<FeedItem.Said>()
+        assertEquals(PAGE, said.single { PAGE in it.text }.share)
+        assertTrue(said.filterNot { PAGE in it.text }.all { it.share == null }, "делиться — только адресом страницы")
+    }
+
     @Test
     fun `просьбы о странице — словами, а не еда`() {
         listOf("компьютер", "Ноутбук", "с компьютера", "адрес?", "сайт", "браузер").forEach {
