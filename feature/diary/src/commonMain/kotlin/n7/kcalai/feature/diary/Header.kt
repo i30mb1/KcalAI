@@ -1,19 +1,19 @@
 package n7.kcalai.feature.diary
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.expandVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -31,22 +31,23 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import kotlinx.datetime.LocalDate
 import kotlin.math.abs
+import kotlinx.datetime.LocalDate
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.NutrimentTotals
+import n7.kcalai.model.formatDateCaps
 import n7.kcalai.repositories.DaySummary
 import n7.kcalai.ui.CapsLabel
+import n7.kcalai.ui.KcalShapes
+import n7.kcalai.ui.KcalTheme
 import n7.kcalai.ui.Macro
 import n7.kcalai.ui.MiniBar
 import n7.kcalai.ui.SproutIcon
 import n7.kcalai.ui.colors
-import n7.kcalai.ui.tileLabel
-import n7.kcalai.ui.KcalShapes
-import n7.kcalai.ui.KcalTheme
 import n7.kcalai.ui.mascot.mascot
+import n7.kcalai.ui.tileLabel
 
 /**
  * Шапка: дата, остаток, три макроса и неделя.

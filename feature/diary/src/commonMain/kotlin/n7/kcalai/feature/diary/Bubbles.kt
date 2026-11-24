@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -222,6 +223,8 @@ fun IncomingBubble(
     speaking: FeedItem,
     modifier: Modifier = Modifier,
     onDismiss: (() -> Unit)? = null,
+    /** Что встаёт справа от пузырька, как в мессенджере, — кнопка «поделиться». */
+    trailing: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val colors = KcalTheme.colors
@@ -274,6 +277,10 @@ fun IncomingBubble(
                     )
                 }
             }
+        }
+        if (trailing != null) {
+            Spacer(Modifier.width(6.dp))
+            trailing()
         }
     }
 }
@@ -671,14 +678,30 @@ fun DeletedBubble(item: FeedItem.Deleted, onUndo: () -> Unit) {
 @Composable
 fun SaidBubble(item: FeedItem.Said) {
     val share = LocalShareText.current
-    IncomingBubble(item) {
+    val link = item.share
+    IncomingBubble(
+        speaking = item,
+        // Как в мессенджере: иконка справа от сообщения, а не кнопка в нём. Это не ответ,
+        // а действие — она не гаснет, и делиться можно сколько угодно раз.
+        trailing = link?.let { { ShareButton(onClick = { share.share(it) }) } },
+    ) {
         BubbleText(item.text, time = item.time)
-        // Не ответ, а действие: кнопка не гаснет, и делиться можно сколько угодно раз.
-        item.share?.let { link ->
-            Row(Modifier.padding(top = 8.dp)) {
-                AnswerChip("Поделиться", chosen = null, primary = true, onClick = { share.share(link) })
-            }
-        }
+    }
+}
+
+/** Круглая кнопка «поделиться» рядом с сообщением. */
+@Composable
+private fun ShareButton(onClick: () -> Unit) {
+    val colors = KcalTheme.colors
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(colors.chip)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Default.Share, contentDescription = "Поделиться", tint = colors.text2, modifier = Modifier.size(18.dp))
     }
 }
 

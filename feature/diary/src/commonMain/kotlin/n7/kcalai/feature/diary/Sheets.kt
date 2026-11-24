@@ -63,6 +63,7 @@ import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.totals
 import n7.kcalai.model.FoodRef
+import n7.kcalai.model.GoalMacros
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.Nutriments

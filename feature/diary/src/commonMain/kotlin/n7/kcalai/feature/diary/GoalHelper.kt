@@ -3,6 +3,10 @@ package n7.kcalai.feature.diary
 import kotlin.math.roundToInt
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.model.FiberTotal
+import n7.kcalai.model.GoalMacros
+import n7.kcalai.model.KCAL_PER_CARB
+import n7.kcalai.model.KCAL_PER_FAT
+import n7.kcalai.model.KCAL_PER_PROT
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.Sex
 import n7.kcalai.ui.Macro
@@ -103,16 +107,6 @@ fun suggestedFiber(kcal: Int?): Int =
     maxOf(FIBER_MIN_G, ((kcal ?: 0) * FIBER_PER_1000_KCAL / 1000.0).roundToInt())
 
 /**
- * Цель в граммах. Калории из неё считаются, а не вводятся отдельно.
- *
- * Отдельное поле калорий давало сохранить невозможное: «200 ккал и 120 г белка»,
- * хотя 120 г белка — уже 480 ккал. Из граммов калории складываются всегда верно.
- */
-data class GoalMacros(val prot: Int, val fat: Int, val carb: Int) {
-    val kcal: Int get() = prot * KCAL_PER_PROT + fat * KCAL_PER_FAT + carb * KCAL_PER_CARB
-}
-
-/**
  * Что встаёт в поля шита цели.
  *
  * Граммы сохранённой цели — как есть. Цель из одних калорий, заведённая до того,
@@ -194,9 +188,6 @@ private const val FIBER_PER_1000_KCAL = 14
 private const val PROT_KEEP = 1.6
 private const val PROT_CHANGE = 1.8
 private const val FAT_SHARE = 0.3
-private const val KCAL_PER_PROT = 4
-private const val KCAL_PER_FAT = 9
-private const val KCAL_PER_CARB = 4
 
 private val AGE_RANGE = 14..100
 private val HEIGHT_RANGE = 120..230

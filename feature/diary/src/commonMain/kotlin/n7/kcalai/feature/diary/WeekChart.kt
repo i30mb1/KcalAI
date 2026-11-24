@@ -25,6 +25,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.datetime.LocalDate
+import n7.kcalai.model.formatDateCaps
+import n7.kcalai.model.formatWeekdayShort
 import n7.kcalai.repositories.DaySummary
 import n7.kcalai.ui.KcalTheme
 

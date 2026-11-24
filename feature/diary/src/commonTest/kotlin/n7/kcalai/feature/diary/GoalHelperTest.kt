@@ -1,9 +1,10 @@
 package n7.kcalai.feature.diary
 
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import kotlin.test.Test
 import n7.kcalai.database.DailyGoalEntity
+import n7.kcalai.model.GoalMacros
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.Sex
 import n7.kcalai.ui.Macro

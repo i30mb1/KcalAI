@@ -7,4 +7,11 @@ kotlin {
     android {
         namespace = "n7.kcalai.model"
     }
+
+    sourceSets {
+        commonMain.dependencies {
+            // Даты подписей — «вторник, 24 нояб» — одни на приложение и страницу дневника.
+            api(libs.kotlinx.datetime)
+        }
+    }
 }

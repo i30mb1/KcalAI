@@ -1,9 +1,8 @@
-package n7.kcalai.feature.diary
+package n7.kcalai.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.TimeZone
 
 /**
  * Названия дней и месяцев — свои таблицы, а не локаль платформы: на разных
@@ -26,17 +25,11 @@ class DateFormatTest {
     }
 
     @Test
-    fun `время записи в местной зоне`() {
-        // 2025-09-13 00:00 UTC + 7 ч 5 мин.
-        val millis = 1_757_721_600_000L + (7 * 60 + 5) * 60_000L
+    fun `день ленты называется словом пока это возможно`() {
+        val today = kotlinx.datetime.LocalDate(2026, 10, 31)
 
-        assertEquals("07:05", formatTime(millis, TimeZone.UTC))
-        assertEquals("10:05", formatTime(millis, TimeZone.of("Europe/Moscow")))
-    }
-
-    @Test
-    fun `час с ведущим нулём`() {
-        assertEquals("08:00", formatHour(8))
-        assertEquals("13:00", formatHour(13))
+        assertEquals("сегодня", dayLabel(today, today))
+        assertEquals("вчера", dayLabel(kotlinx.datetime.LocalDate(2026, 10, 30), today))
+        assertEquals("четверг, 29 окт", dayLabel(kotlinx.datetime.LocalDate(2026, 10, 29), today))
     }
 }

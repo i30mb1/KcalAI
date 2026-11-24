@@ -60,15 +60,6 @@ class FormatTest {
 
     /** Подпись над перепиской дня: сегодня и вчера — словом, дальше — датой. */
     @Test
-    fun `день ленты называется словом пока это возможно`() {
-        val today = kotlinx.datetime.LocalDate(2026, 10, 31)
-
-        assertEquals("сегодня", dayLabel(today, today))
-        assertEquals("вчера", dayLabel(kotlinx.datetime.LocalDate(2026, 10, 30), today))
-        assertEquals("четверг, 29 окт", dayLabel(kotlinx.datetime.LocalDate(2026, 10, 29), today))
-    }
-
-    @Test
     fun `счётное слово в очереди отправки склоняется по правилу`() {
         assertEquals("1 продукт", describeOutbox(scans = 0, products = 1))
         assertEquals("3 продукта", describeOutbox(scans = 0, products = 3))
