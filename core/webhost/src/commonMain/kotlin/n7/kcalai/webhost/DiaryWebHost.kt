@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import n7.kcalai.database.WebClientDao
+import n7.kcalai.model.PageGrace
 import n7.kcalai.nearby.LanRoutes
 import n7.kcalai.webapi.WEB_SOCKET_PATH
 import n7.kcalai.webapi.WebPeer
@@ -43,6 +44,7 @@ class DiaryWebHost(
     private val clients: WebClientDao,
     private val diary: WebDiary,
     private val owner: Flow<String?>,
+    private val grace: Flow<PageGrace>,
     private val peers: Flow<List<WebPeer>>,
     private val presence: WebPresence,
     private val bundle: WebBundle,
@@ -58,6 +60,7 @@ class DiaryWebHost(
                     // Имя не обязательно: свой дневник открывают и без него, подпись тогда пустая.
                     // Потоком: сменили имя со страницы — подпись меняется тут же.
                     owner = owner.map { it.orEmpty() },
+                    grace = grace,
                     peers = peers,
                     label = browserLabel(call.request.headers[HttpHeaders.UserAgent]),
                     presence = presence,

@@ -8,6 +8,13 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlin.test.AfterTest
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.filterNotNull
@@ -41,6 +48,12 @@ class PageAddressTest {
         override fun stop() = Unit
     }
 
+    /** Сервер живёт в области приложения, а не экрана; в тесте — в своей, и гаснет вместе с тестом. */
+    private val lanScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @AfterTest
+    fun stopLan() = lanScope.cancel()
+
     private object NoOffers : OfferInbox {
         override suspend fun waiting(): Int = 0
         override suspend fun receive(offer: PeerOfferEntity) = Unit
@@ -48,7 +61,7 @@ class PageAddressTest {
 
     @Test
     fun `пока сервер поднят — адрес есть, ушёл экран — адреса нет`() = runTest {
-        val lan = NearbyPeersOverLan(Discovery("192.168.1.5"), OfferReceiver(NoOffers), myName = MutableStateFlow("Женя"))
+        val lan = NearbyPeersOverLan(Discovery("192.168.1.5"), OfferReceiver(NoOffers), myName = MutableStateFlow("Женя"), scope = lanScope)
 
         // Сокет настоящий: ждём его на настоящих потоках, а не на виртуальном времени теста.
         val address = withContext(Dispatchers.Default) {
@@ -57,7 +70,34 @@ class PageAddressTest {
         }
 
         assertTrue(address.startsWith("http://192.168.1.5:"), address)
-        assertNull(lan.address().first(), "страница гаснет вместе с экраном")
+        // Без запаса страница гаснет вместе с экраном — сразу, как только сервер остановится.
+        withContext(Dispatchers.Default) { withTimeout(5_000) { lan.address().first { it == null } } }
+    }
+
+    /**
+     * Ушёл экран — страница держится запас: мельком заблокировал телефон — она не заметит.
+     * Запас вышел — страница гаснет: убрал телефон надолго — связь честно закрывается.
+     */
+    @Test
+    fun `ушёл экран — страница живёт запас и гаснет`() = runTest {
+        val lan = NearbyPeersOverLan(
+            Discovery("192.168.1.5"),
+            OfferReceiver(NoOffers),
+            myName = MutableStateFlow("Женя"),
+            scope = lanScope,
+            grace = MutableStateFlow(GRACE),
+        )
+
+        withContext(Dispatchers.Default) {
+            val screen = launch { lan.nearby().collect {} }
+            lan.address().filterNotNull().first()
+            screen.cancelAndJoin()
+
+            delay(GRACE / 3)
+            assertTrue(lan.address().first() != null, "запас ещё не вышел — страница жива")
+
+            withTimeout(5_000) { lan.address().first { it == null } }
+        }
     }
 
     /**
@@ -67,7 +107,7 @@ class PageAddressTest {
     @Test
     fun `без имени страница поднимается, но себя соседям не объявляет`() = runTest {
         val discovery = Discovery("192.168.1.5")
-        val lan = NearbyPeersOverLan(discovery, OfferReceiver(NoOffers), myName = MutableStateFlow(null))
+        val lan = NearbyPeersOverLan(discovery, OfferReceiver(NoOffers), myName = MutableStateFlow(null), scope = lanScope)
 
         val address = withContext(Dispatchers.Default) {
             val running = launch { lan.nearby().collect {} }
@@ -86,11 +126,13 @@ class PageAddressTest {
     fun `смена имени сервер не перезапускает`() = runTest {
         val discovery = Discovery("192.168.1.5")
         val name = MutableStateFlow<String?>("Женя")
-        val lan = NearbyPeersOverLan(discovery, OfferReceiver(NoOffers), myName = name)
+        val lan = NearbyPeersOverLan(discovery, OfferReceiver(NoOffers), myName = name, scope = lanScope)
 
         val (before, after) = withContext(Dispatchers.Default) {
             val running = launch { lan.nearby().collect {} }
             val first = lan.address().filterNotNull().first()
+            // Адрес поднимается раньше объявления: ждём первое имя, иначе сменим его до того, как оно прозвучало.
+            while (discovery.advertised.isEmpty()) kotlinx.coroutines.delay(10)
             name.value = "Аня"
             while (discovery.advertised.size < 2) kotlinx.coroutines.delay(10)
             val second = lan.address().first()
@@ -105,7 +147,7 @@ class PageAddressTest {
     /** Не в Wi-Fi — адреса, по которому браузер достучался бы, нет: молчим, а не врём. */
     @Test
     fun `не в Wi-Fi адреса нет`() = runTest {
-        val lan = NearbyPeersOverLan(Discovery(null), OfferReceiver(NoOffers), myName = MutableStateFlow("Женя"))
+        val lan = NearbyPeersOverLan(Discovery(null), OfferReceiver(NoOffers), myName = MutableStateFlow("Женя"), scope = lanScope)
 
         val running = launch { lan.nearby().collect {} }
         yield()
@@ -113,6 +155,10 @@ class PageAddressTest {
         running.cancel()
 
         assertNull(address)
+    }
+
+    private companion object {
+        val GRACE = 600.milliseconds
     }
 
     @Test

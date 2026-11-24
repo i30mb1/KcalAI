@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.TimeZone
 import n7.kcalai.database.Choice
 import n7.kcalai.model.Mascot
+import n7.kcalai.model.PageGrace
 import n7.kcalai.model.MealType
 import n7.kcalai.webapi.ToPage
 import n7.kcalai.webapi.ToPhone
@@ -58,6 +59,7 @@ class WebSessionTest {
                 clients = clients,
                 diary = diary,
                 owner = flowOf("Женя"),
+                grace = flowOf(PageGrace.MIN_15),
                 peers = peers,
                 label = "Chrome на Windows",
                 presence = presence,
@@ -223,15 +225,18 @@ class WebSessionTest {
     }
 
     @Test
-    fun `цель и имя со страницы доходят до телефона`() = runTest {
+    fun `цель, имя и запас со страницы доходят до телефона`() = runTest {
         val browser = admitted()
 
         browser.say(ToPhone.SetGoal(prot = 120, fat = 70, carb = 230))
         browser.say(ToPhone.SetName("Женя"))
+        browser.say(ToPhone.SetGrace(PageGrace.MIN_60))
         runCurrent()
 
         assertEquals(listOf(WebMacros(120, 70, 230)), diary.goals)
         assertEquals(listOf("Женя"), diary.names)
+        assertEquals(listOf(PageGrace.MIN_60), diary.graces)
+        assertEquals(PageGrace.MIN_15, browser.last<ToPage.Day>()?.day?.grace, "выбранный запас виден в настройках")
     }
 
     @Test
@@ -344,6 +349,7 @@ private class FakeWebDiary : WebDiary {
     val deleted = mutableListOf<Long>()
     val goals = mutableListOf<WebMacros>()
     val names = mutableListOf<String>()
+    val graces = mutableListOf<PageGrace>()
 
     /** 2026-11-24. */
     override val today: Long = 20_781
@@ -364,6 +370,10 @@ private class FakeWebDiary : WebDiary {
 
     override suspend fun setName(name: String) {
         names += name
+    }
+
+    override suspend fun setGrace(grace: PageGrace) {
+        graces += grace
     }
 
     override suspend fun setGrams(entryId: Long, grams: Int) {

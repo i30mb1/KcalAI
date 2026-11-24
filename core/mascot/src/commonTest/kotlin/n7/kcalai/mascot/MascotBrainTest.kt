@@ -17,6 +17,7 @@ import kotlin.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -35,6 +36,7 @@ import n7.kcalai.model.EntrySource
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.ModelDelivery
+import n7.kcalai.model.PageGrace
 import n7.kcalai.personal.PersonalRepository
 
 /**
@@ -504,6 +506,16 @@ class MascotBrainTest {
     }
 
     // --- Страница дневника в браузере ----------------------------------------------------
+
+    /** Сколько держать страницу, когда телефон убран, — выбирают на странице, хранится в профиле. */
+    @Test
+    fun `запас страницы хранится в профиле`() = runTest {
+        assertEquals(PageGrace.MIN_5, brain().profile.first().pageGrace, "по умолчанию — пять минут")
+
+        brain().setPageGrace(PageGrace.FOREVER)
+
+        assertEquals(PageGrace.FOREVER, mascots.profileRow.value?.pageGrace)
+    }
 
     /** Имя меняют и со страницы: оно же больше не спрашивается — человек его уже назвал. */
     @Test

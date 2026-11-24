@@ -31,6 +31,7 @@ import n7.kcalai.mascot.voice.compose
 import n7.kcalai.model.BackgroundModel
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.ModelDelivery
+import n7.kcalai.model.PageGrace
 import n7.kcalai.model.Sex
 import n7.kcalai.model.owner
 import n7.kcalai.model.parseFoodRef
@@ -155,6 +156,12 @@ class MascotBrain(
     suspend fun setName(name: String) {
         val profile = dao.profile() ?: MascotProfileEntity()
         dao.upsertProfile(profile.copy(name = name, nameAsked = true))
+    }
+
+    /** Сколько держать страницу дневника, когда телефон убран, — выбирают на странице. */
+    suspend fun setPageGrace(grace: PageGrace) {
+        val profile = dao.profile() ?: MascotProfileEntity()
+        if (profile.pageGrace != grace) dao.upsertProfile(profile.copy(pageGrace = grace))
     }
 
     /** Пол из помощника цели: с ним персонажи говорят «ты ел» и «ты ела» правильно. */

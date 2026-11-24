@@ -7,6 +7,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,6 +39,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import n7.kcalai.model.PageGrace
 import n7.kcalai.ui.CapsLabel
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
@@ -101,6 +104,7 @@ fun SettingsPanel(day: WebDay, link: PhoneLink, onClose: () -> Unit) {
             }
             NameSection(day.owner, onSave = { link.send(ToPhone.SetName(it)) })
             GoalSection(day.goalMacros, onSave = { link.send(ToPhone.SetGoal(it.prot, it.fat, it.carb)) })
+            GraceSection(day.grace, onPick = { link.send(ToPhone.SetGrace(it)) })
             BrowsersSection(day, onRevoke = { link.send(ToPhone.Revoke(it)) }, onLeave = link::leave)
         }
     }
@@ -172,6 +176,23 @@ private fun MacroField(macro: Macro, value: String, onValue: (String) -> Unit, m
             modifier = Modifier.weight(1f),
         )
         Text("г", style = KcalTheme.type.time, color = palette.text)
+    }
+}
+
+/**
+ * Сколько страница живёт, когда телефон убран: мельком заблокировал — не заметит,
+ * убрал надолго — связь закрывается. «Пока система не остановит» — честно: дольше
+ * телефон приложение сам не держит.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GraceSection(current: PageGrace, onPick: (PageGrace) -> Unit) {
+    Section("Когда телефон убран") {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            PageGrace.entries.forEach { option ->
+                PageChip(option.title, primary = option == current, onClick = { onPick(option) })
+            }
+        }
     }
 }
 

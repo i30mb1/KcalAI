@@ -18,6 +18,7 @@ import n7.kcalai.model.GoalMacros
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
+import n7.kcalai.model.PageGrace
 import n7.kcalai.model.owner
 
 /*
@@ -80,6 +81,9 @@ sealed interface ToPhone {
     /** Отозвать пущенный браузер — и чужой, забытый в гостях, и свой. */
     data class Revoke(val browserId: Long) : ToPhone
 
+    /** Сколько держать страницу, когда телефон убран. */
+    data class SetGrace(val grace: PageGrace) : ToPhone
+
     /** «Выйти»: телефон забывает этот браузер, и в следующий раз его снова надо пустить. */
     data object Leave : ToPhone
 }
@@ -125,6 +129,7 @@ data class WebDaySummary(val date: Long, val kcal: Int, val goalKcal: Int?)
  * @param week неделя открытого дня, с понедельника по воскресенье
  * @param browsers пущенные браузеры — для настроек; вместе с днём, чтобы не ждать отдельного слова
  * @param fiberGoal клетчатка на день, граммы: своя цель или по калориям цели, как в приложении
+ * @param grace сколько страница живёт, когда телефон убран, — для настроек
  */
 data class WebDay(
     val owner: String,
@@ -137,6 +142,7 @@ data class WebDay(
     val week: List<WebDaySummary> = emptyList(),
     val browsers: List<WebBrowser> = emptyList(),
     val fiberGoal: Int? = null,
+    val grace: PageGrace = PageGrace.MIN_5,
 ) {
     val kcal: Int get() = entries.sumOf { it.kcal }
 
@@ -204,6 +210,7 @@ fun encode(message: ToPhone): String = envelope(
         is ToPhone.SetGoal -> "goal"
         is ToPhone.SetName -> "name"
         is ToPhone.Revoke -> "revoke"
+        is ToPhone.SetGrace -> "grace"
         ToPhone.Leave -> "leave"
     },
 ) {
@@ -229,6 +236,7 @@ fun encode(message: ToPhone): String = envelope(
         }
         is ToPhone.SetName -> put("name", message.name)
         is ToPhone.Revoke -> put("id", message.browserId)
+        is ToPhone.SetGrace -> put("grace", message.grace.name)
         ToPhone.Leave -> Unit
     }
 }
@@ -264,6 +272,7 @@ fun encode(message: ToPage): String = envelope(
             put("week", buildJsonArray { day.week.forEach { add(it.toJson()) } })
             put("browsers", buildJsonArray { day.browsers.forEach { add(it.toJson()) } })
             day.fiberGoal?.let { put("fiberGoal", it) }
+            put("grace", day.grace.name)
         }
         is ToPage.Suggestions -> {
             put("query", message.query)
@@ -339,6 +348,7 @@ fun parseToPhone(text: String): ToPhone? {
         )
         "name" -> ToPhone.SetName(name = json.text("name")?.trim()?.takeIf { it.isNotEmpty() }?.take(WEB_NAME_MAX) ?: return null)
         "revoke" -> ToPhone.Revoke(browserId = json.long("id") ?: return null)
+        "grace" -> ToPhone.SetGrace(grace = json.grace() ?: return null)
         "leave" -> ToPhone.Leave
         else -> null
     }
@@ -363,6 +373,7 @@ fun parseToPage(text: String): ToPage? {
                 week = json.list("week") { it.toSummary() } ?: return null,
                 browsers = json.list("browsers") { it.toBrowser() } ?: return null,
                 fiberGoal = json.long("fiberGoal")?.toInt(),
+                grace = json.grace() ?: return null,
             )
         )
         "suggestions" -> ToPage.Suggestions(
@@ -410,6 +421,8 @@ private fun JsonObject.toBrowser(): WebBrowser? = WebBrowser(
     label = text("label") ?: return null,
     here = (this["here"] as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull ?: return null,
 )
+
+private fun JsonObject.grace(): PageGrace? = text("grace")?.let { name -> PageGrace.entries.firstOrNull { it.name == name } }
 
 private fun JsonObject.goalGrams(key: String): Int? = long(key)?.takeIf { it in 1..WEB_GOAL_MAX_G }?.toInt()
 

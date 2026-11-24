@@ -3,6 +3,7 @@ package n7.kcalai.webapi
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
+import n7.kcalai.model.PageGrace
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -29,6 +30,7 @@ class WebMessageTest {
         peers = listOf(WebPeer(name = "Аня", url = "http://192.168.1.7:47800/")),
         goalMacros = WebMacros(prot = 120, fat = 70, carb = 230),
         fiberGoal = 28,
+        grace = PageGrace.MIN_15,
         date = 20_781,
         today = 20_782,
         week = listOf(WebDaySummary(date = 20_781, kcal = 320, goalKcal = 2_100), WebDaySummary(date = 20_782, kcal = 0, goalKcal = null)),
@@ -46,6 +48,7 @@ class WebMessageTest {
             ToPhone.SetGoal(prot = 120, fat = 70, carb = 230),
             ToPhone.SetName(name = "Женя"),
             ToPhone.Revoke(browserId = 4),
+            ToPhone.SetGrace(PageGrace.FOREVER),
             ToPhone.SetGrams(entryId = 7, grams = 150),
             ToPhone.Delete(entryId = 9),
             ToPhone.Leave,

@@ -1,9 +1,11 @@
 package n7.kcalai.database
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import n7.kcalai.model.Mascot
+import n7.kcalai.model.PageGrace
 import n7.kcalai.model.Sex
 
 /** Куда ушло сообщение персонажа. */
@@ -72,4 +74,7 @@ data class MascotProfileEntity(
     val consentAt: Long? = null,
     /** Когда человек последний раз открывал приложение: по нему встречают и не мешают. */
     val lastOpenAt: Long? = null,
+    /** Сколько держать страницу дневника в браузере, когда телефон убран. */
+    @ColumnInfo(defaultValue = "MIN_5")
+    val pageGrace: PageGrace = PageGrace.MIN_5,
 )

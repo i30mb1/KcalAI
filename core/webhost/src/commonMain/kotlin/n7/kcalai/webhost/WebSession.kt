@@ -22,6 +22,7 @@ import n7.kcalai.database.WebClientDao
 import n7.kcalai.database.WebClientEntity
 import n7.kcalai.database.admitted
 import n7.kcalai.model.MealType
+import n7.kcalai.model.PageGrace
 import n7.kcalai.webapi.ToPage
 import n7.kcalai.webapi.ToPhone
 import n7.kcalai.webapi.WebBrowser
@@ -81,6 +82,9 @@ interface WebDiary {
     suspend fun setGoal(goal: WebMacros)
 
     suspend fun setName(name: String)
+
+    /** Сколько держать страницу, когда телефон убран. */
+    suspend fun setGrace(grace: PageGrace)
 }
 
 /** Сколько пущенных браузеров сейчас на связи — пока хоть один есть, экрану гаснуть нельзя. */
@@ -110,6 +114,7 @@ class WebSession(
     private val clients: WebClientDao,
     private val diary: WebDiary,
     private val owner: Flow<String>,
+    private val grace: Flow<PageGrace>,
     private val peers: Flow<List<WebPeer>>,
     private val label: String,
     private val presence: WebPresence,
@@ -167,6 +172,7 @@ class WebSession(
                 is ToPhone.SetGoal -> diary.setGoal(WebMacros(message.prot, message.fat, message.carb))
                 is ToPhone.SetName -> diary.setName(message.name)
                 is ToPhone.Revoke -> clients.revoke(message.browserId, clock.now().toEpochMilliseconds())
+                is ToPhone.SetGrace -> diary.setGrace(message.grace)
                 ToPhone.Leave -> {
                     clients.leave(token, clock.now().toEpochMilliseconds())
                     break
@@ -188,7 +194,8 @@ class WebSession(
                 combine(diary.day(date), diary.week(date)) { content, week -> Triple(date, content, week) }
             }
             val browsers = clients.observeAdmitted().map { list -> list.map { WebBrowser(it.id, it.label, here = it.id == me) } }
-            combine(day, peers, browsers, owner) { (date, content, week), near, admitted, name ->
+            val profile = combine(owner, grace, ::Pair)
+            combine(day, peers, browsers, profile) { (date, content, week), near, admitted, (name, keep) ->
                 WebDay(
                     owner = name,
                     entries = content.entries,
@@ -200,6 +207,7 @@ class WebSession(
                     week = week,
                     browsers = admitted,
                     fiberGoal = content.fiberGoal,
+                    grace = keep,
                 )
             }
                 .distinctUntilChanged()

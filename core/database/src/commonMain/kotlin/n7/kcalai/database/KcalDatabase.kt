@@ -45,6 +45,8 @@ import kotlinx.coroutines.IO
         AutoMigration(from = 9, to = 10),
         // Браузеры, пущенные в дневник, — новая таблица, дневник не трогается.
         AutoMigration(from = 10, to = 11),
+        // Сколько держать страницу дневника — новый столбец профиля, у всех — пять минут.
+        AutoMigration(from = 11, to = 12),
     ],
 )
 @ConstructedBy(KcalDatabaseConstructor::class)
@@ -63,7 +65,7 @@ abstract class KcalDatabase : RoomDatabase() {
 }
 
 /** Версия схемы базы. Константой — её читают тесты обновления и выгрузки схемы. */
-const val KCAL_DB_VERSION = 11
+const val KCAL_DB_VERSION = 12
 
 /** Реализацию для каждой платформы генерирует Room. */
 @Suppress("KotlinNoActualForExpect")

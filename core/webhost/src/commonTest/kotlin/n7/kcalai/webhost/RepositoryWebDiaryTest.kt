@@ -65,6 +65,7 @@ class RepositoryWebDiaryTest {
         },
         regram = { id, grams, _ -> regrammed += id to grams },
         rename = { name -> names += name },
+        keepPage = {},
         clock = clock,
         zone = TimeZone.UTC,
     )

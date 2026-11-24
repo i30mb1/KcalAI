@@ -3,6 +3,8 @@ package n7.kcalai.graph
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.IO
@@ -251,8 +253,14 @@ abstract class AppGraph {
                 routes = diaryWebHost,
             ),
             myName = mascotBrain.profile.map { it.name },
+            // Сервер страницы живёт в области приложения: ушёл экран — держится выбранный запас.
+            scope = lanScope,
+            grace = mascotBrain.profile.map { it.pageGrace.keep },
         )
     }
+
+    /** Где живёт сервер страницы дневника: дольше экрана — на выбранный запас. */
+    private val lanScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val nearbyPeers: NearbyPeers get() = lan
 
@@ -271,8 +279,10 @@ abstract class AppGraph {
                 suggestFood = { query -> textResolver.suggest(query) },
                 regram = personalRepository::onGramsEdited,
                 rename = mascotBrain::setName,
+                keepPage = mascotBrain::setPageGrace,
             ),
             owner = mascotBrain.profile.map { it.name },
+            grace = mascotBrain.profile.map { it.pageGrace },
             // Лениво: соседей знает сервер, который эту страницу и отдаёт.
             peers = flow { emitAll(lan.lanPeers) }.map { peers -> peers.map { WebPeer(it.name, pageUrl(it.host, it.port)) } },
             presence = webPresence,

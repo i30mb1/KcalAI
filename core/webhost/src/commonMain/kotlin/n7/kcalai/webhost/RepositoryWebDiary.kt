@@ -16,6 +16,7 @@ import n7.kcalai.database.fiber
 import n7.kcalai.database.totals
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.MealType
+import n7.kcalai.model.PageGrace
 import n7.kcalai.model.forGrams
 import n7.kcalai.model.formatTime
 import n7.kcalai.model.suggestedFiber
@@ -44,12 +45,14 @@ import kotlin.time.Clock
  *
  * @param regram правка граммов записи — та же, что из шита: `(id, граммы, сейчас)`
  * @param rename новое имя — туда же, куда его кладёт ответ Яйцу
+ * @param keepPage сколько держать страницу, когда телефон убран, — в профиль
  */
 class RepositoryWebDiary(
     private val diary: DiaryRepository,
     private val suggestFood: suspend (String) -> List<ResolvedItem>,
     private val regram: suspend (entryId: Long, grams: Int, now: Long) -> Unit,
     private val rename: suspend (String) -> Unit,
+    private val keepPage: suspend (PageGrace) -> Unit,
     private val clock: Clock = Clock.System,
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
 ) : WebDiary {
@@ -123,6 +126,8 @@ class RepositoryWebDiary(
     }
 
     override suspend fun setName(name: String) = rename(name)
+
+    override suspend fun setGrace(grace: PageGrace) = keepPage(grace)
 
     /** Опознанное, с весом, — и запомненное под этим запросом. */
     private suspend fun found(query: String): List<ResolvedItem> {
