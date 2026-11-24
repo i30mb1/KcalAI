@@ -1,4 +1,4 @@
-package n7.kcalai.feature.diary
+package n7.kcalai.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals

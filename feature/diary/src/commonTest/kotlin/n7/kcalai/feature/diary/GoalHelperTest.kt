@@ -7,6 +7,7 @@ import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.model.GoalMacros
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.Sex
+import n7.kcalai.model.suggestedFiber
 import n7.kcalai.ui.Macro
 
 /**

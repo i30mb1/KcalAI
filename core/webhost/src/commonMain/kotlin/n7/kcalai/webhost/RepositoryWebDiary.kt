@@ -12,10 +12,13 @@ import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryEntryEntity
+import n7.kcalai.database.fiber
 import n7.kcalai.database.totals
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.MealType
 import n7.kcalai.model.forGrams
+import n7.kcalai.model.formatTime
+import n7.kcalai.model.suggestedFiber
 import n7.kcalai.model.owner
 import n7.kcalai.personal.defaultPastMeal
 import n7.kcalai.personal.mealForHour
@@ -61,9 +64,11 @@ class RepositoryWebDiary(
     override fun day(date: Long): Flow<WebDayContent> =
         combine(diary.observeDay(date), diary.observeGoal(date)) { totals, goal ->
             WebDayContent(
-                entries = totals.entries.map { it.toWeb() },
+                entries = totals.entries.map { it.toWeb(zone) },
                 goalKcal = goal?.kcal?.takeIf { it > 0 },
                 goalMacros = goal?.takeIf { it.prot > 0 && it.fat > 0 && it.carb > 0 }?.let { WebMacros(it.prot, it.fat, it.carb) },
+                // Та же цель клетчатки, что в шапке приложения: своя — или по калориям цели.
+                fiberGoal = goal?.fiber ?: suggestedFiber(goal?.kcal),
             )
         }
 
@@ -135,8 +140,9 @@ class RepositoryWebDiary(
     }
 }
 
-private fun DiaryEntryEntity.toWeb(): WebEntry {
+private fun DiaryEntryEntity.toWeb(zone: TimeZone): WebEntry {
     val totals = totals()
+    val fiber = fiber()
     return WebEntry(
         id = id,
         name = displayName,
@@ -146,5 +152,7 @@ private fun DiaryEntryEntity.toWeb(): WebEntry {
         protCg = totals.protCg,
         fatCg = totals.fatCg,
         carbCg = totals.carbCg,
+        fiberCg = fiber.cg.takeIf { fiber.complete },
+        time = formatTime(createdAt, zone),
     )
 }

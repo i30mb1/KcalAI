@@ -25,14 +25,6 @@ class FormatTest {
     }
 
     @Test
-    fun `клетчатка целыми граммами неполная — «не меньше» неизвестная — нигде`() {
-        assertEquals("8", formatFiber(FiberTotal(cg = 810, unknown = 0)))
-        assertEquals("≥8", formatFiber(FiberTotal(cg = 810, unknown = 1)))
-        assertEquals("0", formatFiber(FiberTotal(cg = 0, unknown = 0)))
-        assertEquals(null, formatFiber(FiberTotal(cg = 0, unknown = 2)))
-    }
-
-    @Test
     fun `вес тела всегда с десятыми`() {
         assertEquals("82,4 кг", formatKg(82_450))
         assertEquals("80,0 кг", formatKg(80_000))

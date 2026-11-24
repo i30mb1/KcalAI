@@ -180,10 +180,13 @@ class RepositoryWebDiaryTest {
 
         assertEquals(2_100, shown.goalKcal)
         assertEquals(WebMacros(prot = 100, fat = 70, carb = 250), shown.goalMacros)
+        assertEquals(29, shown.fiberGoal, "своей цели клетчатки нет — по калориям: 14 г на 1000 ккал")
         val only = shown.entries.single()
         assertEquals(220, only.kcal)
         assertEquals(840, only.protCg)
         assertEquals(MealType.LUNCH, only.meal)
+        assertEquals(null, only.fiberCg, "клетчатка не указана — неизвестна, а не ноль")
+        assertEquals("00:00", only.time)
     }
 
     private fun entry(day: Long, grams: Int = 200) = DiaryEntryEntity(

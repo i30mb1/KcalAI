@@ -1,6 +1,9 @@
 package n7.kcalai.model
 
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 /*
  * Названия — свои таблицы, а не локаль платформы. Сокращения те же, что даёт
@@ -38,3 +41,14 @@ fun dayLabel(day: LocalDate, today: LocalDate): String = when (today.toEpochDays
 
 /** «Четверг, 29 окт» — заголовок пустого прошлого дня. */
 fun formatDayFull(day: LocalDate): String = formatDateCaps(day).replaceFirstChar(Char::uppercase)
+
+/** «14:10» — время записи в местной зоне: `createdAt` хранится в UTC-миллисекундах. */
+fun formatTime(millis: Long, zone: TimeZone): String =
+    Instant.fromEpochMilliseconds(millis).toLocalDateTime(zone).let {
+        "${it.hour.twoDigits()}:${it.minute.twoDigits()}"
+    }
+
+/** «13:00» — час без минут: точнее модель привычек всё равно не знает. */
+fun formatHour(hour: Int): String = "${hour.twoDigits()}:00"
+
+private fun Int.twoDigits(): String = toString().padStart(2, '0')

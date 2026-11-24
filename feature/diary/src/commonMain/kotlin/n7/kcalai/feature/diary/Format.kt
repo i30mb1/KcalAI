@@ -6,43 +6,11 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
-import kotlin.time.Instant
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toLocalDateTime
-import n7.kcalai.model.FiberTotal
-import n7.kcalai.model.formatCentigrams
+import n7.kcalai.model.formatHour
 import n7.kcalai.model.MealType
 import n7.kcalai.model.title
 import n7.kcalai.personal.DayOutline
 
-private fun Int.twoDigits(): String = toString().padStart(2, '0')
-
-/**
- * Клетчатка целыми граммами — как числа плиток.
- *
- * Если у части продуктов клетчатка неизвестна, известное — нижняя граница: «≥8».
- * Неизвестна у всех — показывать нечего, и `null`: «0» было бы неправдой.
- */
-fun formatFiber(fiber: FiberTotal): String? {
-    val grams = fiber.cg / CENTIGRAMS_IN_GRAM
-    return when {
-        fiber.complete -> "$grams"
-        fiber.cg > 0 -> "≥$grams"
-        else -> null
-    }
-}
-
-private const val CENTIGRAMS_IN_GRAM = 100
-
-/** «13:00» — час без минут: точнее модель привычек всё равно не знает. */
-fun formatHour(hour: Int): String = "${hour.twoDigits()}:00"
-
-/** «14:10» — время записи в местной зоне: `createdAt` хранится в UTC-миллисекундах. */
-fun formatTime(millis: Long, zone: TimeZone): String =
-    Instant.fromEpochMilliseconds(millis).toLocalDateTime(zone).let {
-        "${it.hour.twoDigits()}:${it.minute.twoDigits()}"
-    }
 
 /** «82,4 кг» — вес тела. Десятые обязательны: без них взвешивание бессмысленно. */
 fun formatKg(weightGrams: Int): String {

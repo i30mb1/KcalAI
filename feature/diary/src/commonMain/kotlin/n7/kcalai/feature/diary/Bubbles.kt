@@ -49,7 +49,9 @@ import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.formatCentigrams
+import n7.kcalai.model.formatFiber
 import n7.kcalai.model.formatGrams
+import n7.kcalai.model.formatHour
 import n7.kcalai.model.genitive
 import n7.kcalai.model.title
 import n7.kcalai.personal.DayOutline

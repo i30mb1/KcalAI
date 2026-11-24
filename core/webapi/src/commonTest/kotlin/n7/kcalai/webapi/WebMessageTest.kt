@@ -19,12 +19,16 @@ class WebMessageTest {
     private val day = WebDay(
         owner = "Женя",
         entries = listOf(
-            WebEntry(id = 7, name = "Гречка отварная", grams = 200, meal = MealType.LUNCH, kcal = 220, protCg = 840, fatCg = 220, carbCg = 4_260),
-            WebEntry(id = 9, name = "Кефир 1%", grams = 250, meal = MealType.SNACK, kcal = 100, protCg = 750, fatCg = 250, carbCg = 1_000),
+            WebEntry(
+                id = 7, name = "Гречка отварная", grams = 200, meal = MealType.LUNCH, kcal = 220, protCg = 840, fatCg = 220, carbCg = 4_260,
+                fiberCg = 560, time = "13:05",
+            ),
+            WebEntry(id = 9, name = "Кефир 1%", grams = 250, meal = MealType.SNACK, kcal = 100, protCg = 750, fatCg = 250, carbCg = 1_000, time = "16:40"),
         ),
         goalKcal = 2_100,
         peers = listOf(WebPeer(name = "Аня", url = "http://192.168.1.7:47800/")),
         goalMacros = WebMacros(prot = 120, fat = 70, carb = 230),
+        fiberGoal = 28,
         date = 20_781,
         today = 20_782,
         week = listOf(WebDaySummary(date = 20_781, kcal = 320, goalKcal = 2_100), WebDaySummary(date = 20_782, kcal = 0, goalKcal = null)),

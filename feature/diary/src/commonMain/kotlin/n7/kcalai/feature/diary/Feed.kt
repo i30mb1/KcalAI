@@ -6,24 +6,25 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
+import n7.kcalai.database.Choice
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.fiber
 import n7.kcalai.database.totals
+import n7.kcalai.mascot.MascotQuestion
 import n7.kcalai.model.FiberTotal
+import n7.kcalai.model.FoodCandidate
+import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
+import n7.kcalai.model.formatTime
 import n7.kcalai.model.plus
-import n7.kcalai.personal.DayPlan
-import n7.kcalai.personal.DayOutline
 import n7.kcalai.personal.CLUSTER_GAP_MS
+import n7.kcalai.personal.DayOutline
+import n7.kcalai.personal.DayPlan
 import n7.kcalai.personal.MEAL_WINDOWS
 import n7.kcalai.personal.MealGap
 import n7.kcalai.personal.mealForHour
 import n7.kcalai.repositories.DaySummary
-import n7.kcalai.model.Mascot
-import n7.kcalai.model.FoodCandidate
-import n7.kcalai.database.Choice
-import n7.kcalai.mascot.MascotQuestion
 
 /**
  * Готовая лента дня.

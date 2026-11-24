@@ -9,6 +9,8 @@ import n7.kcalai.model.KCAL_PER_FAT
 import n7.kcalai.model.KCAL_PER_PROT
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.Sex
+import n7.kcalai.model.formatFiber
+import n7.kcalai.model.suggestedFiber
 import n7.kcalai.ui.Macro
 
 /*
@@ -98,15 +100,6 @@ fun bodyOrNull(
 }
 
 /**
- * Клетчатка по калориям цели: 14 г на каждую 1000 ккал, но не меньше 25 г.
- *
- * Нижняя граница — норма ВОЗ и EFSA для взрослых. Она же и без цели калорий:
- * клетчатка нужна и тому, кто худеет, — ему, при меньших калориях, особенно.
- */
-fun suggestedFiber(kcal: Int?): Int =
-    maxOf(FIBER_MIN_G, ((kcal ?: 0) * FIBER_PER_1000_KCAL / 1000.0).roundToInt())
-
-/**
  * Что встаёт в поля шита цели.
  *
  * Граммы сохранённой цели — как есть. Цель из одних калорий, заведённая до того,
@@ -180,11 +173,9 @@ fun fiberSpeech(fiber: FiberTotal, goalGrams: Int): String {
 private fun roundToTen(kcal: Double): Int = (kcal / 10).roundToInt() * 10
 
 private const val MIN_KCAL = 1200
-private const val FIBER_MIN_G = 25
 private const val KCAL_SPLIT_PROT = 0.2
 private const val KCAL_SPLIT_FAT = 0.3
 private const val KCAL_SPLIT_CARB = 0.5
-private const val FIBER_PER_1000_KCAL = 14
 private const val PROT_KEEP = 1.6
 private const val PROT_CHANGE = 1.8
 private const val FAT_SHARE = 0.3

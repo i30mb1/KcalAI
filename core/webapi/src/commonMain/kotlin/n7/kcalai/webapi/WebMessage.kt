@@ -13,6 +13,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.GoalMacros
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
@@ -123,6 +124,7 @@ data class WebDaySummary(val date: Long, val kcal: Int, val goalKcal: Int?)
  * @param today какой день сегодня по часам телефона: страница своим часам не верит
  * @param week неделя открытого дня, с понедельника по воскресенье
  * @param browsers пущенные браузеры — для настроек; вместе с днём, чтобы не ждать отдельного слова
+ * @param fiberGoal клетчатка на день, граммы: своя цель или по калориям цели, как в приложении
  */
 data class WebDay(
     val owner: String,
@@ -134,10 +136,13 @@ data class WebDay(
     val today: Long = 0,
     val week: List<WebDaySummary> = emptyList(),
     val browsers: List<WebBrowser> = emptyList(),
+    val fiberGoal: Int? = null,
 ) {
     val kcal: Int get() = entries.sumOf { it.kcal }
 
     fun totals(): NutrimentTotals = entries.totals()
+
+    fun fiber(): FiberTotal = entries.fiber()
 }
 
 /** Цель дня в граммах. */
@@ -145,7 +150,12 @@ data class WebMacros(val prot: Int, val fat: Int, val carb: Int) {
     val kcal: Int get() = GoalMacros(prot, fat, carb).kcal
 }
 
-/** Запись дневника: числа уже посчитаны телефоном на её вес. Белки, жиры и углеводы — в сотых грамма. */
+/**
+ * Запись дневника: числа уже посчитаны телефоном на её вес. Белки, жиры и углеводы — в сотых грамма.
+ *
+ * @param fiberCg клетчатка в сотых грамма; `null` — у продукта она неизвестна, и это не ноль
+ * @param time когда записано, по часам телефона: «13:05»
+ */
 data class WebEntry(
     val id: Long,
     val name: String,
@@ -155,6 +165,8 @@ data class WebEntry(
     val protCg: Int,
     val fatCg: Int,
     val carbCg: Int,
+    val fiberCg: Int? = null,
+    val time: String = "",
 ) {
     val totals: NutrimentTotals get() = NutrimentTotals(kcal, protCg, fatCg, carbCg)
 
@@ -169,6 +181,9 @@ fun List<WebEntry>.totals(): NutrimentTotals = NutrimentTotals(
     fatCg = sumOf { it.fatCg },
     carbCg = sumOf { it.carbCg },
 )
+
+/** Клетчатка записей: известная — суммой, неизвестная — пробелом, как в шапке приложения. */
+fun List<WebEntry>.fiber(): FiberTotal = FiberTotal(cg = sumOf { it.fiberCg ?: 0 }, unknown = count { it.fiberCg == null })
 
 /** @param mascot хозяин макроса продукта — цвет точки на подсказке */
 data class WebSuggestion(val name: String, val grams: Int, val kcal: Int, val mascot: Mascot)
@@ -248,6 +263,7 @@ fun encode(message: ToPage): String = envelope(
             put("today", day.today)
             put("week", buildJsonArray { day.week.forEach { add(it.toJson()) } })
             put("browsers", buildJsonArray { day.browsers.forEach { add(it.toJson()) } })
+            day.fiberGoal?.let { put("fiberGoal", it) }
         }
         is ToPage.Suggestions -> {
             put("query", message.query)
@@ -271,6 +287,8 @@ private fun WebEntry.toJson() = buildJsonObject {
     put("prot", protCg)
     put("fat", fatCg)
     put("carb", carbCg)
+    fiberCg?.let { put("fiber", it) }
+    put("time", time)
 }
 
 private fun WebDaySummary.toJson() = buildJsonObject {
@@ -344,6 +362,7 @@ fun parseToPage(text: String): ToPage? {
                 today = json.long("today") ?: return null,
                 week = json.list("week") { it.toSummary() } ?: return null,
                 browsers = json.list("browsers") { it.toBrowser() } ?: return null,
+                fiberGoal = json.long("fiberGoal")?.toInt(),
             )
         )
         "suggestions" -> ToPage.Suggestions(
@@ -376,6 +395,8 @@ private fun JsonObject.toEntry(): WebEntry? = WebEntry(
     protCg = long("prot")?.toInt() ?: return null,
     fatCg = long("fat")?.toInt() ?: return null,
     carbCg = long("carb")?.toInt() ?: return null,
+    fiberCg = long("fiber")?.toInt(),
+    time = text("time") ?: return null,
 )
 
 private fun JsonObject.toSummary(): WebDaySummary? = WebDaySummary(

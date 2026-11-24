@@ -38,6 +38,7 @@ import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.model.formatDateCaps
+import n7.kcalai.model.formatFiber
 import n7.kcalai.repositories.DaySummary
 import n7.kcalai.ui.CapsLabel
 import n7.kcalai.ui.KcalShapes

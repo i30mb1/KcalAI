@@ -18,4 +18,12 @@ class WeightsTest {
         assertEquals("1 кг", formatGrams(1000))
         assertEquals("1,2 кг", formatGrams(1250))
     }
+
+    @Test
+    fun `клетчатка целыми граммами неполная — «не меньше» неизвестная — нигде`() {
+        assertEquals("8", formatFiber(FiberTotal(cg = 810, unknown = 0)))
+        assertEquals("≥8", formatFiber(FiberTotal(cg = 810, unknown = 1)))
+        assertEquals("0", formatFiber(FiberTotal(cg = 0, unknown = 0)))
+        assertEquals(null, formatFiber(FiberTotal(cg = 0, unknown = 2)))
+    }
 }

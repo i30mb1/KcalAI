@@ -1,5 +1,6 @@
 package n7.kcalai.webapi
 
+import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import kotlin.test.Test
@@ -134,6 +135,15 @@ class PageStateTest {
         assertTrue(day.arrivals(since = null).isEmpty(), "первый показ — не новость")
         assertTrue(day.arrivals(since = day).isEmpty())
         assertEquals(Mascot.GRAIN, buckwheat.owner, "у гречки больше всего углеводов")
+    }
+
+    /** Клетчатка, неизвестная у части продуктов, — нижняя граница, а не ноль: «Кл 0» было бы неправдой. */
+    @Test
+    fun `клетчатка дня — известная плюс пробел у неизвестной`() {
+        val withFiber = day.copy(entries = listOf(buckwheat.copy(fiberCg = 560), kefir))
+
+        assertEquals(FiberTotal(cg = 560, unknown = 1), withFiber.fiber())
+        assertEquals(FiberTotal(cg = 560, unknown = 0), listOf(buckwheat.copy(fiberCg = 560)).fiber())
     }
 
     @Test

@@ -45,7 +45,12 @@ import kotlin.uuid.Uuid
 const val WEB_WAITING_MAX = 3
 
 /** День для страницы: записи и цель того дня. */
-data class WebDayContent(val entries: List<WebEntry>, val goalKcal: Int?, val goalMacros: WebMacros? = null)
+data class WebDayContent(
+    val entries: List<WebEntry>,
+    val goalKcal: Int?,
+    val goalMacros: WebMacros? = null,
+    val fiberGoal: Int? = null,
+)
 
 /**
  * Дневник, каким его видит и правит страница.
@@ -194,6 +199,7 @@ class WebSession(
                     today = diary.today,
                     week = week,
                     browsers = admitted,
+                    fiberGoal = content.fiberGoal,
                 )
             }
                 .distinctUntilChanged()
