@@ -95,6 +95,7 @@ import n7.kcalai.webapi.offlineLine
  * Ширина колонки. Дневник — переписка, и строки в ней не тянутся на весь монитор,
  * но и не жмутся: шапке с четырьмя плитками и неделей нужен воздух.
  */
+/** Ширина колонки дневника; мир прогулки вырезан под неё же — см. index.html. */
 private val COLUMN_MAX = 760.dp
 
 /** Число калорий доезжает до нового — но быстро: это ответ на действие, а не заставка. */
@@ -145,6 +146,8 @@ fun DiaryPage(link: PhoneLink) {
     // Связь пропала — дневник остаётся как был, только приглушённый: видно, что он неживой.
     val offline = diary?.offline == true
     val blur by animateDpAsState(if (offline) OFFLINE_BLUR else 0.dp, tween(OFFLINE_MS, easing = EaseOutStrong))
+    // Прогулка: по бокам от колонки дневника оживает бумажный мир, по нему идёт Зёрнышко (см. Walk.kt).
+    rememberWalking()
 
     Box(Modifier.fillMaxSize().background(colors.bg), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = COLUMN_MAX).fillMaxSize().blur(blur)) {

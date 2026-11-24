@@ -307,6 +307,7 @@ export function createControls({ domElement, camera, traveller }) {
   let ctrlAlone = false;
   const applySpeed = () => { state.speedMul = running ? (CONFIG.player.runMul ?? 1.8) : strolling ? (CONFIG.player.slowMul ?? 0.6) : 1; };
   const onModDown = (e) => {
+    if (window.KcalEmbedded) return; // KcalAI: в странице дневника клавиатура — для поля ввода
     if (e.key === 'Shift') { running = true; applySpeed(); }
     if (e.key === 'Control') { if (!e.repeat) ctrlAlone = true; } else ctrlAlone = false;
   };
@@ -317,6 +318,7 @@ export function createControls({ domElement, camera, traveller }) {
   window.addEventListener('keydown', onModDown);
   window.addEventListener('keyup', onModUp);
   const onKeyDown = (e) => {
+    if (window.KcalEmbedded) return;
     if (!KEYS[e.code] || e.metaKey || e.ctrlKey || e.altKey) return;
     e.preventDefault();
     firstInput();

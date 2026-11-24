@@ -343,7 +343,7 @@ export function createLife({ scene, assets, wfc, daynight, camera, quality = 'hi
   const fCyc = new Float64Array(NF).fill(-1e9); const fCx = new Float32Array(NF); const fCz = new Float32Array(NF);
   let birdSprites = null; // [u0, v0, w, h, aspect] per sprite when the art atlas has sky_bits_* birds
   if (artTex) {
-    fetch('./public/textures/art/atlas.json').then((r) => (r.ok ? r.json() : null)).then((j) => {
+    fetch(new URL('../../public/textures/art/', import.meta.url).href + 'atlas.json').then((r) => (r.ok ? r.json() : null)).then((j) => {
       if (!j || !j.sprites || !j.size) return;
       const want = L.birds.spriteNames || [];
       const list = [];

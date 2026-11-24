@@ -4,7 +4,25 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Kcal AI</title>
-    <style>html, body { margin: 0; height: 100%; overflow: hidden; }</style>
+    <style>
+        html, body { margin: 0; height: 100%; overflow: hidden; }
+        /* Мир прогулки — поверх страницы, но с вырезом под колонку дневника (COLUMN_MAX = 760px в DiaryPage.kt):
+           виден по бокам, где идёт герой; клики проходят сквозь него. Холст Compose не прозрачный — под него не спрятать. */
+        canvas#atlas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 2; opacity: 0; transition: opacity 1.2s ease; pointer-events: none;
+            clip-path: polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, calc(50% - 380px) 0, calc(50% - 380px) 100%, calc(50% + 380px) 100%, calc(50% + 380px) 0, calc(50% - 380px) 0); }
+        body.walking canvas#atlas { opacity: 1; }
+    </style>
+    <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/" } }</script>
+    <script>
+        // Мир прогулки (walk/, papertrails + Зёрнышко) весит ~12 МБ: грузим его, только когда пошли.
+        window.KcalWalkStart = function () {
+            if (window.KcalEmbedded) return;
+            window.KcalEmbedded = true;   // горячие клавиши papertrails молчат: поле ввода — для еды
+            var atlas = document.createElement('canvas'); atlas.id = 'atlas'; atlas.tabIndex = -1; document.body.prepend(atlas);
+            var hint = document.createElement('div'); hint.id = 'hint'; hint.hidden = true; document.body.appendChild(hint);
+            import('./walk/kcal/autopilot.js').then(function () { return import('./walk/kcal/hero.js'); }).then(function () { return import('./walk/src/main.js'); });
+        };
+    </script>
     <script src="web.js"></script>
 </head>
 <body></body>

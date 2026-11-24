@@ -127,10 +127,10 @@ export function createAnimals({ scene, renderer, world, traveller, daynight, ass
 
   const ready = (async () => {
     try {
-      const res = await fetch('./public/textures/art/animals.json');
+      const res = await fetch(new URL('../../public/textures/art/', import.meta.url).href + 'animals.json');
       if (!res.ok) return false;
       const json = await res.json();
-      const t = await new THREE.TextureLoader().loadAsync('./public/textures/art/' + (json.image || 'animals.png'));
+      const t = await new THREE.TextureLoader().loadAsync(new URL('../../public/textures/art/', import.meta.url).href + '' + (json.image || 'animals.png'));
       if (disposed) { t.dispose(); return false; }
       t.colorSpace = THREE.SRGBColorSpace;
       t.magFilter = THREE.LinearFilter;

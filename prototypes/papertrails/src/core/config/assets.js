@@ -1,12 +1,12 @@
 // Runtime asset paths and options. Files live under public/ (served at ./).
 export const assets = {
-  tilesUrl: './public/models/tiles.glb',
-  travellerUrl: './public/models/traveller.glb',
+  tilesUrl: new URL('../../../public/models/tiles.glb', import.meta.url).href,
+  travellerUrl: new URL('../../../public/models/traveller.glb', import.meta.url).href,
   /** Per-tile numbers written by the Blender build (flaps, triangles, layers, bridge deck profile). Optional. */
-  metaUrl: './public/models/assets_meta.json',
+  metaUrl: new URL('../../../public/models/assets_meta.json', import.meta.url).href,
   /** Texture manifest (key -> { file, colorSpace, repeat, wrap }). Tolerated if absent. */
-  manifestUrl: './public/textures/manifest.json',
-  texturesBase: './public/textures/',
+  manifestUrl: new URL('../../../public/textures/manifest.json', import.meta.url).href,
+  texturesBase: new URL('../../../public/textures/', import.meta.url).href,
   /** Window panes / lantern glass: the one emissive material. */
   glowColor: '#ffc45a',
   glowIntensity: 3.0,

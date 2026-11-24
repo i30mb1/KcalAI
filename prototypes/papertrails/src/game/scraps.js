@@ -358,12 +358,12 @@ vec3 scrapBend( vec3 p ) {
   let disposed = false;
   (async () => {
     try {
-      const res = await fetch('./public/textures/art/game_icons.json');
+      const res = await fetch(new URL('../../public/textures/art/', import.meta.url).href + 'game_icons.json');
       if (!res.ok) return;
       const json = await res.json();
       const img = new Image();
       img.onload = () => { if (!disposed) atlas.useIcons(img, json); };
-      img.src = './public/textures/art/' + (json.image || json.file || 'game_icons.png');
+      img.src = new URL('../../public/textures/art/', import.meta.url).href + '' + (json.image || json.file || 'game_icons.png');
     } catch { /* no icon sheet: the drawn shapes stay */ }
   })();
 

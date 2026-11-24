@@ -680,6 +680,7 @@ export function createAtlasMap(ctx) {
   const PAN = { KeyW: [0, -1], ArrowUp: [0, -1], KeyS: [0, 1], ArrowDown: [0, 1], KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
   let drag = null;
   function onKeyDown(e) {
+    if (window.KcalEmbedded) return; // KcalAI: Tab и E — для страницы дневника
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.code === 'Tab' || e.code === 'KeyE') {
       e.preventDefault();

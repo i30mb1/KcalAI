@@ -64,7 +64,7 @@ async function boot() {
   follow.setAssistGate(game.modal);
   // N: day / night, M: music on / off (keys only - no on-screen UI)
   window.addEventListener('keydown', (e) => {
-    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || window.KcalEmbedded) return; // KcalAI: буквы — для поля ввода
     if (e.code === 'KeyN') daynight.toggle();
     else if (e.code === 'KeyV' && !game.modal()) views.next();
     else if (e.code === 'KeyM') music.toggle();
