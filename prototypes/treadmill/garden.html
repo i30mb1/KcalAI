@@ -43,8 +43,9 @@
   svg { display: block; }
 
   .app { max-width: 440px; margin: 0 auto; display: grid; gap: 16px; }
-  .tabs { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--chip); border-radius: 99px; padding: 4px; }
-  .tabs button { padding: 9px 0; border-radius: 99px; font-weight: 700; font-size: 13px; color: var(--text2); transition: background .2s, color .2s; min-width: 0; }
+  .tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; background: var(--chip); border-radius: 99px; padding: 4px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { flex: none; padding: 9px 14px; border-radius: 99px; font-weight: 700; font-size: 13px; color: var(--text2); transition: background .2s, color .2s; }
   .tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px var(--shadow); }
 
   #view { display: grid; gap: 14px; }
@@ -87,6 +88,25 @@
   .street span, .sky7 span { font: 600 11px/1 var(--font-data); color: var(--text3); }
   .street .today span, .sky7 .today span { color: var(--text); }
   .sky7 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding: 8px 4px 0; border-radius: 16px; background: linear-gradient(#DCEBF2, #F6F1E6); }
+  .bubble.center::after { left: 50%; }
+  .stage3d { position: relative; aspect-ratio: 4 / 3; border-radius: 22px; overflow: hidden; cursor: pointer; touch-action: manipulation; }
+  .stage3d canvas { display: block; width: 100%; height: 100%; }
+  .stage3d.space {
+    background:
+      radial-gradient(1.2px 1.2px at 12% 18%, #FFF7D6 99%, transparent), radial-gradient(1px 1px at 32% 70%, #FFF7D6 99%, transparent),
+      radial-gradient(1.4px 1.4px at 78% 12%, #FFF7D6 99%, transparent), radial-gradient(1px 1px at 88% 58%, #FFF7D6 99%, transparent),
+      radial-gradient(1px 1px at 55% 30%, #FFF7D6 99%, transparent), radial-gradient(1.3px 1.3px at 22% 88%, #FFF7D6 99%, transparent),
+      radial-gradient(1px 1px at 66% 84%, #FFF7D6 99%, transparent), radial-gradient(1.2px 1.2px at 6% 52%, #FFF7D6 99%, transparent),
+      radial-gradient(ellipse at 50% 40%, #33406A, #161C30 70%);
+  }
+  .stage3d.iso { background: linear-gradient(#E4EFE7, #FBF7EE); }
+  .moons { display: grid; grid-template-columns: repeat(7, 1fr); align-items: end; padding: 14px 4px 0; border-radius: 16px; background: #161C30; }
+  .moons .slot, .night7 .slot { display: grid; justify-items: center; gap: 8px; padding-bottom: 10px; }
+  .moons i { border-radius: 50%; display: block; box-shadow: inset -3px -3px 0 rgba(0,0,0,.18); }
+  .night7 { display: grid; grid-template-columns: repeat(7, 1fr); border-radius: 16px; background: linear-gradient(#10172A, #27324D); padding: 8px 4px 0; }
+  .night7 svg { width: 100%; height: auto; }
+  .moons span, .night7 span { font: 600 11px/1 var(--font-data); color: #B5AB96; }
+  .moons .today span, .night7 .today span { color: #FDFBF5; }
   .sim {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
     padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
@@ -107,6 +127,9 @@
     <button role="tab" data-v="jar">Банка</button>
     <button role="tab" data-v="house">Домик</button>
     <button role="tab" data-v="balloon">Шар</button>
+    <button role="tab" data-v="night">Звёзды</button>
+    <button role="tab" data-v="planet">Планета</button>
+    <button role="tab" data-v="cubes">Кубики</button>
   </nav>
   <section id="view"></section>
 </main>
@@ -244,14 +267,14 @@ class Grain {
 }
 
 // ================= общая сцена: небо, погода от скорости, дорожка =================
-function sceneSVG(extraDefs = '') {
+function sceneSVG(v = {}) {
   const cloudPart = (cx, cy, r) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#FDFBF5" stroke="#D9CFBC" stroke-width="1.5"/>`;
   return `<svg class="scene" viewBox="0 0 400 300">
-    <defs><linearGradient id="gsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E4EFE7"/><stop offset="1" stop-color="#FBF7EE"/></linearGradient>${extraDefs}</defs>
+    <defs><linearGradient id="gsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${v.night ? '#10172A' : '#E4EFE7'}"/><stop offset="1" stop-color="${v.night ? '#2A3552' : '#FBF7EE'}"/></linearGradient></defs>
     <rect width="400" height="300" fill="url(#gsky)"/>
     <g id="sun" class="fade" opacity="0" transform="translate(372 36)"><g id="rays" stroke="#F0C077" stroke-width="3" stroke-linecap="round">${Array.from({ length: 10 }, (_, k) => `<path d="M0,-25 L0,-33" transform="rotate(${k * 36})"/>`).join('')}</g><circle r="18" fill="#F0C077"/></g>
     <g id="rainbow" class="fade" opacity="0" fill="none" stroke-width="7">${['#C2456F', '#C8862B', '#F0C077', '#7FBF8C', '#7FB5C9'].map((c, k) => `<path d="M${200 + k * 7},272 A${100 - k * 7},${100 - k * 7} 0 0 1 ${400 - k * 7},272" stroke="${c}" opacity=".5"/>`).join('')}</g>
-    <rect y="270" width="400" height="30" fill="#E9DEC6"/>
+    <rect y="270" width="400" height="30" fill="${v.night ? '#1C2620' : '#E9DEC6'}"/>
     <g id="back"></g>
     <g id="grow"></g>
     <g id="fx"></g>
@@ -274,8 +297,8 @@ const Weather = {
   render() {
     const tier = tierOf(state.speed);
     $('#cloud').setAttribute('opacity', cur.rain && tier > 0 ? 1 : 0);
-    $('#sun').setAttribute('opacity', tier >= 3 ? 1 : 0);
-    $('#rainbow').setAttribute('opacity', tier >= 4 ? 1 : 0);
+    $('#sun').setAttribute('opacity', !cur.night && tier >= 3 ? 1 : 0);
+    $('#rainbow').setAttribute('opacity', !cur.night && tier >= 4 ? 1 : 0);
     setText($('#lcd'), state.speed.toFixed(1));
   },
   frame(dt, area = [255, 345]) {
@@ -576,34 +599,439 @@ const VARIANTS = {
   },
 };
 
+// ================= необычные: созвездие, планета, кубики =================
+
+// --- 6. Созвездие: взгляд вверх, шаги зажигают звёзды ---
+const SKY_STARS = (() => { const r = rng(404); return Array.from({ length: 70 }, () => ({ x: r() * 400, y: r() * 245, r: 0.4 + r() * 1.1, ph: r() * 6.28 })); })();
+function shapePoints(d, n, closed = true) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg'), p = document.createElementNS(NS, 'path');
+  svg.setAttribute('style', 'position:absolute;width:0;height:0');
+  p.setAttribute('d', d); svg.appendChild(p); document.body.appendChild(svg);
+  const L = p.getTotalLength();
+  const pts = Array.from({ length: n }, (_, i) => { const q = p.getPointAtLength(L * i / (closed ? n : n - 1)); return { x: q.x, y: q.y }; });
+  svg.remove();
+  return pts;
+}
+const ring = (from, n) => Array.from({ length: n }, (_, i) => [from + i, from + ((i + 1) % n)]);
+const chain = (from, n) => Array.from({ length: n - 1 }, (_, i) => [from + i, from + i + 1]);
+let SHAPES = null;
+function shapes() {
+  if (SHAPES) return SHAPES;
+  // Зёрнышко: сначала хохолок (по нему узнаётся), потом контур тела.
+  const body = shapePoints(BODY, 18);
+  const grain = { pts: [{ x: 60, y: 20 }, { x: 53, y: 6 }, { x: 60, y: 2 }, { x: 67, y: 6 }, ...body.slice(1)] };
+  grain.edges = [[0, 1], [0, 2], [0, 3], [0, 4], ...chain(4, 17), [20, 0]];
+  const egg = { pts: shapePoints('M60,4 C78,4 89,38 89,62 C89,83 76,96 60,96 C44,96 31,83 31,62 C31,38 42,4 60,4 Z', 12) };
+  egg.edges = ring(0, 12);
+  const front = shapePoints('M22,48 C22,42 26,38 32,38 H88 C94,38 98,42 98,48 V84 C98,88 95,91 91,91 H29 C25,91 22,88 22,84 Z', 10);
+  const curl = shapePoints('M44,40 C40,28 50,18 60,20 C70,22 72,32 65,35 C60,37 57,32 61,29', 5, false);
+  const butter = { pts: [...front, ...curl], edges: [...ring(0, 10), ...chain(10, 5)] };
+  SHAPES = { grain, egg, butter };
+  return SHAPES;
+}
+function stars(shape, lit, ox, oy, s, opts = {}) {
+  const P = (p) => ({ x: ox + (p.x - 60) * s, y: oy + p.y * s });
+  const pts = shape.pts.map(P);
+  let out = '';
+  for (const [a, b] of shape.edges) if (a < lit && b < lit) out += `<path d="M${f1(pts[a].x)},${f1(pts[a].y)} L${f1(pts[b].x)},${f1(pts[b].y)}" stroke="#FFF7D6" stroke-opacity="${opts.mini ? 0.5 : 0.42}" stroke-width="${opts.mini ? 0.8 : 1.1}"/>`;
+  const core = opts.mini ? 1.3 : 1.4 + 0.5 * s, glow = 4 * s;
+  pts.forEach((p, i) => {
+    if (i >= lit) { out += `<circle cx="${f1(p.x)}" cy="${f1(p.y)}" r="${f1(core * 0.6)}" fill="#FFF7D6" opacity="${opts.mini ? 0.2 : 0.13}"/>`; return; }
+    const g = opts.mini ? '' : `<circle r="${f1(glow)}" fill="#FFF7D6" opacity=".16"/>`;
+    out += `<g transform="translate(${f1(p.x)} ${f1(p.y)})"><g${opts.newest === i ? ' class="pop"' : ''}>${g}<circle r="${f1(core)}" fill="#FFF7D6"/></g></g>`;
+  });
+  if (opts.full) {
+    for (const ex of [48, 72]) { const e = P({ x: ex, y: 62 }); out += `<g transform="translate(${f1(e.x)} ${f1(e.y)})">${opts.mini ? '' : `<circle r="${f1(glow * 1.3)}" fill="#F0C077" opacity=".22"/>`}<circle r="${f1(core * 1.15)}" fill="#F0C077"/></g>`; }
+    const a = P({ x: 54, y: 75 }), c1 = P({ x: 57, y: 79 }), c2 = P({ x: 63, y: 79 }), b = P({ x: 66, y: 75 });
+    out += `<path d="M${f1(a.x)},${f1(a.y)} C${f1(c1.x)},${f1(c1.y)} ${f1(c2.x)},${f1(c2.y)} ${f1(b.x)},${f1(b.y)}" stroke="#F0C077" stroke-width="${opts.mini ? 0.8 : 1.4}" fill="none" opacity=".7"/>`;
+  }
+  return out;
+}
+const starsLit = (steps) => (steps <= 0 ? 0 : Math.max(1, Math.floor(growth(steps) * shapes().grain.pts.length + 1e-9)));
+const nightExtras = (steps) => Math.min(Math.floor(Math.max(0, steps - GOAL) / 2000), 3);
+function nightSky(steps, t = 0, fresh = {}) {
+  let out = '';
+  for (const s of SKY_STARS) {
+    const o = state.speed > 0 ? 0.3 + 0.5 * (0.5 + 0.5 * Math.sin(t * (1.5 + state.speed * 0.5) + s.ph)) : 0.6;
+    out += `<circle cx="${f1(s.x)}" cy="${f1(s.y)}" r="${f1(s.r)}" fill="#FFF7D6" opacity="${o.toFixed(2)}"/>`;
+  }
+  out += '<path d="M66,26 A17,17 0 1 0 66,60 A12,17 0 1 1 66,26 Z" fill="#FFF3C4"/>';
+  const e = nightExtras(steps), sh = shapes();
+  if (e > 0) out += `<g${fresh.extra === 0 ? ' class="pop"' : ''}>${stars(sh.egg, 99, 368, 54, 0.5)}</g>`;
+  if (e > 1) out += `<g${fresh.extra === 1 ? ' class="pop"' : ''}>${stars(sh.butter, 99, 206, 46, 0.5)}</g>`;
+  out += stars(sh.grain, starsLit(steps), 290, 30, 1.38, { full: steps >= GOAL, newest: fresh.star });
+  out += '<path d="M0,262 C70,246 150,252 210,258 C280,264 340,248 400,254 L400,270 L0,270 Z" fill="#1C2620"/>';
+  return out;
+}
+
+// --- общая 3D-сцена ---
+let threeReady = null;
+function loadThree() {
+  if (window.THREE) return Promise.resolve();
+  return (threeReady ??= new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  }));
+}
+const easeBack = (k) => 1 + 2.70158 * (k - 1) ** 3 + 1.70158 * (k - 1) ** 2;
+const easeOut = (k) => 1 - (1 - k) ** 3;
+function easeBounce(k) {
+  if (k < 1 / 2.75) return 7.5625 * k * k;
+  if (k < 2 / 2.75) return 7.5625 * (k -= 1.5 / 2.75) * k + 0.75;
+  if (k < 2.5 / 2.75) return 7.5625 * (k -= 2.25 / 2.75) * k + 0.9375;
+  return 7.5625 * (k -= 2.625 / 2.75) * k + 0.984375;
+}
+class Stage3D {
+  constructor(el) {
+    this.el = el;
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    el.appendChild(this.renderer.domElement);
+    this.scene = new THREE.Scene();
+    this.anims = []; this.raf = 0;
+    this.ro = new ResizeObserver(() => this.resize());
+    this.ro.observe(el);
+  }
+  resize() {
+    const w = this.el.clientWidth, h = this.el.clientHeight;
+    if (!w || !h) return;
+    this.renderer.setSize(w, h, false);
+    this.onResize?.(w, h);
+    this.draw();
+  }
+  draw() { if (this.camera) this.renderer.render(this.scene, this.camera); }
+  // Короткие анимации (рост, падение кубика, смена ракурса) идут и без ходьбы — и сами кончаются.
+  tween(fn, ms) { this.anims.push({ fn, t0: performance.now(), ms }); this.kick(); }
+  kick() {
+    if (this.raf) return;
+    const step = (now) => {
+      this.anims = this.anims.filter((a) => { const k = clamp((now - a.t0) / a.ms, 0, 1); a.fn(k); return k < 1; });
+      this.draw();
+      this.raf = this.anims.length ? requestAnimationFrame(step) : 0;
+    };
+    this.raf = requestAnimationFrame(step);
+  }
+  dispose() { cancelAnimationFrame(this.raf); this.ro.disconnect(); this.renderer.dispose(); this.renderer.forceContextLoss?.(); this.el.innerHTML = ''; }
+}
+const lambert = (c, flat = true) => new THREE.MeshLambertMaterial({ color: c, flatShading: flat });
+
+// Объёмное Зёрнышко из тех же цветов: яйцевидное тело, хохолок, точки-глаза, ручки и ножки.
+function makeGrain3D() {
+  const root = new THREE.Group(), body = new THREE.Group();
+  root.add(body);
+  const geo = new THREE.SphereGeometry(1, 28, 20), pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i), k = y > 0 ? 1 - 0.28 * y : 1 + 0.04 * y;
+    pos.setX(i, pos.getX(i) * k * 0.78); pos.setZ(i, pos.getZ(i) * k * 0.7);
+  }
+  geo.computeVertexNormals();
+  body.add(new THREE.Mesh(geo, lambert(0x7FBF8C, false)));
+  const tuft = new THREE.Group(); tuft.position.y = 0.9; body.add(tuft);
+  for (const a of [-0.45, 0, 0.45]) {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.42, 8), lambert(0x4C8F5A));
+    c.position.set(Math.sin(a) * 0.2, 0.18, 0); c.rotation.z = -a; tuft.add(c);
+  }
+  const ink = lambert(0x2C2618, false);
+  for (const x of [-0.24, 0.24]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), ink); e.position.set(x, 0, 0.66); e.scale.z = 0.5; body.add(e); }
+  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.022, 6, 16, Math.PI), ink);
+  mouth.position.set(0, -0.2, 0.66); mouth.rotation.z = Math.PI; body.add(mouth);
+  const band = new THREE.Mesh(new THREE.TorusGeometry(1, 0.07, 8, 32), lambert(0xC2456F));
+  band.rotation.x = Math.PI / 2; band.position.y = 0.42; band.scale.set(0.64, 0.58, 1); band.visible = false; body.add(band);
+  const limb = (len) => {
+    const g = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, len, 8), lambert(0x6CAE7A)); m.position.y = -len / 2; g.add(m);
+    const end = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), lambert(0x4C8F5A)); end.position.y = -len; g.add(end);
+    return g;
+  };
+  const legL = limb(0.42), legR = limb(0.42), armL = limb(0.4), armR = limb(0.4);
+  legL.position.set(-0.24, -0.82, 0); legR.position.set(0.24, -0.82, 0); root.add(legL, legR);
+  armL.position.set(-0.7, -0.05, 0); armR.position.set(0.7, -0.05, 0); armL.rotation.z = -0.35; armR.rotation.z = 0.35; body.add(armL, armR);
+  root.userData = { body, tuft, band, legL, legR, armL, armR, phase: 0, lean: 0 };
+  return root; // ступни на y = −1.34
+}
+function stepGrain3D(g, dt, speed) {
+  const u = g.userData;
+  u.phase += Math.PI * ((speed / 3.6) / strideM(speed || 1)) * dt;
+  const a = speed > 0 ? Math.sin(u.phase) * Math.min(0.35 + speed * 0.06, 0.8) : 0;
+  u.legL.rotation.x = a; u.legR.rotation.x = -a; u.armL.rotation.x = -a * 0.7; u.armR.rotation.x = a * 0.7;
+  u.body.position.y = speed > 0 ? Math.abs(Math.cos(u.phase)) * 0.06 * (1 + speed * 0.1) : 0;
+  u.lean = speed > 0 ? u.lean + (speed * 0.035 - u.lean) * Math.min(1, dt * 4) : 0;
+  u.body.rotation.x = u.lean;
+  u.tuft.rotation.x = -Math.min(speed * 0.11, 0.9) + (speed > 0 ? Math.sin(u.phase * 2) * 0.05 : 0);
+  u.band.visible = tierOf(speed) >= 2;
+}
+
+// --- 7. Планета: Зёрнышко шагает по маленькой планете, она крутится под ногами ---
+const PLANET_R = 3;
+const PLANET_SLOTS = (() => {
+  const r = rng(909), out = [];
+  const types = ['round', 'flower', 'pine', 'flower', 'rock', 'round', 'pine', 'house', 'flower', 'pine', 'round', 'flower'];
+  for (let i = 0; out.length < 46 && i < 4000; i++) {
+    const u = r() * 2 - 1, th = r() * Math.PI * 2, s = Math.sqrt(1 - u * u);
+    const n = { x: s * Math.cos(th), y: u, z: s * Math.sin(th) };
+    if (Math.abs(n.x) < 0.2) continue; // дорожка — большой круг x = 0
+    if (out.some((o) => (o.n.x - n.x) ** 2 + (o.n.y - n.y) ** 2 + (o.n.z - n.z) ** 2 < 0.07)) continue;
+    out.push({ n, hue: r() });
+  }
+  out.sort((a, b) => b.n.x - a.n.x); // сначала на стороне камеры
+  out.forEach((o, i) => { o.type = types[i % types.length]; });
+  return out;
+})();
+const planetCount = (steps) => Math.min(PLANET_SLOTS.length, Math.round(growth(steps) * 34) + Math.floor(Math.max(0, steps - GOAL) / 700));
+function makeThing(type, hue) {
+  const g = new THREE.Group();
+  const trunk = () => { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.2, 6), lambert(0x8A6A45)); t.position.y = 0.1; return t; };
+  if (type === 'pine') { g.add(trunk()); for (let k = 0; k < 2; k++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.24 - k * 0.07, 0.36, 7), lambert(k ? 0x4C8F5A : 0x3E7A4B)); c.position.y = 0.32 + k * 0.2; g.add(c); } }
+  if (type === 'round') { g.add(trunk()); const c = new THREE.Mesh(new THREE.IcosahedronGeometry(0.24, 0), lambert(hue > 0.5 ? 0x7FBF8C : 0x6CAE7A)); c.position.y = 0.38; g.add(c); }
+  if (type === 'flower') {
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.22, 4), lambert(0x4C8F5A)); st.position.y = 0.11; g.add(st);
+    const h = new THREE.Mesh(new THREE.IcosahedronGeometry(0.075, 0), lambert([0xF09BB6, 0xF0C077, 0xFDFBF5][Math.floor(hue * 3)])); h.position.y = 0.24; g.add(h);
+  }
+  if (type === 'rock') { const c = new THREE.Mesh(new THREE.DodecahedronGeometry(0.12, 0), lambert(0xA9A49A)); c.position.y = 0.05; g.add(c); }
+  if (type === 'house') {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.26, 0.3), lambert(0xD9876A)); b.position.y = 0.13; g.add(b);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(0.29, 0.22, 4), lambert(0xC2456F)); roof.position.y = 0.37; roof.rotation.y = Math.PI / 4; g.add(roof);
+  }
+  return g;
+}
+const VIEW_NAMES = ['Сбоку!', 'Сверху!', 'Крупно!', 'Издалека — и луны недели!'];
+const Planet = {
+  custom: true, cls: 'space', walk: 'Кручу планету!', lines: ['', '', 'Планета разгоняется!', 'Луны закружились!', 'Бегом — хохолок сдувает!'],
+  idle: 'Планета пустая. Пройдёмся — оживёт!',
+  rest: (s) => (s >= GOAL ? 'Планета цветёт! Наш маленький мир.' : 'Планета оживает — каждый шаг что-то сажает.'),
+  marks: milestones([[100, 'Первый росток на планете!'], [2000, 'Уже рощица!'], [5000, 'Кто-то построил домик!'], [GOAL, 'Планета цветёт!']], { from: GOAL, step: 700, text: 'Новый житель!' }),
+  fresh: () => ({}),
+  async mount(el) {
+    await loadThree();
+    if (cur !== Planet || !el.isConnected) return;
+    const st = this.st = new Stage3D(el), sc = st.scene;
+    sc.add(new THREE.HemisphereLight(0xFFF4E0, 0x2B3656, 0.7));
+    const sun = new THREE.DirectionalLight(0xFFE6BA, 0.85); sun.position.set(6, 9, -4); sc.add(sun);
+    st.camera = new THREE.PerspectiveCamera(32, 4 / 3, 0.1, 100);
+    st.onResize = (w, h) => { st.camera.aspect = w / h; st.camera.updateProjectionMatrix(); };
+    this.planet = new THREE.Group(); sc.add(this.planet);
+    this.planet.add(new THREE.Mesh(new THREE.IcosahedronGeometry(PLANET_R, 2), lambert(0x86B472)));
+    const track = new THREE.Mesh(new THREE.TorusGeometry(PLANET_R + 0.02, 0.16, 6, 72), lambert(0xE9DEC6));
+    track.rotation.y = Math.PI / 2; this.planet.add(track);
+    for (let k = 0; k < 28; k++) {
+      const a = (k / 28) * Math.PI * 2, d = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.22), lambert(0xC9B79A));
+      d.position.set(0, Math.cos(a) * (PLANET_R + 0.17), Math.sin(a) * (PLANET_R + 0.17)); d.rotation.x = a; this.planet.add(d);
+    }
+    this.things = [];
+    this.grain = makeGrain3D(); this.grain.scale.setScalar(0.5);
+    this.grain.position.set(0, PLANET_R + 0.19 + 1.34 * 0.5, 0); this.grain.rotation.y = Math.PI; sc.add(this.grain);
+    this.moons = Array.from({ length: 7 }, () => { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), lambert(0xE9DEC6)); sc.add(m); return m; });
+    this.orbit = 0;
+    this.presets = [{ p: [9.5, 7, -7.5], l: [0, 2, 0] }, { p: [0, 15, -2.5], l: [0, 0, 0] }, { p: [2.6, 4.5, -2.8], l: [0, 3.7, 0] }, { p: [0, 2.5, -17], l: [0, 0.6, 0] }];
+    this.view = 0;
+    this.cam = { p: new THREE.Vector3(...this.presets[0].p), l: new THREE.Vector3(...this.presets[0].l) };
+    this.applyCam();
+    el.addEventListener('click', () => this.nextView());
+    st.resize();
+    this.render();
+  },
+  applyCam() { this.st.camera.position.copy(this.cam.p); this.st.camera.lookAt(this.cam.l); },
+  nextView() {
+    if (!this.st) return;
+    const from = { p: this.cam.p.clone(), l: this.cam.l.clone() };
+    this.view = (this.view + 1) % this.presets.length;
+    const tp = new THREE.Vector3(...this.presets[this.view].p), tl = new THREE.Vector3(...this.presets[this.view].l);
+    this.st.tween((k) => { const e = easeOut(k); this.cam.p.lerpVectors(from.p, tp, e); this.cam.l.lerpVectors(from.l, tl, e); this.applyCam(); }, 900);
+    news(VIEW_NAMES[this.view]); render();
+  },
+  sync() {
+    const n = planetCount(state.steps), up = new THREE.Vector3(0, 1, 0);
+    while (this.things.length < n) {
+      const s = PLANET_SLOTS[this.things.length], o = makeThing(s.type, s.hue), nv = new THREE.Vector3(s.n.x, s.n.y, s.n.z);
+      o.position.copy(nv).multiplyScalar(PLANET_R * 0.985); o.quaternion.setFromUnitVectors(up, nv); o.scale.setScalar(0.001);
+      this.planet.add(o); this.things.push(o);
+      const size = 0.9 + s.hue * 0.4;
+      this.st.tween((k) => o.scale.setScalar(Math.max(0.001, easeBack(k) * size)), 650);
+    }
+    while (this.things.length > n) this.planet.remove(this.things.pop());
+    week().forEach((d, i) => {
+      const m = this.moons[i];
+      m.scale.setScalar(d.steps > 0 ? 0.14 + 0.3 * growth(d.steps) : 0.09);
+      m.material.color.set(d.steps >= GOAL ? 0xF0C077 : d.today ? 0x9FD3AA : 0xE9DEC6);
+    });
+    this.placeMoons();
+  },
+  placeMoons() { this.moons.forEach((m, i) => { const a = this.orbit + (i * Math.PI * 2) / 7; m.position.set(Math.cos(a) * 5.6, 1 + Math.sin(a) * 1.5, Math.sin(a) * 5.6); }); },
+  render() { if (!this.st) return; this.sync(); this.st.draw(); },
+  frame(dt) {
+    if (!this.st) return;
+    this.planet.rotation.x += (state.speed / 3.6) * 0.32 * dt;
+    this.orbit += dt * (0.05 + state.speed * 0.02);
+    this.placeMoons();
+    stepGrain3D(this.grain, dt, state.speed);
+    this.st.draw();
+  },
+  still() { if (!this.st) return; stepGrain3D(this.grain, 0, 0); this.st.draw(); },
+  unmount() { this.st?.dispose(); this.st = null; },
+  below: (days) => `<div class="moons">${days.map((d) => {
+    const size = d.steps > 0 ? 12 + 24 * growth(d.steps) : 8, c = d.steps >= GOAL ? '#F0C077' : d.today ? '#9FD3AA' : '#E9DEC6';
+    return `<div class="slot${d.today ? ' today' : ''}"><i style="width:${f1(size)}px;height:${f1(size)}px;background:${c}"></i><span>${d.today ? '•' : d.label}</span></div>`;
+  }).join('')}</div>`,
+};
+
+// --- 8. Кубики: неделя — изометрический остров, у дня своя башенка ---
+const CUBE_COLORS = [0xD8C6A7, 0xC9A86A, 0xB5D3A7, 0x7FBF8C, 0x6CAE7A, 0x4C8F5A, 0x3E7A4B, 0x7FB5C9, 0x5B86C4];
+const cubeCount = (steps) => (steps > 0 ? Math.max(1, Math.round(growth(steps) * 9)) : 0) + Math.min(Math.floor(Math.max(0, steps - GOAL) / 2000), 3);
+function textSprite(text, color, weight = 600) {
+  const c = document.createElement('canvas'); c.width = 160; c.height = 64;
+  const x = c.getContext('2d');
+  x.font = `${weight} 40px "JetBrains Mono", monospace`; x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(text, 80, 34);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true }));
+  s.scale.set(1.5, 0.6, 1);
+  return s;
+}
+const Cubes = {
+  custom: true, cls: 'iso', walk: 'Кладу кубики!', lines: ['', '', 'Хороший темп!', 'Кубики искрят!', 'Бегом — искры летят!'],
+  idle: 'Остров ждёт. Пройдёмся — построим башенку!',
+  rest: (s) => (s >= GOAL ? 'Башня с флажком! Хороший день.' : 'Кубик за кубиком — башенка растёт.'),
+  marks: milestones([[100, 'Первый кубик!'], [2900, 'Уже полбашни!'], [GOAL, 'Башня с флажком!']], { from: GOAL, step: 2000, text: 'Золотой кубик сверху!' }),
+  fresh: () => ({}),
+  async mount(el) {
+    await loadThree();
+    if (cur !== Cubes || !el.isConnected) return;
+    const st = this.st = new Stage3D(el), sc = st.scene;
+    sc.add(new THREE.HemisphereLight(0xFFFFFF, 0x8A7A60, 0.65));
+    const sun = new THREE.DirectionalLight(0xFFF1D6, 0.7); sun.position.set(4, 10, 6); sc.add(sun);
+    st.camera = new THREE.OrthographicCamera(-5, 5, 4, -4, 0.1, 100);
+    st.onResize = (w, h) => { const half = 5.4, a = w / h; Object.assign(st.camera, { left: -half, right: half, top: half / a, bottom: -half / a }); st.camera.updateProjectionMatrix(); };
+    const soil = lambert(0xB08452), grass = lambert(0xA8C48E);
+    const island = new THREE.Mesh(new THREE.BoxGeometry(7.8, 0.7, 2.8), [soil, soil, grass, soil, soil, soil]); island.position.set(0, -0.35, 0.2); sc.add(island);
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.7, 1.1), [soil, soil, grass, soil, soil, soil]); pad.position.set(4.75, -0.35, 0.6); sc.add(pad);
+    this.geo = new THREE.BoxGeometry(0.78, 0.5, 0.78);
+    this.edges = new THREE.EdgesGeometry(this.geo);
+    this.edgeMat = new THREE.LineBasicMaterial({ color: 0x2C2618, transparent: true, opacity: 0.18 });
+    this.mats = new Map();
+    this.cols = Array.from({ length: 7 }, () => []);
+    this.flags = Array(7).fill(null);
+    this.labels = week().map((d, i) => { const s = textSprite(d.today ? '•' : d.label, d.today ? '#2C2618' : '#8D8370', d.today ? 800 : 600); s.position.set(-3 + i, 0.3, 2.05); sc.add(s); return s; });
+    this.grain = makeGrain3D(); this.grain.scale.setScalar(0.6); this.grain.position.set(4.75, 1.34 * 0.6, 0.6); this.grain.rotation.y = -0.5; sc.add(this.grain);
+    this.sparks = [];
+    this.yaw = Math.PI / 4; this.placeCam();
+    this.first = true;
+    el.addEventListener('click', () => {
+      const from = this.yaw, to = from + Math.PI / 2;
+      this.st.tween((k) => { this.yaw = from + (to - from) * easeOut(k); this.placeCam(); }, 700);
+    });
+    st.resize();
+    this.render();
+  },
+  placeCam() { this.st.camera.position.set(Math.cos(this.yaw) * 14, 10, Math.sin(this.yaw) * 14); this.st.camera.lookAt(0.4, 1.3, 0); },
+  mat(c) { if (!this.mats.has(c)) this.mats.set(c, lambert(c)); return this.mats.get(c); },
+  sync() {
+    week().forEach((d, i) => {
+      const col = this.cols[i], n = cubeCount(d.steps), x = -3 + i;
+      while (col.length < n) {
+        const k = col.length, base = cubeCount(Math.min(d.steps, GOAL));
+        const m = new THREE.Mesh(this.geo, this.mat(k >= base ? 0xF0C077 : CUBE_COLORS[Math.min(k, 8)]));
+        m.add(new THREE.LineSegments(this.edges, this.edgeMat));
+        const y = 0.25 + k * 0.5;
+        m.position.set(x, y, 0.2); this.st.scene.add(m); col.push(m);
+        if (d.today && !this.first) { m.position.y = y + 4; this.st.tween((q) => { m.position.y = y + 4 * (1 - easeBounce(q)); }, 650); }
+      }
+      while (col.length > n) this.st.scene.remove(col.pop());
+      const want = d.steps >= GOAL;
+      if (want && !this.flags[i]) {
+        const f = new THREE.Group();
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.7, 6), lambert(0x2C2618)); pole.position.y = 0.35; f.add(pole);
+        const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.22, 0.02), lambert(0xC2456F)); cloth.position.set(0.2, 0.58, 0); f.add(cloth);
+        this.st.scene.add(f); this.flags[i] = f;
+      }
+      if (!want && this.flags[i]) { this.st.scene.remove(this.flags[i]); this.flags[i] = null; }
+      if (this.flags[i]) this.flags[i].position.set(x, n * 0.5, 0.2);
+    });
+    this.first = false;
+  },
+  render() { if (!this.st) return; this.sync(); this.st.draw(); },
+  frame(dt, t) {
+    if (!this.st) return;
+    stepGrain3D(this.grain, dt, state.speed);
+    const want = tierOf(state.speed) >= 3 ? 8 : tierOf(state.speed) >= 2 ? 3 : 0, top = cubeCount(state.steps) * 0.5;
+    while (this.sparks.length < want) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), this.mat(0xF0C077));
+      m.userData = { a: Math.random() * 6.28, y: Math.random() * 1.5 }; this.st.scene.add(m); this.sparks.push(m);
+    }
+    while (this.sparks.length > want) this.st.scene.remove(this.sparks.pop());
+    for (const s of this.sparks) {
+      const u = s.userData; u.y += dt * (0.6 + state.speed * 0.1); u.a += dt * 1.5;
+      if (u.y > 1.8) u.y = 0;
+      s.position.set(3 + Math.cos(u.a) * 0.7, top + u.y, 0.2 + Math.sin(u.a) * 0.7); s.rotation.y += dt * 3;
+    }
+    this.st.draw();
+  },
+  still() { if (!this.st) return; stepGrain3D(this.grain, 0, 0); while (this.sparks.length) this.st.scene.remove(this.sparks.pop()); this.st.draw(); },
+  unmount() { this.st?.dispose(); this.st = null; },
+  below: () => '',
+};
+
+const Night = {
+  night: true, walk: 'Зажигаю звёзды!', lines: ['', '', 'Звёзды ярче!', 'Звездопад начинается!', 'Бегом — метеоры!'],
+  idle: 'Ночь ясная. Пройдёмся — зажжём звёзды!',
+  rest: (s) => (s >= GOAL ? 'Созвездие Зёрнышка! Это мы.' : 'Звёздочки горят — красиво.'),
+  marks(prev, now) {
+    for (const [s, text] of [[100, 'Первая звезда!'], [1100, 'Хохолок зажёгся!'], [GOAL, 'Созвездие Зёрнышка!']]) if (prev < s && now >= s) return text;
+    return nightExtras(now) > nightExtras(prev) ? ['Созвездие Яйца!', 'Созвездие Масла!', 'Звездопад!'][nightExtras(now) - 1] : null;
+  },
+  fresh(prev, now) { return { star: starsLit(now) > starsLit(prev) ? starsLit(now) - 1 : -1, extra: nightExtras(now) > nightExtras(prev) ? nightExtras(now) - 1 : -1 }; },
+  draw(t, fresh) { return nightSky(state.steps, t, fresh); },
+  init() { this.meteors = []; },
+  fx(dt) {
+    if (state.speed <= 0) { this.meteors = []; $('#fx').innerHTML = ''; return; }
+    const rate = state.speed * 0.22 + nightExtras(state.steps) * 0.7;
+    if (Math.random() < rate * dt) this.meteors.push({ x: 150 + Math.random() * 250, y: 8 + Math.random() * 90, life: 1 });
+    for (const m of this.meteors) { m.x -= 240 * dt; m.y += 120 * dt; m.life -= dt * 1.4; }
+    this.meteors = this.meteors.filter((m) => m.life > 0);
+    $('#fx').innerHTML = this.meteors.map((m) => `<path d="M${f1(m.x)},${f1(m.y)} l28,-14" stroke="#FFF7D6" stroke-width="1.8" stroke-linecap="round" opacity="${f1(m.life)}"/>`).join('');
+  },
+  below: (days) => `<div class="night7">${days.map((d) => `<div class="slot${d.today ? ' today' : ''}"><svg viewBox="0 0 60 70">${stars(shapes().grain, starsLit(d.steps), 30, 6, 0.52, { mini: true, full: d.steps >= GOAL })}</svg><span>${d.today ? '•' : d.label}</span></div>`).join('')}</div>`,
+};
+Object.assign(VARIANTS, { night: Night, planet: Planet, cubes: Cubes });
+
 // ================= оркестр =================
+// Тем много, данные одни: шаги дня и скорость. Тема — только как их показать.
 let cur = null, curName = '', grain = null, lastSteps = state.steps, fresh = {}, freshUntil = 0, shelfKey = '';
 
 function show(name) {
   if (!VARIANTS[name]) name = 'flower';
+  cur?.unmount?.();
   curName = name; cur = VARIANTS[name];
-  document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.v === name));
+  document.querySelectorAll('.tabs button').forEach((b) => {
+    b.setAttribute('aria-selected', b.dataset.v === name);
+    if (b.dataset.v === name) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  });
   $('#view').innerHTML = `
     <div class="head"><div class="big" id="n">0</div><div class="sub"><b id="km">0,00 км</b><span id="min">0 мин</span></div></div>
-    <div class="bubble" id="say">…</div>
-    ${sceneSVG()}
+    <div class="bubble${cur.custom ? ' center' : ''}" id="say">…</div>
+    ${cur.custom ? `<div class="stage3d ${cur.cls}" id="stage" title="Тап — другой ракурс"></div>` : sceneSVG(cur)}
     <div class="week"><div id="below"></div><div class="week-total" id="weekTotal"></div></div>`;
-  cur.init?.();
   say.el = $('#say'); say.until = 0;
-  grain = new Grain($('#grain'));
-  Weather.reset();
   shelfKey = '';
+  if (cur.custom) { grain = null; cur.mount($('#stage')); }
+  else { cur.init?.(); grain = new Grain($('#grain')); Weather.reset(); }
   render(true);
-  grain.still(state.steps >= GOAL);
+  still();
   cur.back?.(0);
   loop();
+}
+
+function still() {
+  if (cur.custom) { cur.still(); return; }
+  Weather.reset(); cur.fx?.(0, 0); grain.still(state.steps >= GOAL);
 }
 
 function render(force = false) {
   const now = state.steps;
   if (now !== lastSteps) {
     const m = cur.marks(lastSteps, now);
-    if (m && now > lastSteps) { news(m); grain.jump(); }
+    if (m && now > lastSteps) { news(m); grain?.jump(); }
     const f = cur.fresh(lastSteps, now);
     if (Object.values(f).some((v) => v === true || v >= 0)) { fresh = f; freshUntil = performance.now() + 800; }
     lastSteps = now;
@@ -612,10 +1040,10 @@ function render(force = false) {
   setText($('#n'), fmt(now));
   setText($('#km'), `${km(state.distance)} км`);
   setText($('#min'), `${fmt(state.distance / 1000 / 3.6 * 60)} мин`);
-  Weather.render();
   const tier = tierOf(state.speed);
-  speak(now <= 0 && tier === 0 ? cur.idle : tier === 1 ? cur.walk : tier > 1 ? WALK_LINES[tier] : cur.rest(now));
-  $('#grow').innerHTML = cur.draw(Weather.t, fresh);
+  speak(now <= 0 && tier === 0 ? cur.idle : tier === 1 ? cur.walk : tier > 1 ? (cur.lines ?? WALK_LINES)[tier] : cur.rest(now));
+  if (cur.custom) cur.render();
+  else { Weather.render(); $('#grow').innerHTML = cur.draw(Weather.t, fresh); }
   const days = week();
   const key = curName + days.map((d) => Math.floor(d.steps / 250)).join();
   if (key !== shelfKey || force) {
@@ -628,18 +1056,21 @@ function render(force = false) {
 let raf = 0, lastT = 0, lastRender = 0;
 function loop() { if (!raf && state.speed > 0) { lastT = 0; raf = requestAnimationFrame(frame); } }
 function frame(t) {
-  if (state.speed <= 0) { raf = 0; Weather.reset(); cur.fx?.(0, t); render(); grain.still(state.steps >= GOAL); syncSim(); return; }
+  if (state.speed <= 0) { raf = 0; render(); still(); syncSim(); return; }
   const dt = lastT ? Math.min((t - lastT) / 1000, 0.1) : 0;
   lastT = t;
   const mps = state.speed / 3.6;
   state.steps = Math.min(14000, state.steps + (mps / strideM(state.speed)) * dt * SIM_X);
   state.distance += mps * dt * SIM_X;
   if (!reduced) {
-    Weather.frame(dt, cur.area);
-    grain.step(dt, t, state.speed, state.steps >= GOAL);
-    $('#grow').innerHTML = cur.draw(Weather.t, fresh);
-    cur.back?.(dt);
-    cur.fx?.(dt, t);
+    if (cur.custom) cur.frame(dt, t);
+    else {
+      Weather.frame(dt, cur.area);
+      grain.step(dt, t, state.speed, state.steps >= GOAL);
+      $('#grow').innerHTML = cur.draw(Weather.t, fresh);
+      cur.back?.(dt);
+      cur.fx?.(dt, t);
+    }
   }
   if (t - lastRender > (reduced ? 400 : 120)) { render(); syncSim(); lastRender = t; }
   if (state.steps >= 14000) setSpeed(0);
@@ -649,7 +1080,7 @@ function setSpeed(v) {
   if (v > 0) state.lastSpeed = v;
   state.speed = v;
   syncSim(); render();
-  if (v > 0) loop(); else { Weather.reset(); cur.fx?.(0, 0); grain.still(state.steps >= GOAL); }
+  if (v > 0) loop(); else still();
 }
 function syncSim() {
   $('#spd').value = state.speed;
