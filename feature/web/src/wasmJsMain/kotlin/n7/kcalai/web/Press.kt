@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -58,13 +59,14 @@ fun Modifier.press(shape: Shape, hover: Color, onClick: () -> Unit): Modifier {
  * Короткое: новое не должно заставлять себя ждать.
  */
 @Composable
-fun Modifier.enter(): Modifier {
+fun Modifier.enter(origin: TransformOrigin = TransformOrigin.Center): Modifier {
     val progress = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         launch { progress.animateTo(1f, tween(ENTER_MS, easing = EaseOutStrong)) }
     }
     return graphicsLayer {
         val p = progress.value
+        transformOrigin = origin
         alpha = p
         val scale = ENTER_FROM + (1f - ENTER_FROM) * p
         scaleX = scale

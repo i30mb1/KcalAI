@@ -60,6 +60,7 @@ import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.model.Nutriments
 import n7.kcalai.model.Sex
 import n7.kcalai.model.dayLabel
+import n7.kcalai.model.fiberSpeech
 import n7.kcalai.model.formatDayFull
 import n7.kcalai.model.formatTime
 import n7.kcalai.model.parseFoodRef

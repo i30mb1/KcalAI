@@ -121,7 +121,9 @@ fun Feed(diary: PageState.Diary, link: PhoneLink, modifier: Modifier) {
         verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.Bottom),
     ) {
         items(rows, key = { it.key }) { row ->
-            Box(Modifier.animateItem()) {
+            // Удалённое пропадает сразу, как в ленте приложения: затухающий пузырёк повисал
+            // призраком поверх новых строк, когда лента становилась короче экрана.
+            Box(Modifier.animateItem(fadeOutSpec = null)) {
                 when (row) {
                     is FeedRow.Separator -> CapsLabel(row.label, modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally))
                     is FeedRow.Meal -> MealBubble(
@@ -196,7 +198,7 @@ private fun MealBubble(
                                 },
                             )
                         } else {
-                            EntryChip(entry, onClick = { onEdit(entry.id) })
+                            EntryChip(entry, onClick = { onEdit(entry.id) }, onDelete = { onDelete(entry.id) })
                         }
                     }
                 }
@@ -217,16 +219,19 @@ private fun MealBubble(
     }
 }
 
-/** Продукт в пузырьке: точка хозяина макроса, название, вес. Тап — правка на месте. */
+/**
+ * Продукт в пузырьке: точка хозяина макроса, название, вес и крестик. Тап — правка граммов
+ * на месте, крестик — удалить сразу: записал не то — убрал одним нажатием.
+ */
 @Composable
-private fun EntryChip(entry: WebEntry, onClick: () -> Unit) {
+private fun EntryChip(entry: WebEntry, onClick: () -> Unit, onDelete: () -> Unit) {
     val colors = KcalTheme.colors
     Row(
         modifier = Modifier
             .enter()
             .press(RoundedCornerShape(KcalShapes.chip), colors.onBubble.copy(alpha = HOVER_ALPHA), onClick)
             .background(colors.chipOnBubble)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(start = 12.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         MacroDot(entry.owner.macro.colors().onBubble)
@@ -243,6 +248,15 @@ private fun EntryChip(entry: WebEntry, onClick: () -> Unit) {
             style = KcalTheme.type.time,
             color = colors.onBubble2,
             modifier = Modifier.padding(start = 6.dp),
+        )
+        Text(
+            "×",
+            style = KcalTheme.type.bubbleTitle,
+            color = colors.onBubble2,
+            modifier = Modifier
+                .padding(start = 4.dp)
+                .press(RoundedCornerShape(10.dp), colors.error.copy(alpha = 0.18f), onDelete)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
         )
     }
 }

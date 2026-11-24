@@ -1,12 +1,19 @@
 package n7.kcalai.web
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -38,10 +46,17 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import kotlinx.coroutines.delay
 import kotlinx.browser.document
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
@@ -68,6 +83,8 @@ import n7.kcalai.webapi.PageState
 import n7.kcalai.webapi.ToPhone
 import n7.kcalai.webapi.WebDay
 import n7.kcalai.webapi.WebMacros
+import n7.kcalai.webapi.WebTile
+import n7.kcalai.webapi.tileSpeech
 import n7.kcalai.webapi.arrivals
 import n7.kcalai.webapi.line
 import n7.kcalai.webapi.offlineLine
@@ -85,6 +102,14 @@ internal const val NUMBER_MS = 280
 internal const val HOVER_ALPHA = 0.08f
 
 internal const val CENTIGRAMS_PER_GRAM = 100
+
+/** Смена дня: лента сдвигается на шестую ширины — заметно, куда листаешь, но без карусели. */
+private const val DAY_SLIDE = 6
+private const val DAY_IN_MS = 260
+private const val DAY_OUT_MS = 180
+
+/** Сколько облачко хозяина плитки висит над ней. */
+private const val SPEECH_MS = 4_000L
 
 /** Насколько приглушить неживой дневник: читается, но видно, что сейчас он не отвечает. */
 private val OFFLINE_BLUR = 6.dp
@@ -130,7 +155,21 @@ fun DiaryPage(link: PhoneLink) {
                     onSettings = { settings = true },
                     onOpen = { link.send(ToPhone.Open(it)) },
                 )
-                Feed(diary, link, Modifier.weight(1f))
+                // Смена дня — лента уезжает в сторону листания и растворяется, а не подменяется
+                // разом. Обновления того же дня сменой не считаются: ключ — дата.
+                AnimatedContent(
+                    targetState = diary,
+                    contentKey = { it.day.date },
+                    transitionSpec = {
+                        val forward = targetState.day.date > initialState.day.date
+                        val enterFrom: (Int) -> Int = { width -> if (forward) width / DAY_SLIDE else -width / DAY_SLIDE }
+                        val exitTo: (Int) -> Int = { width -> if (forward) -width / DAY_SLIDE else width / DAY_SLIDE }
+                        (slideInHorizontally(tween(DAY_IN_MS, easing = EaseOutStrong), enterFrom) + fadeIn(tween(DAY_IN_MS))) togetherWith
+                            (slideOutHorizontally(tween(DAY_OUT_MS, easing = EaseOutStrong), exitTo) + fadeOut(tween(DAY_OUT_MS)))
+                    },
+                    modifier = Modifier.weight(1f),
+                    label = "day",
+                ) { shown -> Feed(shown, link, Modifier.fillMaxSize()) }
                 Composer(diary, link)
             }
         }
@@ -167,13 +206,15 @@ private fun Header(day: WebDay, puppets: Map<Mascot, MascotPuppet>, onSettings: 
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             // Чей дневник и какой день. Прошлый день — тапом обратно в сегодня, как в шапке приложения.
-            CapsLabel(
-                text = listOfNotNull(day.owner.takeIf { it.isNotBlank() }, if (past) "← $label" else label).joinToString(" · "),
-                color = if (past) colors.text else colors.text3,
-                modifier = Modifier
-                    .then(if (past) Modifier.press(RoundedCornerShape(8.dp), colors.text.copy(alpha = HOVER_ALPHA)) { onOpen(day.today) } else Modifier)
-                    .padding(vertical = 4.dp),
-            )
+            Crossfade(targetState = label, animationSpec = tween(DAY_IN_MS), label = "date") { shown ->
+                CapsLabel(
+                    text = listOfNotNull(day.owner.takeIf { it.isNotBlank() }, if (past) "← $shown" else shown).joinToString(" · "),
+                    color = if (past) colors.text else colors.text3,
+                    modifier = Modifier
+                        .then(if (past) Modifier.press(RoundedCornerShape(8.dp), colors.text.copy(alpha = HOVER_ALPHA)) { onOpen(day.today) } else Modifier)
+                        .padding(vertical = 4.dp),
+                )
+            }
             Spacer(Modifier.weight(1f))
             Icon(
                 Icons.Default.Settings,
@@ -220,43 +261,66 @@ private fun MacroTiles(
     fiberGoal: Int?,
     puppets: Map<Mascot, MascotPuppet>,
 ) {
+    val scope = rememberCoroutineScope()
+    // Кто сейчас говорит и сколько раз подряд тапали по каждой плитке: фразы идут по кругу.
+    var speaking by remember { mutableStateOf<Pair<WebTile, PageLine>?>(null) }
+    val taps = remember { mutableMapOf<WebTile, Int>() }
+    LaunchedEffect(speaking) {
+        if (speaking == null) return@LaunchedEffect
+        delay(SPEECH_MS)
+        speaking = null
+    }
+
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf(
-            Triple(Macro.PROTEIN, totals.protCg, goal?.prot),
-            Triple(Macro.FAT, totals.fatCg, goal?.fat),
-            Triple(Macro.CARB, totals.carbCg, goal?.carb),
-        ).forEach { (macro, eatenCg, goalGrams) ->
-            val puppet = puppets.getValue(macro.mascot)
-            val scope = rememberCoroutineScope()
-            Tile(macro.colors(), eatenCg, goalGrams, Modifier.weight(1f)) {
-                // Тап по персонажу — он трясётся, как в приложении.
-                MascotFigure(
-                    puppet = puppet,
-                    pose = MascotPose.HOME,
-                    modifier = Modifier.size(width = 42.dp, height = 35.dp).pointerInput(puppet) {
-                        detectTapGestures { scope.launch { puppet.play(MascotAct.SHAKE) } }
-                    },
-                )
-            }
-        }
-        // Клетчатка — рядом с углеводами, ростком Зёрнышка: она его тема. Неизвестная
-        // у части продуктов — нижняя граница «≥», а не выдуманный ноль.
-        Tile(KcalTheme.colors.fiber, fiber.cg, fiberGoal, Modifier.weight(1f), lowerBound = !fiber.complete && fiber.cg > 0) {
-            Box(Modifier.size(width = 42.dp, height = 35.dp), contentAlignment = Alignment.Center) {
-                SproutIcon(KcalTheme.colors.fiber.text, size = 22.dp)
+            Triple(WebTile.PROTEIN, totals.protCg, goal?.prot),
+            Triple(WebTile.FAT, totals.fatCg, goal?.fat),
+            Triple(WebTile.CARB, totals.carbCg, goal?.carb),
+            Triple(WebTile.FIBER, fiber.cg, fiberGoal),
+        ).forEach { (tile, eatenCg, goalGrams) ->
+            val macro = tile.macro
+            val puppet = macro?.let { puppets.getValue(it.mascot) }
+            Tile(
+                palette = macro?.colors() ?: KcalTheme.colors.fiber,
+                eatenCg = eatenCg,
+                goalGrams = goalGrams,
+                // Неизвестная у части продуктов клетчатка — нижняя граница «≥», а не выдуманный ноль.
+                lowerBound = tile == WebTile.FIBER && !fiber.complete && fiber.cg > 0,
+                speech = speaking?.takeIf { it.first == tile }?.second,
+                onTap = {
+                    val tap = taps[tile] ?: 0
+                    taps[tile] = tap + 1
+                    speaking = tile to tileSpeech(tile, eatenCg, goalGrams, fiber, tap)
+                    puppet?.let { scope.launch { it.play(MascotAct.SHAKE) } }
+                },
+                modifier = Modifier.weight(1f),
+            ) {
+                if (puppet != null) {
+                    MascotFigure(puppet = puppet, pose = MascotPose.HOME, modifier = Modifier.size(width = 42.dp, height = 35.dp))
+                } else {
+                    // Клетчатка — росток Зёрнышка: она его тема.
+                    Box(Modifier.size(width = 42.dp, height = 35.dp), contentAlignment = Alignment.Center) {
+                        SproutIcon(KcalTheme.colors.fiber.text, size = 22.dp)
+                    }
+                }
             }
         }
     }
 }
 
-/** Плитка: число, домик хозяина и полоса до цели. Место под полосу есть всегда. */
+/**
+ * Плитка: число, домик хозяина и полоса до цели. Тап — хозяин отвечает облачком над плиткой.
+ * Облачко — поверх страницы, а не в ней: появление реплики ничего не сдвигает.
+ */
 @Composable
 private fun Tile(
     palette: MacroColors,
     eatenCg: Int,
     goalGrams: Int?,
+    lowerBound: Boolean,
+    speech: PageLine?,
+    onTap: () -> Unit,
     modifier: Modifier,
-    lowerBound: Boolean = false,
     home: @Composable () -> Unit,
 ) {
     val type = KcalTheme.type
@@ -264,7 +328,7 @@ private fun Tile(
 
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(KcalShapes.tile))
+            .press(RoundedCornerShape(KcalShapes.tile), KcalTheme.colors.text.copy(alpha = HOVER_ALPHA), onTap)
             .background(palette.tile)
             .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -287,8 +351,57 @@ private fun Tile(
         } else {
             Spacer(Modifier.height(4.dp))
         }
+        // Внутри плитки, а не рядом: облачко встаёт над той плиткой, по которой тапнули.
+        if (speech != null) {
+            key(speech) { SpeechPopup(speech, palette) }
+        }
     }
 }
+
+/** Облачко над плиткой — цвета её хозяина, растёт из плитки вверх. */
+@Composable
+private fun SpeechPopup(line: PageLine, palette: MacroColors) {
+    Popup(popupPositionProvider = AboveAnchor) {
+        Text(
+            line.text,
+            style = KcalTheme.type.body,
+            color = KcalTheme.colors.text,
+            modifier = Modifier
+                .padding(bottom = 6.dp)
+                .widthIn(max = 260.dp)
+                .enter(origin = TransformOrigin(0.5f, 1f))
+                .clip(RoundedCornerShape(KcalShapes.bubble))
+                .background(palette.tile)
+                .border(1.dp, palette.fill.copy(alpha = 0.5f), RoundedCornerShape(KcalShapes.bubble))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        )
+    }
+}
+
+/** Над якорем, по центру, не за краем окна. */
+private object AboveAnchor : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val x = anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2
+        return IntOffset(
+            x.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)),
+            (anchorBounds.top - popupContentSize.height).coerceAtLeast(0),
+        )
+    }
+}
+
+/** Макрос плитки; у клетчатки своего макроса нет — она росток Зёрнышка. */
+private val WebTile.macro: Macro?
+    get() = when (this) {
+        WebTile.PROTEIN -> Macro.PROTEIN
+        WebTile.FAT -> Macro.FAT
+        WebTile.CARB -> Macro.CARB
+        WebTile.FIBER -> null
+    }
 
 /**
  * Поверх неживого дневника — Масло и что сделать. Дымка забирает клики: писать

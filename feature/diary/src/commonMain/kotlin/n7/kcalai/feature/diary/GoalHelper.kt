@@ -2,14 +2,12 @@ package n7.kcalai.feature.diary
 
 import kotlin.math.roundToInt
 import n7.kcalai.database.DailyGoalEntity
-import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.GoalMacros
 import n7.kcalai.model.KCAL_PER_CARB
 import n7.kcalai.model.KCAL_PER_FAT
 import n7.kcalai.model.KCAL_PER_PROT
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.Sex
-import n7.kcalai.model.formatFiber
 import n7.kcalai.model.suggestedFiber
 import n7.kcalai.ui.Macro
 
@@ -159,16 +157,6 @@ fun goalSheetPlaces(line: SheetLine): Map<Mascot, MascotPlace> =
 
 /** Цель клетчатки дня: заданная руками, а без неё — посчитанная по калориям. */
 fun fiberGoal(goal: DailyGoalEntity?): Int = goal?.fiber ?: suggestedFiber(goal?.kcal)
-
-/**
- * Реплика Зёрнышка по тапу на клетчатку в шапке: что это за число и сколько её за день.
- * Неизвестная клетчатка — не ноль: тогда он честно говорит, что посчитать не из чего.
- */
-fun fiberSpeech(fiber: FiberTotal, goalGrams: Int): String {
-    val shown = formatFiber(fiber)
-        ?: return "Это клетчатка! У сегодняшних записей её не указано — посчитать пока не из чего."
-    return "Это клетчатка! Сегодня $shown из $goalGrams г. Её добавят овощи, крупы и отруби."
-}
 
 private fun roundToTen(kcal: Double): Int = (kcal / 10).roundToInt() * 10
 

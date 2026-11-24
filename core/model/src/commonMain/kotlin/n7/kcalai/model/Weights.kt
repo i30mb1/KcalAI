@@ -32,3 +32,13 @@ fun formatFiber(fiber: FiberTotal): String? {
 }
 
 private const val CENTIGRAMS_IN_GRAM = 100
+
+/**
+ * Реплика Зёрнышка по тапу на клетчатку в шапке: что это за число и сколько её за день.
+ * Неизвестная клетчатка — не ноль: тогда он честно говорит, что посчитать не из чего.
+ */
+fun fiberSpeech(fiber: FiberTotal, goalGrams: Int): String {
+    val shown = formatFiber(fiber)
+        ?: return "Это клетчатка! У сегодняшних записей её не указано — посчитать пока не из чего."
+    return "Это клетчатка! Сегодня $shown из $goalGrams г. Её добавят овощи, крупы и отруби."
+}
