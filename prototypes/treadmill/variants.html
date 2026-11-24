@@ -1,0 +1,784 @@
+<title>Три дорожки Зёрнышка</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+  /* Одна колонка-телефон; вкладка выбирает вариант, симулятор прибит к низу.
+     Палитра KcalAI: крафт, чернила и цвета трёх макросов. */
+  :root {
+    --bg: #F4EFE4; --surface: #FDFBF5; --chip: #F0E9D9; --line: #E5DCC9;
+    --text: #2C2618; --text2: #6B6250; --text3: #8D8370;
+    --bubble: #2C2618; --on-bubble: #F4EFE4;
+    --carb: #4C8F5A; --carb-tile: #DDEBD8; --fat: #C8862B; --protein: #C2456F; --protein-deep: #8E2F4E;
+    --deck: #2C2618; --slat: #8D8370;
+    --shadow: rgba(44, 38, 24, 0.12);
+    --on-field: #FDFBF5;
+    --font-ui: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-data: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1C1914; --surface: #26221B; --chip: #332D23; --line: #3A3428;
+      --text: #F4EFE4; --text2: #B5AB96; --text3: #8D8370;
+      --bubble: #F4EFE4; --on-bubble: #1C1914;
+      --carb: #5FA56E; --carb-tile: #22331F; --fat: #D9962F; --protein: #E0648C; --protein-deep: #A8395E;
+      --deck: #0E0C09; --slat: #6B6250;
+      --shadow: rgba(0, 0, 0, 0.4);
+      --on-field: #FDFBF5;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1C1914; --surface: #26221B; --chip: #332D23; --line: #3A3428;
+    --text: #F4EFE4; --text2: #B5AB96; --text3: #8D8370;
+    --bubble: #F4EFE4; --on-bubble: #1C1914;
+    --carb: #5FA56E; --carb-tile: #22331F; --fat: #D9962F; --protein: #E0648C; --protein-deep: #A8395E;
+    --deck: #0E0C09; --slat: #6B6250;
+    --shadow: rgba(0, 0, 0, 0.4);
+    --on-field: #FDFBF5;
+    color-scheme: dark;
+  }
+
+  html, body { background: var(--bg); color: var(--text); }
+  body {
+    font: 500 16px/1.4 var(--font-ui);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 16px 150px;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--carb); outline-offset: 3px; border-radius: 6px; }
+  svg { display: block; }
+
+  .app { max-width: 440px; margin: 0 auto; display: grid; gap: 18px; }
+
+  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--chip); border-radius: 99px; padding: 4px; }
+  .tabs button { padding: 9px 0; border-radius: 99px; font-weight: 700; color: var(--text2); transition: background .2s, color .2s; }
+  .tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px var(--shadow); }
+
+  #view { display: grid; gap: 16px; }
+
+  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .big { font: 800 clamp(56px, 16vw, 80px)/0.9 var(--font-ui); letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+  .sub { color: var(--text3); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+  .sub b { display: block; color: var(--text); font: 600 20px/1.2 var(--font-data); }
+
+  .bubble {
+    position: relative; justify-self: center; max-width: 100%;
+    min-height: 3.1em; display: flex; align-items: center; justify-content: center;
+    background: var(--bubble); color: var(--on-bubble);
+    font-weight: 700; font-size: 15px; line-height: 1.35;
+    padding: 9px 16px; border-radius: 18px; text-wrap: balance; text-align: center;
+  }
+  .bubble::after {
+    content: ""; position: absolute; left: var(--tail, 42%); bottom: -8px; width: 18px; height: 9px;
+    background: var(--bubble); transform: translateX(-50%); clip-path: polygon(0 0, 100% 0, 50% 100%);
+  }
+
+  .scene { width: 100%; height: auto; border-radius: 22px; overflow: hidden; }
+  .g-hop { transform-box: fill-box; transform-origin: 50% 100%; }
+  .g-hop.go { animation: hop .45s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes hop { 40% { transform: translateY(-10px) scale(1.04, .97) } }
+  .fade { transition: opacity .6s; }
+
+  /* ---------- Тропа ---------- */
+  .route { display: grid; gap: 6px; }
+  .route-bar { position: relative; height: 16px; display: flex; border-radius: 99px; overflow: visible; }
+  .route-bar .seg { height: 100%; }
+  .route-bar .seg:first-child { border-radius: 99px 0 0 99px; }
+  .route-bar .seg:last-of-type { border-radius: 0 99px 99px 0; }
+  .route-bar .flag { position: absolute; top: -7px; width: 2px; height: 12px; background: var(--text); }
+  .route-bar .flag::after { content: ""; position: absolute; left: 2px; top: 0; border-left: 7px solid var(--protein); border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent; }
+  .route-bar .you { position: absolute; top: 50%; width: 18px; height: 18px; margin-left: -9px; margin-top: -9px; border-radius: 50%; background: #7FBF8C; border: 3px solid var(--bg); box-shadow: 0 0 0 1.5px #4C8F5A; transition: left .3s; }
+  .route-names { display: flex; font: 600 11px/1 var(--font-data); color: var(--text3); }
+  .route-names span { text-align: center; }
+  .route-names span.on { color: var(--text); }
+
+  /* ---------- Сад ---------- */
+  .shelf { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; align-items: end; padding: 0 6px; position: relative; }
+  .shelf::after { content: ""; position: absolute; left: 0; right: 0; bottom: 18px; height: 7px; border-radius: 4px; background: #B08452; box-shadow: 0 3px 0 #8A6A45; }
+  .shelf .pot { display: grid; justify-items: center; gap: 10px; }
+  .shelf svg { width: 100%; height: auto; }
+  .shelf span { font: 600 11px/1 var(--font-data); color: var(--text3); }
+  .shelf .today span { color: var(--text); }
+  .bloom-in { animation: bloom .7s cubic-bezier(.3,1.5,.5,1); transform-box: fill-box; transform-origin: 50% 50%; }
+  @keyframes bloom { from { transform: scale(0) rotate(-90deg) } }
+
+  /* ---------- Заряд ---------- */
+  .field {
+    position: relative; overflow: hidden; border-radius: 26px; color: var(--on-field);
+    background-color: var(--tier-bg, var(--chip)); transition: background-color .7s;
+    padding: 18px 18px 0; display: grid; gap: 6px; isolation: isolate;
+  }
+  .field.idle { color: var(--text); }
+  .field .stripes { position: absolute; inset: -40px; z-index: -1; background-image: repeating-linear-gradient(-60deg, transparent 0 22px, rgba(255,255,255,.07) 22px 44px); }
+  .field.idle .stripes { opacity: 0; }
+  .field .mark { position: absolute; right: -8px; bottom: 36px; z-index: -1; font: 800 150px/0.8 var(--font-ui); letter-spacing: -0.06em; opacity: .13; font-variant-numeric: tabular-nums; }
+  .field .row { display: flex; justify-content: space-between; align-items: flex-start; }
+  .field .big { font-size: clamp(48px, 13vw, 64px); }
+  .field .unit { font: 600 13px/1.2 var(--font-data); opacity: .8; }
+  .field .spd { text-align: right; }
+  .field .spd b { display: block; font: 700 34px/1 var(--font-data); letter-spacing: -0.03em; }
+  .field .bubble { --bubble: rgba(0,0,0,.28); --on-bubble: var(--on-field); }
+  .field.idle .bubble { --bubble: var(--text); --on-bubble: var(--bg); }
+  .field .trace { width: calc(100% + 36px); margin: 0 -18px; height: 54px; }
+  .stickers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 8px; }
+  .sticker { display: grid; justify-items: center; gap: 6px; text-align: center; }
+  .sticker svg { width: 72px; height: 72px; overflow: visible; }
+  .sticker span { font: 600 11px/1.2 var(--font-data); color: var(--text3); }
+  .sticker.got span { color: var(--text); }
+  .sticker.new svg { animation: stick .6s cubic-bezier(.3,1.7,.5,1); }
+  @keyframes stick { from { transform: scale(1.8) rotate(25deg); opacity: 0 } }
+
+  /* ---------- симулятор ---------- */
+  .sim {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+    padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+    background: var(--surface); border-top: 1.5px dashed var(--line);
+  }
+  .sim-in { max-width: 440px; margin: 0 auto; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; align-items: center; }
+  .sim .play { grid-row: span 2; width: 52px; height: 52px; border-radius: 50%; background: var(--text); color: var(--bg); display: grid; place-items: center; }
+  .sim label { display: grid; grid-template-columns: 58px 1fr 76px; align-items: center; gap: 10px; font: 600 12px/1 var(--font-data); color: var(--text3); }
+  .sim output { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+  .sim input[type=range] { width: 100%; accent-color: var(--carb); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .g-hop.go, .bloom-in, .sticker.new svg { animation: none; }
+    .fade, .field { transition: none; }
+  }
+</style>
+
+<main class="app">
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-v="trail">Тропа</button>
+    <button role="tab" data-v="garden">Сад</button>
+    <button role="tab" data-v="charge">Заряд</button>
+  </nav>
+  <section id="view"></section>
+</main>
+
+<div class="sim" aria-label="Симулятор дорожки">
+  <div class="sim-in">
+    <button class="play" id="play" aria-label="Идти или стоять">
+      <svg width="20" height="20" viewBox="0 0 20 20" id="playIcon"><path d="M5,3 L17,10 L5,17 Z" fill="currentColor"/></svg>
+    </button>
+    <label>скорость<input type="range" id="spd" min="0" max="10" step="0.1"><output id="spdOut">0.0 км/ч</output></label>
+    <label>шаги<input type="range" id="stp" min="0" max="14000" step="50"><output id="stpOut">0</output></label>
+  </div>
+</div>
+
+<script>
+// ================= общее =================
+const $ = (s, r = document) => r.querySelector(s);
+const nf = new Intl.NumberFormat('ru-RU');
+const fmt = (n) => nf.format(Math.max(0, Math.round(n)));
+const km = (m) => (m / 1000).toFixed(2).replace('.', ',');
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const strideM = (v, h = 175) => (h / 100) * (0.26 + 0.035 * clamp(v, 1, 12));
+const tierOf = (v) => (v <= 0 ? 0 : v < 3.5 ? 1 : v < 5.5 ? 2 : v < 7.5 ? 3 : 4);
+const SIM_X = 30; // симулятор ускоряет время, чтобы день проходил за минуты
+
+const state = { speed: 0, lastSpeed: 3.6, steps: 4300, distance: 3010, goal: 8000, maxSpeed: 4.6, trace: [] };
+const pastWeek = [3200, 5100, 800, 6900, 8400, 10200]; // пример прошлых дней, не данные человека
+
+function rng(seed) {
+  return () => {
+    seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ================= Зёрнышко =================
+// Контуры из Grain.kt; ноги, повязка, капля и линии скорости — только для дорожки.
+const LIMB = (d, w1, w2) => `<path d="${d}" fill="none" stroke="#4C8F5A" stroke-width="${w1}" stroke-linecap="round"/><path d="${d}" fill="none" stroke="#7FBF8C" stroke-width="${w2}" stroke-linecap="round"/>`;
+const BODY = 'M60,20 C80,20 90,46 90,64 C90,84 76,94 60,94 C44,94 30,84 30,64 C30,46 40,20 60,20 Z';
+const TUFT = 'M60,22 L53,6 M60,22 L60,2 M60,22 L67,6';
+function grainMarkup() {
+  return `<g class="g-hop">
+    <g class="g-lines" opacity="0" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+      <path d="M22,50 L-8,50"/><path d="M18,64 L-20,64"/><path d="M22,78 L-4,78"/>
+    </g>
+    <g class="g-legL">${LIMB('M52,86 L52,105', 10, 5.5)}</g>
+    <g class="g-legR">${LIMB('M68,86 L68,105', 10, 5.5)}</g>
+    <g class="g-upper">
+      <g class="g-armL">${LIMB('M32,70 C24,76 22,84 26,90', 13, 8)}</g>
+      <g class="g-armR">${LIMB('M88,70 C96,76 98,84 94,90', 13, 8)}</g>
+      <g transform="rotate(4 60 60)">
+        <g class="g-tuft">
+          <path d="${TUFT}" transform="translate(.6 1.8)" stroke="#3B2A12" stroke-opacity=".35" stroke-width="4" stroke-linecap="round" fill="none"/>
+          <path d="${TUFT}" stroke="#4C8F5A" stroke-width="4" stroke-linecap="round" fill="none"/>
+        </g>
+        <path d="${BODY}" transform="translate(.6 1.8)" fill="#3B2A12" fill-opacity=".35"/>
+        <path d="${BODY}" fill="#7FBF8C"/>
+        <path d="M60,28 C57,42 54,52 56,62 C57,72 58,80 60,88" stroke="#3E7A4B" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+        <g class="g-band fade" opacity="0">
+          <g class="g-tails" stroke="#C2456F" stroke-width="4" stroke-linecap="round" fill="none">
+            <path d="M37,47 C30,44 24,42 17,44"/><path d="M37,47 C30,50 25,53 18,55"/>
+          </g>
+          <path d="M37,47 C50,40 70,40 83,47" stroke="#C2456F" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+        </g>
+      </g>
+      <g class="g-blush fade" opacity="0"><circle cx="40" cy="73" r="5" fill="#F3B5C8"/><circle cx="80" cy="73" r="5" fill="#F3B5C8"/></g>
+      <g class="g-face" fill="none" stroke="#2C2618" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></g>
+      <path class="g-sweat fade" opacity="0" d="M27,28 C30,33 31,36 28,38 C25,38 24,34 27,28 Z" fill="#A8D2EE" stroke="#5E8FB0" stroke-width=".8"/>
+    </g>
+  </g>`;
+}
+
+class Grain {
+  constructor(root) {
+    this.root = root;
+    root.innerHTML = grainMarkup();
+    for (const k of ['hop', 'lines', 'legL', 'legR', 'upper', 'armL', 'armR', 'tuft', 'band', 'tails', 'blush', 'face', 'sweat']) this[k] = $(`.g-${k}`, root);
+    this.phase = 0; this.tuftA = 0; this.blink = false; this.nextBlink = 0; this.faceKey = '';
+    this.root.style.cursor = 'pointer';
+    root.addEventListener('click', () => this.jump());
+  }
+  jump() { this.hop.classList.remove('go'); void this.hop.getBBox(); this.hop.classList.add('go'); }
+  gear(speed, happy) {
+    const tier = tierOf(speed);
+    this.band.setAttribute('opacity', tier >= 2 ? 1 : 0);
+    this.sweat.setAttribute('opacity', tier >= 3 ? 1 : 0);
+    this.blush.setAttribute('opacity', tier >= 4 ? 1 : 0);
+    this.lines.setAttribute('opacity', clamp((speed - 5) / 3, 0, 1).toFixed(2));
+    const kind = this.blink ? 'blink' : tier === 0 ? (happy ? 'happy' : 'calm') : tier >= 4 ? 'run' : tier === 3 ? 'push' : happy ? 'happy' : 'calm';
+    this.drawFace(kind, tier > 0 ? 2 : 0);
+  }
+  drawFace(kind, x) {
+    const key = kind + x;
+    if (key === this.faceKey) return;
+    this.faceKey = key;
+    const m = x / 2;
+    const dot = (cx, r = 5.5) => `<circle cx="${cx + x}" cy="62" r="${r}" fill="#2C2618" stroke="none"/>`;
+    const arcUp = (cx) => `<path d="M${cx - 5 + x},63 Q${cx + x},56.5 ${cx + 5 + x},63"/>`;
+    const arcDown = (cx) => `<path d="M${cx - 5 + x},61 Q${cx + x},66 ${cx + 5 + x},61"/>`;
+    const smile = `<path d="M${54 + m},75 C${57 + m},79 ${63 + m},79 ${66 + m},75"/>`;
+    const faces = {
+      calm: dot(48) + dot(72) + smile,
+      happy: arcUp(48) + arcUp(72) + `<path d="M${51 + m},74 C${56 + m},81 ${64 + m},81 ${69 + m},74"/>`,
+      blink: arcDown(48) + arcDown(72) + smile,
+      push: dot(48, 5) + dot(72, 5) + `<ellipse cx="${60 + m}" cy="77" rx="3.4" ry="4" fill="#2C2618" stroke="none"/>`,
+      run: `<path d="M${43 + x},58.5 L${52 + x},62 L${43 + x},65.5"/><path d="M${77 + x},58.5 L${68 + x},62 L${77 + x},65.5"/><path d="M${53 + m},74 Q${60 + m},85 ${67 + m},74 Z" fill="#2C2618"/>`,
+    };
+    this.face.innerHTML = faces[kind];
+  }
+  step(dt, t, speed, happy) {
+    const mps = speed / 3.6;
+    this.phase += Math.PI * (mps / strideM(speed)) * dt;
+    const amp = Math.min(14 + speed * 3.2, 40);
+    const a = Math.sin(this.phase) * amp;
+    const arm = a * (speed > 6 ? 0.9 : 0.55);
+    this.legL.setAttribute('transform', `rotate(${a.toFixed(1)} 52 86)`);
+    this.legR.setAttribute('transform', `rotate(${(-a).toFixed(1)} 68 86)`);
+    this.armL.setAttribute('transform', `rotate(${arm.toFixed(1)} 32 70)`);
+    this.armR.setAttribute('transform', `rotate(${(-arm).toFixed(1)} 88 70)`);
+    const bob = -(1 - Math.abs(Math.sin(this.phase))) * (2 + speed * 0.4);
+    this.upper.setAttribute('transform', `translate(0 ${bob.toFixed(2)}) rotate(${(speed * 0.9).toFixed(1)} 60 96)`);
+    const target = -Math.min(speed * 7, 62);
+    this.tuftA += (target - this.tuftA) * Math.min(1, dt * 5);
+    const flutter = Math.sin(t / 1000 * (4 + speed)) * speed * 0.7;
+    this.tuft.setAttribute('transform', `rotate(${(this.tuftA + flutter).toFixed(1)} 60 22)`);
+    this.tails.setAttribute('transform', `rotate(${(Math.sin(this.phase * 2) * 12 - speed * 3).toFixed(1)} 37 47)`);
+    if (t > this.nextBlink) { this.blink = !this.blink; this.nextBlink = t + (this.blink ? 130 : 2400 + Math.random() * 3000); }
+    this.gear(speed, happy);
+  }
+  still(happy) {
+    for (const [el, p] of [[this.legL, '52 86'], [this.legR, '68 86'], [this.armL, '32 70'], [this.armR, '88 70'], [this.tuft, '60 22'], [this.tails, '37 47']]) el.setAttribute('transform', `rotate(0 ${p})`);
+    this.upper.removeAttribute('transform');
+    this.tuftA = 0; this.blink = false;
+    this.gear(0, happy);
+  }
+}
+
+function setText(el, s) { if (el && el.textContent !== s) el.textContent = s; }
+
+// Реплика держится, пока не сменится; новость (вошёл в лес, наклейка) звучит 4 секунды.
+const say = { el: null, news: '', until: 0 };
+function news(text) { say.news = text; say.until = performance.now() + 4000; }
+function speak(base) { setText(say.el, performance.now() < say.until ? say.news : base); }
+
+// ================= 1. Тропа =================
+const BIOMES = [
+  { name: 'двор', to: 'До парка', enter: 'Двор позади!', sky: ['#F7E6CB', '#F6EFE2'], ground: '#C9B79A', route: '#D9C9AE' },
+  { name: 'парк', to: 'До леса', enter: 'Парк! Тут дышится!', sky: ['#D6E9D2', '#F1F5E6'], ground: '#A8C48E', route: '#A8C48E' },
+  { name: 'лес', to: 'До гор', enter: 'Лес! Тихо-тихо…', sky: ['#C8DCC6', '#E8EFDF'], ground: '#6E8B57', route: '#6E8B57' },
+  { name: 'горы', to: 'До моря', enter: 'Горы! Вот это вид!', sky: ['#D3E0EA', '#F3F5F2'], ground: '#9AA588', route: '#A9B6C2' },
+  { name: 'море', to: '', enter: 'Море! Цель закрыта!', sky: ['#FBDDB8', '#FCEFD9'], ground: '#E6CC98', route: '#7FB5C9' },
+];
+const EDGES = [0, 0.2, 0.45, 0.7, 1.0]; // доля цели, где начинается место
+const ROUTE_MAX = 1.2;
+
+function hills(r, base, amp, color, n = 4) {
+  let d = `M0,${base}`;
+  const w = 400 / n;
+  for (let i = 0; i < n; i++) {
+    const x0 = i * w, x1 = x0 + w, top = base - amp * (0.45 + r() * 0.55);
+    d += ` C${x0 + w * 0.3},${top} ${x1 - w * 0.3},${top} ${x1},${base}`;
+  }
+  return `<path d="${d} L400,260 L0,260 Z" fill="${color}"/>`;
+}
+function tiles(layers) {
+  // каждый слой — две одинаковые плитки по 400, едут со своей скоростью
+  return layers.map(([f, svg]) => `<g data-f="${f}"><g>${svg}</g><g transform="translate(400 0)">${svg}</g></g>`).join('');
+}
+function biomeArt(i) {
+  const r = rng(11 + i * 7);
+  const far = [], mid = [], near = [];
+  if (i === 0) {
+    let x = 4;
+    while (true) {
+      const w = 26 + r() * 26, h = 40 + r() * 64;
+      if (x + w > 396) break;
+      let win = '';
+      for (let y = 192 - h + 8; y < 182; y += 12) for (let wx = x + 5; wx < x + w - 6; wx += 9) if (r() > 0.3) win += `<rect x="${wx.toFixed(1)}" y="${y.toFixed(1)}" width="4" height="6" fill="#FBF6EC" opacity=".8"/>`;
+      far.push(`<rect x="${x.toFixed(1)}" y="${(192 - h).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${r() > 0.5 ? '#D8C6A7' : '#CBB794'}"/>${win}`);
+      x += w + 3 + r() * 8;
+    }
+    for (const lx of [70, 270]) mid.push(`<path d="M${lx},192 L${lx},128 Q${lx},120 ${lx + 10},120" stroke="#6B6250" stroke-width="3" fill="none"/><ellipse cx="${lx + 12}" cy="122" rx="7" ry="4" fill="#F0C077"/>`);
+    for (let px = 6; px < 392; px += 22) near.push(`<rect x="${px}" y="176" width="5" height="20" rx="1.5" fill="#B9A684"/>`);
+    near.push(`<rect x="0" y="181" width="400" height="3" fill="#B9A684"/><rect x="0" y="189" width="400" height="3" fill="#B9A684"/>`);
+  }
+  if (i === 1) {
+    far.push(hills(r, 178, 46, '#B9D7AB'));
+    for (const tx of [40, 140, 245, 340]) {
+      const x = tx + r() * 16, c = r() > 0.5 ? '#7FBF8C' : '#6CAE7A';
+      mid.push(`<rect x="${x - 3}" y="140" width="6" height="52" fill="#8A6A45"/><circle cx="${x}" cy="128" r="23" fill="${c}"/><circle cx="${x - 14}" cy="140" r="15" fill="${c}"/><circle cx="${x + 14}" cy="140" r="15" fill="${c}"/>`);
+    }
+    for (const bx of [30, 180, 320]) near.push(`<ellipse cx="${bx}" cy="194" rx="20" ry="13" fill="#5FA56E"/><circle cx="${bx - 6}" cy="186" r="2.4" fill="#F09BB6"/><circle cx="${bx + 8}" cy="189" r="2.4" fill="#F0C077"/>`);
+  }
+  if (i === 2) {
+    far.push(hills(r, 172, 60, '#7FA67D', 3));
+    for (let x = 20; x < 385; x += 40 + r() * 12) {
+      const h = 70 + r() * 40, c = r() > 0.5 ? '#3E7A4B' : '#356B41';
+      let p = '';
+      for (let k = 0; k < 3; k++) {
+        const top = 192 - h + k * h * 0.22, bw = 14 + k * 6;
+        p += `<path d="M${x},${top} L${x + bw},${top + h * 0.38} L${x - bw},${top + h * 0.38} Z" fill="${c}"/>`;
+      }
+      mid.push(`<rect x="${x - 2.5}" y="${192 - h * 0.3}" width="5" height="${h * 0.3}" fill="#5C4630"/>${p}`);
+    }
+    for (const fx of [50, 150, 260, 350]) near.push(`<path d="M${fx},196 l-8,-12 M${fx},196 l0,-15 M${fx},196 l8,-12" stroke="#2E6B3A" stroke-width="3" stroke-linecap="round"/>`);
+    near.push(`<rect x="208" y="186" width="5" height="9" fill="#F4EFE4"/><path d="M200,188 Q210,174 221,188 Z" fill="#C2456F"/><circle cx="207" cy="183" r="1.6" fill="#FDFBF5"/><circle cx="214" cy="181" r="1.4" fill="#FDFBF5"/>`);
+  }
+  if (i === 3) {
+    for (const [px, h, w] of [[70, 120, 80], [190, 95, 70], [310, 130, 85]]) {
+      far.push(`<path d="M${px - w},192 L${px},${192 - h} L${px + w},192 Z" fill="#A9B6C2"/><path d="M${px - w * 0.26},${192 - h * 0.74} L${px},${192 - h} L${px + w * 0.26},${192 - h * 0.74} L${px + 8},${192 - h * 0.66} L${px - 6},${192 - h * 0.7} Z" fill="#FDFBF5"/>`);
+    }
+    for (const [px, h, w] of [[130, 45, 45], [260, 60, 55], [370, 38, 26]]) mid.push(`<path d="M${px - w},192 L${px - w * 0.2},${192 - h} L${px + w * 0.3},${192 - h * 0.8} L${px + w},192 Z" fill="#8D8E8A"/>`);
+    for (let gx = 15; gx < 390; gx += 34 + r() * 20) near.push(`<path d="M${gx},196 l-4,-9 M${gx},196 l1,-11 M${gx},196 l5,-8" stroke="#6E8B5A" stroke-width="2.4" stroke-linecap="round"/>`);
+  }
+  if (i === 4) {
+    let waves = '';
+    for (let y = 150; y < 190; y += 12) {
+      let d = `M0,${y}`;
+      for (let x = 0; x < 400; x += 25) d += ` q6.25,-4 12.5,0 t12.5,0`;
+      waves += `<path d="${d}" stroke="#D3EAF1" stroke-width="2" fill="none" opacity=".8"/>`;
+    }
+    far.push(`<rect x="0" y="140" width="400" height="56" fill="#7FB5C9"/>${waves}`);
+    mid.push(`<path d="M240,192 L262,192 L258,112 L244,112 Z" fill="#FDFBF5"/><path d="M242.5,160 L259.5,160 L258.7,146 L243.3,146 Z M244.7,128 L257.3,128 L256.8,118 L245.2,118 Z" fill="#C2456F"/><rect x="242" y="104" width="18" height="9" rx="2" fill="#2C2618"/><path d="M240,104 L251,94 L262,104 Z" fill="#C2456F"/>`);
+    for (const [gx, gy] of [[90, 70], [120, 88], [330, 60]]) mid.push(`<path d="M${gx - 7},${gy} q3.5,-5 7,0 q3.5,-5 7,0" stroke="#6B6250" stroke-width="2" fill="none" stroke-linecap="round"/>`);
+    near.push(hills(r, 198, 12, '#EBD3A5', 3));
+    for (const sx of [60, 210, 330]) near.push(`<path d="M${sx},196 q5,-9 10,0 Z" fill="#F09BB6"/>`);
+  }
+  return { far: far.join(''), mid: mid.join(''), near: near.join('') };
+}
+
+const Trail = {
+  mount(view) {
+    const defs = BIOMES.map((b, i) => `<linearGradient id="sky${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${b.sky[0]}"/><stop offset="1" stop-color="${b.sky[1]}"/></linearGradient>`).join('');
+    const biomes = BIOMES.map((b, i) => {
+      const a = biomeArt(i);
+      const sun = i === 4 ? '<circle cx="320" cy="72" r="26" fill="#F0C077"/>' : i === 0 ? '<circle cx="330" cy="58" r="18" fill="#FBF6EC"/>' : '';
+      return `<g class="biome" data-i="${i}" opacity="${i === 0 ? 1 : 0}">
+        <rect width="400" height="260" fill="url(#sky${i})"/>${sun}
+        ${tiles([[0.12, a.far], [0.4, a.mid]])}
+        <rect y="194" width="400" height="66" fill="${b.ground}"/>
+        ${tiles([[1, a.near]])}
+      </g>`;
+    }).join('');
+    const streaks = Array.from({ length: 6 }, (_, k) => `<path class="streak" d="M0,0 L${30 + k * 7},0" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" opacity="0"/>`).join('');
+    view.innerHTML = `
+      <div class="head"><div class="big" id="n">0</div><div class="sub"><b id="km">0,00 км</b><span id="goal">из 8 000</span></div></div>
+      <div class="bubble" id="say" style="--tail:42%">…</div>
+      <svg class="scene" viewBox="0 0 400 260">
+        <defs>${defs}</defs>
+        <g id="biomes">${biomes}</g>
+        <g id="flags"></g>
+        <line id="path" x1="0" y1="222" x2="400" y2="222" stroke="#FFFFFF" stroke-opacity=".55" stroke-width="3" stroke-dasharray="12 16" stroke-linecap="round"/>
+        <g id="streaks">${streaks}</g>
+        <g id="grain" transform="translate(110 88) scale(1.2)" style="color:#FFFFFF"></g>
+      </svg>
+      <div class="route"><div class="route-bar" id="route"></div><div class="route-names" id="names"></div></div>`;
+    say.el = $('#say');
+    this.grain = new Grain($('#grain'));
+    this.layers = [...view.querySelectorAll('[data-f]')].map((g) => ({ g, f: +g.dataset.f }));
+    this.biomes = [...view.querySelectorAll('.biome')];
+    this.streaks = [...view.querySelectorAll('.streak')].map((el, k) => ({ el, x: k * 70, y: 30 + k * 17 }));
+    this.scroll = 0;
+    this.flags = [];
+    this.lastK = Math.floor(state.steps / 1000);
+    this.lastBiome = this.biomeAt(state.steps);
+    $('#names').innerHTML = BIOMES.map((b, i) => `<span style="width:${((EDGES[i + 1] ?? ROUTE_MAX) - EDGES[i]) / ROUTE_MAX * 100}%">${b.name}</span>`).join('');
+  },
+  biomeAt(steps) { const p = steps / state.goal; let b = 0; EDGES.forEach((e, i) => { if (p >= e) b = i; }); return b; },
+  render() {
+    const p = state.steps / state.goal;
+    setText($('#n'), fmt(state.steps));
+    setText($('#km'), `${km(state.distance)} км`);
+    setText($('#goal'), `из ${fmt(state.goal)}`);
+    this.biomes.forEach((g, i) => g.setAttribute('opacity', i === 0 ? 1 : clamp((p - EDGES[i] + 0.04) / 0.04, 0, 1).toFixed(3)));
+    const b = this.biomeAt(state.steps);
+    if (b > this.lastBiome) news(BIOMES[b].enter);
+    this.lastBiome = b;
+    const k = Math.floor(state.steps / 1000);
+    if (k > this.lastK && k > 0) this.flags.push({ k, x: state.speed > 0 ? 420 : 330 });
+    this.lastK = k;
+    speak(b < 4 ? `${BIOMES[b].to} — ${fmt(EDGES[b + 1] * state.goal - state.steps)} шагов!` : (state.steps >= state.goal * 1.1 ? 'Плещемся! Это уже бонус!' : 'Море! Цель закрыта!'));
+    // маршрут: места, флажок на каждую тысячу, где ты сейчас
+    const segs = BIOMES.map((bm, i) => `<div class="seg" style="width:${((EDGES[i + 1] ?? ROUTE_MAX) - EDGES[i]) / ROUTE_MAX * 100}%;background:${bm.route};opacity:${i <= b ? 1 : 0.35}"></div>`).join('');
+    let flags = '';
+    for (let f = 1000; f <= Math.min(state.steps, state.goal * ROUTE_MAX); f += 1000) flags += `<div class="flag" style="left:${f / state.goal / ROUTE_MAX * 100}%"></div>`;
+    $('#route').innerHTML = segs + flags + `<div class="you" style="left:${Math.min(p, ROUTE_MAX) / ROUTE_MAX * 100}%"></div>`;
+    [...$('#names').children].forEach((s, i) => s.classList.toggle('on', i === b));
+    this.drawFlags();
+  },
+  drawFlags() {
+    $('#flags').innerHTML = this.flags.map((f) => `<g transform="translate(${f.x.toFixed(1)} 0)">
+      <rect x="-1.5" y="150" width="3" height="48" fill="#2C2618"/>
+      <path d="M1.5,150 L34,158 L1.5,166 Z" fill="#C2456F"/>
+      <text x="13" y="161.5" fill="#FDFBF5" style="font:700 9px var(--font-data)">${f.k}к</text></g>`).join('');
+  },
+  frame(dt, t) {
+    const mps = state.speed / 3.6;
+    this.scroll += mps * 46 * dt;
+    for (const { g, f } of this.layers) g.setAttribute('transform', `translate(${(-(this.scroll * f) % 400).toFixed(1)} 0)`);
+    $('#path').setAttribute('stroke-dashoffset', this.scroll.toFixed(1));
+    if (this.flags.length) {
+      for (const f of this.flags) f.x -= mps * 46 * dt;
+      this.flags = this.flags.filter((f) => f.x > -50);
+      this.drawFlags();
+    }
+    const windy = clamp((state.speed - 5) / 3, 0, 1);
+    for (const s of this.streaks) {
+      s.x -= (200 + state.speed * 50) * dt;
+      if (s.x < -80) { s.x = 420 + Math.random() * 100; s.y = 20 + Math.random() * 130; }
+      s.el.setAttribute('transform', `translate(${s.x.toFixed(1)} ${s.y.toFixed(1)})`);
+      s.el.setAttribute('opacity', (windy * 0.8).toFixed(2));
+    }
+    this.grain.step(dt, t, state.speed, state.steps >= state.goal);
+  },
+  still() {
+    this.grain.still(state.steps >= state.goal);
+    for (const s of this.streaks) s.el.setAttribute('opacity', 0);
+  },
+};
+
+// ================= 2. Сад =================
+// Растение — функция от шагов: одна и та же рисует большой горшок и горшки на полке.
+function plant(steps, goal, sway = 0, opts = {}) {
+  const g = Math.min(steps / goal, 1);
+  if (steps < 80) return `<ellipse cx="0" cy="-2" rx="5" ry="3.5" fill="#C8862B"/><path d="M0,-5 L-2,-10 M0,-5 L0,-11 M0,-5 L2,-10" stroke="#4C8F5A" stroke-width="1.4" stroke-linecap="round"/>`;
+  const H = 18 + 124 * g;
+  const tx = sway, ty = -H;
+  const pt = (u) => ({ x: 2 * (1 - u) * u * (sway * 0.35) + u * u * tx, y: 2 * (1 - u) * u * (-H * 0.5) + u * u * ty });
+  let out = `<path d="M0,0 Q${(sway * 0.35).toFixed(1)},${(-H * 0.5).toFixed(1)} ${tx.toFixed(1)},${ty.toFixed(1)}" stroke="#4C8F5A" stroke-width="${3 + g * 3}" stroke-linecap="round" fill="none"/>`;
+  // бонусные цветы за каждую тысячу сверх цели — на боковых веточках
+  const extra = Math.min(Math.floor(Math.max(0, steps - goal) / 1000), 6);
+  for (let i = 0; i < extra; i++) {
+    const u = 0.3 + i * 0.09, p = pt(u), side = i % 2 ? 1 : -1, ex = p.x + side * 30, ey = p.y - 14;
+    out += `<path d="M${p.x.toFixed(1)},${p.y.toFixed(1)} Q${(p.x + side * 18).toFixed(1)},${(p.y - 2).toFixed(1)} ${ex.toFixed(1)},${ey.toFixed(1)}" stroke="#4C8F5A" stroke-width="2.4" fill="none"/>`;
+    let petals = '';
+    for (let k = 0; k < 6; k++) petals += `<ellipse cx="0" cy="-6" rx="3" ry="6" fill="${i % 2 ? '#F09BB6' : '#FDFBF5'}" transform="rotate(${k * 60})"/>`;
+    out += `<g transform="translate(${ex.toFixed(1)} ${ey.toFixed(1)})"${opts.newExtra === i ? ' class="bloom-in"' : ''}>${petals}<circle r="3.5" fill="#F0C077"/></g>`;
+  }
+  const leaves = [0.22, 0.36, 0.5, 0.62, 0.74, 0.84];
+  leaves.forEach((u, i) => {
+    const thr = 0.06 + i * 0.11;
+    const s = clamp((g - thr) / 0.08, 0, 1);
+    if (s <= 0) return;
+    const p = pt(u), side = i % 2 ? 1 : -1;
+    out += `<g transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) scale(${(side * s).toFixed(2)} ${s.toFixed(2)}) rotate(-28)">
+      <path d="M0,0 C8,-11 24,-11 32,0 C24,7 8,7 0,0 Z" fill="#7FBF8C"/><path d="M2,0 L28,0" stroke="#4C8F5A" stroke-width="1.2"/></g>`;
+  });
+  if (g >= 0.72 && g < 1) {
+    const s = clamp((g - 0.72) / 0.22, 0.2, 1);
+    out += `<g transform="translate(${tx.toFixed(1)} ${ty.toFixed(1)}) scale(${s.toFixed(2)})"><ellipse cx="0" cy="-8" rx="9" ry="12" fill="#4C8F5A"/><path d="M-6,-14 Q0,-26 6,-14" fill="#F0C077"/></g>`;
+  }
+  if (g >= 1) {
+    let petals = '';
+    for (let k = 0; k < 14; k++) petals += `<ellipse cx="0" cy="-17" rx="5.5" ry="12" fill="#F0C077" stroke="#C8862B" stroke-width=".8" transform="rotate(${(k * 360 / 14).toFixed(1)})"/>`;
+    let seeds = '';
+    for (let k = 0; k < 8; k++) seeds += `<circle cx="${(Math.cos(k) * 6).toFixed(1)}" cy="${(Math.sin(k * 1.7) * 6).toFixed(1)}" r="1.3" fill="#4A3006"/>`;
+    out += `<g transform="translate(${tx.toFixed(1)} ${(ty - 6).toFixed(1)})"><g${opts.justBloomed ? ' class="bloom-in"' : ''}>${petals}<circle r="13" fill="#7A5008"/>${seeds}</g></g>`;
+  }
+  return out;
+}
+function potSVG(steps, goal) {
+  return `<svg viewBox="-34 -110 68 128"><g transform="translate(0 -6) scale(.55)">${plant(steps, goal)}</g>
+    <path d="M-17,-6 L17,-6 L13,14 L-13,14 Z" fill="#C8763F"/><rect x="-19" y="-10" width="38" height="7" rx="2" fill="#B5652F"/></svg>`;
+}
+
+const Garden = {
+  mount(view) {
+    view.innerHTML = `
+      <div class="head"><div class="big" id="n">0</div><div class="sub"><b id="km">0,00 км</b><span id="goal">из 8 000</span></div></div>
+      <div class="bubble" id="say" style="--tail:70%">…</div>
+      <svg class="scene" viewBox="0 0 400 290" style="background:var(--surface)">
+        <defs><linearGradient id="gsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E7F0EA"/><stop offset="1" stop-color="#FBF7EE"/></linearGradient></defs>
+        <rect width="400" height="290" fill="url(#gsky)"/>
+        <g id="sun" class="fade" opacity="0" transform="translate(362 44)"><g id="rays" stroke="#F0C077" stroke-width="3" stroke-linecap="round">${Array.from({ length: 10 }, (_, k) => `<path d="M0,-27 L0,-36" transform="rotate(${k * 36})"/>`).join('')}</g><circle r="20" fill="#F0C077"/></g>
+        <g id="rainbow" class="fade" opacity="0" fill="none" stroke-width="7">
+          ${['#C2456F', '#C8862B', '#F0C077', '#7FBF8C', '#7FB5C9'].map((c, k) => `<path d="M${226 + k * 7},252 A${84 - k * 7},${84 - k * 7} 0 0 1 ${394 - k * 7},252" stroke="${c}" opacity=".55"/>`).join('')}
+        </g>
+        <rect y="252" width="400" height="38" fill="#E9DEC6"/>
+        <g id="cloud" class="fade" opacity="0" transform="translate(300 30)">
+          <ellipse cx="0" cy="0" rx="34" ry="16" fill="#FDFBF5" stroke="#D9CFBC" stroke-width="1.5"/><circle cx="-14" cy="-10" r="15" fill="#FDFBF5" stroke="#D9CFBC" stroke-width="1.5"/><circle cx="10" cy="-14" r="18" fill="#FDFBF5" stroke="#D9CFBC" stroke-width="1.5"/><ellipse cx="0" cy="2" rx="32" ry="12" fill="#FDFBF5"/>
+        </g>
+        <g id="rain"></g>
+        <g id="plant" transform="translate(310 214)"></g>
+        <path d="M276,214 L344,214 L336,252 L284,252 Z" fill="#C8763F"/><rect x="272" y="206" width="76" height="12" rx="3" fill="#B5652F"/>
+        <ellipse cx="310" cy="214" rx="32" ry="4" fill="#6B4A2A"/>
+        <!-- дорожка -->
+        <ellipse cx="128" cy="262" rx="112" ry="3.5" fill="var(--shadow)"/>
+        <path d="M222,246 L238,176" stroke="#2C2618" stroke-width="6" stroke-linecap="round"/>
+        <rect x="222" y="158" width="40" height="22" rx="5" fill="#2C2618"/><rect x="226" y="162" width="32" height="14" rx="2" fill="#1E2A1F"/>
+        <text id="lcd" x="242" y="172.5" text-anchor="middle" fill="#A9D88A" style="font:600 10px var(--font-data)">0.0</text>
+        <rect x="20" y="242" width="216" height="13" rx="6.5" fill="#2C2618"/>
+        <line id="slats" x1="30" y1="245" x2="226" y2="245" stroke="#8D8370" stroke-width="2" stroke-dasharray="2 11" stroke-linecap="round"/>
+        <g id="grain" transform="translate(56 112) scale(1.22)" style="color:#8D8370"></g>
+      </svg>
+      <div class="shelf" id="shelf"></div>`;
+    say.el = $('#say');
+    this.grain = new Grain($('#grain'));
+    this.belt = 0; this.t = 0; this.drops = [];
+    this.bloomed = state.steps >= state.goal;
+    this.extras = Math.floor(Math.max(0, state.steps - state.goal) / 1000);
+    this.flash = {};
+    this.lastStage = -1;
+  },
+  render() {
+    setText($('#n'), fmt(state.steps));
+    setText($('#km'), `${km(state.distance)} км`);
+    setText($('#goal'), `из ${fmt(state.goal)}`);
+    setText($('#lcd'), state.speed.toFixed(1));
+    const bloomed = state.steps >= state.goal;
+    const extras = Math.min(Math.floor(Math.max(0, state.steps - state.goal) / 1000), 6);
+    this.flash = {};
+    if (bloomed && !this.bloomed) { this.flash.justBloomed = true; news('Расцвёл! Цель закрыта!'); }
+    if (extras > this.extras) { this.flash.newExtra = extras - 1; news(`Ещё цветок! Их уже ${extras + 1}.`); }
+    this.bloomed = bloomed; this.extras = extras;
+    const tier = tierOf(state.speed);
+    $('#cloud').setAttribute('opacity', tier > 0 ? 1 : 0);
+    $('#sun').setAttribute('opacity', tier >= 3 ? 1 : 0);
+    $('#rainbow').setAttribute('opacity', tier >= 4 ? 1 : 0);
+    const left = state.goal - state.steps;
+    speak(state.steps < 80 ? 'Посадил зёрнышко. Пройдёмся — вырастет!'
+      : bloomed ? (extras ? `Целый букет: ${extras + 1}! Топаем дальше?` : 'Цветёт! Цель закрыта!')
+      : tier >= 4 ? 'Бегом — и радуга вылезла!' : tier >= 3 ? 'Солнце вышло! Растём!'
+      : tier > 0 ? `Поливаю! До цветка — ${fmt(left)} шагов.` : `До цветка — ${fmt(left)} шагов. Польём?`);
+    this.drawPlant(0);
+    this.renderShelf();
+  },
+  drawPlant(sway) {
+    $('#plant').innerHTML = plant(state.steps, state.goal, sway, this.flash);
+  },
+  renderShelf() {
+    const days = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+    const stage = Math.min(Math.floor(state.steps / 500), 40);
+    if (stage === this.lastStage) return;
+    this.lastStage = stage;
+    $('#shelf').innerHTML = pastWeek.map((s, i) => `<div class="pot">${potSVG(s, state.goal)}<span>${days[i]}</span></div>`).join('')
+      + `<div class="pot today">${potSVG(state.steps, state.goal)}<span>•</span></div>`;
+  },
+  frame(dt, t) {
+    this.t += dt;
+    const mps = state.speed / 3.6;
+    this.belt += mps * 38 * dt;
+    $('#slats').setAttribute('stroke-dashoffset', this.belt.toFixed(1));
+    this.flash = {};
+    this.drawPlant(Math.sin(this.t * (1.2 + state.speed * 0.25)) * state.speed * 1.6);
+    const want = Math.round(state.speed * 3);
+    while (this.drops.length < want) this.drops.push({ x: 275 + Math.random() * 50, y: 44 + Math.random() * 160 });
+    this.drops.length = Math.min(this.drops.length, want);
+    for (const d of this.drops) { d.y += (170 + state.speed * 25) * dt; if (d.y > 208) { d.y = 44; d.x = 275 + Math.random() * 50; } }
+    $('#rain').innerHTML = this.drops.map((d) => `<path d="M${d.x.toFixed(1)},${d.y.toFixed(1)} l-1.5,7" stroke="#7FB5C9" stroke-width="2.2" stroke-linecap="round"/>`).join('');
+    $('#rays').setAttribute('transform', `rotate(${(this.t * 30).toFixed(1)})`);
+    this.grain.step(dt, t, state.speed, state.steps >= state.goal);
+  },
+  still() {
+    this.grain.still(state.steps >= state.goal);
+    this.drops = []; $('#rain').innerHTML = '';
+    this.drawPlant(0);
+  },
+};
+
+// ================= 3. Заряд =================
+const TIERS = [
+  { bg: 'var(--chip)', say: 'Встаём на дорожку? Покажу, какой темп!' },
+  { bg: 'var(--carb)', say: 'Прогулочным шагом!' },
+  { bg: 'var(--fat)', say: 'Бодрячком!' },
+  { bg: 'var(--protein)', say: 'Вжух! Вот это темп!' },
+  { bg: 'var(--protein-deep)', say: 'Бегом! Хохолок сдувает!' },
+];
+const STICKERS = [
+  { id: 'km1', label: 'первый километр', big: '1 км', shape: 'circle', color: '#7FBF8C', test: () => state.distance >= 1000 },
+  { id: 's3', label: 'три тысячи', big: '3К', shape: 'burst', color: '#F0C077', test: () => state.steps >= 3000 },
+  { id: 'v4', label: 'бодрый шаг', big: '4+', shape: 'hex', color: '#C8862B', test: () => state.maxSpeed >= 4 },
+  { id: 'goal', label: 'цель дня', big: 'ЦЕЛЬ', shape: 'star', color: '#C2456F', test: () => state.steps >= state.goal },
+  { id: 'km5', label: 'пять километров', big: '5 км', shape: 'square', color: '#7FB5C9', test: () => state.distance >= 5000 },
+  { id: 'v6', label: 'вжух', big: '6+', shape: 'burst', color: '#E0648C', test: () => state.maxSpeed >= 6 },
+  { id: 's10', label: 'десять тысяч', big: '10К', shape: 'circle', color: '#4C8F5A', test: () => state.steps >= 10000 },
+  { id: 'v8', label: 'бегом', big: '8+', shape: 'star', color: '#8E2F4E', test: () => state.maxSpeed >= 8 },
+];
+function shapePath(kind) {
+  const pts = (n, r1, r2) => Array.from({ length: n * 2 }, (_, k) => {
+    const r = k % 2 ? r2 : r1, a = (k / (n * 2)) * Math.PI * 2 - Math.PI / 2;
+    return `${(Math.cos(a) * r).toFixed(1)},${(Math.sin(a) * r).toFixed(1)}`;
+  }).join(' ');
+  if (kind === 'circle') return '<circle r="30"/>';
+  if (kind === 'square') return '<rect x="-28" y="-28" width="56" height="56" rx="12"/>';
+  if (kind === 'hex') return `<polygon points="${Array.from({ length: 6 }, (_, k) => { const a = k * Math.PI / 3; return `${(Math.cos(a) * 31).toFixed(1)},${(Math.sin(a) * 31).toFixed(1)}`; }).join(' ')}"/>`;
+  if (kind === 'burst') return `<polygon points="${pts(12, 33, 26)}"/>`;
+  return `<polygon points="${pts(5, 35, 18)}"/>`;
+}
+function stickerSVG(s, got, tilt) {
+  const shape = shapePath(s.shape);
+  if (!got) return `<svg viewBox="-36 -36 72 72"><g fill="none" stroke="var(--text3)" stroke-width="1.6" stroke-dasharray="4 4" opacity=".7">${shape}</g><text text-anchor="middle" y="5" fill="var(--text3)" opacity=".7" style="font:700 14px var(--font-data)">?</text></svg>`;
+  const size = s.big.length > 3 ? 12 : 16;
+  return `<svg viewBox="-36 -36 72 72"><g transform="rotate(${tilt})">
+    <g transform="translate(1 2.5)" fill="#3B2A12" opacity=".25">${shape}</g>
+    <g fill="#FDFBF5" stroke="#FDFBF5" stroke-width="7" stroke-linejoin="round">${shape}</g>
+    <g fill="${s.color}">${shape}</g>
+    <text text-anchor="middle" y="${size / 2.8}" fill="#FDFBF5" style="font:800 ${size}px var(--font-ui);letter-spacing:-.02em">${s.big}</text></g></svg>`;
+}
+
+const Charge = {
+  mount(view) {
+    view.innerHTML = `
+      <div class="field idle" id="field">
+        <div class="stripes" id="stripes"></div>
+        <div class="mark" id="mark">0.0</div>
+        <div class="row">
+          <div><div class="big" id="n">0</div><div class="unit" id="km">0,00 км</div></div>
+          <div class="spd"><b id="spdBig">0.0</b><span class="unit">км/ч</span></div>
+        </div>
+        <div class="bubble" id="say" style="--tail:50%">…</div>
+        <svg viewBox="0 0 360 150" style="overflow:visible"><g id="grain" transform="translate(110 10) scale(1.3)" style="color:currentColor"></g>
+          <line id="floor" x1="0" y1="149" x2="360" y2="149" stroke="currentColor" stroke-opacity=".35" stroke-width="3" stroke-dasharray="14 12" stroke-linecap="round"/></svg>
+        <svg class="trace" viewBox="0 0 360 54" preserveAspectRatio="none"><path id="traceFill" fill="currentColor" fill-opacity=".14"/><path id="traceLine" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>
+      </div>
+      <div class="stickers" id="stickers"></div>`;
+    say.el = $('#say');
+    this.grain = new Grain($('#grain'));
+    this.belt = 0;
+    this.got = new Set(STICKERS.filter((s) => s.test()).map((s) => s.id));
+    this.fresh = null;
+    this.tilts = STICKERS.map((_, i) => ((rng(i + 3)() - 0.5) * 18).toFixed(1));
+    this.renderStickers();
+  },
+  renderStickers() {
+    $('#stickers').innerHTML = STICKERS.map((s, i) => `<div class="sticker${this.got.has(s.id) ? ' got' : ''}${this.fresh === s.id ? ' new' : ''}">${stickerSVG(s, this.got.has(s.id), this.tilts[i])}<span>${s.label}</span></div>`).join('');
+  },
+  render() {
+    const tier = tierOf(state.speed);
+    const field = $('#field');
+    field.classList.toggle('idle', tier === 0);
+    field.style.setProperty('--tier-bg', TIERS[tier].bg);
+    setText($('#n'), fmt(state.steps));
+    setText($('#km'), `${km(state.distance)} км · из ${fmt(state.goal)}`);
+    setText($('#spdBig'), state.speed.toFixed(1));
+    setText($('#mark'), state.speed.toFixed(1));
+    let changed = false;
+    for (const s of STICKERS) if (!this.got.has(s.id) && s.test()) { this.got.add(s.id); this.fresh = s.id; news(`Наклейка «${s.label}»!`); this.grain.jump(); changed = true; }
+    if (changed) this.renderStickers();
+    speak(TIERS[tier].say);
+    this.drawTrace();
+  },
+  drawTrace() {
+    const tr = state.trace;
+    if (tr.length < 2) { $('#traceLine').setAttribute('d', ''); $('#traceFill').setAttribute('d', ''); return; }
+    const n = 90, xs = 360 / (n - 1), seg = tr.slice(-n);
+    const y = (v) => (52 - (v / 10) * 46).toFixed(1);
+    const line = seg.map((v, i) => `${i ? 'L' : 'M'}${(i * xs).toFixed(1)},${y(v)}`).join(' ');
+    $('#traceLine').setAttribute('d', line);
+    $('#traceFill').setAttribute('d', `${line} L${((seg.length - 1) * xs).toFixed(1)},54 L0,54 Z`);
+  },
+  frame(dt, t) {
+    const mps = state.speed / 3.6;
+    this.belt += mps * 60 * dt;
+    $('#stripes').style.backgroundPosition = `${(-this.belt).toFixed(1)}px 0`;
+    $('#floor').setAttribute('stroke-dashoffset', this.belt.toFixed(1));
+    this.grain.step(dt, t, state.speed, state.steps >= state.goal);
+  },
+  still() { this.grain.still(state.steps >= state.goal); },
+};
+
+// ================= оркестр =================
+const VARIANTS = { trail: Trail, garden: Garden, charge: Charge };
+let current = null;
+
+function show(name) {
+  if (!VARIANTS[name]) name = 'trail';
+  document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.v === name));
+  current = VARIANTS[name];
+  current.mount($('#view'));
+  current.render();
+  current.still();
+  loop();
+}
+
+let raf = 0, lastT = 0, lastRender = 0, lastTrace = 0;
+function loop() { if (!raf && state.speed > 0) { lastT = 0; raf = requestAnimationFrame(frame); } }
+function frame(t) {
+  if (state.speed <= 0) { raf = 0; current.still(); current.render(); syncSim(); return; }
+  const dt = lastT ? Math.min((t - lastT) / 1000, 0.1) : 0;
+  lastT = t;
+  const mps = state.speed / 3.6;
+  state.steps = Math.min(14000, state.steps + (mps / strideM(state.speed)) * dt * SIM_X);
+  state.distance += mps * dt * SIM_X;
+  state.maxSpeed = Math.max(state.maxSpeed, state.speed);
+  if (t - lastTrace > 400) { state.trace.push(state.speed); lastTrace = t; }
+  if (!reduced) current.frame(dt, t);
+  if (t - lastRender > 120) { current.render(); syncSim(); lastRender = t; }
+  if (state.steps >= 14000) setSpeed(0);
+  raf = requestAnimationFrame(frame);
+}
+
+function setSpeed(v) {
+  if (v > 0) state.lastSpeed = v;
+  state.speed = v;
+  state.maxSpeed = Math.max(state.maxSpeed, v);
+  syncSim();
+  current.render();
+  if (v > 0) loop(); else current.still();
+}
+function syncSim() {
+  $('#spd').value = state.speed;
+  $('#spdOut').textContent = `${state.speed.toFixed(1)} км/ч`;
+  $('#stp').value = Math.round(state.steps);
+  $('#stpOut').textContent = fmt(state.steps);
+  $('#playIcon').innerHTML = state.speed > 0
+    ? '<rect x="4" y="3" width="4.5" height="14" rx="1" fill="currentColor"/><rect x="11.5" y="3" width="4.5" height="14" rx="1" fill="currentColor"/>'
+    : '<path d="M5,3 L17,10 L5,17 Z" fill="currentColor"/>';
+}
+
+$('#play').addEventListener('click', () => setSpeed(state.speed > 0 ? 0 : state.lastSpeed));
+$('#spd').addEventListener('input', (e) => setSpeed(+e.target.value));
+$('#stp').addEventListener('input', (e) => {
+  state.steps = +e.target.value;
+  state.distance = state.steps * strideM(state.lastSpeed);
+  syncSim();
+  current.render();
+});
+document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => { location.hash = b.dataset.v; }));
+addEventListener('hashchange', () => show(location.hash.slice(1)));
+
+for (let i = 0; i < 40; i++) state.trace.push(Math.max(0, 3.2 + Math.sin(i / 5) * 0.8 + (i > 25 ? 0.9 : 0)));
+syncSim();
+show(location.hash.slice(1));
+</script>

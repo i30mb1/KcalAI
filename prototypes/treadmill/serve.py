@@ -5,6 +5,7 @@
 """
 import http.server
 import pathlib
+import sys
 import webbrowser
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -24,8 +25,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
     def do_GET(self):
-        if self.path.split('?')[0] in ('/', '/index.html'):
-            page = SHELL.replace('{page}', (ROOT / 'index.html').read_text('utf-8')).encode('utf-8')
+        path = self.path.split('?')[0]
+        name = 'index.html' if path == '/' else path.lstrip('/')
+        if name.endswith('.html') and '/' not in name and (ROOT / name).is_file():
+            page = SHELL.replace('{page}', (ROOT / name).read_text('utf-8')).encode('utf-8')
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.send_header('Content-Length', str(len(page)))
@@ -45,5 +48,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 if __name__ == '__main__':
     url = f'http://localhost:{PORT}'
     print(f'Дорожка: {url}  (демо: {url}/#demo)')
-    webbrowser.open(url)
+    if "--no-open" not in sys.argv:
+        webbrowser.open(url)
     http.server.ThreadingHTTPServer(('127.0.0.1', PORT), Handler).serve_forever()
