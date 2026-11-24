@@ -9,9 +9,11 @@ import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import n7.kcalai.model.GoalMacros
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
@@ -35,6 +37,12 @@ const val WEB_SOCKET_PATH = "/ws"
 /** Больше десяти килограммов за раз человек не ест, а ноль записывать нечего. */
 const val WEB_GRAMS_MAX = 10_000
 
+/** Имя — подпись в чужой ленте и во вкладке, а не документ. */
+const val WEB_NAME_MAX = 40
+
+/** Больше килограмма белка, жира или углеводов в день цель не бывает, ноль — тоже не цель. */
+const val WEB_GOAL_MAX_G = 1_000
+
 /** Что страница просит у телефона. */
 sealed interface ToPhone {
 
@@ -54,11 +62,22 @@ sealed interface ToPhone {
      * Подсказка называется номером в выдаче на [query], а не продуктом: продукт
      * знает только телефон, и страница не может подсунуть ему чужие числа.
      */
-    data class Add(val query: String, val index: Int, val grams: Int) : ToPhone
+    data class Add(val query: String, val index: Int, val grams: Int, val meal: MealType? = null) : ToPhone
 
     data class SetGrams(val entryId: Long, val grams: Int) : ToPhone
 
     data class Delete(val entryId: Long) : ToPhone
+
+    /** Показать другой день — из недели или стрелками по неделям. Будущее не открывается. */
+    data class Open(val day: Long) : ToPhone
+
+    /** Цель в граммах: калории из них складываются сами, как в шите цели. Действует с сегодня. */
+    data class SetGoal(val prot: Int, val fat: Int, val carb: Int) : ToPhone
+
+    data class SetName(val name: String) : ToPhone
+
+    /** Отозвать пущенный браузер — и чужой, забытый в гостях, и свой. */
+    data class Revoke(val browserId: Long) : ToPhone
 
     /** «Выйти»: телефон забывает этот браузер, и в следующий раз его снова надо пустить. */
     data object Leave : ToPhone
@@ -81,11 +100,17 @@ sealed interface ToPage {
     /** Пустить просятся слишком многие сразу — новых не спрашиваем. */
     data object Busy : ToPage
 
-    /** Сегодняшний дневник; приходит заново на каждое его изменение. */
+    /** Открытый день; приходит заново на каждое его изменение. */
     data class Day(val day: WebDay) : ToPage
 
     data class Suggestions(val query: String, val items: List<WebSuggestion>) : ToPage
 }
+
+/** Пущенный браузер. @param here это тот, в котором открыта страница */
+data class WebBrowser(val id: Long, val label: String, val here: Boolean)
+
+/** День недели в полосе над дневником: калории и цель того дня. */
+data class WebDaySummary(val date: Long, val kcal: Int, val goalKcal: Int?)
 
 /**
  * Дневник дня глазами страницы.
@@ -94,6 +119,10 @@ sealed interface ToPage {
  * @param goalKcal цель дня; `null` — не задана
  * @param peers телефоны рядом: у каждого своя страница
  * @param goalMacros цель по белкам, жирам и углеводам — полосы в плитках; `null` — не задана
+ * @param date какой это день, эпохальные сутки
+ * @param today какой день сегодня по часам телефона: страница своим часам не верит
+ * @param week неделя открытого дня, с понедельника по воскресенье
+ * @param browsers пущенные браузеры — для настроек; вместе с днём, чтобы не ждать отдельного слова
  */
 data class WebDay(
     val owner: String,
@@ -101,6 +130,10 @@ data class WebDay(
     val goalKcal: Int?,
     val peers: List<WebPeer>,
     val goalMacros: WebMacros? = null,
+    val date: Long = 0,
+    val today: Long = 0,
+    val week: List<WebDaySummary> = emptyList(),
+    val browsers: List<WebBrowser> = emptyList(),
 ) {
     val kcal: Int get() = entries.sumOf { it.kcal }
 
@@ -108,7 +141,9 @@ data class WebDay(
 }
 
 /** Цель дня в граммах. */
-data class WebMacros(val prot: Int, val fat: Int, val carb: Int)
+data class WebMacros(val prot: Int, val fat: Int, val carb: Int) {
+    val kcal: Int get() = GoalMacros(prot, fat, carb).kcal
+}
 
 /** Запись дневника: числа уже посчитаны телефоном на её вес. Белки, жиры и углеводы — в сотых грамма. */
 data class WebEntry(
@@ -150,6 +185,10 @@ fun encode(message: ToPhone): String = envelope(
         is ToPhone.Add -> "add"
         is ToPhone.SetGrams -> "grams"
         is ToPhone.Delete -> "delete"
+        is ToPhone.Open -> "open"
+        is ToPhone.SetGoal -> "goal"
+        is ToPhone.SetName -> "name"
+        is ToPhone.Revoke -> "revoke"
         ToPhone.Leave -> "leave"
     },
 ) {
@@ -160,12 +199,21 @@ fun encode(message: ToPhone): String = envelope(
             put("query", message.query)
             put("index", message.index)
             put("grams", message.grams)
+            message.meal?.let { put("meal", it.name) }
         }
         is ToPhone.SetGrams -> {
             put("id", message.entryId)
             put("grams", message.grams)
         }
         is ToPhone.Delete -> put("id", message.entryId)
+        is ToPhone.Open -> put("day", message.day)
+        is ToPhone.SetGoal -> {
+            put("prot", message.prot)
+            put("fat", message.fat)
+            put("carb", message.carb)
+        }
+        is ToPhone.SetName -> put("name", message.name)
+        is ToPhone.Revoke -> put("id", message.browserId)
         ToPhone.Leave -> Unit
     }
 }
@@ -196,6 +244,10 @@ fun encode(message: ToPage): String = envelope(
             }
             put("entries", buildJsonArray { day.entries.forEach { add(it.toJson()) } })
             put("peers", buildJsonArray { day.peers.forEach { add(it.toJson()) } })
+            put("date", day.date)
+            put("today", day.today)
+            put("week", buildJsonArray { day.week.forEach { add(it.toJson()) } })
+            put("browsers", buildJsonArray { day.browsers.forEach { add(it.toJson()) } })
         }
         is ToPage.Suggestions -> {
             put("query", message.query)
@@ -219,6 +271,18 @@ private fun WebEntry.toJson() = buildJsonObject {
     put("prot", protCg)
     put("fat", fatCg)
     put("carb", carbCg)
+}
+
+private fun WebDaySummary.toJson() = buildJsonObject {
+    put("date", date)
+    put("kcal", kcal)
+    goalKcal?.let { put("goal", it) }
+}
+
+private fun WebBrowser.toJson() = buildJsonObject {
+    put("id", id)
+    put("label", label)
+    put("here", here)
 }
 
 private fun WebPeer.toJson() = buildJsonObject {
@@ -245,9 +309,18 @@ fun parseToPhone(text: String): ToPhone? {
             query = json.text("query") ?: return null,
             index = json.long("index")?.toInt()?.takeIf { it >= 0 } ?: return null,
             grams = json.grams() ?: return null,
+            meal = json.text("meal")?.let { name -> MealType.entries.firstOrNull { it.name == name } ?: return null },
         )
         "grams" -> ToPhone.SetGrams(entryId = json.long("id") ?: return null, grams = json.grams() ?: return null)
         "delete" -> ToPhone.Delete(entryId = json.long("id") ?: return null)
+        "open" -> ToPhone.Open(day = json.long("day") ?: return null)
+        "goal" -> ToPhone.SetGoal(
+            prot = json.goalGrams("prot") ?: return null,
+            fat = json.goalGrams("fat") ?: return null,
+            carb = json.goalGrams("carb") ?: return null,
+        )
+        "name" -> ToPhone.SetName(name = json.text("name")?.trim()?.takeIf { it.isNotEmpty() }?.take(WEB_NAME_MAX) ?: return null)
+        "revoke" -> ToPhone.Revoke(browserId = json.long("id") ?: return null)
         "leave" -> ToPhone.Leave
         else -> null
     }
@@ -267,6 +340,10 @@ fun parseToPage(text: String): ToPage? {
                 goalKcal = json.long("goal")?.toInt(),
                 peers = json.list("peers") { it.toPeer() } ?: return null,
                 goalMacros = json.macros(),
+                date = json.long("date") ?: return null,
+                today = json.long("today") ?: return null,
+                week = json.list("week") { it.toSummary() } ?: return null,
+                browsers = json.list("browsers") { it.toBrowser() } ?: return null,
             )
         )
         "suggestions" -> ToPage.Suggestions(
@@ -300,6 +377,20 @@ private fun JsonObject.toEntry(): WebEntry? = WebEntry(
     fatCg = long("fat")?.toInt() ?: return null,
     carbCg = long("carb")?.toInt() ?: return null,
 )
+
+private fun JsonObject.toSummary(): WebDaySummary? = WebDaySummary(
+    date = long("date") ?: return null,
+    kcal = long("kcal")?.toInt() ?: return null,
+    goalKcal = long("goal")?.toInt(),
+)
+
+private fun JsonObject.toBrowser(): WebBrowser? = WebBrowser(
+    id = long("id") ?: return null,
+    label = text("label") ?: return null,
+    here = (this["here"] as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull ?: return null,
+)
+
+private fun JsonObject.goalGrams(key: String): Int? = long(key)?.takeIf { it in 1..WEB_GOAL_MAX_G }?.toInt()
 
 private fun JsonObject.toPeer(): WebPeer? = WebPeer(name = text("name") ?: return null, url = text("url") ?: return null)
 

@@ -2,25 +2,31 @@ package n7.kcalai.webhost
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
+import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.totals
 import n7.kcalai.model.EntrySource
+import n7.kcalai.model.MealType
 import n7.kcalai.model.forGrams
 import n7.kcalai.model.owner
+import n7.kcalai.personal.defaultPastMeal
 import n7.kcalai.personal.mealForHour
+import n7.kcalai.personal.pastEntryTime
 import n7.kcalai.repositories.DiaryRepository
 import n7.kcalai.resolver.ResolvedItem
+import n7.kcalai.webapi.WebDaySummary
 import n7.kcalai.webapi.WebEntry
 import n7.kcalai.webapi.WebMacros
 import n7.kcalai.webapi.WebSuggestion
+import n7.kcalai.webapi.weekOf
 import kotlin.time.Clock
 
 /**
@@ -34,11 +40,13 @@ import kotlin.time.Clock
  * надо ровно ту, что была у неё перед глазами, даже если поиск с тех пор выучил новое.
  *
  * @param regram правка граммов записи — та же, что из шита: `(id, граммы, сейчас)`
+ * @param rename новое имя — туда же, куда его кладёт ответ Яйцу
  */
 class RepositoryWebDiary(
     private val diary: DiaryRepository,
     private val suggestFood: suspend (String) -> List<ResolvedItem>,
     private val regram: suspend (entryId: Long, grams: Int, now: Long) -> Unit,
+    private val rename: suspend (String) -> Unit,
     private val clock: Clock = Clock.System,
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
 ) : WebDiary {
@@ -48,17 +56,22 @@ class RepositoryWebDiary(
     /** Последние выдачи по запросам, старые первыми. Браузеров бывает несколько, и запросы у них свои. */
     private val shown = LinkedHashMap<String, List<ResolvedItem>>()
 
-    override fun today(): Flow<WebToday> = flow {
-        val day = todayEpochDay()
-        emitAll(
-            combine(diary.observeDay(day), diary.observeGoal(day)) { totals, goal ->
-                WebToday(
-                    entries = totals.entries.map { it.toWeb() },
-                    goalKcal = goal?.kcal?.takeIf { it > 0 },
-                    goalMacros = goal?.takeIf { it.prot > 0 && it.fat > 0 && it.carb > 0 }?.let { WebMacros(it.prot, it.fat, it.carb) },
-                )
-            }
-        )
+    override val today: Long get() = clock.todayIn(zone).toEpochDays()
+
+    override fun day(date: Long): Flow<WebDayContent> =
+        combine(diary.observeDay(date), diary.observeGoal(date)) { totals, goal ->
+            WebDayContent(
+                entries = totals.entries.map { it.toWeb() },
+                goalKcal = goal?.kcal?.takeIf { it > 0 },
+                goalMacros = goal?.takeIf { it.prot > 0 && it.fat > 0 && it.carb > 0 }?.let { WebMacros(it.prot, it.fat, it.carb) },
+            )
+        }
+
+    override fun week(date: Long): Flow<List<WebDaySummary>> {
+        val week = weekOf(date)
+        return diary.observeWeek(todayEpochDay = week.last, days = week.count()).map { days ->
+            days.map { WebDaySummary(date = it.dateEpochDay, kcal = it.kcal, goalKcal = it.goalKcal) }
+        }
     }
 
     override suspend fun suggest(query: String): List<WebSuggestion> = found(query).map { item ->
@@ -71,28 +84,40 @@ class RepositoryWebDiary(
         )
     }
 
-    override suspend fun add(query: String, index: Int, grams: Int) {
+    /**
+     * Сегодня — приём по часам (или выбранный) и время «сейчас». Прошлый день — выбранный
+     * приём или первый незаписанный, и его обычный час: ужин, дописанный утром, не должен
+     * стать ужином в девять утра и научить этому модели привычек.
+     */
+    override suspend fun add(query: String, index: Int, grams: Int, day: Long, meal: MealType?) {
         val candidate = (lock.withLock { shown[query] } ?: found(query)).getOrNull(index)?.candidate ?: return
-        val day = todayEpochDay()
+        val entries = diary.observeDay(day).first().entries
         val now = clock.now()
-        val meal = mealForHour(
-            hour = now.toLocalDateTime(zone).hour,
-            lastEntry = diary.observeDay(day).first().entries.maxByOrNull { it.createdAt },
-            nowMillis = now.toEpochMilliseconds(),
-        )
-        diary.add(candidate, grams, meal, day, EntrySource.TEXT, now.toEpochMilliseconds())
+        val (target, at) = if (day >= today) {
+            val target = meal ?: mealForHour(
+                hour = now.toLocalDateTime(zone).hour,
+                lastEntry = entries.maxByOrNull { it.createdAt },
+                nowMillis = now.toEpochMilliseconds(),
+            )
+            target to now.toEpochMilliseconds()
+        } else {
+            val target = meal ?: defaultPastMeal(entries)
+            target to pastEntryTime(LocalDate.fromEpochDays(day), target, entries, zone)
+        }
+        diary.add(candidate, grams, target, day.coerceAtMost(today), EntrySource.TEXT, at)
     }
 
     override suspend fun setGrams(entryId: Long, grams: Int) {
-        if (todays(entryId)) regram(entryId, grams, clock.now().toEpochMilliseconds())
+        if (diary.entry(entryId) != null) regram(entryId, grams, clock.now().toEpochMilliseconds())
     }
 
-    override suspend fun delete(entryId: Long) {
-        if (todays(entryId)) diary.delete(entryId)
+    override suspend fun delete(entryId: Long) = diary.delete(entryId)
+
+    override suspend fun setGoal(goal: WebMacros) {
+        diary.setGoal(DailyGoalEntity(fromDateEpochDay = today, kcal = goal.kcal, prot = goal.prot, fat = goal.fat, carb = goal.carb))
     }
 
-    /** Страница показывает только сегодня — и трогать может только сегодняшнее. */
-    private suspend fun todays(entryId: Long): Boolean = diary.entry(entryId)?.dateEpochDay == todayEpochDay()
+    override suspend fun setName(name: String) = rename(name)
 
     /** Опознанное, с весом, — и запомненное под этим запросом. */
     private suspend fun found(query: String): List<ResolvedItem> {
@@ -104,8 +129,6 @@ class RepositoryWebDiary(
         }
         return items
     }
-
-    private fun todayEpochDay(): Long = clock.todayIn(zone).toEpochDays()
 
     private companion object {
         const val REMEMBERED = 16

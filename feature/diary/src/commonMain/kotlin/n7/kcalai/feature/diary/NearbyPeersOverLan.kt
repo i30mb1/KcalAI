@@ -8,10 +8,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.awaitCancellation
 import n7.kcalai.model.Nutriments
 import n7.kcalai.nearby.NearbyDiscovery
 import n7.kcalai.nearby.OfferPacket
@@ -59,26 +59,20 @@ class NearbyPeersOverLan(
     override fun address(): Flow<String?> = page
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    override fun nearby(): Flow<List<NearbyPerson>> = myName
-        // Профиль приходит потоком из базы и повторяет себя на каждое её изменение,
-        // а перезапуск здесь — это новый сокет на новом порту. Сосед, успевший
-        // узнать прошлый порт, стучался бы в закрытую дверь.
-        .distinctUntilChanged()
-        .flatMapLatest { name -> running(name?.takeIf { it.isNotBlank() }) }
-
-    /** @param name как объявиться соседям; `null` — назваться нечем: ни объявляемся, ни ищем */
-    private fun running(name: String?): Flow<List<NearbyPerson>> = flow {
+    override fun nearby(): Flow<List<NearbyPerson>> = flow {
+        // Сервер — на всё время экрана, а не на имя: смена имени (в том числе со страницы)
+        // не должна обрывать страницу, с которой его и меняли.
         val port = receiver.start()
-        if (name != null) discovery.advertise(name, port)
         // Страница дневника — на том же сервере: её адрес живёт, пока он поднят.
         page.value = discovery.localAddress()?.let { pageUrl(it, port) }
         try {
-            if (name != null) {
-                emitAll(discovery.peers())
-            } else {
-                emit(emptyList())
-                awaitCancellation()
-            }
+            emitAll(
+                myName
+                    // Профиль повторяет себя на каждое изменение базы — объявляемся заново только на новое имя.
+                    .map { it?.takeIf(String::isNotBlank) }
+                    .distinctUntilChanged()
+                    .flatMapLatest { name -> announced(name, port) },
+            )
         } finally {
             page.value = null
             around.value = emptyList()
@@ -90,6 +84,17 @@ class NearbyPeersOverLan(
         around.value = peers
         peers.map { NearbyPerson(id = it.key, name = it.name) }
     }
+
+    /** @param name как объявиться соседям; `null` — назваться нечем: ни объявляемся, ни ищем */
+    private fun announced(name: String?, port: Int): Flow<List<Peer>> =
+        if (name == null) {
+            flowOf(emptyList())
+        } else {
+            flow {
+                discovery.advertise(name, port)
+                emitAll(discovery.peers())
+            }
+        }
 
     override suspend fun send(id: String, food: String, grams: Int, nutriments: Nutriments): Boolean {
         val peer = known[id] ?: return false

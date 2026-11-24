@@ -78,6 +78,30 @@ class PageAddressTest {
         assertTrue(discovery.advertised.isEmpty(), "без имени соседям объявлять нечего")
     }
 
+    /**
+     * Сменили имя (в том числе со страницы) — соседям объявляемся заново, а сервер стоит:
+     * перезапуск оборвал бы страницу, с которой имя и меняли.
+     */
+    @Test
+    fun `смена имени сервер не перезапускает`() = runTest {
+        val discovery = Discovery("192.168.1.5")
+        val name = MutableStateFlow<String?>("Женя")
+        val lan = NearbyPeersOverLan(discovery, OfferReceiver(NoOffers), myName = name)
+
+        val (before, after) = withContext(Dispatchers.Default) {
+            val running = launch { lan.nearby().collect {} }
+            val first = lan.address().filterNotNull().first()
+            name.value = "Аня"
+            while (discovery.advertised.size < 2) kotlinx.coroutines.delay(10)
+            val second = lan.address().first()
+            running.cancelAndJoin()
+            first to second
+        }
+
+        assertEquals(before, after, "порт тот же — сервер не перезапускался")
+        assertEquals(listOf("Женя", "Аня"), discovery.advertised)
+    }
+
     /** Не в Wi-Fi — адреса, по которому браузер достучался бы, нет: молчим, а не врём. */
     @Test
     fun `не в Wi-Fi адреса нет`() = runTest {

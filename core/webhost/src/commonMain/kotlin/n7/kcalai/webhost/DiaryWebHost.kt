@@ -16,7 +16,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.consumeAsFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import n7.kcalai.database.WebClientDao
 import n7.kcalai.nearby.LanRoutes
@@ -52,12 +52,12 @@ class DiaryWebHost(
         install(WebSockets)
         routing {
             webSocket(WEB_SOCKET_PATH) {
-                // Имя не обязательно: свой дневник открывают и без него, подпись тогда пустая.
-                val name = owner.first().orEmpty()
                 WebSession(
                     clients = clients,
                     diary = diary,
-                    owner = name,
+                    // Имя не обязательно: свой дневник открывают и без него, подпись тогда пустая.
+                    // Потоком: сменили имя со страницы — подпись меняется тут же.
+                    owner = owner.map { it.orEmpty() },
                     peers = peers,
                     label = browserLabel(call.request.headers[HttpHeaders.UserAgent]),
                     presence = presence,

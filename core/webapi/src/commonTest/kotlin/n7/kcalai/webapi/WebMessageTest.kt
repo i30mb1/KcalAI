@@ -25,6 +25,9 @@ class WebMessageTest {
         goalKcal = 2_100,
         peers = listOf(WebPeer(name = "Аня", url = "http://192.168.1.7:47800/")),
         goalMacros = WebMacros(prot = 120, fat = 70, carb = 230),
+        date = 20_781,
+        today = 20_782,
+        week = listOf(WebDaySummary(date = 20_781, kcal = 320, goalKcal = 2_100), WebDaySummary(date = 20_782, kcal = 0, goalKcal = null)),
     )
 
     @Test
@@ -34,6 +37,11 @@ class WebMessageTest {
             ToPhone.Hello(token = "a1b2"),
             ToPhone.Search(query = "гречка 200"),
             ToPhone.Add(query = "гречка 200", index = 1, grams = 180),
+            ToPhone.Add(query = "гречка 200", index = 0, grams = 200, meal = MealType.DINNER),
+            ToPhone.Open(day = 20_775),
+            ToPhone.SetGoal(prot = 120, fat = 70, carb = 230),
+            ToPhone.SetName(name = "Женя"),
+            ToPhone.Revoke(browserId = 4),
             ToPhone.SetGrams(entryId = 7, grams = 150),
             ToPhone.Delete(entryId = 9),
             ToPhone.Leave,
@@ -49,7 +57,8 @@ class WebMessageTest {
             ToPage.Denied,
             ToPage.Busy,
             ToPage.Day(day),
-            ToPage.Day(day.copy(goalKcal = null, goalMacros = null, peers = emptyList(), entries = emptyList())),
+            ToPage.Day(day.copy(goalKcal = null, goalMacros = null, peers = emptyList(), entries = emptyList(), week = emptyList())),
+            ToPage.Day(day.copy(browsers = listOf(WebBrowser(id = 4, label = "Chrome на Windows", here = true), WebBrowser(id = 5, label = "Safari на Mac", here = false)))),
             ToPage.Suggestions(
                 query = "гречка",
                 items = listOf(WebSuggestion(name = "Гречка отварная", grams = 200, kcal = 220, mascot = Mascot.GRAIN)),
@@ -74,6 +83,21 @@ class WebMessageTest {
         assertNull(parseToPhone("""{"v":$WEB_VERSION,"t":"add","query":"гречка"}"""), "без номера и граммов добавлять нечего")
         assertNull(parseToPhone(encode(ToPage.Denied)), "сообщение телефона телефону не команда")
         assertNull(parseToPage("[]"))
+    }
+
+    /** Имя — подпись в чужой ленте: пустое не меняет ничего, длинное укорачивается. */
+    @Test
+    fun `имя со страницы — непустое и не длиннее подписи`() {
+        assertNull(parseToPhone(encode(ToPhone.SetName("   "))))
+        assertEquals(ToPhone.SetName("Женя"), parseToPhone(encode(ToPhone.SetName("  Женя "))))
+        assertEquals(WEB_NAME_MAX, (parseToPhone(encode(ToPhone.SetName("я".repeat(200)))) as ToPhone.SetName).name.length)
+    }
+
+    /** Цель — те же пределы, что у шита цели: ноль белка и центнер углеводов не сохраняются. */
+    @Test
+    fun `невозможная цель не разбирается`() {
+        assertNull(parseToPhone(encode(ToPhone.SetGoal(prot = 0, fat = 70, carb = 230))))
+        assertNull(parseToPhone(encode(ToPhone.SetGoal(prot = 120, fat = 70, carb = 100_000))))
     }
 
     /** Граммы со страницы — от человека, но через сеть: ноль и десять тонн не записываются. */

@@ -39,6 +39,13 @@ internal class FakeWebClientDao : WebClientDao {
         rows.update { list -> list.map { if (it.token == token && it.leftAt == null) it.copy(leftAt = now) else it } }
     }
 
+    override suspend fun revoke(id: Long, now: Long) {
+        rows.update { list -> list.map { if (it.id == id && it.leftAt == null) it.copy(leftAt = now) else it } }
+    }
+
+    override fun observeAdmitted(): Flow<List<WebClientEntity>> =
+        rows.map { list -> list.filter { it.choice == Choice.YES && it.leftAt == null }.sortedBy { it.id } }
+
     override suspend fun waitingCount(dateEpochDay: Long): Int =
         rows.value.count { it.choice == null && it.dateEpochDay == dateEpochDay }
 }

@@ -64,6 +64,14 @@ interface WebClientDao {
     @Query("UPDATE web_client SET leftAt = :now WHERE token = :token AND leftAt IS NULL")
     suspend fun leave(token: String, now: Long)
 
+    /** Отозвать по id — из настроек страницы: и чужой браузер, и свой. */
+    @Query("UPDATE web_client SET leftAt = :now WHERE id = :id AND leftAt IS NULL")
+    suspend fun revoke(id: Long, now: Long)
+
+    /** Пущенные и не вышедшие — список в настройках страницы. */
+    @Query("SELECT * FROM web_client WHERE choice = 'YES' AND leftAt IS NULL ORDER BY id")
+    fun observeAdmitted(): Flow<List<WebClientEntity>>
+
     /**
      * Сколько сегодняшних просьб ждёт ответа: по ним считается предел. Вчерашние не в счёт:
      * в ленте их уже не видно, ответить на них нельзя, и держать предел они не должны.

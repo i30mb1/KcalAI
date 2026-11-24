@@ -505,6 +505,15 @@ class MascotBrainTest {
 
     // --- Страница дневника в браузере ----------------------------------------------------
 
+    /** Имя меняют и со страницы: оно же больше не спрашивается — человек его уже назвал. */
+    @Test
+    fun `имя меняется в профиле и больше не спрашивается`() = runTest {
+        brain().setName("Женя")
+
+        assertEquals("Женя", mascots.profileRow.value?.name)
+        assertEquals(true, mascots.profileRow.value?.nameAsked)
+    }
+
     @Test
     fun `адрес страницы Зёрнышко называет в ленте`() = runTest {
         started()

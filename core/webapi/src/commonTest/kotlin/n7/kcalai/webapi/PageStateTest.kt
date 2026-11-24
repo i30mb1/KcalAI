@@ -112,6 +112,27 @@ class PageStateTest {
         assertEquals(220, listOf(buckwheat).totals().kcal)
     }
 
+    /** Неделя — с понедельника по воскресенье, как в календаре; стрелки листают по неделе. */
+    @Test
+    fun `неделя дня — с понедельника по воскресенье`() {
+        // 2026-11-24 — вторник.
+        val tuesday = kotlinx.datetime.LocalDate(2026, 11, 24).toEpochDays()
+
+        assertEquals(tuesday - 1..tuesday + 5, weekOf(tuesday))
+        assertEquals(tuesday - 1, weekOf(tuesday - 1).first, "понедельник — сам начало недели")
+    }
+
+    @Test
+    fun `в прошлый день приём по умолчанию — первый незаписанный`() {
+        assertEquals(MealType.BREAKFAST, day.copy(entries = emptyList()).defaultMeal())
+        assertEquals(MealType.DINNER, day.defaultMeal(), "завтрак и обед уже записаны")
+    }
+
+    @Test
+    fun `цель из граммов складывает калории`() {
+        assertEquals(120 * 4 + 70 * 9 + 230 * 4, WebMacros(prot = 120, fat = 70, carb = 230).kcal)
+    }
+
     @Test
     fun `соседи — словами Зёрнышка`() {
         val near = day.copy(peers = listOf(WebPeer("Аня", "http://192.168.1.7:47800/")))

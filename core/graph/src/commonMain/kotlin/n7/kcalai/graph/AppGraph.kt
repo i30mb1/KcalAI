@@ -270,6 +270,7 @@ abstract class AppGraph {
                 diary = diaryRepository,
                 suggestFood = { query -> textResolver.suggest(query) },
                 regram = personalRepository::onGramsEdited,
+                rename = mascotBrain::setName,
             ),
             owner = mascotBrain.profile.map { it.name },
             // Лениво: соседей знает сервер, который эту страницу и отдаёт.

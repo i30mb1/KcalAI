@@ -1,7 +1,9 @@
 package n7.kcalai.webapi
 
 import n7.kcalai.model.Mascot
+import kotlinx.datetime.LocalDate
 import n7.kcalai.model.MealType
+import n7.kcalai.model.firstUnloggedMeal
 
 /**
  * Что видно на странице дневника в браузере.
@@ -84,6 +86,17 @@ fun WebDay.arrivals(since: WebDay?): List<Mascot> {
     val known = since.entries.map { it.id }.toSet()
     return entries.filter { it.id !in known }.map { it.owner }.distinct()
 }
+
+/** Неделя дня — с понедельника по воскресенье, эпохальные сутки. */
+fun weekOf(day: Long): LongRange {
+    val monday = day - LocalDate.fromEpochDays(day).dayOfWeek.ordinal
+    return monday..monday + DAYS_IN_WEEK - 1
+}
+
+private const val DAYS_IN_WEEK = 7
+
+/** Приём, в который пишется прошлый день, пока человек не выбрал другой: первый незаписанный. */
+fun WebDay.defaultMeal(): MealType = firstUnloggedMeal(entries.map { it.meal })
 
 /** Записи по приёмам в порядке дня; пустые приёмы не показываются. */
 fun WebDay.byMeal(): List<Pair<MealType, List<WebEntry>>> =

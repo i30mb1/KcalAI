@@ -47,11 +47,15 @@ class DiaryWebHostTest {
     private val host = DiaryWebHost(
         clients = clients,
         diary = object : WebDiary {
-            override fun today() = emptyFlow<WebToday>()
+            override val today: Long = 0
+            override fun day(date: Long) = emptyFlow<WebDayContent>()
+            override fun week(date: Long) = emptyFlow<List<n7.kcalai.webapi.WebDaySummary>>()
             override suspend fun suggest(query: String) = emptyList<WebSuggestion>()
-            override suspend fun add(query: String, index: Int, grams: Int) = Unit
+            override suspend fun add(query: String, index: Int, grams: Int, day: Long, meal: n7.kcalai.model.MealType?) = Unit
             override suspend fun setGrams(entryId: Long, grams: Int) = Unit
             override suspend fun delete(entryId: Long) = Unit
+            override suspend fun setGoal(goal: n7.kcalai.webapi.WebMacros) = Unit
+            override suspend fun setName(name: String) = Unit
         },
         owner = MutableStateFlow("Женя"),
         peers = MutableStateFlow(emptyList()),

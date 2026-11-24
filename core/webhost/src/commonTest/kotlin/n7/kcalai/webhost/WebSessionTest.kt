@@ -15,7 +15,11 @@ import n7.kcalai.model.MealType
 import n7.kcalai.webapi.ToPage
 import n7.kcalai.webapi.ToPhone
 import n7.kcalai.webapi.WebEntry
+import n7.kcalai.webapi.WebDaySummary
+import n7.kcalai.webapi.WebMacros
 import n7.kcalai.webapi.WebPeer
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import n7.kcalai.webapi.WebSuggestion
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -53,7 +57,7 @@ class WebSessionTest {
             val session = WebSession(
                 clients = clients,
                 diary = diary,
-                owner = "Женя",
+                owner = flowOf("Женя"),
                 peers = peers,
                 label = "Chrome на Windows",
                 presence = presence,
@@ -161,7 +165,7 @@ class WebSessionTest {
 
         browser.say(ToPhone.Add(query = "гречка", index = 1, grams = 180))
         runCurrent()
-        assertEquals(listOf(Triple("гречка", 1, 180)), diary.added)
+        assertEquals(listOf(Added("гречка", 1, 180, diary.today, null)), diary.added)
     }
 
     @Test
@@ -184,6 +188,82 @@ class WebSessionTest {
         runCurrent()
 
         assertEquals(listOf(buckwheat), browser.last<ToPage.Day>()?.day?.entries)
+    }
+
+    @Test
+    fun `открыть другой день — страница получает его`() = runTest {
+        val browser = admitted()
+
+        browser.say(ToPhone.Open(day = diary.today - 3))
+        runCurrent()
+
+        assertEquals(diary.today - 3, browser.last<ToPage.Day>()?.day?.date)
+        assertEquals(diary.today, browser.last<ToPage.Day>()?.day?.today)
+    }
+
+    /** В будущее не заглядывают: записывать туда нечего. */
+    @Test
+    fun `будущий день не открывается`() = runTest {
+        val browser = admitted()
+
+        browser.say(ToPhone.Open(day = diary.today + 5))
+        runCurrent()
+
+        assertEquals(diary.today, browser.last<ToPage.Day>()?.day?.date)
+    }
+
+    @Test
+    fun `запись — в открытый день и выбранный приём`() = runTest {
+        val browser = admitted()
+        browser.say(ToPhone.Open(day = diary.today - 1))
+        browser.say(ToPhone.Add(query = "гречка", index = 0, grams = 200, meal = MealType.DINNER))
+        runCurrent()
+
+        assertEquals(listOf(Added("гречка", 0, 200, diary.today - 1, MealType.DINNER)), diary.added)
+    }
+
+    @Test
+    fun `цель и имя со страницы доходят до телефона`() = runTest {
+        val browser = admitted()
+
+        browser.say(ToPhone.SetGoal(prot = 120, fat = 70, carb = 230))
+        browser.say(ToPhone.SetName("Женя"))
+        runCurrent()
+
+        assertEquals(listOf(WebMacros(120, 70, 230)), diary.goals)
+        assertEquals(listOf("Женя"), diary.names)
+    }
+
+    @Test
+    fun `пущенные браузеры видны в настройках, свой отмечен`() = runTest {
+        Browser(this).say(ToPhone.Hello(token = null))
+        runCurrent()
+        admit("token-1")
+        val browser = admitted()
+
+        val shown = assertNotNull(browser.last<ToPage.Day>()).day.browsers
+        assertEquals(2, shown.size)
+        assertEquals(listOf(false, true), shown.map { it.here })
+    }
+
+    /** Отозвать можно и чужой браузер: на компьютере, забытом в гостях, дневник больше не откроется. */
+    @Test
+    fun `отозванный браузер больше не видит дневник`() = runTest {
+        val other = Browser(this)
+        other.say(ToPhone.Hello(token = null))
+        runCurrent()
+        admit("token-1")
+        runCurrent()
+        val me = admitted()
+
+        me.say(ToPhone.Revoke(browserId = clients.find("token-1")!!.id))
+        runCurrent()
+        val before = other.heard.size
+        diary.entries.value = listOf(buckwheat)
+        runCurrent()
+
+        assertIs<ToPage.Denied>(other.heard.last(), "отозванному говорят, что не пускают")
+        assertTrue(other.heard.drop(before).none { it is ToPage.Day }, "и новых записей он не видит")
     }
 
     @Test
@@ -237,7 +317,7 @@ class WebSessionTest {
         val browser = Browser(this)
         browser.say(ToPhone.Hello(token = null))
         runCurrent()
-        admit("token-1")
+        admit("token-${tokens}")
         runCurrent()
         return browser
     }
@@ -254,19 +334,36 @@ class WebSessionTest {
     )
 }
 
+private data class Added(val query: String, val index: Int, val grams: Int, val day: Long, val meal: MealType?)
+
 private class FakeWebDiary : WebDiary {
     val entries = MutableStateFlow<List<WebEntry>>(emptyList())
     val found = listOf(WebSuggestion("Гречка отварная", 200, 220, Mascot.GRAIN), WebSuggestion("Гречка ядрица", 60, 188, Mascot.GRAIN))
-    val added = mutableListOf<Triple<String, Int, Int>>()
+    val added = mutableListOf<Added>()
     val regrammed = mutableListOf<Pair<Long, Int>>()
     val deleted = mutableListOf<Long>()
+    val goals = mutableListOf<WebMacros>()
+    val names = mutableListOf<String>()
 
-    override fun today() = kotlinx.coroutines.flow.combine(entries, MutableStateFlow(2_100)) { list, goal -> WebToday(list, goal) }
+    /** 2026-11-24. */
+    override val today: Long = 20_781
+
+    override fun day(date: Long) = entries.map { list -> WebDayContent(list.takeIf { date == today }.orEmpty(), 2_100) }
+
+    override fun week(date: Long) = flowOf(emptyList<WebDaySummary>())
 
     override suspend fun suggest(query: String): List<WebSuggestion> = found
 
-    override suspend fun add(query: String, index: Int, grams: Int) {
-        added += Triple(query, index, grams)
+    override suspend fun add(query: String, index: Int, grams: Int, day: Long, meal: MealType?) {
+        added += Added(query, index, grams, day, meal)
+    }
+
+    override suspend fun setGoal(goal: WebMacros) {
+        goals += goal
+    }
+
+    override suspend fun setName(name: String) {
+        names += name
     }
 
     override suspend fun setGrams(entryId: Long, grams: Int) {

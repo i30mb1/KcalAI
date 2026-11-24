@@ -151,6 +151,12 @@ class MascotBrain(
         return true
     }
 
+    /** Имя, сменённое со страницы дневника. Спрашивать его больше незачем — человек его назвал. */
+    suspend fun setName(name: String) {
+        val profile = dao.profile() ?: MascotProfileEntity()
+        dao.upsertProfile(profile.copy(name = name, nameAsked = true))
+    }
+
     /** Пол из помощника цели: с ним персонажи говорят «ты ел» и «ты ела» правильно. */
     suspend fun setSex(sex: Sex) {
         val profile = dao.profile() ?: MascotProfileEntity()

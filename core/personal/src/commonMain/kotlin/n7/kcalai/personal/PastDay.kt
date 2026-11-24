@@ -7,6 +7,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.model.MealType
+import n7.kcalai.model.firstUnloggedMeal
 
 /*
  * Запись в прошлый день — одни правила на приложение и страницу дневника в браузере.
@@ -19,12 +20,7 @@ import n7.kcalai.model.MealType
  * основной, которого в том дне нет. Все три на месте — значит, дописывают
  * перекус.
  */
-fun defaultPastMeal(entries: List<DiaryEntryEntity>): MealType {
-    val logged = entries.mapTo(HashSet()) { it.meal }
-    return MAIN_MEALS.firstOrNull { it !in logged } ?: MealType.SNACK
-}
-
-private val MAIN_MEALS = listOf(MealType.BREAKFAST, MealType.LUNCH, MealType.DINNER)
+fun defaultPastMeal(entries: List<DiaryEntryEntity>): MealType = firstUnloggedMeal(entries.map { it.meal })
 
 /** Час приёма прошлого дня, когда его времени взять неоткуда: середина окна. */
 val PAST_MEAL_HOURS: Map<MealType, Int> = mapOf(

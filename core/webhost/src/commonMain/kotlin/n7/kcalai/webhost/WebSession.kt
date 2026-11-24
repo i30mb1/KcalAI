@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.produceIn
 import kotlinx.coroutines.flow.stateIn
@@ -20,9 +21,12 @@ import n7.kcalai.database.Choice
 import n7.kcalai.database.WebClientDao
 import n7.kcalai.database.WebClientEntity
 import n7.kcalai.database.admitted
+import n7.kcalai.model.MealType
 import n7.kcalai.webapi.ToPage
 import n7.kcalai.webapi.ToPhone
+import n7.kcalai.webapi.WebBrowser
 import n7.kcalai.webapi.WebDay
+import n7.kcalai.webapi.WebDaySummary
 import n7.kcalai.webapi.WebEntry
 import n7.kcalai.webapi.WebMacros
 import n7.kcalai.webapi.WebPeer
@@ -40,26 +44,38 @@ import kotlin.uuid.Uuid
  */
 const val WEB_WAITING_MAX = 3
 
-/** Сегодняшний дневник для страницы: записи и цель. */
-data class WebToday(val entries: List<WebEntry>, val goalKcal: Int?, val goalMacros: WebMacros? = null)
+/** День для страницы: записи и цель того дня. */
+data class WebDayContent(val entries: List<WebEntry>, val goalKcal: Int?, val goalMacros: WebMacros? = null)
 
 /**
- * Дневник, каким его видит и правит страница. Всё — о сегодняшнем дне.
+ * Дневник, каким его видит и правит страница.
  *
  * Запись называется номером подсказки в выдаче на запрос, а не продуктом: продукт
  * знает только телефон, и страница не может подсунуть ему свои числа.
  */
 interface WebDiary {
 
-    fun today(): Flow<WebToday>
+    /** Сегодня по часам телефона: страница своим часам не верит. */
+    val today: Long
+
+    fun day(date: Long): Flow<WebDayContent>
+
+    /** Неделя дня [date], с понедельника по воскресенье. */
+    fun week(date: Long): Flow<List<WebDaySummary>>
 
     suspend fun suggest(query: String): List<WebSuggestion>
 
-    suspend fun add(query: String, index: Int, grams: Int)
+    /** @param meal приём; `null` — сегодня по часам, в прошлый день — первый незаписанный */
+    suspend fun add(query: String, index: Int, grams: Int, day: Long, meal: MealType?)
 
     suspend fun setGrams(entryId: Long, grams: Int)
 
     suspend fun delete(entryId: Long)
+
+    /** Цель с сегодня; калории — из граммов. */
+    suspend fun setGoal(goal: WebMacros)
+
+    suspend fun setName(name: String)
 }
 
 /** Сколько пущенных браузеров сейчас на связи — пока хоть один есть, экрану гаснуть нельзя. */
@@ -80,7 +96,7 @@ class WebPresence {
  * Браузер, которого телефон не знает, получает код и ждёт: в ленте встаёт вопрос
  * Яйца, и пускает только тап человека. До него браузер не видит дневника и не может
  * ничего записать — это проверяется на каждое сообщение, а не только на странице:
- * страницу можно и подделать.
+ * страницу можно и подделать. Отозвали — браузер слышит «нет» и больше ничего не видит.
  *
  * @param owner имя хозяина телефона: чей это дневник, видно во вкладке
  * @param label чем назвался браузер — подпись в вопросе Яйца
@@ -88,7 +104,7 @@ class WebPresence {
 class WebSession(
     private val clients: WebClientDao,
     private val diary: WebDiary,
-    private val owner: String,
+    private val owner: Flow<String>,
     private val peers: Flow<List<WebPeer>>,
     private val label: String,
     private val presence: WebPresence,
@@ -97,6 +113,9 @@ class WebSession(
     private val newToken: () -> String = ::randomToken,
     private val newCode: () -> String = ::randomCode,
 ) {
+
+    /** Какой день открыт на странице; сначала — сегодня. */
+    private val shown = MutableStateFlow(diary.today)
 
     /**
      * @param incoming что говорит страница; кончился поток — вкладку закрыли
@@ -114,24 +133,35 @@ class WebSession(
 
         val client = clients.observe(token).stateIn(this)
         val watcher = launch {
+            var shownDiary = false
             client.map { it.access() }.distinctUntilChanged().collectLatest { access ->
                 when (access) {
-                    Access.ADMITTED -> showDiary(send)
+                    Access.ADMITTED -> {
+                        shownDiary = true
+                        showDiary(client.value?.id, send)
+                    }
                     Access.DENIED -> send(ToPage.Denied)
-                    Access.WAITING, Access.GONE -> Unit
+                    // Пущенного отозвали — с этой или с другой вкладки: дальше он не видит ничего.
+                    Access.GONE -> if (shownDiary) send(ToPage.Denied)
+                    Access.WAITING -> Unit
                 }
             }
         }
 
         for (message in messages) {
-            // Спрашиваем базу на каждое сообщение: пустить могли только что, а выйти — с другой вкладки.
+            // Спрашиваем базу на каждое сообщение: пустить могли только что, а отозвать — с другой вкладки.
             if (client.value?.admitted != true) continue
             when (message) {
                 is ToPhone.Hello -> Unit
                 is ToPhone.Search -> send(ToPage.Suggestions(message.query, diary.suggest(message.query)))
-                is ToPhone.Add -> diary.add(message.query, message.index, message.grams)
+                is ToPhone.Add -> diary.add(message.query, message.index, message.grams, shown.value, message.meal)
                 is ToPhone.SetGrams -> diary.setGrams(message.entryId, message.grams)
                 is ToPhone.Delete -> diary.delete(message.entryId)
+                // В будущее не заглядывают: записывать туда нечего.
+                is ToPhone.Open -> shown.value = message.day.coerceAtMost(diary.today)
+                is ToPhone.SetGoal -> diary.setGoal(WebMacros(message.prot, message.fat, message.carb))
+                is ToPhone.SetName -> diary.setName(message.name)
+                is ToPhone.Revoke -> clients.revoke(message.browserId, clock.now().toEpochMilliseconds())
                 ToPhone.Leave -> {
                     clients.leave(token, clock.now().toEpochMilliseconds())
                     break
@@ -141,11 +171,31 @@ class WebSession(
         watcher.cancel()
     }
 
-    /** Пока браузер пущен и на связи, он держит экран и получает дневник на каждое изменение. */
-    private suspend fun showDiary(send: suspend (ToPage) -> Unit) {
+    /**
+     * Пока браузер пущен и на связи, он держит экран и получает открытый день
+     * на каждое изменение — записи, неделю, соседей и пущенные браузеры для настроек.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private suspend fun showDiary(me: Long?, send: suspend (ToPage) -> Unit) {
         presence.enter()
         try {
-            combine(diary.today(), peers) { today, near -> WebDay(owner, today.entries, today.goalKcal, near, today.goalMacros) }
+            val day = shown.flatMapLatest { date ->
+                combine(diary.day(date), diary.week(date)) { content, week -> Triple(date, content, week) }
+            }
+            val browsers = clients.observeAdmitted().map { list -> list.map { WebBrowser(it.id, it.label, here = it.id == me) } }
+            combine(day, peers, browsers, owner) { (date, content, week), near, admitted, name ->
+                WebDay(
+                    owner = name,
+                    entries = content.entries,
+                    goalKcal = content.goalKcal,
+                    peers = near,
+                    goalMacros = content.goalMacros,
+                    date = date,
+                    today = diary.today,
+                    week = week,
+                    browsers = admitted,
+                )
+            }
                 .distinctUntilChanged()
                 .collect { send(ToPage.Day(it)) }
         } finally {

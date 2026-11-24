@@ -23,6 +23,8 @@ import n7.kcalai.model.Nutriments
 import n7.kcalai.repositories.DiaryRepository
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.webapi.WebMacros
+import n7.kcalai.webapi.weekOf
+import kotlinx.datetime.toLocalDateTime
 import n7.kcalai.webapi.WebSuggestion
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -43,6 +45,7 @@ class RepositoryWebDiaryTest {
     }
     private val today = clock.todayIn(TimeZone.UTC).toEpochDays()
     private val regrammed = mutableListOf<Pair<Long, Int>>()
+    private val names = mutableListOf<String>()
 
     private val buckwheat = FoodCandidate(FoodRef.Generic(1), "Гречка отварная", Nutriments(110, 420, 110, 2_130, 280), servingG = 200)
     private val kernel = FoodCandidate(FoodRef.Generic(2), "Гречка ядрица", Nutriments(313, 1_260, 330, 6_200, 1_000), servingG = 60)
@@ -61,6 +64,7 @@ class RepositoryWebDiaryTest {
             }
         },
         regram = { id, grams, _ -> regrammed += id to grams },
+        rename = { name -> names += name },
         clock = clock,
         zone = TimeZone.UTC,
     )
@@ -80,7 +84,7 @@ class RepositoryWebDiaryTest {
     fun `запись — та подсказка, что была на странице, с граммами со страницы`() = runTest {
         web.suggest("гречка")
 
-        web.add(query = "гречка", index = 1, grams = 80)
+        web.add(query = "гречка", index = 1, grams = 80, day = today, meal = null)
 
         val entry = diaryDao.entries.value.single()
         assertEquals("Гречка ядрица", entry.displayName)
@@ -92,27 +96,78 @@ class RepositoryWebDiaryTest {
 
     @Test
     fun `подсказки, которой не было, не записывают`() = runTest {
-        web.add(query = "гречка", index = 2, grams = 80)
-        web.add(query = "гречка", index = 7, grams = 80)
+        web.add(query = "гречка", index = 2, grams = 80, day = today, meal = null)
+        web.add(query = "гречка", index = 7, grams = 80, day = today, meal = null)
 
         assertTrue(diaryDao.entries.value.isEmpty())
     }
 
-    /** Страница показывает только сегодня — и править может только сегодня. */
+    /** Страница листает дни — и прошлые записи правит так же, как сегодняшние. */
     @Test
-    fun `вчерашнее со страницы не правится и не удаляется`() = runTest {
+    fun `прошлый день правится и удаляется`() = runTest {
         val yesterday = diaryDao.insert(entry(day = today - 1))
-        val now = diaryDao.insert(entry(day = today))
 
         web.setGrams(yesterday, 150)
         web.delete(yesterday)
-        web.setGrams(now, 150)
 
-        assertEquals(listOf(now to 150), regrammed)
-        assertEquals(2, diaryDao.entries.value.size)
+        assertEquals(listOf(yesterday to 150), regrammed)
+        assertTrue(diaryDao.entries.value.isEmpty())
+    }
 
-        web.delete(now)
-        assertEquals(listOf(today - 1), diaryDao.entries.value.map { it.dateEpochDay })
+    /**
+     * Дописанное в прошлый день — в выбранный приём и в его обычный час, как в приложении:
+     * ужин, дописанный утром, не должен стать ужином в девять утра.
+     */
+    @Test
+    fun `запись в прошлый день — в выбранный приём и его час`() = runTest {
+        web.suggest("гречка")
+
+        web.add(query = "гречка", index = 0, grams = 200, day = today - 2, meal = MealType.DINNER)
+
+        val entry = diaryDao.entries.value.single()
+        assertEquals(today - 2, entry.dateEpochDay)
+        assertEquals(MealType.DINNER, entry.meal)
+        assertEquals(19, Instant.fromEpochMilliseconds(entry.createdAt).toLocalDateTime(TimeZone.UTC).hour)
+    }
+
+    @Test
+    fun `приём прошлого дня не выбран — первый незаписанный`() = runTest {
+        diaryDao.insert(entry(day = today - 1).copy(meal = MealType.BREAKFAST))
+        web.suggest("гречка")
+
+        web.add(query = "гречка", index = 0, grams = 200, day = today - 1, meal = null)
+
+        assertEquals(MealType.LUNCH, diaryDao.entries.value.last().meal)
+    }
+
+    /** Цель — из граммов, калории складываются сами; действует с сегодня, прошлое не переписывает. */
+    @Test
+    fun `цель со страницы — с сегодня и с калориями из граммов`() = runTest {
+        web.setGoal(WebMacros(prot = 120, fat = 70, carb = 230))
+
+        val goal = goalDao.goalFor(today)!!
+        assertEquals(today, goal.fromDateEpochDay)
+        assertEquals(120 * 4 + 70 * 9 + 230 * 4, goal.kcal)
+        assertEquals(230, goal.carb)
+    }
+
+    @Test
+    fun `имя со страницы — тому, кто его хранит`() = runTest {
+        web.setName("Женя")
+
+        assertEquals(listOf("Женя"), names)
+    }
+
+    /** Неделя — с понедельника по воскресенье, с целью каждого дня. */
+    @Test
+    fun `неделя дня — семь дней с понедельника`() = runTest {
+        diaryDao.insert(entry(day = today, grams = 200))
+
+        val week = web.week(today).first()
+
+        assertEquals(7, week.size)
+        assertEquals(weekOf(today).toList(), week.map { it.date })
+        assertEquals(220, week.single { it.date == today }.kcal)
     }
 
     @Test
@@ -121,7 +176,7 @@ class RepositoryWebDiaryTest {
         diaryDao.insert(entry(day = today - 1))
         goalDao.upsert(DailyGoalEntity(fromDateEpochDay = today - 3, kcal = 2_100, prot = 100, fat = 70, carb = 250))
 
-        val shown = web.today().first()
+        val shown = web.day(today).first()
 
         assertEquals(2_100, shown.goalKcal)
         assertEquals(WebMacros(prot = 100, fat = 70, carb = 250), shown.goalMacros)
