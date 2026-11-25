@@ -58,6 +58,8 @@ val syncWebBundle by tasks.registering(Sync::class) {
     // ПРОБА: прототип прогулки (papertrails) — рядом со страницей, по адресу /walk/kcal.html
     from(rootProject.file("prototypes/papertrails")) {
         include("kcal.html", "kcal/**", "src/**", "public/**", "LICENSE")
+        // Предпросмотр печати — инструмент разработчика, на страницу не едет.
+        exclude("kcal/*-preview.html")
         into("walk")
     }
     into(layout.buildDirectory.dir("webBundle/files/web"))

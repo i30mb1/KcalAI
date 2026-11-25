@@ -22,6 +22,7 @@ import { createLife } from './life/life.js';
 import { createAnimals } from './life/animals.js';
 import { createGame } from './game/index.js';
 import { createViews } from './camera/views.js';
+import { repaintField } from '../kcal/field-prints.js';
 // Allocation-free two-dimensional length.
 const hypot2 = (a, b) => Math.sqrt(a * a + b * b);
 
@@ -45,6 +46,8 @@ async function boot() {
   const materials = createMaterials({ quality });
   const assets = await loadAssets({ materials, renderer, quality });
   materials.setTextures(assets.textures);
+  // KcalAI: стартовая зона — Поле Зёрнышка: её предметы перепечатаны по теме приложения (kcal/field-prints.js).
+  await repaintField(renderer, assets.textures && assets.textures.art, THREE);
   const lights = createLights({ scene, quality });
   const wfc = createWFC({ seed });
   const world = createWorld({ scene, assets, wfc, materials, quality });

@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Поле Зёрнышка — печать</title>
+<style>
+  body { margin: 0; background: #e9dcc0; font: 12px sans-serif; color: #3b2a1d; }
+  #grid { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; }
+  figure { margin: 0; display: flex; gap: 6px; align-items: flex-end; background: #efe4cc; padding: 6px; border-radius: 6px; }
+  figcaption { writing-mode: vertical-rl; transform: rotate(180deg); opacity: .6; }
+  canvas { max-height: 190px; }
+</style>
+<div id="grid"></div>
+<script type="module">
+  // Предпросмотр: слева — старая печать атласа, справа — новая (?only=new — только новые).
+  import { FIELD_SPRITES, paintSprite } from './field-prints.js';
+  const meta = await (await fetch('../public/textures/art/atlas.json')).json();
+  const atlas = new Image(); atlas.src = '../public/textures/art/atlas.webp'; await atlas.decode();
+  const onlyNew = new URLSearchParams(location.search).get('only') === 'new';
+  const grid = document.getElementById('grid');
+  for (const name of FIELD_SPRITES) {
+    const s = meta.sprites[name]; const [x, y, w, h] = s.rect;
+    const fig = document.createElement('figure');
+    const cap = document.createElement('figcaption'); cap.textContent = name; fig.append(cap);
+    if (!onlyNew) { const old = document.createElement('canvas'); old.width = w; old.height = h; old.getContext('2d').drawImage(atlas, x, y, w, h, 0, 0, w, h); fig.append(old); }
+    fig.append(paintSprite(name, w, h, s.outline));
+    grid.append(fig);
+  }
+  document.title += ' — готово';
+</script>
