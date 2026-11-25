@@ -56,6 +56,35 @@ class DayNavigationTest {
     private fun DiaryViewModel.shownNames(): List<String> =
         state.value.feed.filterIsInstance<FeedItem.Meal>().flatMap { it.entries }.map { it.displayName }
 
+    /** Дни листают как страницы: соседние переписки готовы заранее и тянутся за пальцем. */
+    @Test
+    fun `переписки соседних дней готовы для перелистывания`() = runTest(dispatcher) {
+        harness.addEntry("Кефир", grams = 200, meal = MealType.BREAKFAST, daysAgo = 1)
+        harness.addEntry("Гречка", grams = 150, meal = MealType.LUNCH)
+        val vm = screen()
+
+        fun names(day: Long) = vm.state.value.around.getValue(day).filterIsInstance<FeedItem.Meal>().flatMap { it.entries }.map { it.displayName }
+
+        assertEquals(setOf(yesterday), vm.state.value.around.keys, "у сегодня сосед один: будущего нет")
+        assertEquals(listOf("Кефир"), names(yesterday))
+
+        vm.onSelectDay(yesterday)
+        advanceUntilIdle()
+
+        assertEquals(setOf(yesterday - 1, harness.today), vm.state.value.around.keys)
+        assertEquals(listOf("Гречка"), names(harness.today))
+    }
+
+    @Test
+    fun `дальше недели соседей нет`() = runTest(dispatcher) {
+        val vm = screen()
+
+        vm.onSelectDay(harness.today - 6)
+        advanceUntilIdle()
+
+        assertEquals(setOf(harness.today - 5), vm.state.value.around.keys)
+    }
+
     @Test
     fun `тап по прошлому дню открывает его переписку — и только её`() = runTest(dispatcher) {
         harness.addEntry("Гречка", grams = 200, meal = MealType.LUNCH, daysAgo = 1)

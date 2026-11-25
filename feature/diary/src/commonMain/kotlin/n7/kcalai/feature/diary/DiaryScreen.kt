@@ -10,14 +10,12 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.CompositionLocalProvider
@@ -280,7 +278,13 @@ fun DiaryScreen(
     // У каждого дня своя переписка — и своя прокрутка: вчерашняя лента
     // открывается у своего конца, а не там, где остановилась сегодняшняя. Сразу у конца:
     // открытая сверху и доведённая следом, она прыгала на глазах при переключении дня.
-    val listState = key(state.date) { rememberLazyListState(initialFirstVisibleItemIndex = state.feed.lastIndex.coerceAtLeast(0)) }
+    // Дни листаются страницами, поэтому прокрутка и переписка помнятся по дням: соседняя страница
+    // не пустеет, пока новый день ещё в пути из базы.
+    val listStates = remember { HashMap<Long, LazyListState>() }
+    val known = remember { HashMap<Long, List<FeedItem>>() }
+    fun listOf(day: Long, feed: List<FeedItem>) = listStates.getOrPut(day) { LazyListState(feed.lastIndex.coerceAtLeast(0)) }
+    val shownDay = state.date.toEpochDays()
+    val listState = listOf(shownDay, state.feed)
 
     /*
      * Шапка сжимается ровно тогда, когда лента сдвинулась с начала: любой порог
@@ -385,36 +389,42 @@ fun DiaryScreen(
     var headerHeight by remember { mutableIntStateOf(0) }
     var composerHeight by remember { mutableIntStateOf(0) }
     Box(Modifier.fillMaxSize().background(KcalTheme.colors.bg)) {
-        // Новый день — новая лента целиком: его записи не «приходят» в переписку,
-        // они в ней были, и выпрыгивать с анимацией им незачем. Дни листаются пальцем.
-        DayPages(date = state.date.toEpochDays(), today = state.today.toEpochDays(), onSelectDay = onSelectDay) {
-        key(state.date) {
-        Feed(
-            feed = state.feed,
-            listState = listState,
-            topInset = with(density) { headerHeight.toDp() },
-            bottomInset = with(density) { composerHeight.toDp() },
-            onEditEntry = onEditEntry,
-            onUndoDelete = onUndoDelete,
-            onPickGap = onPickGap,
-            onDismissGap = onDismissGap,
-            onSendOutbox = onSendOutbox,
-            onDeclineOutbox = onDeclineOutbox,
-            onAskAssistant = onAskAssistant,
-            onAddProduct = onAddProduct,
-            onPickPlan = onPickPlan,
-            onOpenGoal = onOpenGoal,
-            onOpenSteps = onOpenSteps,
-            onAnswerAsk = onAnswerAsk,
-            onAnswerOffer = onAnswerOffer,
-            onAnswerBrowser = onAnswerBrowser,
-            onSendToPeer = onSendToPeer,
-            onHideMessage = onHideMessage,
-            onHideOffer = onHideOffer,
-            onHideBrowser = onHideBrowser,
-            modifier = Modifier.fillMaxSize().nestedScroll(expandOnPull),
-        )
-        }
+        // У каждого дня своя переписка: его записи не «приходят» в неё, они в ней были.
+        // Дни листаются пальцем, как страницы.
+        DayPager(date = shownDay, today = state.today.toEpochDays(), onSelectDay = onSelectDay) { day ->
+            val current = day == shownDay
+            val feed = if (current) state.feed else state.around[day] ?: known[day]
+            if (feed != null) {
+                SideEffect { known[day] = feed }
+                // Персонажи стоят только у реплик открытого дня: соседние страницы мест им не дают.
+                CompositionLocalProvider(LocalMascotAnchors provides anchors.takeIf { current }) {
+                Feed(
+                    feed = feed,
+                    listState = listOf(day, feed),
+                    topInset = with(density) { headerHeight.toDp() },
+                    bottomInset = with(density) { composerHeight.toDp() },
+                    onEditEntry = onEditEntry,
+                    onUndoDelete = onUndoDelete,
+                    onPickGap = onPickGap,
+                    onDismissGap = onDismissGap,
+                    onSendOutbox = onSendOutbox,
+                    onDeclineOutbox = onDeclineOutbox,
+                    onAskAssistant = onAskAssistant,
+                    onAddProduct = onAddProduct,
+                    onPickPlan = onPickPlan,
+                    onOpenGoal = onOpenGoal,
+                    onOpenSteps = onOpenSteps,
+                    onAnswerAsk = onAnswerAsk,
+                    onAnswerOffer = onAnswerOffer,
+                    onAnswerBrowser = onAnswerBrowser,
+                    onSendToPeer = onSendToPeer,
+                    onHideMessage = onHideMessage,
+                    onHideOffer = onHideOffer,
+                    onHideBrowser = onHideBrowser,
+                    modifier = Modifier.fillMaxSize().then(if (current) Modifier.nestedScroll(expandOnPull) else Modifier),
+                )
+                }
+            }
         }
 
         Header(

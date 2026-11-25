@@ -186,6 +186,8 @@ data class DiaryUiState(
     val totals: NutrimentTotals = NutrimentTotals.ZERO,
     /** Клетчатка открытого дня: известная часть и сколько продуктов без данных. */
     val fiber: FiberTotal = FiberTotal.ZERO,
+    /** Переписки соседних дней — чтобы при перелистывании они ехали рядом с открытой. */
+    val around: Map<Long, List<FeedItem>> = emptyMap(),
     /** Калории по дням за неделю, последний элемент — сегодня. Всегда семь элементов. */
     val week: List<DaySummary> = emptyList(),
     /** Шаги по дням той же недели — тонкой полоской под днём; пусто — шагов нет вовсе. */
@@ -375,34 +377,52 @@ class DiaryViewModel(
      * что добавили. Порознь потоки к тому же приходили в любом порядке: неделя
      * со столбиком за сегодня — и «0 съедено» в шапке над ней.
      */
-    private val data = combine(date, picked) { now, chosen -> now to (chosen ?: now) }
-        .distinctUntilChanged()
-        .flatMapLatest { (now, day) ->
-            // Сказанное и предложенное — одним потоком: у типизированного combine
-            // потолок в пять, а дню нужно больше.
-            val saidAndOffered = combine(
-                // Что персонажи написали в этот день — из шторки или ответом в ленте.
-                brain.messages(day.toEpochDays()),
-                // Что предложили с телефона рядом; без шва предложений не бывает.
-                peerOffers?.observeDay(day.toEpochDays()) ?: flowOf(emptyList()),
-                // Какие браузеры просились в дневник; без страницы их не бывает.
-                browsers?.requests?.observeDay(day.toEpochDays()) ?: flowOf(emptyList()),
-                ::Said,
-            )
-            combine(
-                diary.observeDay(day.toEpochDays()),
-                diary.observeGoal(day.toEpochDays()),
-                // Неделя — всегда последние семь дней до сегодня: по ней и выбирают день.
-                diary.observeWeek(now.toEpochDays()),
-                diary.observeGoal(now.toEpochDays()),
-                saidAndOffered,
-            ) { dayTotals, goal, week, todayGoal, (said, offers, asked) ->
-                DayData(day, now, dayTotals, goal, week, todayGoal, said, offers, asked)
-            }
-        }
-        // Шаги — отдельным потоком поверх дня: переключение дня их не ждёт и не перечитывает.
-        .combine(walking()) { day, walked -> day.withSteps(walked) }
+    private val shownAndToday = combine(date, picked) { now, chosen -> now to (chosen ?: now) }.distinctUntilChanged()
+
+    /** Шаги — отдельным потоком поверх дней: переключение дня их не ждёт и не перечитывает. */
+    private val walked = walking().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val data = shownAndToday
+        .flatMapLatest { (now, day) -> dayData(now, day) }
+        .combine(walked) { day, steps -> day.withSteps(steps) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Соседние дни открытого — их переписки тянутся за пальцем, когда листают. */
+    private val around = shownAndToday
+        .flatMapLatest { (now, shown) ->
+            val week = now.toEpochDays() - (WEEK_DAYS - 1)..now.toEpochDays()
+            val days = listOf(shown.toEpochDays() - 1, shown.toEpochDays() + 1).filter { it in week }
+            combine(days.map { dayData(now, LocalDate.fromEpochDays(it)) }) { it.toList() }
+        }
+        .onStart { emit(emptyList()) }
+        .combine(walked) { days, steps -> days.map { it.withSteps(steps) } }
+
+    private val shownAndAround = combine(data, around) { day, near -> day to near }
+
+    /** День из базы: записи, цель, неделя и всё сказанное в нём. */
+    private fun dayData(now: LocalDate, day: LocalDate): Flow<DayData> {
+        // Сказанное и предложенное — одним потоком: у типизированного combine
+        // потолок в пять, а дню нужно больше.
+        val saidAndOffered = combine(
+            // Что персонажи написали в этот день — из шторки или ответом в ленте.
+            brain.messages(day.toEpochDays()),
+            // Что предложили с телефона рядом; без шва предложений не бывает.
+            peerOffers?.observeDay(day.toEpochDays()) ?: flowOf(emptyList()),
+            // Какие браузеры просились в дневник; без страницы их не бывает.
+            browsers?.requests?.observeDay(day.toEpochDays()) ?: flowOf(emptyList()),
+            ::Said,
+        )
+        return combine(
+            diary.observeDay(day.toEpochDays()),
+            diary.observeGoal(day.toEpochDays()),
+            // Неделя — всегда последние семь дней до сегодня: по ней и выбирают день.
+            diary.observeWeek(now.toEpochDays()),
+            diary.observeGoal(now.toEpochDays()),
+            saidAndOffered,
+        ) { dayTotals, goal, week, todayGoal, (said, offers, asked) ->
+            DayData(day, now, dayTotals, goal, week, todayGoal, said, offers, asked)
+        }
+    }
 
     /**
      * Записи открытого дня — для правил, которым нужен день прямо сейчас.
@@ -459,7 +479,8 @@ class DiaryViewModel(
         val address: String?,
     )
 
-    val state = combine(typingAndReplies, data, personalState, stage, nearby) { session, loaded, models, scene, near ->
+    val state = combine(typingAndReplies, shownAndAround, personalState, stage, nearby) { session, days, models, scene, near ->
+        val (loaded, neighbours) = days
         val (typed, replies, pending, meal) = session
         val (people, writingTo, browsersOnline, address) = near
         if (loaded == null) {
@@ -483,6 +504,18 @@ class DiaryViewModel(
                 nearby = people.takeIf { pastMeal == null && writingTo == null }.orEmpty(),
                 address = address,
             ),
+            around = neighbours.associate { other ->
+                val otherDay = other.date.toEpochDays()
+                otherDay to buildFeed(
+                    loaded = other,
+                    models = models,
+                    typed = typed,
+                    replies = replies.filter { it.day == otherDay }.map { it.item },
+                    pending = null,
+                    pastMeal = if (other.date < other.today) defaultPastMeal(other.day.entries) else null,
+                    address = address,
+                ).filterNot { it is FeedItem.NotFound } // «не нашлось» — про строку ввода открытого дня
+            },
             composer = row,
             action = composerAction(typed.input),
             totals = loaded.day.totals,
@@ -612,7 +645,7 @@ class DiaryViewModel(
         val browsers: List<WebClientEntity> = emptyList(),
         val walked: Walked? = null,
     ) {
-        fun withSteps(steps: Walked) = DayData(date, today, day, goal, week, todayGoal, said, offers, browsers, steps)
+        fun withSteps(steps: Walked?) = DayData(date, today, day, goal, week, todayGoal, said, offers, browsers, steps)
     }
 
     /** Шаги сегодняшнего дня (`null` — ещё не прочитаны или их нет), шаги недели по дням и цель. */
@@ -2124,3 +2157,6 @@ private val WEIGHT_PATTERN = Regex(
 /** Ниже — не человек, выше — не человек. Обе границы существуют только против опечаток. */
 private const val MIN_WEIGHT_G = 20_000
 private const val MAX_WEIGHT_G = 400_000
+
+/** Сколько дней листается и видно на графике. */
+private const val WEEK_DAYS = 7
