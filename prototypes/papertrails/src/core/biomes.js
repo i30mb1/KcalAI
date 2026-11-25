@@ -1,9 +1,8 @@
 // FROZEN contract (owner: orchestrator): which BIOME a cell belongs to. Pure, deterministic, allocation-free
 // lookups shared by the WFC (tile choice), the world, weather / ambient life and the grade.
 //
-// Layout: a jittered Voronoi diagram of sites on a SITE-tile grid with a gentle domain warp (wobbly borders).
-// The site at the origin is always 'heartland' (the original look) and its four neighbours are fixed so every
-// biome lies within ~12 tiles of the start: east = desert, west = snow, south = blossom, north = pinewood.
+// Layout (KcalAI): bands across the walk to the north, BIOME_BAND tiles each, with a gently wobbling border.
+// The start is always 'heartland'; see journey() below.
 //
 //   heartland  the original warm autumn farmland            (leaves drifting, clear)
 //   desert     sand, dunes, cacti, tents, oasis              (heat haze, dust motes, hard sun)
@@ -13,8 +12,6 @@
 
 export const BIOMES = ['heartland', 'desert', 'snow', 'blossom', 'pinewood'];
 export const BIOME_INDEX = { heartland: 0, desert: 1, snow: 2, blossom: 3, pinewood: 4 };
-/** Grid pitch of the Voronoi sites, in tiles. */
-export const BIOME_SITE = 11;
 
 function h2(seed, x, y, k) {
   let h = (Math.imul(x | 0, 0x9e3779b1) ^ Math.imul(y | 0, 0x85ebca6b) ^ Math.imul((seed | 0) + k * 0x632be5ab, 0xc2b2ae35)) >>> 0;
@@ -22,9 +19,13 @@ function h2(seed, x, y, k) {
   return (h >>> 0) / 4294967296;
 }
 
-// KcalAI: зоны — полосами поперёк пути на север: каждый ряд площадок (BIOME_SITE клеток) — следующая зона,
-// все пять по кругу, края остаются волнистыми. Прогулка проходит их равномерно. Начинается всегда с полей
-// (у старта мост и домик), остальные четыре идут в своём порядке у каждого мира (seed).
+// KcalAI: зоны — полосами поперёк пути на север, по зоне на ~1 600 шагов: пять зон — дневная цель 8 000 шагов.
+// Начинается всегда с полей (у старта мост и домик), остальные четыре идут в своём порядке у каждого мира (seed).
+// Граница между полосами волнистая, но всегда поперёк дороги: идти вдоль шва двух зон нельзя.
+/** Длина зоны вдоль пути, клеток: 1 600 шагов по 0,7 при клетке 2. */
+export const BIOME_BAND = 560;
+/** Старт — чуть внутри полей, чтобы позади героя тоже было поле. */
+const BAND_START = 10;
 const ORDERS = new Map();
 function journey(seed) {
   let order = ORDERS.get(seed);
@@ -35,9 +36,10 @@ function journey(seed) {
   }
   return order;
 }
-function siteBiome(seed, gx, gy) {
+/** Зона полосы k (0 — поля у старта, дальше на север — следующие). */
+function bandBiome(seed, k) {
   const order = journey(seed);
-  return order[((-gy % order.length) + order.length) % order.length];
+  return order[((k % order.length) + order.length) % order.length];
 }
 // smooth value noise for the domain warp
 function vnoise(seed, x, y, k) {
@@ -51,21 +53,15 @@ function vnoise(seed, x, y, k) {
 
 const _d = new Float64Array(BIOMES.length); // nearest site distance per biome (scratch)
 
-/** Fills _d with the distance (tiles) from (x, z) to the nearest site of each biome. x, z in TILE units (floats ok). */
+/** Fills _d with the distance (tiles) from (x, z) to the nearest band of each biome. x, z in TILE units (floats ok). */
 function distances(seed, x, z) {
-  const wx = x + (vnoise(seed, x / 5.5, z / 5.5, 11) - 0.5) * 3.2;
-  const wz = z + (vnoise(seed, x / 5.5, z / 5.5, 12) - 0.5) * 3.2;
-  const gx0 = Math.round(wx / BIOME_SITE); const gy0 = Math.round(wz / BIOME_SITE);
+  const wz = z + (vnoise(seed, x / 5.5, z / 5.5, 12) - 0.5) * 3.2; // волнистая граница поперёк пути
+  const k0 = Math.floor((BAND_START - wz) / BIOME_BAND);
   for (let i = 0; i < _d.length; i++) _d[i] = 1e9;
-  for (let gy = gy0 - 2; gy <= gy0 + 2; gy++) {
-    for (let gx = gx0 - 2; gx <= gx0 + 2; gx++) {
-      const origin = gx === 0 && gy === 0;
-      const sx = (gx + (origin ? 0 : (h2(seed, gx, gy, 1) - 0.5) * 0.7)) * BIOME_SITE;
-      const sz = (gy + (origin ? 0 : (h2(seed, gx, gy, 2) - 0.5) * 0.7)) * BIOME_SITE;
-      const d = Math.sqrt((wx - sx) * (wx - sx) + (wz - sz) * (wz - sz));
-      const b = siteBiome(seed, gx, gy);
-      if (d < _d[b]) _d[b] = d;
-    }
+  for (let k = k0 - 2; k <= k0 + 2; k++) {
+    const d = Math.abs(wz - (BAND_START - (k + 0.5) * BIOME_BAND));
+    const b = bandBiome(seed, k);
+    if (d < _d[b]) _d[b] = d;
   }
 }
 
@@ -109,20 +105,4 @@ export function biomeWeights(seed, x, z, out, soft = 1.6) {
   for (let i = 0; i < _d.length; i++) { const w = Math.exp(-(_d[i] - min) / soft); out[i] = w; sum += w; }
   for (let i = 0; i < _d.length; i++) out[i] /= sum;
   return out;
-}
-
-/** Nearest cell (spiral from cx, cz) that lies at least `depth` tiles inside biome `id`. Returns {x, z} (cell) or null. */
-export function findBiome(seed, id, cx = 0, cz = 0, depth = 3, maxR = 90) {
-  const want = BIOME_INDEX[id];
-  if (want === undefined) return null;
-  for (let r = 0; r <= maxR; r++) {
-    for (let dz = -r; dz <= r; dz++) {
-      for (let dx = -r; dx <= r; dx++) {
-        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
-        const info = biomeInfo(seed, cx + dx, cz + dz);
-        if (info.index === want && info.edge >= depth) return { x: cx + dx, z: cz + dz };
-      }
-    }
-  }
-  return null;
 }
