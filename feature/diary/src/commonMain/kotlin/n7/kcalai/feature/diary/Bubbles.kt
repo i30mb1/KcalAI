@@ -233,6 +233,11 @@ fun IncomingBubble(
     onDismiss: (() -> Unit)? = null,
     /** Корзинка: убрать сообщение из переписки, чтобы не мешало записывать еду. */
     onHide: (() -> Unit)? = null,
+    /**
+     * Корзинка появится позже — после ответа: место под неё держится с самого начала, иначе текст
+     * переносится заново, когда она встаёт.
+     */
+    hideLater: Boolean = false,
     /** Что встаёт справа от пузырька, как в мессенджере, — кнопка «поделиться». */
     trailing: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
@@ -287,15 +292,18 @@ fun IncomingBubble(
                     )
                 }
             }
-            if (onHide != null) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .offset(x = 8.dp, y = (-6).dp)
-                        .clip(CircleShape)
-                        .clickable(onClick = onHide),
-                    contentAlignment = Alignment.Center,
-                ) {
+        }
+        // Корзинка — за пузырём, у его верхнего края, как кнопки в мессенджере: внутри пузыря время всегда
+        // в правом нижнем углу. Появится позже — место держится заранее, и пузырь не сужается под неё.
+        if (onHide != null || hideLater) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Top)
+                    .size(36.dp)
+                    .then(if (onHide != null) Modifier.clip(CircleShape).clickable(onClick = onHide) else Modifier),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (onHide != null) {
                     Icon(
                         Icons.Default.Delete,
                         contentDescription = "Удалить",
@@ -756,7 +764,7 @@ fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit, onHide: (
         MascotQuestion.TREADMILL -> "Подключить" to "Не надо"
         MascotQuestion.STEPS -> "Считать" to "Не надо"
     }
-    IncomingBubble(item, onHide = onHide) {
+    IncomingBubble(item, onHide = onHide, hideLater = true) {
         Answerable(item.choice, yes, no, onYes, onNo, item.text, item.time)
     }
 }
@@ -794,7 +802,7 @@ fun NearbyBubble(item: FeedItem.Nearby, onSend: (String) -> Unit) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OfferBubble(item: FeedItem.Offer, onYes: () -> Unit, onNo: () -> Unit, onHide: (() -> Unit)? = null) {
-    IncomingBubble(item, onHide = onHide) {
+    IncomingBubble(item, onHide = onHide, hideLater = true) {
         Answerable(item.choice, "Записать", "Не надо", onYes, onNo, peerOffer(item.fromName, item.food, item.grams), item.time)
     }
 }
@@ -806,7 +814,7 @@ fun OfferBubble(item: FeedItem.Offer, onYes: () -> Unit, onNo: () -> Unit, onHid
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BrowserBubble(item: FeedItem.Browser, onYes: () -> Unit, onNo: () -> Unit, onHide: (() -> Unit)? = null) {
-    IncomingBubble(item, onHide = onHide) {
+    IncomingBubble(item, onHide = onHide, hideLater = true) {
         Answerable(item.choice, "Пустить", "Нет", onYes, onNo, browserAsks(item.label, item.code), item.time)
     }
 }

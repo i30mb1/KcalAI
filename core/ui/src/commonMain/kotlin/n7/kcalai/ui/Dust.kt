@@ -18,6 +18,9 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
@@ -27,7 +30,8 @@ import kotlin.random.Random
 
 /**
  * Удалённое сообщение рассыпается на крошки, как песок: снимок пузырька режется на клетки, и они
- * волной слева направо улетают вверх-вправо, мельчая и угасая. Эффект знаком по мессенджерам,
+ * волной слева направо улетают вверх-вправо, мельчая и угасая. Куда волна ещё не дошла, там остаётся
+ * сам снимок, а не мозаика: текст цел до последнего мгновения. Эффект знаком по мессенджерам,
  * реализация — своя.
  *
  * Использование: `val dust = rememberDust()`, на пузырёк — `Modifier.dust(dust)`, на «удалить» —
@@ -36,6 +40,12 @@ import kotlin.random.Random
 class Dust internal constructor(internal val layer: GraphicsLayer) {
 
     internal var crumbs by mutableStateOf<List<Crumb>?>(null)
+        private set
+    /** Снимок пузырька — им рисуется нетронутое волной. */
+    internal var image: ImageBitmap? = null
+        private set
+    /** Крошки по строкам, слева направо: нетронутый хвост строки рисуется снимком. */
+    internal var rows: List<List<Crumb>> = emptyList()
         private set
     internal var cell = 1f
         private set
@@ -48,7 +58,10 @@ class Dust internal constructor(internal val layer: GraphicsLayer) {
             val pixels = IntArray(image.width * image.height)
             image.readPixels(pixels)
             cell = cellPx.toFloat()
-            crumbs = crumbsOf(pixels, image.width, image.height, cellPx, Random.Default)
+            val all = crumbsOf(pixels, image.width, image.height, cellPx, Random.Default)
+            this.image = image
+            rows = all.groupBy { it.y }.values.map { row -> row.sortedBy { it.x } }
+            crumbs = all
         }
         time.animateTo(1f, tween(DUST_MS, easing = LinearEasing))
     }
@@ -94,12 +107,25 @@ fun Modifier.dust(dust: Dust): Modifier = drawWithContent {
         return@drawWithContent
     }
     val t = dust.time.value
+    val image = dust.image
+    val side = dust.cell.toInt()
+    if (image != null) {
+        // нетронутый хвост каждой строки — снимком, одним куском на строку
+        for (row in dust.rows) {
+            val front = restFront(row, t, image.width)
+            if (front >= image.width) continue
+            val y = row.first().y.toInt()
+            val size = IntSize(image.width - front, min(side, image.height - y))
+            drawImage(image, srcOffset = IntOffset(front, y), srcSize = size, dstOffset = IntOffset(front, y), dstSize = size)
+        }
+    }
     for (crumb in crumbs) {
+        if (t < crumb.delay) continue // ещё на месте — нарисована снимком
         val pose = crumb.at(t)
         if (pose.alpha <= 0f) continue
-        val side = dust.cell * pose.scale
+        val size = dust.cell * pose.scale
         val color = Color(crumb.color)
-        drawRect(color.copy(alpha = color.alpha * pose.alpha), Offset(pose.x, pose.y), Size(side, side))
+        drawRect(color.copy(alpha = color.alpha * pose.alpha), Offset(pose.x, pose.y), Size(size, size))
     }
 }
 
@@ -123,22 +149,24 @@ fun Crumb.at(t: Float): CrumbPose {
 }
 
 /**
- * Снимок → крошки: по одной на клетку [cell] x [cell], цвет — из её середины; прозрачное не рассыпается.
- * Задержка растёт слева направо (волна) с небольшим разбросом; полёт — вверх и вправо, у каждой свой.
+ * Снимок → крошки: по одной на клетку [cell] x [cell], цвет — средний по клетке; прозрачное не рассыпается.
+ * Задержка растёт слева направо (волна); разброс — у строки целиком, поэтому внутри строки крошки трогаются
+ * строго по порядку и нетронутое — её хвост. Полёт — вверх и вправо, у каждой свой.
  */
 fun crumbsOf(pixels: IntArray, width: Int, height: Int, cell: Int, random: Random): List<Crumb> {
     val out = ArrayList<Crumb>()
     val step = max(1, cell)
     for (cy in 0 until height step step) {
+        val rowJitter = random.nextFloat() * JITTER
         for (cx in 0 until width step step) {
-            val color = pixels[min(height - 1, cy + step / 2) * width + min(width - 1, cx + step / 2)]
+            val color = average(pixels, width, cx, cy, min(step, width - cx), min(step, height - cy))
             if ((color ushr ALPHA_SHIFT) < MIN_ALPHA) continue
             val wave = if (width > 1) cx.toFloat() / width else 0f
             out += Crumb(
                 x = cx.toFloat(),
                 y = cy.toFloat(),
                 color = color,
-                delay = (wave * WAVE + random.nextFloat() * JITTER).coerceAtMost(1f - FLIGHT),
+                delay = (wave * WAVE + rowJitter).coerceAtMost(1f - FLIGHT),
                 flyX = width * (FLY_X_MIN + random.nextFloat() * FLY_X_SPREAD) + FLY_PX * random.nextFloat(),
                 flyY = -height * (FLY_Y_MIN + random.nextFloat() * FLY_Y_SPREAD) - FLY_PX * random.nextFloat(),
                 wobble = (random.nextFloat() - 0.5f) * height * WOBBLE,
@@ -146,6 +174,39 @@ fun crumbsOf(pixels: IntArray, width: Int, height: Int, cell: Int, random: Rando
         }
     }
     return out
+}
+
+/**
+ * С какого пикселя строка ещё нетронута волной в момент [t]: первая крошка, что не тронулась; все тронулись — [width].
+ * Крошки строки — слева направо, и трогаются они по порядку (см. [crumbsOf]).
+ */
+fun restFront(row: List<Crumb>, t: Float, width: Int): Int {
+    var lo = 0
+    var hi = row.size
+    while (lo < hi) {
+        val mid = (lo + hi) / 2
+        if (row[mid].delay > t) hi = mid else lo = mid + 1
+    }
+    return row.getOrNull(lo)?.x?.toInt() ?: width
+}
+
+/** Средний цвет клетки (ARGB, с учётом прозрачности): крошка из одной точки ломает тонкие буквы в кашу. */
+private fun average(pixels: IntArray, width: Int, x: Int, y: Int, w: Int, h: Int): Int {
+    var a = 0L
+    var r = 0L
+    var g = 0L
+    var b = 0L
+    for (yy in y until y + h) for (xx in x until x + w) {
+        val c = pixels[yy * width + xx]
+        val ca = (c ushr ALPHA_SHIFT).toLong()
+        a += ca
+        r += ((c shr 16) and 0xFF) * ca
+        g += ((c shr 8) and 0xFF) * ca
+        b += (c and 0xFF) * ca
+    }
+    val n = (w * h).toLong()
+    if (a == 0L) return 0
+    return ((a / n).toInt() shl ALPHA_SHIFT) or ((r / a).toInt() shl 16) or ((g / a).toInt() shl 8) or (b / a).toInt()
 }
 
 /** Вся анимация: волна проходит пузырёк, последняя крошка гаснет. */

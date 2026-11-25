@@ -39,6 +39,29 @@ class DustTest {
         assertTrue(left < right, "левые до $left, правые от $right")
     }
 
+    /**
+     * Нетронутое волной рисуется снимком, а не крошками — иначе текст с первого кадра превращается в мозаику.
+     * Для этого внутри строки крошки трогаются строго слева направо: нетронутое — хвост строки.
+     */
+    @Test
+    fun `в строке крошки трогаются строго слева направо`() {
+        val crumbs = crumbsOf(IntArray(40 * 10) { opaque }, width = 40, height = 10, cell = 2, random = Random(7))
+        crumbs.groupBy { it.y }.values.forEach { row ->
+            val delays = row.sortedBy { it.x }.map { it.delay }
+            assertEquals(delays.sorted(), delays, "строка ${row.first().y}")
+        }
+    }
+
+    @Test
+    fun `нетронутый хвост строки — с первой крошки, что ещё не тронулась`() {
+        val crumbs = crumbsOf(IntArray(40 * 2) { opaque }, width = 40, height = 2, cell = 2, random = Random(9))
+        for (t in listOf(0f, 0.1f, 0.2f, 0.3f, 0.45f, 1f)) {
+            val front = restFront(crumbs, t, width = 40)
+            val resting = crumbs.filter { it.delay > t }
+            assertEquals(resting.minOfOrNull { it.x.toInt() } ?: 40, front, "t = $t")
+        }
+    }
+
     @Test
     fun `крошки летят вверх и вправо`() {
         val crumbs = crumbsOf(IntArray(20 * 20) { opaque }, 20, 20, 2, Random(5))

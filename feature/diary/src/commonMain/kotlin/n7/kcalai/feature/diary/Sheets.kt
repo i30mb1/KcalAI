@@ -1,5 +1,6 @@
 package n7.kcalai.feature.diary
 
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -315,18 +316,29 @@ private const val SPEECH_LINES = 2
 @Composable
 private fun <T> Choices(options: List<T>, selected: T?, title: (T) -> String, onPick: (T) -> Unit) {
     val colors = KcalTheme.colors
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
+    // Одна категория — одна строка равных частей: длинный вариант переносится внутри своей части,
+    // а не уезжает на вторую строку отдельно от соседей. Высота у всех — по самому высокому.
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         options.forEach { option ->
             val chosen = option == selected
-            KcalChip(
-                onClick = { onPick(option) },
-                background = if (chosen) colors.bubble else colors.chip,
-                modifier = Modifier.semantics { this.selected = chosen },
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(KcalShapes.chip))
+                    .background(if (chosen) colors.bubble else colors.chip)
+                    .clickable { onPick(option) }
+                    .semantics { this.selected = chosen }
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                Text(title(option), style = KcalTheme.type.chip, color = if (chosen) colors.onBubble else colors.text)
+                Text(
+                    title(option),
+                    style = KcalTheme.type.chip,
+                    color = if (chosen) colors.onBubble else colors.text,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
             }
         }
     }
