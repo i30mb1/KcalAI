@@ -16,7 +16,7 @@ import { bus } from '../core/events.js';
 import { hash2f } from '../core/rng.js';
 import { createFoldInstance } from './fold.js';
 import { createBook, BIOME_TINT_GLSL, biomeTintUniforms, biomeIndexOf } from './book.js';
-import { biomeAt as biomeIdAt, biomeWeights, BIOMES } from '../core/biomes.js';
+import { biomeAt as biomeIdAt, biomeWeights, skinAt, BIOMES } from '../core/biomes.js';
 import { state } from '../core/state.js';
 import { isThinned, hashStr } from './cards.js';
 // integration: V8's Math.hypot allocates (rest-argument array) on every call; this 2-argument form is allocation-free.
@@ -211,23 +211,30 @@ export function createWorld({ scene, assets, wfc, materials, quality }) {
       if (prev) prev.call(m, shader, renderer);
       Object.assign(shader.uniforms, tintUniforms);
       // (three defines USE_BATCHING_COLOR only in the VERTEX stage: the varyings are unconditional and default to identity)
-      const pars = '\nvarying vec4 vBt0;\nvarying vec4 vBt1;\nvarying vec4 vBt2;\nvarying float vBtK;\n';
+      const pars = '\nvarying vec4 vBt0;\nvarying vec4 vBt1;\nvarying vec4 vBt2;\nvarying float vBtK;\nvarying float vSkin;\n';
       const stock = 'vColor *= getBatchingColor( getIndirectIndex( gl_DrawID ) );';
       const mine = `{ int bi = clamp( int( getBatchingColor( getIndirectIndex( gl_DrawID ) ).r - 0.5 ), 0, ${NB - 1} );
-        vBt0 = uBiomeP[ bi * 3 ]; vBt1 = uBiomeP[ bi * 3 + 1 ]; vBt2 = uBiomeP[ bi * 3 + 2 ]; vBtK = uBiomePK[ bi ]; }`;
+        vBt0 = uBiomeP[ bi * 3 ]; vBt1 = uBiomeP[ bi * 3 + 1 ]; vBt2 = uBiomeP[ bi * 3 + 2 ]; vBtK = uBiomePK[ bi ];
+        vSkin = getBatchingColor( getIndirectIndex( gl_DrawID ) ).g - 1.0; }`;
       let vs = shader.vertexShader;
       if (!vs.includes(stock)) vs = vs.replace('#include <color_vertex>', THREE.ShaderChunk.color_vertex);
       if (!vs.includes(stock)) { console.warn('[world] biome tint hook not applied (unexpected shader)'); return; }
       shader.vertexShader = vs.replace(stock, mine)
-        .replace('void main() {', 'void main() {\n\tvBt0 = vec4( 1.0, 0.0, 0.0, 0.0 ); vBt1 = vec4( 0.0, 1.0, 0.0, 0.0 ); vBt2 = vec4( 0.0, 0.0, 1.0, 0.0 ); vBtK = 0.0;')
+        .replace('void main() {', 'void main() {\n\tvBt0 = vec4( 1.0, 0.0, 0.0, 0.0 ); vBt1 = vec4( 0.0, 1.0, 0.0, 0.0 ); vBt2 = vec4( 0.0, 0.0, 1.0, 0.0 ); vBtK = 0.0; vSkin = 0.0;')
         .replace('#include <common>', `#include <common>${pars}#ifdef USE_BATCHING_COLOR\nuniform vec4 uBiomeP[${NB * 3}];\nuniform float uBiomePK[${NB}];\n#endif\n`);
       const apply = '\ndiffuseColor.rgb = biomeTint( diffuseColor.rgb, vBt0, vBt1, vBt2, vBtK );\n';
       let fs = shader.fragmentShader.replace('#include <common>', '#include <common>' + pars + BIOME_TINT_GLSL);
+      // KcalAI: печать сцены — из атласа её вида (uPaperArtSkin — копия атласа с перепечатанными местами, kcal/field-prints.js)
+      fs = fs.replace('uniform sampler2D uPaperArtTex;', 'uniform sampler2D uPaperArtTex;\nuniform sampler2D uPaperArtSkin;')
+        .replace('vec4 paperArt = texture2D( uPaperArtTex, vPaperArtUv );',
+          'vec4 paperArt = mix( texture2D( uPaperArtTex, vPaperArtUv ), texture2D( uPaperArtSkin, vPaperArtUv ), step( 0.5, vSkin ) );')
+        .replace('textureLod( uPaperArtTex, vPaperArtUv + o, lod ).a',
+          'mix( textureLod( uPaperArtTex, vPaperArtUv + o, lod ).a, textureLod( uPaperArtSkin, vPaperArtUv + o, lod ).a, step( 0.5, vSkin ) )');
       const anchor = 'vec3 paperAN = abs( vPaperNrm );'; // right after the art print of the paper material, before fibre
       fs = fs.includes(anchor) ? fs.replace(anchor, apply + anchor) : fs.replace('#include <color_fragment>', '#include <color_fragment>' + apply);
       shader.fragmentShader = fs;
     };
-    m.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|biome-tint-v2';
+    m.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|biome-tint-v3';
     m.needsUpdate = true;
   }
 
@@ -918,13 +925,15 @@ export function createWorld({ scene, assets, wfc, materials, quality }) {
     }
     // integrator (biome pass): single-biome tiles carry art drawn in their biome's colours - no prop tint on top
     const bi = OWN_ART.has(rec.model) && W.biomeTintOwnArt !== true ? 0 : biomeIndexOf(cell);
-    if (bi !== rec.biome) { // pooled records keep their instances: re-colour only when the biome changes
-      rec.biome = bi;
-      _tintCol.setRGB(1 + bi, 1, 1);
+    // KcalAI: вид печати сцены (0 — исходный атлас, 1 — Поле Зёрнышка) едет в зелёном канале того же цвета экземпляра
+    const skin = skinAt(wfc.seed, cx, cz);
+    if (bi + skin * 16 !== rec.biome) { // pooled records keep their instances: re-colour only when the biome or skin changes
+      rec.biome = bi + skin * 16;
+      _tintCol.setRGB(1 + bi, 1 + skin, 1);
       const sel = rec.keep !== null && W.biomeTintKeep && W.biomeTintKeep[BIOMES[bi]] === true; // selective tint: reeds stay green, rocks grey, roofs red
       for (let i = 0; i < rec.inst.length; i++) {
         if (!rec.inst[i].b.tinted) continue;
-        if (sel && rec.keep[i] === 1) { _tintCol.setRGB(1, 1, 1); rec.inst[i].b.mesh.setColorAt(rec.inst[i].id, _tintCol); _tintCol.setRGB(1 + bi, 1, 1); } else rec.inst[i].b.mesh.setColorAt(rec.inst[i].id, _tintCol);
+        if (sel && rec.keep[i] === 1) { _tintCol.setRGB(1, 1 + skin, 1); rec.inst[i].b.mesh.setColorAt(rec.inst[i].id, _tintCol); _tintCol.setRGB(1 + bi, 1 + skin, 1); } else rec.inst[i].b.mesh.setColorAt(rec.inst[i].id, _tintCol);
       }
     }
     cullFor(rec, cell, cx, cz);

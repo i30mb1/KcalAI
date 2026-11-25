@@ -1,7 +1,8 @@
 // KcalAI: панель настроек прогулки поверх страницы — всё, что меняется на лету (window.KcalTune в autopilot.js).
 // Каждый может подогнать вид под себя: панель спрятана под шестерёнку в углу, пока загружен мир прогулки.
 // Значения запоминаются в браузере; «Скопировать» отдаёт их одной строкой, «Сбросить» — к умолчаниям.
-import { biomeAt } from '../src/core/biomes.js';
+import { sceneIndexAt } from '../src/core/biomes.js';
+import { SCENES, chosenIds, chooseIds, chosenScenes } from './scenes.js';
 
 const KEY = 'kcal.walk.tune';
 const OPEN_KEY = 'kcal.walk.tune.open';
@@ -56,18 +57,42 @@ function start() {
   head.addEventListener('click', () => setOpen(body.style.display === 'none'));
   // НА ВРЕМЯ РАЗРАБОТКИ: слайдер сцен — герой встаёт туда, докуда довели бы N шагов, чтобы посмотреть все зоны.
   // Не сохраняется и не копируется; следующая загрузка ставит героя по настоящим шагам дня.
-  const ZONES = { heartland: 'поле', desert: 'пустыня', snow: 'снег', blossom: 'сад', pinewood: 'лес' };
   const scene = document.createElement('label');
   scene.style.cssText = 'display:grid;gap:3px;padding-bottom:6px;border-bottom:1px solid #3a3328';
   const now = Math.max(0, (window.KcalWalk && window.KcalWalk.steps) | 0);
   scene.innerHTML = `<span style="display:flex;justify-content:space-between;color:#e8c47a"><span>Сцена (разработка): шаги</span><b style="color:#f4efe4" data-v></b></span>`
     + `<input type="range" min="0" max="12000" step="20" value="${now}" style="width:100%;accent-color:#e8c47a">`;
   const sceneInput = scene.querySelector('input'), sceneShown = scene.querySelector('[data-v]');
-  const zoneOf = (steps) => ZONES[biomeAt(window.__pt.state.seed, 0, Math.round(-steps * 0.35))] || '';
+  const chosen = chosenScenes();
+  const zoneOf = (steps) => (chosen[sceneIndexAt(window.__pt.state.seed, 0, Math.round(-steps * 0.35))] || {}).label || '';
   const showScene = () => { const v = Number(sceneInput.value); sceneShown.textContent = `${v} · ${zoneOf(v)}`; };
   sceneInput.addEventListener('input', () => { showScene(); window.KcalPlace && window.KcalPlace(Number(sceneInput.value)); });
   showScene();
   body.appendChild(scene);
+
+  // Сцены прогулки: отмеченные делят дневную дистанцию поровну; мир собирается по ним заново — «Применить».
+  const picks = document.createElement('div');
+  picks.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;padding-bottom:6px;border-bottom:1px solid #3a3328';
+  picks.innerHTML = '<span style="grid-column:1/-1;color:#b5ab96">Сцены прогулки</span>';
+  const was = chosenIds();
+  const boxes = SCENES.map((sc) => {
+    const l = document.createElement('label');
+    l.style.cssText = 'display:flex;gap:6px;align-items:center;cursor:pointer';
+    l.innerHTML = `<input type="checkbox" ${was.includes(sc.id) ? 'checked' : ''} style="accent-color:#7fbf8c;margin:0"><span>${sc.label}</span>`;
+    picks.appendChild(l);
+    return { id: sc.id, box: l.querySelector('input') };
+  });
+  const apply = document.createElement('button');
+  apply.textContent = 'Применить';
+  apply.style.cssText = 'grid-column:1/-1;border:0;border-radius:8px;padding:7px 4px;background:#7fbf8c;color:#1c1914;font:600 12px system-ui;cursor:pointer;visibility:hidden';
+  const picked = () => boxes.filter((b) => b.box.checked).map((b) => b.id);
+  for (const b of boxes) b.box.addEventListener('change', () => {
+    const now = picked();
+    apply.style.visibility = now.length && now.join() !== was.join() ? 'visible' : 'hidden'; // место под кнопку — заранее
+  });
+  apply.addEventListener('click', () => { chooseIds(picked()); location.reload(); });
+  picks.appendChild(apply);
+  body.appendChild(picks);
   for (const [label, key, min, max, step] of ROWS) {
     const row = document.createElement('label');
     row.style.cssText = 'display:grid;gap:3px';

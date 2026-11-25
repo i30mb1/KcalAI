@@ -28,6 +28,8 @@ export const paperUniforms = {
   // whole art face takes the atlas colour: the PNG is colour-bled outside the silhouettes and the card is already
   // cut to the outline; 0 = straight alpha over the vertex colour), y = 1 when an atlas is bound, z = strength.
   uPaperArtTex: { value: null },
+  // KcalAI: атлас вида сцены (Поле Зёрнышка) — копия атласа с перепечатанными местами; плитки сцены берут печать отсюда
+  uPaperArtSkin: { value: null },
   uPaperArt: { value: new THREE.Vector4(1, 0, 1, 0.4) },
   // Look pass. Hero cut-out: stand-up paper between the camera and the traveller is dithered away inside a cylinder
   // around the camera -> traveller line (lights.js writes these). xyz = traveller chest (world), w = radius;

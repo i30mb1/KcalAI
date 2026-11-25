@@ -19,25 +19,35 @@ function h2(seed, x, y, k) {
   return (h >>> 0) / 4294967296;
 }
 
-// KcalAI: зоны — полосами поперёк пути на север, по зоне на ~1 600 шагов: пять зон — дневная цель 8 000 шагов.
-// Начинается всегда с полей (у старта мост и домик), остальные четыре идут в своём порядке у каждого мира (seed).
-// Граница между полосами волнистая, но всегда поперёк дороги: идти вдоль шва двух зон нельзя.
-/** Длина зоны вдоль пути, клеток: 1 600 шагов по 0,7 при клетке 2. */
-export const BIOME_BAND = 560;
-/** Старт — чуть внутри полей, чтобы позади героя тоже было поле. */
+// KcalAI: сцены прогулки — полосами поперёк пути на север. Сцена — зона (BIOMES) и вид её печати (skin: 0 — исходный
+// атлас, 1 — Поле Зёрнышка, kcal/field-prints.js). Какие сцены идут, выбирает человек (kcal/scenes.js): дневная
+// дистанция делится между выбранными поровну. Первая выбранная — всегда у старта, остальные — в своём порядке у
+// каждого мира (seed). Граница волнистая, но всегда поперёк дороги: идти вдоль шва двух сцен нельзя.
+/** Дневная дистанция, клеток: 8 000 шагов по 0,7 при клетке 2. */
+const DAY_TILES = 2800;
+/** Старт — чуть внутри первой сцены, чтобы позади героя была она же. */
 const BAND_START = 10;
+let SCENES = [{ biome: 0, skin: 0 }, { biome: 1, skin: 0 }, { biome: 2, skin: 0 }, { biome: 3, skin: 0 }, { biome: 4, skin: 0 }];
+/** Длина сцены вдоль пути, клеток. */
+export let BIOME_BAND = DAY_TILES / SCENES.length;
 const ORDERS = new Map();
+/** Выбрать сцены прогулки — до создания мира. [list] — { biome: индекс в BIOMES, skin }; пустой — все зоны. */
+export function setScenes(list) {
+  if (list && list.length) SCENES = list.map((sc) => ({ biome: sc.biome | 0, skin: sc.skin | 0 }));
+  BIOME_BAND = DAY_TILES / SCENES.length;
+  ORDERS.clear();
+}
 function journey(seed) {
   let order = ORDERS.get(seed);
   if (!order) {
-    const rest = [1, 2, 3, 4];                    // пустыня, снег, цветущий сад, хвойный лес
+    const rest = SCENES.map((_, i) => i).slice(1);
     for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(h2(seed, i, 0, 77) * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
     ORDERS.set(seed, (order = [0, ...rest]));
   }
   return order;
 }
-/** Зона полосы k (0 — поля у старта, дальше на север — следующие). */
-function bandBiome(seed, k) {
+/** Сцена полосы k (0 — у старта, дальше на север — следующие): индекс в выбранных. */
+function bandScene(seed, k) {
   const order = journey(seed);
   return order[((k % order.length) + order.length) % order.length];
 }
@@ -53,17 +63,28 @@ function vnoise(seed, x, y, k) {
 
 const _d = new Float64Array(BIOMES.length); // nearest site distance per biome (scratch)
 
+/** Полоса пути под точкой (x, z) в клетках: с волнистой границей поперёк пути. */
+function bandAt(seed, x, z) {
+  const wz = z + (vnoise(seed, x / 5.5, z / 5.5, 12) - 0.5) * 3.2;
+  return { wz, k: Math.floor((BAND_START - wz) / BIOME_BAND) };
+}
+
 /** Fills _d with the distance (tiles) from (x, z) to the nearest band of each biome. x, z in TILE units (floats ok). */
 function distances(seed, x, z) {
-  const wz = z + (vnoise(seed, x / 5.5, z / 5.5, 12) - 0.5) * 3.2; // волнистая граница поперёк пути
-  const k0 = Math.floor((BAND_START - wz) / BIOME_BAND);
+  const { wz, k: k0 } = bandAt(seed, x, z);
   for (let i = 0; i < _d.length; i++) _d[i] = 1e9;
   for (let k = k0 - 2; k <= k0 + 2; k++) {
     const d = Math.abs(wz - (BAND_START - (k + 0.5) * BIOME_BAND));
-    const b = bandBiome(seed, k);
+    const b = SCENES[bandScene(seed, k)].biome;
     if (d < _d[b]) _d[b] = d;
   }
 }
+
+/** Сцена клетки: индекс в выбранных (kcal/scenes.js). */
+export function sceneIndexAt(seed, cx, cz) { return bandScene(seed, bandAt(seed, cx, cz).k); }
+
+/** Вид печати клетки: 0 — исходный атлас, 1 — Поле Зёрнышка. */
+export function skinAt(seed, cx, cz) { return SCENES[sceneIndexAt(seed, cx, cz)].skin; }
 
 /** Biome index (into BIOMES) of the cell / tile-space point. */
 export function biomeIndexAt(seed, cx, cz) {

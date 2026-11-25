@@ -4,8 +4,8 @@
 //
 // Карточки мира вырезаны по контуру старого рисунка (public/textures/art/atlas.json, `outline`), а шейдер режет
 // карточку ещё и по прозрачности печати. Поэтому новая печать рисуется внутри того же контура и по возможности
-// заполняет его: тень карточки — по контуру. Печатается при загрузке поверх своих мест в атласе на видеокарте:
-// файл атласа не меняется, рисунок остаётся кодом, как еда (food-prints.js).
+// заполняет его: тень карточки — по контуру. Печатается при загрузке в копию атласа на видеокарте — ею печатаются
+// плитки сцены «Поле Зёрнышка» (kcal/scenes.js), остальные сцены — исходным атласом; файл атласа не меняется.
 
 // ---- набор печати: лист шириной 100 единиц, высота — по пропорции места; свет слева сверху ------------------------
 const P = () => new Path2D();
@@ -411,14 +411,18 @@ function finish(cv, pad) {
 }
 
 /**
- * Перепечатать места поля в атласе [art] на видеокарте. Атлас сначала загружается целиком, затем каждое место
- * заменяется своей печатью; мипы пересчитывает three. Без атласа или его описания — ничего не делает.
+ * Атлас вида «Поле Зёрнышка»: копия атласа [art] на видеокарте, в которой места поля перепечатаны своей печатью.
+ * Исходный атлас не трогается — по нему печатаются остальные сцены. Мипы копии пересчитывает three.
+ * @return копия или null, если нет атласа или его описания
  */
-export async function repaintField(renderer, art, THREE) {
-  if (!art || !art.isTexture) return;
+export async function fieldAtlas(renderer, art, THREE) {
+  if (!art || !art.isTexture || !art.image) return null;
   const meta = await fetch(new URL('../public/textures/art/atlas.json', import.meta.url)).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  if (!meta) return;
-  renderer.initTexture(art);
+  if (!meta) return null;
+  const skin = new THREE.Texture(art.image);               // своё место на видеокарте: новый источник, не общий с art
+  for (const k of ['flipY', 'colorSpace', 'wrapS', 'wrapT', 'generateMipmaps', 'minFilter', 'magFilter', 'anisotropy']) skin[k] = art[k];
+  skin.needsUpdate = true;
+  renderer.initTexture(skin);
   const PAD = 3;
   for (const name of FIELD_SPRITES) {
     const s = meta.sprites[name]; if (!s) continue;
@@ -426,7 +430,8 @@ export async function repaintField(renderer, art, THREE) {
     const px = finish(paintSprite(name, w, h, s.outline), PAD);
     const src = new THREE.DataTexture(px.data, px.width, px.height, THREE.RGBAFormat);
     src.needsUpdate = true;
-    renderer.copyTextureToTexture(src, art, null, new THREE.Vector2(x - PAD, y - PAD));
+    renderer.copyTextureToTexture(src, skin, null, new THREE.Vector2(x - PAD, y - PAD));
     src.dispose();
   }
+  return skin;
 }

@@ -14,7 +14,7 @@ import { createFollowCamera } from './camera/follow.js';
 import { createRenderer } from './render/renderer.js';
 import { createLights } from './render/lights.js';
 import { createPost } from './render/post.js';
-import { createMaterials } from './render/materials.js';
+import { createMaterials, paperUniforms } from './render/materials.js';
 import { createPaperAudio } from './audio/paper.js';
 import { createMusic } from './audio/music.js';
 import { createDayNight } from './render/daynight.js';
@@ -22,7 +22,9 @@ import { createLife } from './life/life.js';
 import { createAnimals } from './life/animals.js';
 import { createGame } from './game/index.js';
 import { createViews } from './camera/views.js';
-import { repaintField } from '../kcal/field-prints.js';
+import { fieldAtlas } from '../kcal/field-prints.js';
+import { chosenScenes } from '../kcal/scenes.js';
+import { setScenes } from './core/biomes.js';
 // Allocation-free two-dimensional length.
 const hypot2 = (a, b) => Math.sqrt(a * a + b * b);
 
@@ -46,8 +48,10 @@ async function boot() {
   const materials = createMaterials({ quality });
   const assets = await loadAssets({ materials, renderer, quality });
   materials.setTextures(assets.textures);
-  // KcalAI: стартовая зона — Поле Зёрнышка: её предметы перепечатаны по теме приложения (kcal/field-prints.js).
-  await repaintField(renderer, assets.textures && assets.textures.art, THREE);
+  // KcalAI: сцены прогулки, отмеченные в панели вида (kcal/scenes.js), и атлас вида Поля Зёрнышка, если оно отмечено.
+  const scenes = chosenScenes();
+  setScenes(scenes.map((sc) => ({ biome: sc.biomeIndex, skin: sc.skin })));
+  if (scenes.some((sc) => sc.skin === 1)) paperUniforms.uPaperArtSkin.value = await fieldAtlas(renderer, assets.textures && assets.textures.art, THREE);
   const lights = createLights({ scene, quality });
   const wfc = createWFC({ seed });
   const world = createWorld({ scene, assets, wfc, materials, quality });
