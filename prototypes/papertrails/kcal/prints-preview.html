@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>Поле Зёрнышка — печать</title>
+<title>Виды печати сцен</title>
 <style>
   body { margin: 0; background: #e9dcc0; font: 12px sans-serif; color: #3b2a1d; }
   #grid { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; }
@@ -10,18 +10,20 @@
 </style>
 <div id="grid"></div>
 <script type="module">
-  // Предпросмотр: слева — старая печать атласа, справа — новая (?only=new — только новые).
-  import { FIELD_SPRITES, paintSprite } from './field-prints.js';
-  const meta = await (await fetch('../public/textures/art/atlas.json')).json();
+  // Предпросмотр вида печати: слева — исходное место атласа, справа — новое. ?skin=1|2 (по умолчанию 1), ?only=new.
+  import { SKINS, atlasMeta } from './skins.js';
+  import { paintSprite } from './print-kit.js';
+  const q = new URLSearchParams(location.search);
+  const prints = SKINS[q.get('skin') || 1];
+  const meta = await atlasMeta();
   const atlas = new Image(); atlas.src = '../public/textures/art/atlas.webp'; await atlas.decode();
-  const onlyNew = new URLSearchParams(location.search).get('only') === 'new';
   const grid = document.getElementById('grid');
-  for (const name of FIELD_SPRITES) {
+  for (const [name, draw] of Object.entries(prints)) {
     const s = meta.sprites[name]; const [x, y, w, h] = s.rect;
     const fig = document.createElement('figure');
     const cap = document.createElement('figcaption'); cap.textContent = name; fig.append(cap);
-    if (!onlyNew) { const old = document.createElement('canvas'); old.width = w; old.height = h; old.getContext('2d').drawImage(atlas, x, y, w, h, 0, 0, w, h); fig.append(old); }
-    fig.append(paintSprite(name, w, h, s.outline));
+    if (q.get('only') !== 'new') { const old = document.createElement('canvas'); old.width = w; old.height = h; old.getContext('2d').drawImage(atlas, x, y, w, h, 0, 0, w, h); fig.append(old); }
+    fig.append(paintSprite(draw, w, h, s.outline));
     grid.append(fig);
   }
   document.title += ' — готово';

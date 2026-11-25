@@ -1,3 +1,5 @@
+import java.util.zip.GZIPOutputStream
+
 plugins {
     // Compose — ради Compose Resources: в них едет собранная страница, одинаково на обе платформы.
     id("n7.kcalai.kmp-compose")
@@ -63,6 +65,16 @@ val syncWebBundle by tasks.registering(Sync::class) {
         into("walk")
     }
     into(layout.buildDirectory.dir("webBundle/files/web"))
+    // Рядом с крупными сжимаемыми файлами — сжатая копия `.gzip`: телефон отдаёт её браузеру, который понимает
+    // gzip (DiaryWebHost), — по Wi‑Fi едет в 3–4 раза меньше. Картинки (webp, jpg, png) уже сжаты — без копий.
+    val packable = setOf("wasm", "js", "mjs", "glb", "json", "html", "css", "ttf", "svg")
+    doLast {
+        destinationDir.walkTopDown()
+            .filter { it.isFile && it.extension in packable && it.length() > 4096 }
+            .forEach { file ->
+                GZIPOutputStream(file.resolveSibling(file.name + ".gzip").outputStream()).use { out -> file.inputStream().use { it.copyTo(out) } }
+            }
+    }
 }
 
 compose.resources {

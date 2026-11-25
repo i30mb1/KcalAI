@@ -17,6 +17,7 @@ import { hash2f } from '../core/rng.js';
 import { createFoldInstance } from './fold.js';
 import { createBook, BIOME_TINT_GLSL, biomeTintUniforms, biomeIndexOf } from './book.js';
 import { biomeAt as biomeIdAt, biomeWeights, skinAt, BIOMES } from '../core/biomes.js';
+import { SKIN_MAX } from '../../kcal/skins.js';
 import { state } from '../core/state.js';
 import { isThinned, hashStr } from './cards.js';
 // integration: V8's Math.hypot allocates (rest-argument array) on every call; this 2-argument form is allocation-free.
@@ -214,27 +215,43 @@ export function createWorld({ scene, assets, wfc, materials, quality }) {
       const pars = '\nvarying vec4 vBt0;\nvarying vec4 vBt1;\nvarying vec4 vBt2;\nvarying float vBtK;\nvarying float vSkin;\n';
       const stock = 'vColor *= getBatchingColor( getIndirectIndex( gl_DrawID ) );';
       const mine = `{ int bi = clamp( int( getBatchingColor( getIndirectIndex( gl_DrawID ) ).r - 0.5 ), 0, ${NB - 1} );
-        vBt0 = uBiomeP[ bi * 3 ]; vBt1 = uBiomeP[ bi * 3 + 1 ]; vBt2 = uBiomeP[ bi * 3 + 2 ]; vBtK = uBiomePK[ bi ];
-        vSkin = getBatchingColor( getIndirectIndex( gl_DrawID ) ).g - 1.0; }`;
+        vBt0 = uBiomeP[ bi * 3 ]; vBt1 = uBiomeP[ bi * 3 + 1 ]; vBt2 = uBiomeP[ bi * 3 + 2 ]; vBtK = uBiomePK[ bi ]; }`;
+      // KcalAI: вид печати сцены (зелёный канал цвета экземпляра = 1 + номер вида): место атласа, которое вид
+      // перепечатал, переезжает в общий лист видов по таблице (kcal/skins.js); остальное печатается из атласа.
+      const remap = `vPaperArtUv = uv1;
+  #ifdef USE_BATCHING_COLOR
+  { int sk = int( getBatchingColor( getIndirectIndex( gl_DrawID ) ).g - 0.5 );
+    if ( sk > 0 && uv1.x > 0.0001 ) {
+      vec2 px = uv1 * uSkinScale.xy;
+      for ( int i = 0; i < ${SKIN_MAX}; i ++ ) {
+        vec4 r = texelFetch( uSkinTable, ivec2( i * 2, sk - 1 ), 0 );
+        if ( r.z <= 0.0 ) break;
+        if ( px.x >= r.x && px.x <= r.z && px.y >= r.y && px.y <= r.w ) {
+          vPaperArtUv = ( px + texelFetch( uSkinTable, ivec2( i * 2 + 1, sk - 1 ), 0 ).xy ) / uSkinScale.zw; vSkin = 1.0; break;
+        }
+      }
+    } }
+  #endif`;
       let vs = shader.vertexShader;
       if (!vs.includes(stock)) vs = vs.replace('#include <color_vertex>', THREE.ShaderChunk.color_vertex);
       if (!vs.includes(stock)) { console.warn('[world] biome tint hook not applied (unexpected shader)'); return; }
-      shader.vertexShader = vs.replace(stock, mine)
+      shader.vertexShader = vs.replace(stock, mine).replace('vPaperArtUv = uv1;', remap)
         .replace('void main() {', 'void main() {\n\tvBt0 = vec4( 1.0, 0.0, 0.0, 0.0 ); vBt1 = vec4( 0.0, 1.0, 0.0, 0.0 ); vBt2 = vec4( 0.0, 0.0, 1.0, 0.0 ); vBtK = 0.0; vSkin = 0.0;')
-        .replace('#include <common>', `#include <common>${pars}#ifdef USE_BATCHING_COLOR\nuniform vec4 uBiomeP[${NB * 3}];\nuniform float uBiomePK[${NB}];\n#endif\n`);
+        .replace('#include <common>', `#include <common>${pars}#ifdef USE_BATCHING_COLOR\nuniform highp sampler2D uSkinTable;\nuniform vec4 uSkinScale;\nuniform vec4 uBiomeP[${NB * 3}];\nuniform float uBiomePK[${NB}];\n#endif\n`);
       const apply = '\ndiffuseColor.rgb = biomeTint( diffuseColor.rgb, vBt0, vBt1, vBt2, vBtK );\n';
       let fs = shader.fragmentShader.replace('#include <common>', '#include <common>' + pars + BIOME_TINT_GLSL);
-      // KcalAI: печать сцены — из атласа её вида (uPaperArtSkin — копия атласа с перепечатанными местами, kcal/field-prints.js)
+      // KcalAI: перепечатанное видом сцены место — из общего листа видов (uPaperArtSkin, kcal/skins.js)
       fs = fs.replace('uniform sampler2D uPaperArtTex;', 'uniform sampler2D uPaperArtTex;\nuniform sampler2D uPaperArtSkin;')
         .replace('vec4 paperArt = texture2D( uPaperArtTex, vPaperArtUv );',
           'vec4 paperArt = mix( texture2D( uPaperArtTex, vPaperArtUv ), texture2D( uPaperArtSkin, vPaperArtUv ), step( 0.5, vSkin ) );')
+        .replace('vec2 ts = vec2( textureSize( uPaperArtTex, 0 ) );', 'vec2 ts = mix( vec2( textureSize( uPaperArtTex, 0 ) ), vec2( textureSize( uPaperArtSkin, 0 ) ), step( 0.5, vSkin ) );')
         .replace('textureLod( uPaperArtTex, vPaperArtUv + o, lod ).a',
           'mix( textureLod( uPaperArtTex, vPaperArtUv + o, lod ).a, textureLod( uPaperArtSkin, vPaperArtUv + o, lod ).a, step( 0.5, vSkin ) )');
       const anchor = 'vec3 paperAN = abs( vPaperNrm );'; // right after the art print of the paper material, before fibre
       fs = fs.includes(anchor) ? fs.replace(anchor, apply + anchor) : fs.replace('#include <color_fragment>', '#include <color_fragment>' + apply);
       shader.fragmentShader = fs;
     };
-    m.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|biome-tint-v3';
+    m.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|biome-tint-v4';
     m.needsUpdate = true;
   }
 

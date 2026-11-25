@@ -6,6 +6,7 @@ import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.websocket.Frame
@@ -23,7 +24,10 @@ import n7.kcalai.webapi.WebSuggestion
 import n7.kcalai.webapi.encode
 import n7.kcalai.webapi.parseToPage
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertIs
 import kotlin.time.Duration.Companion.seconds
 
@@ -40,6 +44,8 @@ class DiaryWebHostTest {
             "index.html" -> "<html>дневник</html>".encodeToByteArray()
             "app.wasm" -> byteArrayOf(0, 97, 115, 109)
             "web.js" -> "start()".encodeToByteArray()
+            "walk/tiles.glb" -> RAW_GLB
+            "walk/tiles.glb.gzip" -> GZ_GLB
             else -> null
         }
     }
@@ -110,6 +116,53 @@ class DiaryWebHostTest {
         }
     }
 
+    /**
+     * Мир прогулки весит мегабайты, а телефон отдаёт его по Wi‑Fi: сборка кладёт рядом сжатую копию (`.gzip`), и браузер,
+     * который понимает gzip, получает её — модели мира в 3–4 раза меньше. Тип файла остаётся своим.
+     */
+    @Test
+    fun `сжатую копию получает браузер, который понимает gzip`() = runTest(timeout = 20.seconds) {
+        served { port ->
+            val glb = HttpClient(CIO).get("http://127.0.0.1:$port/walk/tiles.glb") { header(HttpHeaders.AcceptEncoding, "gzip, deflate, br") }
+            assertEquals("gzip", glb.headers[HttpHeaders.ContentEncoding])
+            assertContentEquals(GZ_GLB, glb.bodyAsBytes())
+            assertEquals("application/octet-stream", glb.headers[HttpHeaders.ContentType])
+            assertEquals(HttpHeaders.AcceptEncoding, glb.headers[HttpHeaders.Vary], "кеш браузера не путает сжатую копию с исходной")
+        }
+    }
+
+    @Test
+    fun `без gzip браузер получает исходный файл`() = runTest(timeout = 20.seconds) {
+        served { port ->
+            val glb = HttpClient(CIO).get("http://127.0.0.1:$port/walk/tiles.glb")
+            assertNull(glb.headers[HttpHeaders.ContentEncoding])
+            assertContentEquals(RAW_GLB, glb.bodyAsBytes())
+        }
+    }
+
+    /**
+     * Перепроверка без метки — то же скачивание: браузер каждый раз тянул бы весь мир заново. С меткой содержимого
+     * телефон отвечает «не изменилось», и страница открывается из кеша; после обновления приложения метка другая.
+     */
+    @Test
+    fun `неизменённый файл второй раз не скачивается`() = runTest(timeout = 20.seconds) {
+        served { port ->
+            val client = HttpClient(CIO)
+            val first = client.get("http://127.0.0.1:$port/walk/tiles.glb") { header(HttpHeaders.AcceptEncoding, "gzip") }
+            val tag = assertNotNull(first.headers[HttpHeaders.ETag])
+
+            val again = client.get("http://127.0.0.1:$port/walk/tiles.glb") {
+                header(HttpHeaders.AcceptEncoding, "gzip")
+                header(HttpHeaders.IfNoneMatch, tag)
+            }
+            assertEquals(304, again.status.value)
+            assertEquals(0, again.bodyAsBytes().size)
+
+            val raw = client.get("http://127.0.0.1:$port/walk/tiles.glb") { header(HttpHeaders.IfNoneMatch, tag) }
+            assertEquals(200, raw.status.value, "метка сжатой копии не подходит исходному файлу")
+        }
+    }
+
     /** Отдаётся только собранная страница, а не что угодно по пути с «..». */
     @Test
     fun `за пределы страницы путь не выводит`() = runTest(timeout = 20.seconds) {
@@ -146,3 +199,6 @@ class DiaryWebHostTest {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
     }
 }
+
+private val RAW_GLB = ByteArray(64) { it.toByte() }
+private val GZ_GLB = byteArrayOf(31, -117, 8, 0, 1, 2, 3)

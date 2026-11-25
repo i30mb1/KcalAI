@@ -22,7 +22,7 @@ import { createLife } from './life/life.js';
 import { createAnimals } from './life/animals.js';
 import { createGame } from './game/index.js';
 import { createViews } from './camera/views.js';
-import { fieldAtlas } from '../kcal/field-prints.js';
+import { buildSkins } from '../kcal/skins.js';
 import { chosenScenes } from '../kcal/scenes.js';
 import { setScenes } from './core/biomes.js';
 // Allocation-free two-dimensional length.
@@ -48,10 +48,15 @@ async function boot() {
   const materials = createMaterials({ quality });
   const assets = await loadAssets({ materials, renderer, quality });
   materials.setTextures(assets.textures);
-  // KcalAI: сцены прогулки, отмеченные в панели вида (kcal/scenes.js), и атлас вида Поля Зёрнышка, если оно отмечено.
+  // KcalAI: сцены прогулки, отмеченные в панели вида (kcal/scenes.js), и лист перепечатанных мест их видов (kcal/skins.js).
   const scenes = chosenScenes();
   setScenes(scenes.map((sc) => ({ biome: sc.biomeIndex, skin: sc.skin })));
-  if (scenes.some((sc) => sc.skin === 1)) paperUniforms.uPaperArtSkin.value = await fieldAtlas(renderer, assets.textures && assets.textures.art, THREE);
+  const skins = await buildSkins([...new Set(scenes.map((sc) => sc.skin).filter(Boolean))], THREE, assets.textures && assets.textures.art);
+  if (skins) {
+    paperUniforms.uPaperArtSkin.value = skins.sheet;
+    paperUniforms.uSkinTable.value = skins.table;
+    paperUniforms.uSkinScale.value.set(...skins.scale);
+  }
   const lights = createLights({ scene, quality });
   const wfc = createWFC({ seed });
   const world = createWorld({ scene, assets, wfc, materials, quality });

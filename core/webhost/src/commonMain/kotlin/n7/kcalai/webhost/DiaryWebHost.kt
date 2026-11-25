@@ -6,6 +6,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.response.header
+import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
 import io.ktor.server.routing.RoutingCall
 import io.ktor.server.routing.get
@@ -75,20 +76,38 @@ class DiaryWebHost(
     }
 
     private suspend fun RoutingCall.serve(path: String) {
-        val bytes = path.takeIf(::isInside)?.let { bundle.read(it) }
+        if (!isInside(path)) {
+            respondBytes(ByteArray(0), status = HttpStatusCode.NotFound)
+            return
+        }
+        // Сжатая копия, если сборка её положила и браузер понимает gzip: мир прогулки весит мегабайты.
+        val packed = if (request.headers[HttpHeaders.AcceptEncoding].orEmpty().contains("gzip")) bundle.read(path + GZIP) else null
+        val bytes = packed ?: bundle.read(path)
         if (bytes == null) {
             respondBytes(ByteArray(0), status = HttpStatusCode.NotFound)
             return
         }
         // Навсегда — только wasm: у него в имени хеш содержимого, и новая сборка — новое имя.
         // Страницу, web.js и шрифты браузер перепроверяет: имена у них постоянные, и после
-        // обновления приложения он иначе остался бы на старой странице.
+        // обновления приложения он иначе остался бы на старой странице. Перепроверка — по метке
+        // содержимого: не изменилось — «304», и файл второй раз не едет.
         response.header(HttpHeaders.CacheControl, if (path.endsWith(".wasm")) "max-age=31536000, immutable" else "no-cache")
+        response.header(HttpHeaders.Vary, HttpHeaders.AcceptEncoding)
+        val tag = "\"${bytes.size.toString(16)}-${bytes.contentHashCode().toUInt().toString(16)}${if (packed != null) "-gz" else ""}\""
+        response.header(HttpHeaders.ETag, tag)
+        if (request.headers[HttpHeaders.IfNoneMatch] == tag) {
+            respond(HttpStatusCode.NotModified)
+            return
+        }
+        if (packed != null) response.header(HttpHeaders.ContentEncoding, "gzip")
         respondBytes(bytes, contentType(path))
     }
 
     private companion object {
         const val INDEX = "index.html"
+
+        /** Сжатая копия файла страницы — рядом с ним (`.gz` сборка Android распаковала бы). */
+        const val GZIP = ".gzip"
     }
 }
 
