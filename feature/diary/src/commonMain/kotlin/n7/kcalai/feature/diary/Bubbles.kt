@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -465,9 +466,8 @@ private val OUTLINE_ALPHA = floatArrayOf(0.85f, 0.6f, 0.4f, 0.25f)
 /** Корзинка тише текста: действие на случай, а не главное в пузырьке. */
 private const val HIDE_ALPHA = 0.7f
 
-/** Значок ответа — с палец; отвеченный — тише: решение принято. */
-private const val ANSWER_DP = 40
-private const val ANSWERED_ALPHA = 0.55f
+/** Кнопка ответа — небольшая, в строке со временем; строка этой высоты и после ответа — пузырёк не прыгает. */
+private const val ANSWER_DP = 32
 
 /**
  * Идея 4: приём пищи, который человек, похоже, забыл записать.
@@ -757,7 +757,7 @@ fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit, onHide: (
         MascotQuestion.STEPS -> "Считать" to "Не надо"
     }
     IncomingBubble(item, onHide = onHide) {
-        Answerable(item.choice, yes, no, onYes, onNo) { BubbleText(item.text, time = item.time) }
+        Answerable(item.choice, yes, no, onYes, onNo, item.text, item.time)
     }
 }
 
@@ -795,9 +795,7 @@ fun NearbyBubble(item: FeedItem.Nearby, onSend: (String) -> Unit) {
 @Composable
 fun OfferBubble(item: FeedItem.Offer, onYes: () -> Unit, onNo: () -> Unit, onHide: (() -> Unit)? = null) {
     IncomingBubble(item, onHide = onHide) {
-        Answerable(item.choice, "Записать", "Не надо", onYes, onNo) {
-            BubbleText(peerOffer(item.fromName, item.food, item.grams), time = item.time)
-        }
+        Answerable(item.choice, "Записать", "Не надо", onYes, onNo, peerOffer(item.fromName, item.food, item.grams), item.time)
     }
 }
 
@@ -809,40 +807,59 @@ fun OfferBubble(item: FeedItem.Offer, onYes: () -> Unit, onNo: () -> Unit, onHid
 @Composable
 fun BrowserBubble(item: FeedItem.Browser, onYes: () -> Unit, onNo: () -> Unit, onHide: (() -> Unit)? = null) {
     IncomingBubble(item, onHide = onHide) {
-        Answerable(item.choice, "Пустить", "Нет", onYes, onNo) { BubbleText(browserAsks(item.label, item.code), time = item.time) }
+        Answerable(item.choice, "Пустить", "Нет", onYes, onNo, browserAsks(item.label, item.code), item.time)
     }
 }
 
 /**
- * Реплика с ответом в два значка справа, где у пузырька есть место: зелёная галочка — да, красный крестик —
- * нет. Компактнее кнопок со словами — пузырёк не растёт на строку; слова остаются подписью для экранного
- * диктора. Ответили — остаётся выбранный значок, тише, и второй тап ничего не запускает.
+ * Реплика с ответом в две тихие кнопки в нижней строке, рядом со временем: галочка — да, крестик — нет.
+ * Пузырёк не растёт и не кричит цветом; слова ответов — подпись для экранного диктора. Ответили — на месте
+ * кнопок остаётся выбранное словом («✓ Сказать»), строка той же высоты, и второй тап ничего не запускает.
  */
 @Composable
-private fun Answerable(chosen: Choice?, yes: String, no: String, onYes: () -> Unit, onNo: () -> Unit, text: @Composable () -> Unit) {
+private fun Answerable(chosen: Choice?, yes: String, no: String, onYes: () -> Unit, onNo: () -> Unit, text: String, time: String) {
     val colors = KcalTheme.colors
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f, fill = false)) { text() }
-        Spacer(Modifier.width(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (chosen != Choice.NO) AnswerIcon(Icons.Default.Check, yes, colors.carb.fill, answered = chosen != null, onClick = onYes)
-            if (chosen != Choice.YES) AnswerIcon(Icons.Default.Close, no, colors.error, answered = chosen != null, onClick = onNo)
+    Column {
+        BubbleText(text)
+        Row(
+            modifier = Modifier.align(Alignment.End).padding(top = 6.dp).heightIn(min = ANSWER_DP.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            when (chosen) {
+                null -> {
+                    AnswerIcon(Icons.Default.Check, yes, colors.carb.fill, onYes)
+                    AnswerIcon(Icons.Default.Close, no, colors.text3, onNo)
+                }
+                Choice.YES -> Answered(Icons.Default.Check, yes, colors.carb.fill)
+                Choice.NO -> Answered(Icons.Default.Close, no, colors.text3)
+            }
+            Text(time, style = KcalTheme.type.time, color = colors.text3)
         }
     }
 }
 
+/** Тихая круглая кнопка ответа: фон чипа, значок своим цветом. */
 @Composable
-private fun AnswerIcon(icon: ImageVector, description: String, tint: Color, answered: Boolean, onClick: () -> Unit) {
-    val ink = if (answered) tint.copy(alpha = ANSWERED_ALPHA) else tint
+private fun AnswerIcon(icon: ImageVector, description: String, tint: Color, onClick: () -> Unit) {
     Box(
         Modifier
             .size(ANSWER_DP.dp)
             .clip(CircleShape)
-            .background(ink.copy(alpha = if (answered) 0.08f else 0.16f))
-            .then(if (answered) Modifier else Modifier.clickable(onClick = onClick)),
+            .background(KcalTheme.colors.chip)
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = description, tint = ink, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(18.dp))
+    }
+}
+
+/** Выбранный ответ — значком и словом, на месте кнопок. */
+@Composable
+private fun Answered(icon: ImageVector, word: String, tint: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+        Text(word, style = KcalTheme.type.chip, color = KcalTheme.colors.text2, modifier = Modifier.padding(start = 4.dp))
     }
 }
 
