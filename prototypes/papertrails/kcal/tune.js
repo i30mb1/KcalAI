@@ -1,8 +1,7 @@
 // KcalAI: панель настроек прогулки поверх страницы — всё, что меняется на лету (window.KcalTune в autopilot.js).
 // Каждый может подогнать вид под себя: панель спрятана под шестерёнку в углу, пока загружен мир прогулки.
 // Значения запоминаются в браузере; «Скопировать» отдаёт их одной строкой, «Сбросить» — к умолчаниям.
-import { sceneIndexAt } from '../src/core/biomes.js';
-import { SCENES, chosenIds, chooseIds, chosenScenes } from './scenes.js';
+import { SCENES, chosenIds, chooseIds } from './scenes.js';
 
 const KEY = 'kcal.walk.tune';
 const OPEN_KEY = 'kcal.walk.tune.open';
@@ -55,21 +54,6 @@ function start() {
     try { localStorage.setItem(OPEN_KEY, open ? '1' : '0'); } catch { /* приватное окно */ }
   };
   head.addEventListener('click', () => setOpen(body.style.display === 'none'));
-  // НА ВРЕМЯ РАЗРАБОТКИ: слайдер сцен — герой встаёт туда, докуда довели бы N шагов, чтобы посмотреть все зоны.
-  // Не сохраняется и не копируется; следующая загрузка ставит героя по настоящим шагам дня.
-  const scene = document.createElement('label');
-  scene.style.cssText = 'display:grid;gap:3px;padding-bottom:6px;border-bottom:1px solid #3a3328';
-  const now = Math.max(0, (window.KcalWalk && window.KcalWalk.steps) | 0);
-  scene.innerHTML = `<span style="display:flex;justify-content:space-between;color:#e8c47a"><span>Сцена (разработка): шаги</span><b style="color:#f4efe4" data-v></b></span>`
-    + `<input type="range" min="0" max="12000" step="20" value="${now}" style="width:100%;accent-color:#e8c47a">`;
-  const sceneInput = scene.querySelector('input'), sceneShown = scene.querySelector('[data-v]');
-  const chosen = chosenScenes();
-  const zoneOf = (steps) => (chosen[sceneIndexAt(window.__pt.state.seed, 0, Math.round(-steps * 0.35))] || {}).label || '';
-  const showScene = () => { const v = Number(sceneInput.value); sceneShown.textContent = `${v} · ${zoneOf(v)}`; };
-  sceneInput.addEventListener('input', () => { showScene(); window.KcalPlace && window.KcalPlace(Number(sceneInput.value)); });
-  showScene();
-  body.appendChild(scene);
-
   // Сцены прогулки: отмеченные делят дневную дистанцию поровну; мир собирается по ним заново — «Применить».
   const picks = document.createElement('div');
   picks.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;padding-bottom:6px;border-bottom:1px solid #3a3328';

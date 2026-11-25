@@ -39,11 +39,10 @@
 
     <!--
         Шагомер телефона — Health Connect, только чтение шагов: они складываются с дорожкой в одну цель.
-        Чтение в фоне — потому что день у телефона спрашивает страница дневника, пока экран погашен.
+        Без чтения в фоне: с погасшим экраном страница показывает последние известные шаги дня.
         Спрашивается вопросом Зёрнышка в ленте, не на старте.
     -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
-    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
     </queries>
@@ -84,7 +83,16 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Health Connect до Android 14 спрашивает, зачем приложению шаги, — показываем само приложение. -->
+        </activity>
+
+        <!--
+            Health Connect спрашивает, зачем приложению шаги, — Google требует показать политику
+            конфиденциальности. До Android 14 — этим входом, с Android 14 — псевдонимом ниже.
+        -->
+        <activity
+            android:name=".walk.HealthPolicyActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>
@@ -95,7 +103,7 @@
             android:name="ViewPermissionUsageActivity"
             android:exported="true"
             android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
-            android:targetActivity=".MainActivity">
+            android:targetActivity=".walk.HealthPolicyActivity">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />

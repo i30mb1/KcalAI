@@ -6,9 +6,11 @@ import kotlin.math.roundToInt
 import kotlin.time.Clock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
@@ -46,6 +48,12 @@ class StepsRepository(
     private val clock: Clock = Clock.System,
 ) {
 
+    /**
+     * Последние известные шаги телефона по дням. Health Connect отвечает только на переднем плане: погас экран —
+     * телефон на время молчит, а шаги дня не убывают, поэтому остаются последние известные.
+     */
+    private val known = MutableStateFlow<Map<Long, Int>>(emptyMap())
+
     suspend fun day(date: Long): DaySteps = stepsOf(date, walks.day(date))
 
     /** Шаги дня — заново на каждую прогулку и раз в минуту: телефон считает и без дорожки. */
@@ -62,9 +70,11 @@ class StepsRepository(
         val from = LocalDate.fromEpochDays(date).atStartOfDayIn(zone).toEpochMilliseconds()
         val to = min(LocalDate.fromEpochDays(date + 1).atStartOfDayIn(zone).toEpochMilliseconds(), clock.now().toEpochMilliseconds())
         if (to <= from) return DaySteps(phone = 0, treadmill = treadmill)
-        val all = phone.between(from, to) ?: return DaySteps(phone = null, treadmill = treadmill)
+        val all = phone.between(from, to) ?: return DaySteps(phone = known.value[date], treadmill = treadmill)
         val pocket = walked.sumOf { phone.between(max(it.startedAt, from), min(it.seenAt, to)) ?: 0 }
-        return DaySteps(phone = max(0, all - pocket), treadmill = treadmill)
+        val steps = max(0, all - pocket)
+        known.update { it + (date to steps) }
+        return DaySteps(phone = steps, treadmill = treadmill)
     }
 
     private fun ticks(): Flow<Unit> = flow {

@@ -41,9 +41,9 @@ class HealthConnectSteps(context: Context) : PhoneSteps {
         val READ = HealthPermission.getReadPermission(StepsRecord::class)
 
         /**
-         * Шаги и чтение в фоне: страница дневника спрашивает день, когда телефон лежит с погасшим экраном,
-         * а без этого разрешения Health Connect не отвечает приложению в фоне.
+         * Только шаги, без чтения в фоне: с погасшим экраном Health Connect молчит, и страница дневника
+         * показывает последние известные шаги дня (StepsRepository) — они обновятся, когда экран включат.
          */
-        val PERMISSIONS = setOf(READ, HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
+        val PERMISSIONS = setOf(READ)
     }
 }

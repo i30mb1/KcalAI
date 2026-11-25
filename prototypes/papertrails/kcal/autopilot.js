@@ -74,13 +74,13 @@ function placeByProgress() {
     const pt = window.__pt, S = window.KcalWalk;
     if (!pt || !S || !(S.steps >= 0)) return;          // -1 — телефон ещё не назвал шаги дня
     clearInterval(wait);
-    if (S.steps > 0) window.KcalPlace(S.steps);
+    if (S.steps > 0) placeAt(S.steps);
   }, 300);
 }
-/** Поставить героя туда, докуда довели бы [steps] шагов от старта (и слайдер сцен в панели — tune.js). */
-window.KcalPlace = (steps) => {
+/** Поставить героя туда, докуда довели бы [steps] шагов от старта. */
+function placeAt(steps) {
   const pt = window.__pt;
   if (!pt) return;
   pt.traveller.teleport(LANE_X * T, -steps * STEP_UNITS, 0, -1);
   pt.follow.snap(pt.traveller);
-};
+}

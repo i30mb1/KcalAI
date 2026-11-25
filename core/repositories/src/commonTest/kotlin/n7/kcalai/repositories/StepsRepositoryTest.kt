@@ -60,6 +60,23 @@ class StepsRepositoryTest {
         assertEquals(day.treadmill, day.total)
     }
 
+    /**
+     * Health Connect отвечает приложению только на переднем плане: погас экран — шаги телефона на время пропадают.
+     * Шаги дня не убывают, поэтому остаются последние известные, и счётчик на странице не прыгает вниз.
+     */
+    @Test
+    fun `телефон замолчал — остаются последние известные шаги дня`() = runBlocking {
+        var awake = true
+        val sleepy = object : PhoneSteps {
+            override suspend fun between(from: Long, to: Long): Int? = if (awake) pocket.between(from, to) else null
+        }
+        val steps = StepsRepository(walks, sleepy, zone, clock)
+        val known = steps.day(today).phone
+
+        awake = false
+        assertEquals(known, steps.day(today).phone)
+    }
+
     @Test
     fun `неделя шагов — по дням, вместе с телефоном`() = runBlocking {
         walk()
