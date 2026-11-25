@@ -58,6 +58,7 @@ import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.MealType
 import n7.kcalai.personal.PlanOption
 import n7.kcalai.resolver.ResolvedItem
+import n7.kcalai.ui.Crumbling
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.ui.popIn
 
@@ -643,14 +644,17 @@ private fun Feed(
                     is FeedItem.Answer -> AnswerBubble(item)
                     is FeedItem.Deleted -> DeletedBubble(item, onUndo = { onUndoDelete(item) })
                     is FeedItem.Outbox -> OutboxBubble(item, onSendOutbox, onDeclineOutbox)
-                    is FeedItem.Said -> SaidBubble(item, onHide = { onHideMessage(item.id) })
-                    is FeedItem.Ask -> AskBubble(
-                        item = item,
-                        onYes = { onAnswerAsk(item.question, true) },
-                        onNo = { onAnswerAsk(item.question, false) },
-                        // Отвеченный вопрос — уже просто переписка: его можно убрать; ждущий ответа — нет.
-                        onHide = { onHideMessage(item.id) }.takeIf { item.choice != null },
-                    )
+                    // Корзинка рассыпает сообщение на крошки, и только потом оно уходит из переписки.
+                    is FeedItem.Said -> Crumbling(onHide = { onHideMessage(item.id) }) { hide -> SaidBubble(item, onHide = hide) }
+                    // Отвеченный вопрос — уже просто переписка: его можно убрать; ждущий ответа — нет.
+                    is FeedItem.Ask -> Crumbling(onHide = { onHideMessage(item.id) }.takeIf { item.choice != null }) { hide ->
+                        AskBubble(
+                            item = item,
+                            onYes = { onAnswerAsk(item.question, true) },
+                            onNo = { onAnswerAsk(item.question, false) },
+                            onHide = hide,
+                        )
+                    }
                     is FeedItem.Nearby -> NearbyBubble(item, onSendToPeer)
                     is FeedItem.Offer -> OfferBubble(
                         item = item,

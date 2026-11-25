@@ -58,6 +58,7 @@ import n7.kcalai.model.formatCentigrams
 import n7.kcalai.model.formatFiber
 import n7.kcalai.model.formatGrams
 import n7.kcalai.model.title
+import n7.kcalai.ui.Crumbling
 import n7.kcalai.ui.CapsLabel
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
@@ -158,10 +159,10 @@ fun Feed(diary: PageState.Diary, link: PhoneLink, modifier: Modifier) {
                         onDelete = { id -> link.send(ToPhone.Delete(id)) },
                     )
                     is FeedRow.Said -> IncomingLine(row.line, links = row.links)
-                    is FeedRow.Walked -> IncomingLine(
-                        PageLine(row.said.mascot, row.said.text),
-                        onHide = { link.send(ToPhone.Hide(row.said.id)) },
-                    )
+                    // Корзинка рассыпает реплику на крошки, и только потом она уходит — здесь и на телефоне.
+                    is FeedRow.Walked -> Crumbling(onHide = { link.send(ToPhone.Hide(row.said.id)) }) { hide ->
+                        IncomingLine(PageLine(row.said.mascot, row.said.text), onHide = hide)
+                    }
                 }
             }
         }
