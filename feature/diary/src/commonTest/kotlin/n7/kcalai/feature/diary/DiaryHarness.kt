@@ -91,6 +91,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
         browsers: Browsers? = null,
         daySteps: ((Long) -> Flow<DaySteps>)? = null,
         weekSteps: ((Long) -> Flow<List<Pair<Long, Int>>>)? = null,
+        treadmillSeen: Flow<Boolean> = MutableStateFlow(false),
     ): DiaryViewModel {
         val personal = PersonalRepository(diaryDao, FakePersonalDao(), bodyMetricDao, goalDao, zone)
         val food = FoodRepository(
@@ -121,6 +122,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
             assistant = assistant,
             daySteps = daySteps,
             weekSteps = weekSteps,
+            treadmillSeen = treadmillSeen,
             clock = clock,
             zone = zone,
         )

@@ -36,6 +36,7 @@ class StepsTest {
     private val harness = DiaryHarness()
     private val counted = MutableStateFlow(DaySteps(phone = 2_010, treadmill = 3_232))
     private val asked = mutableListOf<Long>()
+    private val treadmill = MutableStateFlow(false)
 
     @BeforeTest
     fun setUp() = Dispatchers.setMain(dispatcher)
@@ -53,7 +54,7 @@ class StepsTest {
         counted.map { now -> (today - 6..today).map { it to if (it == today) now.total else if (it == today - 2) 9_000 else 0 } }
 
     private fun TestScope.screen(): DiaryViewModel =
-        harness.viewModel(dispatcher, daySteps = ::daySteps, weekSteps = ::weekSteps).also { vm ->
+        harness.viewModel(dispatcher, daySteps = ::daySteps, weekSteps = ::weekSteps, treadmillSeen = treadmill).also { vm ->
             backgroundScope.launch { vm.state.collect {} }
             advanceUntilIdle()
         }
@@ -126,7 +127,7 @@ class StepsTest {
 
         vm.onOpenSteps()
         advanceUntilIdle()
-        assertEquals(Overlay.Steps(goal = DEFAULT_STEPS_GOAL, heightCm = 170), vm.state.value.overlay)
+        assertEquals(Overlay.Steps(goal = DEFAULT_STEPS_GOAL, heightCm = 170, treadmill = false), vm.state.value.overlay)
 
         vm.onSetSteps(goal = 10_000, heightCm = 182)
         advanceUntilIdle()
@@ -135,6 +136,18 @@ class StepsTest {
         assertEquals(10_000, harness.mascotDao.profile()?.stepsGoal)
         assertEquals(182, harness.mascotDao.profile()?.heightCm)
         assertEquals(10_000, vm.steps()?.goal)
+    }
+
+    /** Рост меряет шаг дорожки: сигнал дорожки ловили — шит спрашивает и рост. */
+    @Test
+    fun `с дорожкой шит шагов спрашивает и рост`() = runTest(dispatcher) {
+        treadmill.value = true
+        val vm = screen()
+
+        vm.onOpenSteps()
+        advanceUntilIdle()
+
+        assertEquals(true, (vm.state.value.overlay as Overlay.Steps).treadmill)
     }
 
     @Test

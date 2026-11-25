@@ -31,6 +31,31 @@ class BubbleLayoutTest {
         assertEquals(TimeSlot(inline = true, width = 580), slot)
     }
 
+    // --- Кнопки ответа в строке с концом реплики ---------------------------------------------
+
+    /** Кнопки выше строки текста: их середина — на середине последней строки, текст сдвигается вниз. */
+    @Test
+    fun `кнопки в строке с концом однострочной реплики — по её середине`() {
+        val placed = footerPlacement(inline = true, lastLineTop = 0, lastLineBottom = 20, bodyHeight = 20, footerHeight = 32, gapPx = 6)
+
+        assertEquals(FooterPlacement(textY = 6, footerY = 0, height = 32), placed)
+    }
+
+    /** Над последней строкой — другая строка текста: кнопки на неё не наезжают, выступают только вниз. */
+    @Test
+    fun `кнопки в строке с концом многострочной реплики — не выше её начала`() {
+        val placed = footerPlacement(inline = true, lastLineTop = 40, lastLineBottom = 60, bodyHeight = 60, footerHeight = 32, gapPx = 6)
+
+        assertEquals(FooterPlacement(textY = 0, footerY = 40, height = 72), placed)
+    }
+
+    @Test
+    fun `места в последней строке нет — кнопки строкой ниже, с зазором`() {
+        val placed = footerPlacement(inline = false, lastLineTop = 40, lastLineBottom = 60, bodyHeight = 60, footerHeight = 32, gapPx = 6)
+
+        assertEquals(FooterPlacement(textY = 0, footerY = 66, height = 98), placed)
+    }
+
     @Test
     fun `последняя строка во всю ширину — время уходит строкой ниже`() {
         val slot = timeSlot(textWidth = 590, lastLineRight = 590, timeWidth = 60, gapPx = 16, maxWidth = 600)

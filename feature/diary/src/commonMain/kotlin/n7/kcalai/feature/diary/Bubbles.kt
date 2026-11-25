@@ -820,21 +820,25 @@ fun BrowserBubble(item: FeedItem.Browser, onYes: () -> Unit, onNo: () -> Unit, o
 }
 
 /**
- * Реплика с ответом в две тихие кнопки в нижней строке, рядом со временем: галочка — да, крестик — нет.
- * Пузырёк не растёт и не кричит цветом; слова ответов — подпись для экранного диктора. Ответили — на месте
- * кнопок остаётся выбранное словом («✓ Сказать»), строка той же высоты, и второй тап ничего не запускает.
+ * Реплика с ответом в две тихие кнопки рядом со временем: галочка — да, крестик — нет. Пузырёк не растёт
+ * и не кричит цветом; слова ответов — подпись для экранного диктора. Ответили — на месте кнопок остаётся
+ * выбранное словом («✓ Сказать»), и второй тап ничего не запускает.
+ *
+ * Кнопки со временем встают в строку с концом фразы, если там хватает места, как время в мессенджере;
+ * иначе — строкой ниже. Место меряется по самому широкому варианту строки — кнопкам или любому ответу
+ * словом, — поэтому после ответа пузырёк не перескакивает.
  */
 @Composable
 private fun Answerable(chosen: Choice?, yes: String, no: String, onYes: () -> Unit, onNo: () -> Unit, text: String, time: String) {
     val colors = KcalTheme.colors
-    Column {
-        BubbleText(text)
+    val laidOut = remember { arrayOfNulls<TextLayoutResult>(1) }
+    val footer: @Composable (Choice?) -> Unit = { state ->
         Row(
-            modifier = Modifier.align(Alignment.End).padding(top = 6.dp).heightIn(min = ANSWER_DP.dp),
+            modifier = Modifier.heightIn(min = ANSWER_DP.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            when (chosen) {
+            when (state) {
                 null -> {
                     AnswerIcon(Icons.Default.Check, yes, colors.carb.fill, onYes)
                     AnswerIcon(Icons.Default.Close, no, colors.text3, onNo)
@@ -845,7 +849,43 @@ private fun Answerable(chosen: Choice?, yes: String, no: String, onYes: () -> Un
             Text(time, style = KcalTheme.type.time, color = colors.text3)
         }
     }
+    Layout(
+        content = {
+            Text(remember(text) { mailLinked(text) }, style = KcalTheme.type.body, color = colors.text, onTextLayout = { laidOut[0] = it })
+            footer(chosen)
+            // Только замер: самый широкий вариант строки держит место, сам не рисуется.
+            Column {
+                footer(null)
+                footer(Choice.YES)
+                footer(Choice.NO)
+            }
+        },
+    ) { measurables, constraints ->
+        val body = measurables[0].measure(constraints.copy(minWidth = 0))
+        val shown = measurables[1].measure(Constraints())
+        val widest = measurables[2].measure(Constraints())
+        val text = laidOut[0]
+        val last = (text?.lineCount ?: 1) - 1
+        val lastLineRight = text?.let { ceil(it.getLineRight(last)).toInt() } ?: body.width
+        val slot = timeSlot(body.width, lastLineRight, widest.width, TIME_GAP.roundToPx(), constraints.maxWidth)
+        val placed = footerPlacement(
+            inline = slot.inline,
+            lastLineTop = text?.getLineTop(last)?.toInt() ?: 0,
+            lastLineBottom = text?.getLineBottom(last)?.toInt() ?: body.height,
+            bodyHeight = body.height,
+            footerHeight = shown.height,
+            gapPx = ANSWER_GAP.roundToPx(),
+        )
+        val width = constraints.constrainWidth(slot.width)
+        layout(width, constraints.constrainHeight(placed.height)) {
+            body.place(0, placed.textY)
+            shown.place(width - shown.width, placed.footerY)
+        }
+    }
 }
+
+/** Кнопки ответа строкой ниже фразы — на таком расстоянии от неё. */
+private val ANSWER_GAP = 6.dp
 
 /** Тихая круглая кнопка ответа: фон чипа, значок своим цветом. */
 @Composable

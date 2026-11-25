@@ -89,13 +89,14 @@ class RepositoryWebDiary(
     override val today: Long get() = clock.todayIn(zone).toEpochDays()
 
     override fun day(date: Long): Flow<WebDayContent> =
-        combine(diary.observeDay(date), diary.observeGoal(date), walks.observeDay(date), counted(date), walkSaid(date)) { totals, goal, walked, (counted, target), said ->
+        combine(diary.observeDay(date), diary.observeGoal(date), walks.observeDay(date), counted(date), walkSaid(date)) { totals, goal, walked, (counted, target, seen), said ->
             WebDayContent(
                 walks = walked.map { it.toWeb(date) },
                 steps = counted.total,
                 phoneSteps = counted.phone,
                 stepsGoal = target.goal,
                 heightCm = target.heightCm,
+                treadmillSeen = seen,
                 said = said,
                 entries = totals.entries.map { it.toWeb(zone) },
                 goalKcal = goal?.kcal?.takeIf { it > 0 },
@@ -105,8 +106,12 @@ class RepositoryWebDiary(
             )
         }
 
-    /** Шаги дня и цель к ним — одним потоком: у типизированного combine потолок в пять. */
-    private fun counted(date: Long) = combine(steps.observeDay(date), stepsGoal) { counted, target -> counted to target }
+    /**
+     * Шаги дня, цель к ним и была ли дорожка — одним потоком: у типизированного combine потолок в пять.
+     * Дорожка «была», если с неё записана хоть одна прогулка.
+     */
+    private fun counted(date: Long) =
+        combine(steps.observeDay(date), stepsGoal, walks.observeLast().map { it != null }) { counted, target, seen -> Triple(counted, target, seen) }
 
     override fun week(date: Long): Flow<List<WebDaySummary>> {
         val week = weekOf(date)

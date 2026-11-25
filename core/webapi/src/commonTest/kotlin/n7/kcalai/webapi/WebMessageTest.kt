@@ -40,6 +40,7 @@ class WebMessageTest {
         phoneSteps = 2_998,
         stepsGoal = 8_000,
         heightCm = 182,
+        treadmillSeen = true,
         said = listOf(WebSaid(id = 41, mascot = Mascot.GRAIN, text = "Прогулка в копилке: 3 242 шага.", minute = 18 * 60 + 56)),
         live = TreadmillSample(speedKmh = 4.5, distanceM = 2_140, kcal = 90, elapsedS = 1_920),
     )

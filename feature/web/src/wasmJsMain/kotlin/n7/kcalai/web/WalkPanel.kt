@@ -196,12 +196,15 @@ private fun Card(
                     PageChip(stepsLabel(preset), primary = pickedGoal == preset) { goalText = preset.toString() }
                 }
             }
-            // Рост — по нему меряется шаг дорожки; не знают — пусто, и шаг по среднему.
+            // Рост — по нему меряется шаг дорожки, поэтому он здесь, только если её сигнал ловили;
+            // не знают — пусто, и шаг по среднему.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("рост", style = type.label, color = colors.text2)
-                Spacer(Modifier.width(10.dp))
-                PanelNumber(heightText, { heightText = it }, digits = HEIGHT_DIGITS, fieldWidth = HEIGHT_FIELD_DP.dp, placeholder = DEFAULT_HEIGHT_CM.toString(), onEnter = save, onEscape = { editing = false })
-                Text(" см", style = type.label, color = colors.text3)
+                if (day.treadmillSeen) {
+                    Text("рост", style = type.label, color = colors.text2)
+                    Spacer(Modifier.width(10.dp))
+                    PanelNumber(heightText, { heightText = it }, digits = HEIGHT_DIGITS, fieldWidth = HEIGHT_FIELD_DP.dp, placeholder = DEFAULT_HEIGHT_CM.toString(), onEnter = save, onEscape = { editing = false })
+                    Text(" см", style = type.label, color = colors.text3)
+                }
                 Spacer(Modifier.weight(1f))
                 PageChip("Сохранить", primary = canSave, onClick = save)
             }

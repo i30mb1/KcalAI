@@ -209,6 +209,7 @@ class RepositoryWebDiaryTest {
         assertEquals(2_140, walk.distanceM)
         assertEquals(walk.steps, shown.steps)
         assertEquals(DEFAULT_STEPS_GOAL, shown.stepsGoal)
+        assertEquals(true, shown.treadmillSeen, "сигнал дорожки поймали")
         assertEquals("Прогулка в копилке", shown.said.single().text)
         assertEquals(walk.steps, web.week(today).first().single { it.date == today }.steps)
     }
@@ -219,6 +220,7 @@ class RepositoryWebDiaryTest {
         stepsGoal.value = StepsSettings(goal = 10_000, heightCm = 182)
 
         val shown = web.day(today).first()
+        assertEquals(false, shown.treadmillSeen, "прогулок с дорожки не было — о дорожке молчим")
         assertEquals(10_000, shown.stepsGoal)
         assertEquals(182, shown.heightCm)
     }

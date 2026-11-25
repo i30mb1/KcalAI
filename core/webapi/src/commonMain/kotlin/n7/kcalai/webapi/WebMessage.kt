@@ -174,6 +174,7 @@ private const val KMH_PER_MPS = 3.6
  * @param phoneSteps из них — насчитанные самим телефоном; `null` — телефон шаги не отдаёт
  * @param stepsGoal цель шагов на день
  * @param heightCm рост из профиля — для панели шагов; `null` — не называли
+ * @param treadmillSeen ловили ли сигнал беговой дорожки: без неё панель о росте не спрашивает
  * @param said что персонажи сказали в ленте дня о прогулках
  * @param live беговая дорожка, подключённая к телефону, прямо сейчас; `null` — её нет на связи
  */
@@ -194,6 +195,7 @@ data class WebDay(
     val phoneSteps: Int? = null,
     val stepsGoal: Int = DEFAULT_STEPS_GOAL,
     val heightCm: Int? = null,
+    val treadmillSeen: Boolean = false,
     val said: List<WebSaid> = emptyList(),
     val live: TreadmillSample? = null,
 ) {
@@ -338,6 +340,7 @@ fun encode(message: ToPage): String = envelope(
             day.phoneSteps?.let { put("phoneSteps", it) }
             put("stepsGoal", day.stepsGoal)
             day.heightCm?.let { put("height", it) }
+            if (day.treadmillSeen) put("treadmill", true)
             put("said", buildJsonArray { day.said.forEach { add(it.toJson()) } })
             day.live?.let { live ->
                 put(
@@ -478,6 +481,7 @@ fun parseToPage(text: String): ToPage? {
                 phoneSteps = json.long("phoneSteps")?.toInt(),
                 stepsGoal = json.long("stepsGoal")?.toInt() ?: return null,
                 heightCm = json.long("height")?.toInt(),
+                treadmillSeen = (json["treadmill"] as? JsonPrimitive)?.booleanOrNull == true,
                 said = json.list("said") { it.toSaid() } ?: return null,
                 live = (json["live"] as? JsonObject)?.let { it.toLive() ?: return null },
             )

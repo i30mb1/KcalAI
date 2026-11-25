@@ -34,6 +34,27 @@ internal fun timeSlot(textWidth: Int, lastLineRight: Int, timeWidth: Int, gapPx:
     }
 }
 
+/**
+ * Где по высоте встать тексту и нижней строке с кнопками ответа.
+ *
+ * @param height высота всего пузырька без полей
+ */
+internal data class FooterPlacement(val textY: Int, val footerY: Int, val height: Int)
+
+/**
+ * Кнопки ответа — в строку с концом реплики ([inline]). Реплика в одну строку — кнопки по её середине,
+ * а текст сдвигается вниз, раз кнопки выше строки. В несколько строк — кнопки от начала последней
+ * и выступают только вниз: вверху над ними другая строка, наезжать на неё нельзя. Не влезли — строкой
+ * ниже, через [gapPx].
+ */
+internal fun footerPlacement(inline: Boolean, lastLineTop: Int, lastLineBottom: Int, bodyHeight: Int, footerHeight: Int, gapPx: Int): FooterPlacement {
+    if (!inline) return FooterPlacement(textY = 0, footerY = bodyHeight + gapPx, height = bodyHeight + gapPx + footerHeight)
+    val centre = (lastLineTop + lastLineBottom) / 2
+    val textY = maxOf(0, footerHeight / 2 - centre)
+    val footerY = maxOf(centre + textY - footerHeight / 2, lastLineTop)
+    return FooterPlacement(textY = textY, footerY = footerY, height = maxOf(bodyHeight + textY, footerY + footerHeight))
+}
+
 /** Зазор между репликами одной стороны подряд. */
 internal val SAME_SIDE_GAP = 4.dp
 

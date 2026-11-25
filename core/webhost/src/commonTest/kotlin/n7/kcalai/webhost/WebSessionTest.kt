@@ -273,6 +273,7 @@ class WebSessionTest {
 
         assertEquals(listOf<Pair<Int, Int?>>(10_000 to 182), diary.steps)
         assertEquals(176, browser.last<ToPage.Day>()?.day?.heightCm, "рост из профиля — в данных дня")
+        assertEquals(true, browser.last<ToPage.Day>()?.day?.treadmillSeen, "дорожка была — панель спросит и рост")
     }
 
     @Test
@@ -393,7 +394,7 @@ private class FakeWebDiary : WebDiary {
     /** 2026-11-24. */
     override val today: Long = 20_781
 
-    override fun day(date: Long) = entries.map { list -> WebDayContent(list.takeIf { date == today }.orEmpty(), 2_100, heightCm = 176) }
+    override fun day(date: Long) = entries.map { list -> WebDayContent(list.takeIf { date == today }.orEmpty(), 2_100, heightCm = 176, treadmillSeen = true) }
 
     override fun week(date: Long) = flowOf(emptyList<WebDaySummary>())
 

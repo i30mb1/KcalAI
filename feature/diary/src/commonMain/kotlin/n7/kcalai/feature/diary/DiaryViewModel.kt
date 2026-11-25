@@ -130,8 +130,12 @@ sealed interface Overlay {
     /** «Как тебя зовут?» — ответ на вопрос Яйца. */
     data object Name : Overlay
 
-    /** Цель шагов и рост — тапом по плашке шагов в ленте; открывается с тем, что уже задано. */
-    data class Steps(val goal: Int, val heightCm: Int?) : Overlay
+    /**
+     * Цель шагов и рост — тапом по плашке шагов в ленте; открывается с тем, что уже задано.
+     *
+     * @param treadmill сигнал дорожки ловили: рост меряет её шаг — шит спрашивает и его
+     */
+    data class Steps(val goal: Int, val heightCm: Int?, val treadmill: Boolean = false) : Overlay
 }
 
 /** Что стоит над строкой ввода. Ряд ровно один — выбор между ними делает состояние. */
@@ -268,6 +272,8 @@ class DiaryViewModel(
     private val daySteps: ((Long) -> Flow<DaySteps>)? = null,
     /** Шаги семи дней, кончая данным: пары (день, шаги). `null` — шагов нет, и полосок под неделей тоже. */
     private val weekSteps: ((Long) -> Flow<List<Pair<Long, Int>>>)? = null,
+    /** Ловили ли сигнал беговой дорожки: без неё о ней не говорят, и рост не нужен. */
+    private val treadmillSeen: Flow<Boolean> = flowOf(false),
     private val clock: Clock = Clock.System,
     /** Зона, в которой считаются день и час: `createdAt` хранится в UTC. */
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
@@ -1912,7 +1918,7 @@ class DiaryViewModel(
     fun onOpenSteps() {
         viewModelScope.launch {
             val profile = brain.profile.first()
-            overlay.value = Overlay.Steps(goal = profile.stepsGoalOrDefault, heightCm = profile.heightCm)
+            overlay.value = Overlay.Steps(goal = profile.stepsGoalOrDefault, heightCm = profile.heightCm, treadmill = treadmillSeen.first())
         }
     }
 

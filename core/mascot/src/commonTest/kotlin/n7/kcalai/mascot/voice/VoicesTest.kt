@@ -1,5 +1,7 @@
 package n7.kcalai.mascot.voice
 
+import kotlin.test.assertFalse
+import n7.kcalai.mascot.MascotQuestion
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -141,6 +143,18 @@ class VoicesTest {
     fun `реплика укладывается в длину своей темы`() {
         forEverySaying(longest) { topic, mascot, text ->
             assertTrue(text.length <= topic.kind.maxLength, "$mascot, $topic, ${text.length}: $text")
+        }
+    }
+
+    /** Дорожки у многих нет: о шагах телефона говорят, не упоминая её. */
+    @Test
+    fun `о шагах телефона — без дорожки`() {
+        assertFalse("дорож" in MascotQuestion.STEPS.text.lowercase(), MascotQuestion.STEPS.text)
+        val grain = Voices.of(Mascot.GRAIN).topics
+        listOf(Topic.STEPS_YES, Topic.STEPS_NO, Topic.STEPS_FAILED).forEach { topic ->
+            grain[topic].orEmpty().flatMap { it.slots }.flatMap { it.lines }.forEach { line ->
+                assertFalse("дорож" in line.text.lowercase(), "«${line.text}» — о дорожке, а её может не быть")
+            }
         }
     }
 

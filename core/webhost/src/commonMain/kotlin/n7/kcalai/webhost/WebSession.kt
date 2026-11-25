@@ -60,6 +60,7 @@ data class WebDayContent(
     val phoneSteps: Int? = null,
     val stepsGoal: Int = DEFAULT_STEPS_GOAL,
     val heightCm: Int? = null,
+    val treadmillSeen: Boolean = false,
     val said: List<WebSaid> = emptyList(),
     val live: TreadmillSample? = null,
 )
@@ -237,6 +238,7 @@ class WebSession(
                     phoneSteps = content.phoneSteps,
                     stepsGoal = content.stepsGoal,
                     heightCm = content.heightCm,
+                    treadmillSeen = content.treadmillSeen,
                     said = content.said,
                     live = content.live,
                 )

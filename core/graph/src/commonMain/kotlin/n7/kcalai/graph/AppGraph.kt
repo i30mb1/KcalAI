@@ -382,6 +382,8 @@ abstract class AppGraph {
         // Шаги дня — плашкой в ленте: телефона и дорожки вместе.
         daySteps = stepsRepository::observeDay,
         weekSteps = stepsRepository::observeWeek,
+        // Сигнал дорожки ловили — с неё есть хоть одна прогулка.
+        treadmillSeen = walkRepository.observeLast().map { it != null },
     )
 }
 

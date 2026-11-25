@@ -69,11 +69,11 @@ fun StepsPill(item: FeedItem.Steps, onOpen: () -> Unit) {
 
 /**
  * Цель шагов и рост — шит по тапу на плашку шагов. Говорит Зёрнышко: прогулки — его тема.
- * Подписей у полей нет — их называют единицы, «шагов» и «см». Рост не знают — поле пустое,
- * и шаг меряется по среднему.
+ * Подписей у полей нет — их называют единицы, «шагов» и «см». Рост меряет шаг дорожки, поэтому
+ * он здесь, только если её сигнал ловили ([treadmill]); не знают — поле пустое, и шаг по среднему.
  */
 @Composable
-fun StepsSheet(goal: Int, heightCm: Int?, onConfirm: (goal: Int, heightCm: Int?) -> Unit, onDismiss: () -> Unit) {
+fun StepsSheet(goal: Int, heightCm: Int?, treadmill: Boolean, onConfirm: (goal: Int, heightCm: Int?) -> Unit, onDismiss: () -> Unit) {
     var steps by remember { mutableStateOf(goal.toString()) }
     var height by remember { mutableStateOf(heightCm?.toString().orEmpty()) }
     val picked = stepsGoalInput(steps)
@@ -87,7 +87,7 @@ fun StepsSheet(goal: Int, heightCm: Int?, onConfirm: (goal: Int, heightCm: Int?)
     CompositionLocalProvider(LocalMascotAnchors provides anchors) {
     Box(Modifier.observeTouches(pointer)) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SheetSpeech(STEPS_LINE, Modifier.padding(bottom = 4.dp))
+            SheetSpeech(if (treadmill) TREADMILL_LINE else STEPS_LINE, Modifier.padding(bottom = 4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 StepsField(
                     value = steps,
@@ -97,8 +97,9 @@ fun StepsSheet(goal: Int, heightCm: Int?, onConfirm: (goal: Int, heightCm: Int?)
                     tinted = true,
                     description = "цель шагов",
                     modifier = Modifier.weight(STEPS_FIELD_WEIGHT),
+                    imeAction = if (treadmill) ImeAction.Next else ImeAction.Done,
                 )
-                StepsField(
+                if (treadmill) StepsField(
                     value = height,
                     onValueChange = { height = it.take(HEIGHT_DIGITS) },
                     unit = "см",
@@ -172,7 +173,8 @@ internal fun stepsSheetPlaces(): Map<Mascot, MascotPlace> =
         if (mascot == Mascot.GRAIN) MascotPlace.Reply(SHEET_SPEECH_ANCHOR) else MascotPlace.Offstage
     }
 
-private val STEPS_LINE = SheetLine(Mascot.GRAIN, "Сколько шагов в день берём? По росту мерю шаг на дорожке.")
+private val STEPS_LINE = SheetLine(Mascot.GRAIN, "Сколько шагов в день берём? Выбери или впиши своё.")
+private val TREADMILL_LINE = SheetLine(Mascot.GRAIN, "Сколько шагов в день берём? По росту мерю шаг на дорожке.")
 private val STEP_PRESETS = listOf(6_000, 8_000, 10_000, 12_000)
 private const val HEIGHT_DIGITS = 3
 private const val STEPS_FIELD_WEIGHT = 1.4f

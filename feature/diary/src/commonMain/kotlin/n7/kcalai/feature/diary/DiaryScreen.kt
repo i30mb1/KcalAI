@@ -211,6 +211,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         is Overlay.Steps -> StepsSheet(
             goal = overlay.goal,
             heightCm = overlay.heightCm,
+            treadmill = overlay.treadmill,
             onConfirm = viewModel::onSetSteps,
             onDismiss = viewModel::onDismissOverlay,
         )
