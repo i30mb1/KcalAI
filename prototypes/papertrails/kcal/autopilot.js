@@ -15,7 +15,7 @@ window.KcalTune = {
     const pt = window.__pt;
     if (!pt) return;
     pt.follow.setPose({ pitchDeg: this.pitch, distance: this.distance, fov: this.fov, screenUp: this.screenUp, yawDeg: 0 });
-    pt.state.viewReach = this.reach;                     // плюс клеток к кругу, где встаёт окружение
+    pt.state.viewReach = this.reach;                     // ± клеток к кругу (5), где встаёт окружение
     pt.CONFIG.player.radius = this.radius;               // насколько герой держится от карточек
     pt.traveller.model.scale.setScalar(this.heroScale);
     const cam = pt.follow.camera, W = innerWidth, H = innerHeight;

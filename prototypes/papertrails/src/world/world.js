@@ -1034,7 +1034,8 @@ export function createWorld({ scene, assets, wfc, materials, quality }) {
     // round 3 (camera views): a far view (views.js 'wide') sees past the reveal ring, so the ring grows by state.viewReach
     // tiles while such a view is active and shrinks back afterwards (eased: about one tile per 1.2 s, tiles ripple up / fold).
     {
-      const wantReach = Math.max(0, Math.min(W.viewReachMax ?? 1.5, state.viewReach || 0));
+      // KcalAI: добавка бывает и отрицательной — круг сжимается до клетки вокруг героя (панель прогулки)
+      const wantReach = Math.max(1 - REVEAL_RADIUS, Math.min(W.viewReachMax ?? 1.5, state.viewReach || 0));
       if (instant || last.fresh) reach = wantReach;
       else if (reach !== wantReach) { const st = dt * (W.viewReachRate ?? 0.85); reach += Math.max(-st, Math.min(st, wantReach - reach)); }
     }
