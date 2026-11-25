@@ -13,6 +13,7 @@ import n7.kcalai.mascot.Facts
 import n7.kcalai.mascot.KNOWN_KEYS
 import n7.kcalai.mascot.MissedMeal
 import n7.kcalai.mascot.WalkFacts
+import n7.kcalai.mascot.WeekFacts
 import n7.kcalai.model.MealType
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.Mascot.BUTTER
@@ -59,6 +60,8 @@ class VoicesTest {
         put(Topic.STEPS_YES, setOf(GRAIN))
         put(Topic.STEPS_NO, setOf(GRAIN))
         put(Topic.STEPS_FAILED, setOf(GRAIN))
+        put(Topic.STREAK_DAY, setOf(EGG))
+        put(Topic.WEEK_SUMMARY, setOf(BUTTER))
     }
 
     /** Факты, при которых у каждой темы есть о чём сказать. */
@@ -92,6 +95,7 @@ class VoicesTest {
         foodDaysInRow = 3,
         address = "http://192.168.100.200:47800/",
         walk = WalkFacts(steps = 13_480, distanceM = 10_350, elapsedS = 7_100, daySteps = 21_480, stepsLeft = 7_480),
+        week = WeekFacts(days = 5, goalDays = 3, food = food),
     )
 
     /** Самые длинные факты, какие бывают: имя в двадцать букв, название — в предел. */

@@ -25,6 +25,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import n7.kcalai.database.Choice
+import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.Delivery
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.MascotMessageEntity
@@ -85,6 +86,95 @@ class MascotBrainTest {
             createdAt = at.toEpochMilliseconds(),
         )
         return entry.copy(id = diary.insert(entry))
+    }
+
+    // --- Серия и итог недели ----------------------------------------------------------------
+
+    /** Знакомы: имя названо, писать разрешили — вопросов на запись не будет. */
+    private suspend fun known() = mascots.upsertProfile(MascotProfileEntity(name = "Женя", nameAsked = true, consent = WriteConsent.ALLOWED))
+
+    /** Понедельник, 9 ноября: прошлая неделя — 2–8 ноября. */
+    private val monday = Instant.parse("2026-11-09T09:00:00Z")
+
+    @Test
+    fun `третий день подряд с записями — Яйцо отмечает серию сообщением в ленте`() = runTest {
+        known()
+        eat("Гречка", now - 2.days)
+        eat("Кефир", now - 1.days)
+
+        val reaction = brain().react(MascotEvent.Ate(eat("Творог", now)), now)
+
+        val said = mascots.messages.value.single { it.topic == Topic.STREAK_DAY.name }
+        assertEquals(Mascot.EGG, said.mascot)
+        assertEquals(today, said.dateEpochDay)
+        assertTrue("три дня" in said.text.lowercase(), said.text)
+        assertNull(reaction?.speech, "на шаг человека — одно сообщение: облачка вдобавок нет")
+    }
+
+    @Test
+    fun `серию отмечают раз в день и только в круглые дни`() = runTest {
+        known()
+        eat("Гречка", now - 2.days)
+        eat("Кефир", now - 1.days)
+        val brain = brain()
+
+        brain.react(MascotEvent.Ate(eat("Творог", now)), now)
+        brain.react(MascotEvent.Ate(eat("Яблоко", now + 1.hours)), now + 1.hours)
+        brain.react(MascotEvent.Ate(eat("Гречка", now + 1.days)), now + 1.days)
+
+        assertEquals(1, mascots.messages.value.count { it.topic == Topic.STREAK_DAY.name }, "четвёртый день — не повод")
+    }
+
+    @Test
+    fun `итог прошлой недели — Масло на запись новой недели, один раз`() = runTest {
+        known()
+        goals.upsert(DailyGoalEntity(fromDateEpochDay = 0, kcal = 220, prot = 10, fat = 5, carb = 40))
+        eat("Гречка", Instant.parse("2026-11-02T13:00:00Z"))
+        eat("Гречка", Instant.parse("2026-11-04T13:00:00Z"))
+        eat("Творог", Instant.parse("2026-11-06T13:00:00Z"), prot100 = 1_800, carb100 = 300)
+        val brain = brain()
+
+        brain.react(MascotEvent.Ate(eat("Кефир", monday)), monday)
+        brain.react(MascotEvent.Ate(eat("Яблоко", monday + 2.hours)), monday + 2.hours)
+
+        val said = mascots.messages.value.single { it.topic == Topic.WEEK_SUMMARY.name }
+        assertEquals(Mascot.BUTTER, said.mascot)
+        assertTrue("три дня" in said.text.lowercase(), said.text)
+    }
+
+    @Test
+    fun `за прошлую неделю меньше двух дней — итога нет`() = runTest {
+        known()
+        eat("Гречка", Instant.parse("2026-11-04T13:00:00Z"))
+
+        brain().react(MascotEvent.Ate(eat("Кефир", monday)), monday)
+
+        assertTrue(mascots.messages.value.none { it.topic == Topic.WEEK_SUMMARY.name })
+    }
+
+    @Test
+    fun `итог недели и серия в один шаг не звучат — сначала итог, серия на следующий`() = runTest {
+        known()
+        // суббота и воскресенье: за неделю два дня, а с понедельником — третий подряд
+        eat("Гречка", Instant.parse("2026-11-07T13:00:00Z"))
+        eat("Кефир", Instant.parse("2026-11-08T13:00:00Z"))
+        val brain = brain()
+
+        brain.react(MascotEvent.Ate(eat("Творог", monday)), monday)
+        assertEquals(listOf(Topic.WEEK_SUMMARY.name), mascots.messages.value.map { it.topic })
+
+        brain.react(MascotEvent.Ate(eat("Яблоко", monday + 2.hours)), monday + 2.hours)
+        assertEquals(listOf(Topic.WEEK_SUMMARY.name, Topic.STREAK_DAY.name), mascots.messages.value.map { it.topic })
+    }
+
+    @Test
+    fun `вопрос важнее итога и серии`() = runTest {
+        eat("Гречка", now - 2.days)
+        eat("Кефир", now - 1.days)
+
+        brain().react(MascotEvent.Ate(eat("Творог", now)), now)
+
+        assertEquals(listOf(MascotQuestion.NAME), mascots.messages.value.map { it.question })
     }
 
     // --- Пишет первым ---------------------------------------------------------------------

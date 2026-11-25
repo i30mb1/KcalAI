@@ -110,6 +110,20 @@ class FactsBuilder(
         return Snapshot(facts, outline?.rhythm() ?: Rhythm.DEFAULT, suggestions)
     }
 
+    /**
+     * Итог недели, что кончилась перед [monday]: дни с записями, дни в цель, самая частая еда.
+     * Меньше двух дней с записями — подводить нечего: `null`.
+     */
+    suspend fun lastWeek(monday: Long): WeekFacts? {
+        val entries = diaryDao.since(monday - WEEK_DAYS).filter { it.dateEpochDay < monday }
+        val days = entries.mapTo(HashSet()) { it.dateEpochDay }
+        if (days.size < WEEK_MIN_DAYS) return null
+        val food = entries.groupingBy { it.displayName }.eachCount()
+            .filterValues { it >= WEEK_MIN_DAYS }
+            .maxByOrNull { it.value }?.key
+        return WeekFacts(days = days.size, goalDays = days.count { onGoal(it, entries) }, food = food)
+    }
+
     /** Сколько белка осталось, граммы. Только при цели по белку и только когда день начат. */
     private suspend fun proteinLeft(today: Long, todayEntries: List<DiaryEntryEntity>): Int? {
         if (todayEntries.isEmpty()) return null
@@ -133,6 +147,9 @@ class FactsBuilder(
         const val CENTIGRAMS_PER_GRAM = 100
         const val FAVORITE_MIN = 3
         const val GOAL_TOLERANCE = 0.10
+        const val WEEK_DAYS = 7
+        /** С двух дней есть что подводить; еда — если встречалась хотя бы дважды. */
+        const val WEEK_MIN_DAYS = 2
     }
 }
 

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.toLocalDateTime
 import n7.kcalai.database.Choice
 import n7.kcalai.database.Delivery
@@ -475,6 +476,7 @@ class MascotBrain(
         if (askIfDue(day, entriesToday = history.count { it.dateEpochDay == day } + 1, now)) {
             return Reaction(Cue(CueKind.PROUD, owner), null)
         }
+        if (progressIfDue(day, history, now)) return Reaction(Cue(CueKind.CELEBRATE, null), null)
         val key = entry.foodKey()
         val same = history.filter { it.foodKey() == key }
         val sameDays = same.mapTo(HashSet()) { it.dateEpochDay } + day
@@ -523,6 +525,37 @@ class MascotBrain(
                 openedAt = at,
             )
         )
+        return true
+    }
+
+    /**
+     * Сказать о прогрессе, если пришёл черёд, — сообщением в ленте, по одному на шаг человека:
+     * итог прошлой недели — Масло, раз за неделю; иначе круглый день серии с записями — Яйцо, раз за день.
+     * Только про сегодня: запись задним числом — не повод.
+     *
+     * @param history записи до этой, за [FOOD_LOOKBACK_DAYS] дней
+     * @return сказано ли
+     */
+    private suspend fun progressIfDue(day: Long, history: List<DiaryEntryEntity>, now: Instant): Boolean {
+        val local = now.toLocalDateTime(zone)
+        if (day != local.date.toEpochDays()) return false
+        val monday = day - (local.dayOfWeek.isoDayNumber - 1)
+        val summarized = dao.lastSaid(Topic.WEEK_SUMMARY.name)
+            ?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(zone).date.toEpochDays() >= monday } == true
+        if (!summarized) {
+            val week = facts.lastWeek(monday)
+            if (week != null) return tellProgress(Mascot.BUTTER, Topic.WEEK_SUMMARY, day, now) { it.copy(week = week) }
+        }
+        if (dao.observeDay(day).first().any { it.topic == Topic.STREAK_DAY.name }) return false
+        val days = history.mapTo(HashSet()) { it.dateEpochDay } + day
+        val streak = generateSequence(day) { it - 1 }.takeWhile { it in days }.count()
+        if (!isStreakMilestone(streak)) return false
+        return tellProgress(Mascot.EGG, Topic.STREAK_DAY, day, now) { it.copy(streakDays = streak) }
+    }
+
+    private suspend fun tellProgress(mascot: Mascot, topic: Topic, day: Long, now: Instant, tune: (Facts) -> Facts): Boolean {
+        val said = Voices.of(mascot).compose(topic, tune(lightFacts(now)), dao.recent(MEMORY).memory(), random) ?: return false
+        save(mascot, topic, said, Delivery.FEED, day, now)
         return true
     }
 
@@ -653,3 +686,11 @@ private fun List<MascotMessageEntity>.memory(): List<List<String>> =
 /** Еда по ссылке на продукт, а без неё — по названию. */
 private fun DiaryEntryEntity.foodKey(): String =
     parseFoodRef(foodRef)?.serialize() ?: displayName.trim().lowercase()
+
+/**
+ * Круглый день серии — повод сказать: третий, неделя, две недели, три, месяц, полсотни, сотня, дальше —
+ * каждая сотня. Между ними серия растёт молча: поздравлять каждый день — шум.
+ */
+internal fun isStreakMilestone(days: Int): Boolean = days in STREAK_MILESTONES || (days > 100 && days % 100 == 0)
+
+private val STREAK_MILESTONES = setOf(3, 7, 14, 21, 30, 50, 100)

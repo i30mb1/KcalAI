@@ -76,6 +76,8 @@ data class Facts(
     val address: String? = null,
     /** Только что кончившаяся прогулка по дорожке. */
     val walk: WalkFacts? = null,
+    /** Прошлая неделя — для её итога. */
+    val week: WeekFacts? = null,
 ) {
     val partOfDay: PartOfDay
         get() = when (now.hour) {
@@ -129,6 +131,9 @@ internal fun Facts.value(key: String): String? = when (key) {
     "walkTime" -> walk?.elapsedS?.let(::walkTimePhrase)
     "daySteps" -> walk?.daySteps?.let(::stepsPhrase)
     "stepsLeft" -> walk?.stepsLeft?.takeIf { it > 0 }?.let(::stepsPhrase)
+    "weekDays" -> week?.days?.takeIf { it >= 1 }?.let { countPhrase(it, "день", "дня", "дней") }
+    "weekGoal" -> week?.goalDays?.takeIf { it >= 1 }?.let { countPhrase(it, "раз", "раза", "раз") }
+    "weekFood" -> week?.food?.let(::foodName)
     else -> null
 }
 
@@ -136,8 +141,17 @@ internal fun Facts.value(key: String): String? = when (key) {
 internal val KNOWN_KEYS = setOf(
     "name", "gap", "last", "lastTime", "meal", "mealGen", "usualTime", "usual", "usualGrams",
     "protLeft", "protIdea", "streak", "away", "absent", "fav", "food", "foodRun", "today", "mail",
-    "address", "walkSteps", "walkKm", "walkTime", "daySteps", "stepsLeft",
+    "address", "walkSteps", "walkKm", "walkTime", "daySteps", "stepsLeft", "weekDays", "weekGoal", "weekFood",
 )
+
+/**
+ * Прошлая неделя (понедельник — воскресенье) для её итога в ленте.
+ *
+ * @param days дней с записями
+ * @param goalDays из них калории в пределах ±10% цели
+ * @param food что ели чаще всего, если хоть что-то повторялось; `null` — нечего назвать
+ */
+data class WeekFacts(val days: Int, val goalDays: Int, val food: String?)
 
 /** Прогулка по дорожке и шаги дня — для итога прогулки в ленте. */
 data class WalkFacts(val steps: Int, val distanceM: Int, val elapsedS: Int, val daySteps: Int, val stepsLeft: Int)
