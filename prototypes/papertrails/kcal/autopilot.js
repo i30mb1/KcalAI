@@ -30,9 +30,24 @@ function pickDir(pt, cx, cz, from) {
 }
 function goTo(cx, cz) { target = { cx, cz, x: cx * T, z: cz * T }; lastD = 1e9; stuckT = 0; }
 
+// камера за героем: встаёт позади по сглаженному направлению хода — герой всегда идёт вверх по экрану,
+// мир разворачивается навстречу; на зигзагах тропы не дёргается, на поворотах доворачивает за ~1,5 с
+let camYaw = 0;
+const CAM = { pitchDeg: 36, distance: 10, screenUp: 1.1 };
+const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+function followBehind(pt, dt) {
+  const t = pt.traveller, mx = t.moveDir.x, mz = t.moveDir.z;
+  if (t.speed > 0.2 && Math.hypot(mx, mz) > 0.5) {
+    const want = Math.atan2(-mx, -mz);                 // камера — с противоположной ходу стороны
+    camYaw = wrap(camYaw + wrap(want - camYaw) * (1 - Math.exp(-dt / 1.5)));
+  }
+  pt.follow.setPose({ ...CAM, yawDeg: camYaw * 180 / Math.PI });
+}
+
 window.__ptInput = (dt) => {
   const pt = window.__pt, S = window.KcalWalk;
   if (!pt || !S) return null;
+  followBehind(pt, dt);
   out.x = 0; out.z = 0;
   if (S.vis <= 0.05) return out;                       // дорожка стоит — стоит и путник
   pt.state.speedMul = Math.min(1.8, Math.max(0.35, S.vis / 4));   // 4 км/ч — его обычный шаг
