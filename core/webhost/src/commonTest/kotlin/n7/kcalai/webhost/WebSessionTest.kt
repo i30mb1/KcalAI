@@ -225,15 +225,18 @@ class WebSessionTest {
         assertEquals(listOf(Added("гречка", 0, 200, diary.today - 1, MealType.DINNER)), diary.added)
     }
 
-    /** Дорожка подключена к странице, а прогулки хранит телефон — пакеты доходят до него. */
+    /** Дорожка подключена к телефону — её живые числа видны на странице, но только у сегодняшнего дня. */
     @Test
-    fun `пакеты дорожки со страницы доходят до телефона`() = runTest {
+    fun `живые числа дорожки — в сегодняшнем дне`() = runTest {
         val browser = admitted()
 
-        browser.say(ToPhone.Treadmill(TreadmillSample(speedKmh = 4.0, distanceM = 120, kcal = 6, elapsedS = 110)))
+        diary.live.value = TreadmillSample(speedKmh = 4.0, distanceM = 120, kcal = 6, elapsedS = 110)
         runCurrent()
+        assertEquals(TreadmillSample(4.0, 120, 6, 110), browser.last<ToPage.Day>()?.day?.live)
 
-        assertEquals(listOf(TreadmillSample(4.0, 120, 6, 110)), diary.samples)
+        browser.say(ToPhone.Open(day = 20_780))
+        runCurrent()
+        assertEquals(null, browser.last<ToPage.Day>()?.day?.live)
     }
 
     @Test
@@ -362,7 +365,7 @@ private class FakeWebDiary : WebDiary {
     val goals = mutableListOf<WebMacros>()
     val names = mutableListOf<String>()
     val graces = mutableListOf<PageGrace>()
-    val samples = mutableListOf<TreadmillSample>()
+    override val live = MutableStateFlow<TreadmillSample?>(null)
 
     /** 2026-11-24. */
     override val today: Long = 20_781
@@ -395,9 +398,5 @@ private class FakeWebDiary : WebDiary {
 
     override suspend fun delete(entryId: Long) {
         deleted += entryId
-    }
-
-    override suspend fun treadmill(sample: TreadmillSample) {
-        samples += sample
     }
 }

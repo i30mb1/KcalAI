@@ -42,11 +42,6 @@ const val WEB_SOCKET_PATH = "/ws"
 /** Больше десяти килограммов за раз человек не ест, а ноль записывать нечего. */
 const val WEB_GRAMS_MAX = 10_000
 
-/** Пакет дорожки с невозможными числами — помеха в эфире, а не прогулка: быстрее 30 км/ч дорожки не едут. */
-const val WEB_SPEED_MAX_KMH = 30.0
-const val WEB_DISTANCE_MAX_M = 200_000L
-const val WEB_ELAPSED_MAX_S = 86_400L
-
 /** Имя — подпись в чужой ленте и во вкладке, а не документ. */
 const val WEB_NAME_MAX = 40
 
@@ -95,8 +90,6 @@ sealed interface ToPhone {
     /** «Выйти»: телефон забывает этот браузер, и в следующий раз его снова надо пустить. */
     data object Leave : ToPhone
 
-    /** Пакет беговой дорожки: к ней по Bluetooth подключена страница, а прогулки хранит телефон. */
-    data class Treadmill(val sample: TreadmillSample) : ToPhone
 }
 
 /** Что телефон говорит странице. */
@@ -167,6 +160,7 @@ private const val KMH_PER_MPS = 3.6
  * @param steps шаги дня: телефона и дорожки вместе
  * @param stepsGoal цель шагов на день
  * @param said что персонажи сказали в ленте дня о прогулках
+ * @param live беговая дорожка, подключённая к телефону, прямо сейчас; `null` — её нет на связи
  */
 data class WebDay(
     val owner: String,
@@ -184,6 +178,7 @@ data class WebDay(
     val steps: Int = 0,
     val stepsGoal: Int = DEFAULT_STEPS_GOAL,
     val said: List<WebSaid> = emptyList(),
+    val live: TreadmillSample? = null,
 ) {
     val kcal: Int get() = entries.sumOf { it.kcal }
 
@@ -253,7 +248,6 @@ fun encode(message: ToPhone): String = envelope(
         is ToPhone.Revoke -> "revoke"
         is ToPhone.SetGrace -> "grace"
         ToPhone.Leave -> "leave"
-        is ToPhone.Treadmill -> "treadmill"
     },
 ) {
     when (message) {
@@ -280,12 +274,6 @@ fun encode(message: ToPhone): String = envelope(
         is ToPhone.Revoke -> put("id", message.browserId)
         is ToPhone.SetGrace -> put("grace", message.grace.name)
         ToPhone.Leave -> Unit
-        is ToPhone.Treadmill -> {
-            put("speed", message.sample.speedKmh)
-            put("distance", message.sample.distanceM)
-            put("kcal", message.sample.kcal)
-            put("elapsed", message.sample.elapsedS)
-        }
     }
 }
 
@@ -325,6 +313,17 @@ fun encode(message: ToPage): String = envelope(
             put("steps", day.steps)
             put("stepsGoal", day.stepsGoal)
             put("said", buildJsonArray { day.said.forEach { add(it.toJson()) } })
+            day.live?.let { live ->
+                put(
+                    "live",
+                    buildJsonObject {
+                        put("speed", live.speedKmh)
+                        put("distance", live.distanceM)
+                        put("kcal", live.kcal)
+                        put("elapsed", live.elapsedS)
+                    },
+                )
+            }
         }
         is ToPage.Suggestions -> {
             put("query", message.query)
@@ -418,14 +417,6 @@ fun parseToPhone(text: String): ToPhone? {
         "revoke" -> ToPhone.Revoke(browserId = json.long("id") ?: return null)
         "grace" -> ToPhone.SetGrace(grace = json.grace() ?: return null)
         "leave" -> ToPhone.Leave
-        "treadmill" -> ToPhone.Treadmill(
-            TreadmillSample(
-                speedKmh = json.double("speed")?.takeIf { it in 0.0..WEB_SPEED_MAX_KMH } ?: return null,
-                distanceM = json.long("distance")?.takeIf { it in 0..WEB_DISTANCE_MAX_M }?.toInt() ?: return null,
-                kcal = json.long("kcal")?.takeIf { it >= 0 }?.toInt() ?: return null,
-                elapsedS = json.long("elapsed")?.takeIf { it in 0..WEB_ELAPSED_MAX_S }?.toInt() ?: return null,
-            ),
-        )
         else -> null
     }
 }
@@ -454,6 +445,7 @@ fun parseToPage(text: String): ToPage? {
                 steps = json.long("steps")?.toInt() ?: return null,
                 stepsGoal = json.long("stepsGoal")?.toInt() ?: return null,
                 said = json.list("said") { it.toSaid() } ?: return null,
+                live = (json["live"] as? JsonObject)?.let { it.toLive() ?: return null },
             )
         )
         "suggestions" -> ToPage.Suggestions(
@@ -504,6 +496,13 @@ private fun JsonObject.toWalk(): WebWalk? = WebWalk(
     elapsedS = long("elapsed")?.toInt() ?: return null,
     steps = long("steps")?.toInt() ?: return null,
     topSpeedKmh = double("top") ?: return null,
+)
+
+private fun JsonObject.toLive(): TreadmillSample? = TreadmillSample(
+    speedKmh = double("speed") ?: return null,
+    distanceM = long("distance")?.toInt() ?: return null,
+    kcal = long("kcal")?.toInt() ?: return null,
+    elapsedS = long("elapsed")?.toInt() ?: return null,
 )
 
 private fun JsonObject.toSaid(): WebSaid? = WebSaid(

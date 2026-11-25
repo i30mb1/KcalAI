@@ -645,6 +645,40 @@ class MascotBrainTest {
         assertEquals(Mascot.GRAIN, reply.mascot)
     }
 
+    /** Про дорожку Зёрнышко спрашивает само один раз — вопросом в ленте, в свою очередь. */
+    @Test
+    fun `про беговую дорожку спрашивают один раз`() = runTest {
+        started()
+
+        val asked = brain().askTreadmill(at(now))
+
+        assertEquals(MascotQuestion.TREADMILL.topic, asked?.topic)
+        assertEquals(Mascot.GRAIN, asked?.mascot)
+        assertNull(brain().askTreadmill(at(now + 3.days)))
+    }
+
+    /** Повторный тап по «Подключить» не открывает выбор дорожки второй раз. */
+    @Test
+    fun `на отвеченный вопрос про дорожку второй ответ не принимается`() = runTest {
+        asked(MascotQuestion.TREADMILL)
+        val brain = brain()
+
+        assertTrue(brain.answerTreadmill(yes = true, now))
+        assertFalse(brain.answerTreadmill(yes = false, now + 1.minutes))
+        assertEquals(Choice.YES, mascots.messages.value.single().choice)
+    }
+
+    @Test
+    fun `на «Не надо» про дорожку Зёрнышко отвечает сразу, на «Подключить» — после выбора дорожки`() = runTest {
+        asked(MascotQuestion.TREADMILL)
+        val brain = brain()
+        brain.answerTreadmill(yes = false, now)
+        assertEquals(Topic.TREADMILL_NO.name, mascots.messages.value.last().topic)
+
+        assertEquals(Topic.TREADMILL_YES.name, brain.treadmillResult(connected = true, now)?.topic)
+        assertEquals(Topic.TREADMILL_FAILED.name, brain.treadmillResult(connected = false, now)?.topic)
+    }
+
     /** Повторный тап по «Пишите» не должен второй раз спрашивать телефон. */
     @Test
     fun `на отвеченный вопрос про сообщения второй ответ не принимается`() = runTest {

@@ -664,7 +664,7 @@ class DiaryViewModel(
                     // И по просьбе об адресе страницы: «компьютер» — не еда.
                     if (text.isBlank() || parseWeight(text) != null || text.continuesScan() ||
                         text.none(Char::isLetter) || (assist.value.ready && isQuestion(text)) ||
-                        (peers != null && asksForPage(text))
+                        (peers != null && asksForPage(text)) || asksForTreadmill(text)
                     ) {
                         null
                     } else {
@@ -1439,6 +1439,12 @@ class DiaryViewModel(
                 tellPageAddress(pageAddress.value)
                 true
             }
+            asksForTreadmill(text) -> {
+                input.value = ""
+                answer.value = null
+                treadmillAsks.trySend(Unit)
+                true
+            }
             assist.value.ready && isQuestion(text) -> {
                 askDiary(text)
                 true
@@ -1784,6 +1790,25 @@ class DiaryViewModel(
 
     fun onNotificationsResult(granted: Boolean) {
         viewModelScope.launch { brain.notificationsResult(granted, clock.now()) }
+    }
+
+    /**
+     * Просьбы подключить беговую дорожку: на «Подключить» Зёрнышку и на слово «дорожка». Выбирает её
+     * телефон — системным окном, — поэтому событием, как разрешение на уведомления. Ответ — [onTreadmillResult].
+     */
+    private val treadmillAsks = Channel<Unit>(Channel.BUFFERED)
+    val treadmillRequests: Flow<Unit> = treadmillAsks.receiveAsFlow()
+
+    /** «Подключить» или «Не надо» про дорожку; повторный тап ничего не запускает. */
+    fun onAnswerTreadmill(yes: Boolean) {
+        viewModelScope.launch {
+            if (brain.answerTreadmill(yes, clock.now()) && yes) treadmillAsks.send(Unit)
+        }
+    }
+
+    /** Телефон выбрал дорожку и получил Bluetooth — или нет. */
+    fun onTreadmillResult(connected: Boolean) {
+        viewModelScope.launch { brain.treadmillResult(connected, clock.now()) }
     }
 
     /** Пол из помощника цели: с ним персонажи говорят «ты ел» и «ты ела» правильно. */

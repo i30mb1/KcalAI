@@ -57,12 +57,14 @@ class RepositoryWebDiaryTest {
     private val kernel = FoodCandidate(FoodRef.Generic(2), "Гречка ядрица", Nutriments(313, 1_260, 330, 6_200, 1_000), servingG = 60)
 
     private val walkDao = FakeWalkDao()
+    private val walks = WalkRepository(walkDao, TimeZone.UTC)
     private val said = MutableStateFlow<List<WebSaid>>(emptyList())
 
     private val web = RepositoryWebDiary(
         diary = DiaryRepository(diaryDao, goalDao, NoContributions),
-        walks = WalkRepository(walkDao, TimeZone.UTC),
+        walks = walks,
         walkSaid = { said },
+        live = MutableStateFlow(null),
         suggestFood = { query ->
             if ("греч" in query) {
                 listOf(
@@ -185,7 +187,7 @@ class RepositoryWebDiaryTest {
     /** Прогулки — со временем по часам телефона, шаги дня — их сумма, реплики о них — в ленту дня. */
     @Test
     fun `пакеты дорожки — прогулки дня, шаги и итог Зёрнышка`() = runTest {
-        web.treadmill(TreadmillSample(speedKmh = 4.0, distanceM = 2_140, kcal = 90, elapsedS = 1_920))
+        walks.record(TreadmillSample(speedKmh = 4.0, distanceM = 2_140, kcal = 90, elapsedS = 1_920), clock.now().toEpochMilliseconds())
         said.value = listOf(WebSaid(Mascot.GRAIN, "Прогулка в копилке", minute = 9 * 60 + 5))
 
         val shown = web.day(today).first()

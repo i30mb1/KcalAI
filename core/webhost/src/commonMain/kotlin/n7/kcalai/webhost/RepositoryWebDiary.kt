@@ -54,13 +54,15 @@ import kotlin.time.Clock
  * @param regram правка граммов записи — та же, что из шита: `(id, граммы, сейчас)`
  * @param rename новое имя — туда же, куда его кладёт ответ Яйцу
  * @param keepPage сколько держать страницу, когда телефон убран, — в профиль
- * @param walks прогулки по дорожке: пакеты шлёт страница, к которой она подключена
+ * @param walks прогулки по дорожке, подключённой к телефону
+ * @param live её живые числа, см. [n7.kcalai.repositories.TreadmillFeed]
  * @param walkSaid что Зёрнышко сказало о прогулках в ленте дня
  */
 class RepositoryWebDiary(
     private val diary: DiaryRepository,
     private val walks: WalkRepository,
     private val walkSaid: (Long) -> Flow<List<WebSaid>>,
+    override val live: Flow<TreadmillSample?>,
     private val suggestFood: suspend (String) -> List<ResolvedItem>,
     private val regram: suspend (entryId: Long, grams: Int, now: Long) -> Unit,
     private val rename: suspend (String) -> Unit,
@@ -97,8 +99,6 @@ class RepositoryWebDiary(
             days.map { WebDaySummary(date = it.dateEpochDay, kcal = it.kcal, goalKcal = it.goalKcal, steps = stepsOf[it.dateEpochDay] ?: 0) }
         }
     }
-
-    override suspend fun treadmill(sample: TreadmillSample) = walks.record(sample, clock.now().toEpochMilliseconds())
 
     /** Минуты от полуночи дня [date] по часам телефона; прогулка за полночь кончается в конце дня. */
     private fun Walk.toWeb(date: Long): WebWalk {

@@ -57,6 +57,7 @@ import n7.kcalai.repositories.FoodRepository
 import n7.kcalai.repositories.PersonalSemantic
 import n7.kcalai.repositories.QueryEmbedder
 import n7.kcalai.repositories.RemoteProductSource
+import n7.kcalai.repositories.TreadmillFeed
 import n7.kcalai.repositories.WalkRepository
 import n7.kcalai.resolver.TextFoodResolver
 import n7.kcalai.resolver.parseSegment
@@ -186,8 +187,14 @@ abstract class AppGraph {
         DiaryRepository(database.diaryDao(), database.goalDao(), database.contributionDao())
     }
 
-    /** Прогулки по беговой дорожке: шаги шлёт страница дневника, к которой дорожка подключена. */
+    /** Прогулки по беговой дорожке, подключённой к телефону. */
     val walkRepository: WalkRepository by lazy { WalkRepository(database.walkDao(), TimeZone.currentSystemDefault()) }
+
+    /** Дорожка у телефона: платформа отдаёт сюда пакеты Bluetooth, отсюда — прогулки и живые числа. */
+    val treadmillFeed: TreadmillFeed by lazy { TreadmillFeed(walkRepository) }
+
+    /** Пущен ли в дневник хоть один браузер — тогда Зёрнышко спросит про дорожку. */
+    val webUsed get() = database.webClientDao().observeAdmitted().map { it.isNotEmpty() }
 
     /**
      * Зона нужна моделям: `createdAt` хранится в UTC, а привычки у человека
@@ -287,6 +294,7 @@ abstract class AppGraph {
                 diary = diaryRepository,
                 walks = walkRepository,
                 walkSaid = ::walkSaid,
+                live = treadmillFeed.live,
                 suggestFood = { query -> textResolver.suggest(query) },
                 regram = personalRepository::onGramsEdited,
                 rename = mascotBrain::setName,

@@ -29,51 +29,6 @@
             import('./walk/kcal/autopilot.js').then(function () { return import('./walk/kcal/hero.js'); }).then(function () { return import('./walk/kcal/tune.js'); }).then(function () { return import('./walk/kcal/food.js'); }).then(function () { return import('./walk/src/main.js'); });
         };
 
-        // Беговая дорожка — по Bluetooth (FTMS). Тонкий адаптер: подключиться и отдавать сырые пакеты; разбирает их
-        // и решает, что с ними делать, общий код (n7.kcalai.model.Treadmill, страница — Treadmill.kt).
-        // Состояния: unsupported — браузер не умеет Bluetooth; needPair — дорожку ещё не выбирали; waiting — ждём, когда
-        // знакомая дорожка включится; connecting; connected; needTap — без касания не подключиться (так устроен Bluetooth).
-        window.KcalTreadmill = (function () {
-            var bt = navigator.bluetooth, FTMS = 0x1826, DATA = 0x2acd, onPacket = null, onState = null, abort = null, hooked = [];
-            function state(s) { if (onState) onState(s); }
-            function hex(v) { var s = ''; for (var i = 0; i < v.byteLength; i++) s += ('0' + v.getUint8(i).toString(16)).slice(-2); return s; }
-            function hook(d) {
-                if (hooked.indexOf(d) >= 0) return;
-                hooked.push(d);
-                d.addEventListener('gattserverdisconnected', function () { state('waiting'); waitFor(d); });
-            }
-            async function connect(d) {
-                hook(d); state('connecting');
-                try {
-                    var server = await d.gatt.connect();
-                    var ch = await (await server.getPrimaryService(FTMS)).getCharacteristic(DATA);
-                    ch.addEventListener('characteristicvaluechanged', function (e) { if (onPacket) onPacket(hex(e.target.value)); });
-                    await ch.startNotifications();
-                    state('connected');
-                } catch (e) { state('needTap'); }
-            }
-            async function waitFor(d) {
-                hook(d);
-                if (!d.watchAdvertisements) { state('needTap'); return; }
-                if (abort) abort.abort();
-                abort = new AbortController();
-                d.addEventListener('advertisementreceived', function () { abort.abort(); connect(d); }, { once: true });
-                state('waiting');
-                try { await d.watchAdvertisements({ signal: abort.signal }); } catch (e) { state('needTap'); }
-            }
-            return {
-                start: async function (packet, changed) {
-                    onPacket = packet; onState = changed;
-                    if (!bt) { state('unsupported'); return; }
-                    var known = bt.getDevices ? await bt.getDevices().catch(function () { return []; }) : [];
-                    if (known.length) waitFor(known[0]); else state('needPair');
-                },
-                pair: async function () {
-                    try { connect(await bt.requestDevice({ filters: [{ services: [FTMS] }] })); }
-                    catch (e) { if (!e || e.name !== 'NotFoundError') state('needTap'); }
-                },
-            };
-        })();
     </script>
     <script src="web.js"></script>
 </head>

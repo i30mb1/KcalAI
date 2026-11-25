@@ -25,6 +25,19 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <!--
+        Беговая дорожка — спутник телефона: её выбирают один раз системным окном (CompanionDeviceManager),
+        и система сама будит приложение, когда дорожка включилась рядом. Поиска в фоне нет — ищет система,
+        поэтому разрешения на поиск и местоположение не нужны: только подключение к выбранной дорожке.
+        Ниже Android 12 подключение — обычным разрешением BLUETOOTH.
+    -->
+    <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
+
+    <!--
         WorkManager и Play Asset Delivery объявляют foreground-сервисы «на всякий случай»,
         а Google Play за каждое такое разрешение требует декларацию с видео. Отправка вкладов
         и распаковка пака идут обычной фоновой работой и в передний план не выходят.
@@ -96,6 +109,16 @@
                 android:value="kcal_app_functions.xml" />
             <intent-filter>
                 <action android:name="android.app.appfunctions.AppFunctionService" />
+            </intent-filter>
+        </service>
+
+        <!-- Система будит его, когда выбранная беговая дорожка рядом; привязаться может только она. -->
+        <service
+            android:name=".walk.TreadmillCompanionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+            <intent-filter>
+                <action android:name="android.companion.CompanionDeviceService" />
             </intent-filter>
         </service>
 

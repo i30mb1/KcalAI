@@ -190,6 +190,47 @@ class MascotBrain(
         return true
     }
 
+    /**
+     * Спросить про беговую дорожку — один раз за всю жизнь, в свою очередь, см. [awaitTurn].
+     * Дальше подключение — по слову «дорожка».
+     *
+     * @return заданный вопрос; `null` — уже спрашивали
+     */
+    suspend fun askTreadmill(clock: Clock = Clock.System): MascotMessageEntity? {
+        val question = MascotQuestion.TREADMILL
+        if (dao.lastSaid(question.topic) != null) return null
+        awaitTurn(clock)
+        if (dao.lastSaid(question.topic) != null) return null
+        val now = clock.now()
+        val message = MascotMessageEntity(
+            mascot = question.mascot,
+            topic = question.topic,
+            text = question.text,
+            lineIds = "",
+            delivery = Delivery.FEED,
+            dateEpochDay = now.toLocalDateTime(zone).date.toEpochDays(),
+            createdAt = now.toEpochMilliseconds(),
+        )
+        return message.copy(id = dao.insert(message))
+    }
+
+    /**
+     * «Подключить» или «Не надо» на вопрос про дорожку. Ответ ложится в вопрос и второй раз не
+     * принимается. На «Не надо» Зёрнышко отвечает сразу, на «Подключить» — когда телефон выберет
+     * дорожку, см. [treadmillResult].
+     *
+     * @return принят ли ответ
+     */
+    suspend fun answerTreadmill(yes: Boolean, now: Instant): Boolean {
+        if (dao.answer(MascotQuestion.TREADMILL.topic, if (yes) Choice.YES else Choice.NO) == 0) return false
+        if (!yes) answer(Topic.TREADMILL_NO, Mascot.GRAIN, now)
+        return true
+    }
+
+    /** Телефон выбрал дорожку и получил Bluetooth — или нет. */
+    suspend fun treadmillResult(connected: Boolean, now: Instant): MascotMessageEntity? =
+        answer(if (connected) Topic.TREADMILL_YES else Topic.TREADMILL_FAILED, Mascot.GRAIN, now)
+
     /** Телефон разрешил уведомления или нет. */
     suspend fun notificationsResult(granted: Boolean, now: Instant): MascotMessageEntity? =
         answer(if (granted) Topic.WRITE_YES else Topic.WRITE_DENIED, Mascot.GRAIN, now)

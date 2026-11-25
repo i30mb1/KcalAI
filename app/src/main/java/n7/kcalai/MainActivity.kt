@@ -1,5 +1,8 @@
 package n7.kcalai
 
+import n7.kcalai.walk.TreadmillGatt
+import n7.kcalai.walk.TreadmillCompanion
+import androidx.activity.result.IntentSenderRequest
 import android.Manifest
 import android.content.Intent
 import android.os.Build
@@ -57,6 +60,17 @@ class MainActivity : ComponentActivity() {
         diary.onNotificationsResult(granted)
     }
 
+    private val treadmill by lazy { TreadmillCompanion(this) }
+
+    /** Выбор дорожки идёт — ответ Зёрнышку даётся один раз, даже если система сообщит о нём дважды. */
+    private var choosingTreadmill = false
+
+    private val chooseTreadmill = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        treadmill.chosen(result.resultCode == RESULT_OK, result.data)?.let(::treadmillChosen)
+    }
+
+    private val askBluetooth = registerForActivityResult(ActivityResultContracts.RequestPermission(), ::treadmillReady)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -64,6 +78,11 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 diary.notificationRequests.collect { requestNotifications() }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                diary.treadmillRequests.collect { requestTreadmill() }
             }
         }
         lifecycleScope.launch {
@@ -121,6 +140,28 @@ class MainActivity : ComponentActivity() {
         val messageId = intent.getLongExtra(MascotNotifier.EXTRA_MESSAGE_ID, 0)
         if (messageId > 0) diary.onOpenedFromMessage(messageId)
         intent.removeExtra(MascotNotifier.EXTRA_MESSAGE_ID)
+    }
+
+    /** «Подключить» Зёрнышку или слово «дорожка»: системный выбор дорожки, затем разрешение на Bluetooth. */
+    private fun requestTreadmill() {
+        if (!treadmill.supported) return diary.onTreadmillResult(false)
+        choosingTreadmill = true
+        treadmill.choose(
+            onChooser = { sender -> chooseTreadmill.launch(IntentSenderRequest.Builder(sender).build()) },
+            onChosen = ::treadmillChosen,
+        )
+    }
+
+    private fun treadmillChosen(chosen: Boolean) {
+        if (!chosen) return treadmillReady(false)
+        if (TreadmillGatt.allowed(this)) treadmillReady(true) else askBluetooth.launch(Manifest.permission.BLUETOOTH_CONNECT)
+    }
+
+    private fun treadmillReady(ready: Boolean) {
+        if (!choosingTreadmill) return
+        choosingTreadmill = false
+        if (ready) container.startTreadmill()
+        diary.onTreadmillResult(ready)
     }
 
     /**

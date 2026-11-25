@@ -54,7 +54,13 @@ object KcalApp {
         scope.launch { container.mascotRoutines.onLaunch() }
         // Итоги прогулок по дорожке — так же, как на Android.
         scope.launch { container.mascotRoutines.tellWalks() }
+        scope.launch { container.mascotRoutines.askTreadmill(container.webUsed) }
+        // Знакомая беговая дорожка — iOS подключится к ней сама, когда её включат.
+        treadmill.resume()
     }
+
+    /** Беговая дорожка у iPhone — CoreBluetooth; прогулки из её пакетов складывает общий код. */
+    private val treadmill by lazy { IosTreadmill(container.treadmillFeed, scope) }
 
     /** Человек открыл приложение: написанное теперь стоит в ленте, шторку пора освободить. */
     fun onForeground() {
@@ -98,6 +104,10 @@ object KcalApp {
                 diary.notificationRequests.collect {
                     diary.onNotificationsResult(container.notifier.requestPermission())
                 }
+            }
+            // «Подключить» Зёрнышку или «дорожка»: ищем дорожку рядом, итог — обратно в дневник.
+            LaunchedEffect(Unit) {
+                diary.treadmillRequests.collect { diary.onTreadmillResult(treadmill.choose()) }
             }
             // Браузер на связи со страницей дневника — таймер простоя не гасит экран.
             CompositionLocalProvider(

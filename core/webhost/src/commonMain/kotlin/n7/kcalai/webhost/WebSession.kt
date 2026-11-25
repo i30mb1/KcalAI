@@ -59,6 +59,7 @@ data class WebDayContent(
     val steps: Int = 0,
     val stepsGoal: Int = DEFAULT_STEPS_GOAL,
     val said: List<WebSaid> = emptyList(),
+    val live: TreadmillSample? = null,
 )
 
 /**
@@ -94,8 +95,8 @@ interface WebDiary {
     /** Сколько держать страницу, когда телефон убран. */
     suspend fun setGrace(grace: PageGrace)
 
-    /** Пакет беговой дорожки, подключённой к странице, — в прогулки. */
-    suspend fun treadmill(sample: TreadmillSample)
+    /** Беговая дорожка, подключённая к телефону, прямо сейчас; `null` — её нет на связи. */
+    val live: Flow<TreadmillSample?>
 }
 
 /** Сколько пущенных браузеров сейчас на связи — пока хоть один есть, экрану гаснуть нельзя. */
@@ -184,7 +185,6 @@ class WebSession(
                 is ToPhone.SetName -> diary.setName(message.name)
                 is ToPhone.Revoke -> clients.revoke(message.browserId, clock.now().toEpochMilliseconds())
                 is ToPhone.SetGrace -> diary.setGrace(message.grace)
-                is ToPhone.Treadmill -> diary.treadmill(message.sample)
                 ToPhone.Leave -> {
                     clients.leave(token, clock.now().toEpochMilliseconds())
                     break
@@ -203,7 +203,9 @@ class WebSession(
         presence.enter()
         try {
             val day = shown.flatMapLatest { date ->
-                combine(diary.day(date), diary.week(date)) { content, week -> Triple(date, content, week) }
+                combine(diary.day(date), diary.week(date), diary.live) { content, week, live ->
+                    Triple(date, content.copy(live = live.takeIf { date == diary.today }), week)
+                }
             }
             val browsers = clients.observeAdmitted().map { list -> list.map { WebBrowser(it.id, it.label, here = it.id == me) } }
             val profile = combine(owner, grace, ::Pair)
@@ -224,6 +226,7 @@ class WebSession(
                     steps = content.steps,
                     stepsGoal = content.stepsGoal,
                     said = content.said,
+                    live = content.live,
                 )
             }
                 .distinctUntilChanged()

@@ -39,6 +39,7 @@ class WebMessageTest {
         steps = 6_240,
         stepsGoal = 8_000,
         said = listOf(WebSaid(mascot = Mascot.GRAIN, text = "Прогулка в копилке: 3 242 шага.", minute = 18 * 60 + 56)),
+        live = TreadmillSample(speedKmh = 4.5, distanceM = 2_140, kcal = 90, elapsedS = 1_920),
     )
 
     @Test
@@ -56,7 +57,6 @@ class WebMessageTest {
             ToPhone.SetGrace(PageGrace.FOREVER),
             ToPhone.SetGrams(entryId = 7, grams = 150),
             ToPhone.Delete(entryId = 9),
-            ToPhone.Treadmill(TreadmillSample(speedKmh = 4.5, distanceM = 2_140, kcal = 90, elapsedS = 1_920)),
             ToPhone.Leave,
         )
 
@@ -70,7 +70,7 @@ class WebMessageTest {
             ToPage.Denied,
             ToPage.Busy,
             ToPage.Day(day),
-            ToPage.Day(day.copy(goalKcal = null, goalMacros = null, peers = emptyList(), entries = emptyList(), week = emptyList(), walks = emptyList(), said = emptyList())),
+            ToPage.Day(day.copy(goalKcal = null, goalMacros = null, peers = emptyList(), entries = emptyList(), week = emptyList(), walks = emptyList(), said = emptyList(), live = null)),
             ToPage.Day(day.copy(browsers = listOf(WebBrowser(id = 4, label = "Chrome на Windows", here = true), WebBrowser(id = 5, label = "Safari на Mac", here = false)))),
             ToPage.Suggestions(
                 query = "гречка",

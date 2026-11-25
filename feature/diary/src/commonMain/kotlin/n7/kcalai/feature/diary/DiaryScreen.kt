@@ -115,6 +115,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
             when (question) {
                 MascotQuestion.NAME -> if (yes) viewModel.onAskName() else viewModel.onAnswerName(null)
                 MascotQuestion.WRITE -> viewModel.onAnswerWrite(yes)
+                MascotQuestion.TREADMILL -> viewModel.onAnswerTreadmill(yes)
             }
         },
         onAnswerOffer = viewModel::onAnswerOffer,

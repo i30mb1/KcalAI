@@ -149,11 +149,8 @@ fun DiaryPage(link: PhoneLink) {
     val blur by animateDpAsState(if (offline) OFFLINE_BLUR else 0.dp, tween(OFFLINE_MS, easing = EaseOutStrong))
     // Прогулка: под дневником оживает бумажный мир, по нему идёт Зёрнышко (см. Walk.kt). Пока идём,
     // фон страницы уходит — колонка становится матовым стеклом над миром (его рисует index.html).
-    val scope = rememberCoroutineScope()
-    val treadmill = remember { PageTreadmill(link::send, scope) }
-    LaunchedEffect(treadmill) { treadmill.start() }
-    val live by treadmill.live.collectAsState()
-    val treadmillLink by treadmill.link.collectAsState()
+    // Живые числа — с дорожки, подключённой к телефону (или демо по ?demo).
+    val live = rememberDemoWalk() ?: diary?.day?.live
     val walking = rememberWalking(colors.bg, live?.speedKmh ?: 0.0, diary?.day?.steps ?: 0, diary?.day?.stepsGoal ?: 0)
     val pageBg by animateColorAsState(if (walking) colors.bg.copy(alpha = 0f) else colors.bg, tween(WALK_FADE_MS))
 
@@ -186,7 +183,7 @@ fun DiaryPage(link: PhoneLink) {
                         },
                         modifier = Modifier.fillMaxSize(),
                         label = "day",
-                    ) { shown -> Feed(shown, link, Modifier.fillMaxSize(), treadmillLink, treadmill::pair) }
+                    ) { shown -> Feed(shown, link, Modifier.fillMaxSize()) }
                     // Шаги дня — поверх ленты, в углу: окошко ничего не сдвигает.
                     if (diary.day.date == diary.day.today) {
                         WalkPanel(diary.day, live, walking, Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 16.dp))
@@ -198,7 +195,7 @@ fun DiaryPage(link: PhoneLink) {
         if (diary != null && offline) {
             OfflineOverlay(diary.offlineLine())
         } else if (settings && diary != null) {
-            SettingsPanel(diary.day, link, treadmillLink, treadmill::pair, onClose = { settings = false })
+            SettingsPanel(diary.day, link, onClose = { settings = false })
         }
     }
 }

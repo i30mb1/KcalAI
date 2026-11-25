@@ -18,7 +18,7 @@ import kotlin.test.assertNull
 /** Пакеты дорожки складываются в прогулки дня, неделя шагов — всегда из семи дней. */
 class WalkRepositoryTest {
 
-    private val dao = FakeWalkDao()
+    private val dao = MemoryWalkDao()
     private val zone = TimeZone.UTC
     private val repository = WalkRepository(dao, zone)
 
@@ -76,7 +76,7 @@ class WalkRepositoryTest {
     }
 }
 
-private class FakeWalkDao : WalkDao {
+internal class MemoryWalkDao : WalkDao {
     val rows = MutableStateFlow<List<WalkEntity>>(emptyList())
 
     override suspend fun upsert(walk: WalkEntity) {

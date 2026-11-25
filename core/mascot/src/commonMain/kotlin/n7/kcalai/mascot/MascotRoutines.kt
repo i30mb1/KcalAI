@@ -5,6 +5,7 @@ import kotlin.time.Clock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import n7.kcalai.database.MascotMessageEntity
@@ -107,6 +108,17 @@ class MascotRoutines(
                 if (told) walks.markTold(last, clock.now().toEpochMilliseconds())
             }
         }
+    }
+
+    /**
+     * Спросить про беговую дорожку — когда дневник впервые открыли с компьютера: прогулка с дорожкой
+     * видна на странице дневника. Спрашивают один раз за всю жизнь, см. [MascotBrain.askTreadmill].
+     *
+     * @param webUsed пущен ли в дневник хоть один браузер
+     */
+    suspend fun askTreadmill(webUsed: Flow<Boolean>) {
+        webUsed.first { it }
+        guarded("не удалось спросить про дорожку") { brain.askTreadmill(clock) }
     }
 
     /**

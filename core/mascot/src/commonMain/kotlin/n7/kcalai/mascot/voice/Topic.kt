@@ -91,6 +91,15 @@ enum class Topic(val kind: TopicKind) {
     /** Прогулка добрала цель шагов на день. */
     WALK_GOAL(TopicKind.ANSWER),
 
+    /** Дорожку выбрали — телефон подключится к ней сам, когда её включат. */
+    TREADMILL_YES(TopicKind.ANSWER),
+
+    /** «Не надо» на вопрос про дорожку. */
+    TREADMILL_NO(TopicKind.ANSWER),
+
+    /** Дорожку не выбрали или телефон не дал Bluetooth. */
+    TREADMILL_FAILED(TopicKind.ANSWER),
+
     /** Третий тык подряд. */
     POKE(TopicKind.SPEECH),
 

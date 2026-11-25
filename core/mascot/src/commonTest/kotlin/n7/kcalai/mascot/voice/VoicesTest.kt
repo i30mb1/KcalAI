@@ -53,6 +53,9 @@ class VoicesTest {
         put(Topic.WEB_NO_WIFI, setOf(GRAIN))
         put(Topic.WALK_DONE, setOf(GRAIN))
         put(Topic.WALK_GOAL, setOf(GRAIN))
+        put(Topic.TREADMILL_YES, setOf(GRAIN))
+        put(Topic.TREADMILL_NO, setOf(GRAIN))
+        put(Topic.TREADMILL_FAILED, setOf(GRAIN))
     }
 
     /** Факты, при которых у каждой темы есть о чём сказать. */

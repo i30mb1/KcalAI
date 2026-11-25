@@ -65,7 +65,6 @@ import n7.kcalai.ui.letter
 import n7.kcalai.ui.mascot.MascotFigure
 import n7.kcalai.ui.mascot.MascotPose
 import n7.kcalai.ui.mascot.macro
-import n7.kcalai.model.Mascot
 import n7.kcalai.webapi.PageLine
 import n7.kcalai.webapi.WebSaid
 import n7.kcalai.webapi.PageState
@@ -105,11 +104,6 @@ private sealed interface FeedRow {
     data class Walked(val said: WebSaid) : FeedRow {
         override val key get() = "walked-${said.minute}-${said.text.hashCode()}"
     }
-
-    /** Знакомая дорожка рядом, но браузер подключится к ней только по касанию. */
-    data object Treadmill : FeedRow {
-        override val key get() = "treadmill"
-    }
 }
 
 /**
@@ -117,14 +111,13 @@ private sealed interface FeedRow {
  * как в мессенджере; новая запись — лента доезжает до неё.
  */
 @Composable
-fun Feed(diary: PageState.Diary, link: PhoneLink, modifier: Modifier, treadmill: TreadmillLink = TreadmillLink.UNSUPPORTED, onPair: () -> Unit = {}) {
+fun Feed(diary: PageState.Diary, link: PhoneLink, modifier: Modifier) {
     val day = diary.day
     var editing by remember { mutableStateOf<Long?>(null) }
     val rows = buildList {
         add(FeedRow.Separator(dayLabel(LocalDate.fromEpochDays(day.date), LocalDate.fromEpochDays(day.today))))
         day.byMeal().forEach { (meal, entries) -> add(FeedRow.Meal(meal, entries)) }
         day.said.sortedBy { it.minute }.forEach { add(FeedRow.Walked(it)) }
-        if (treadmill == TreadmillLink.NEED_TAP && day.date == day.today) add(FeedRow.Treadmill)
         // Персонажи говорят последними, у поля: это ответ на то, что сейчас на экране.
         diary.line()?.let { add(FeedRow.Said(it)) }
         diary.peersLine()?.let { add(FeedRow.Said(it, day.peers.map { peer -> peer.name to peer.url })) }
@@ -163,10 +156,6 @@ fun Feed(diary: PageState.Diary, link: PhoneLink, modifier: Modifier, treadmill:
                     )
                     is FeedRow.Said -> IncomingLine(row.line, links = row.links)
                     is FeedRow.Walked -> IncomingLine(PageLine(row.said.mascot, row.said.text))
-                    FeedRow.Treadmill -> IncomingLine(
-                        PageLine(Mascot.GRAIN, "Дорожка рядом, а браузер подключается к ней только по касанию. Тапни — и погнали!"),
-                        action = "Подключить" to onPair,
-                    )
                 }
             }
         }
