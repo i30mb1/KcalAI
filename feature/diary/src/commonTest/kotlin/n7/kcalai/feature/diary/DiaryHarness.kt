@@ -353,7 +353,7 @@ internal class FakeUserFoodDao : UserFoodDao {
     override suspend fun all(): List<UserFoodEntity> = foods.toList()
 }
 
-private class FakeCachedProductDao : CachedProductDao {
+internal class FakeCachedProductDao : CachedProductDao {
     private val products = mutableMapOf<String, CachedProductEntity>()
 
     override suspend fun insert(product: CachedProductEntity) {
@@ -363,7 +363,7 @@ private class FakeCachedProductDao : CachedProductDao {
     override suspend fun findByGtin(gtin: String): CachedProductEntity? = products[gtin]
 }
 
-private class FakeContributionDao : ContributionDao {
+internal class FakeContributionDao : ContributionDao {
     private val queue = mutableListOf<ContributionEntity>()
 
     override suspend fun insert(contribution: ContributionEntity): Long {

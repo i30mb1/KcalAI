@@ -123,8 +123,8 @@ class FoodRepository(
                 is FoodRef.Generic -> generics[ref.id]?.toCandidate()
                 is FoodRef.User -> userFoodDao.findById(ref.id)?.toCandidate()
                 is FoodRef.Barcode -> userFoodDao.findByBarcode(ref.gtin)?.toCandidate()
-                    ?: onDb { it.findByBarcode(ref.gtin) }?.toCandidate()
-                    ?: cachedProductDao.findByGtin(ref.gtin)?.toCandidate()
+                    ?: onDb { db -> db.findByBarcode(ref.gtin)?.toCandidate(db) }
+                    ?: cachedProductDao.findByGtin(ref.gtin)?.let { cached -> onDb { cached.toCandidate(it) } }
             }
         }
     }
@@ -143,16 +143,19 @@ class FoodRepository(
      *
      * Ответ с одним названием в кэш не ложится: записывать в него нечего, а при
      * следующем скане в сети уже могли вбить таблицу.
+     *
+     * Клетчатку, которой у товара нет, подсказывает справочник ([FoodDb.withFiber]) —
+     * на выходе, а не в кэше: там остаётся сказанное сетью.
      */
     suspend fun byBarcode(gtin: String): BarcodeLookup {
         userFoodDao.findByBarcode(gtin)?.let { return BarcodeLookup.Found(it.toCandidate()) }
-        onDb { it.findByBarcode(gtin) }?.let { return BarcodeLookup.Found(it.toCandidate()) }
-        cachedProductDao.findByGtin(gtin)?.let { return BarcodeLookup.Found(it.toCandidate()) }
+        onDb { db -> db.findByBarcode(gtin)?.toCandidate(db) }?.let { return BarcodeLookup.Found(it) }
+        cachedProductDao.findByGtin(gtin)?.let { cached -> return BarcodeLookup.Found(onDb { cached.toCandidate(it) }) }
 
         val fetched = remote.fetch(gtin) ?: return BarcodeLookup.Miss
         val nutriments = fetched.nutriments ?: return BarcodeLookup.NameOnly(brandedName(fetched.brand, fetched.name))
         cachedProductDao.insert(fetched.toEntity(nutriments, fetchedAt = currentTimeMillis()))
-        return BarcodeLookup.Found(fetched.toCandidate(nutriments))
+        return BarcodeLookup.Found(fetched.toCandidate(onDb { it.withFiber(fetched.name, nutriments) }))
     }
 
     /**
@@ -241,7 +244,7 @@ class FoodRepository(
             if (taken >= limit) {
                 (own + generic).take(limit)
             } else {
-                val products = db.searchProducts(query, limit - taken).map { it.toCandidate() }
+                val products = db.searchProducts(query, limit - taken).map { it.toCandidate(db) }
                 (own + generic + products).take(limit)
             }
         }
@@ -283,11 +286,11 @@ private fun GenericRow.toCandidate(): FoodCandidate =
         exactMatch = exactMatch,
     )
 
-private fun ProductRow.toCandidate(): FoodCandidate =
+private fun ProductRow.toCandidate(db: FoodDb): FoodCandidate =
     FoodCandidate(
         ref = FoodRef.Barcode(barcode),
         displayName = name,
-        nutriments = nutriments,
+        nutriments = db.withFiber(name, nutriments),
         servingG = servingG,
     )
 
@@ -313,11 +316,11 @@ private fun brandedName(brand: String?, name: String): String {
     return if (name.startsWith(prefix, ignoreCase = true)) name else "$prefix $name"
 }
 
-private fun CachedProductEntity.toCandidate(): FoodCandidate =
+private fun CachedProductEntity.toCandidate(db: FoodDb): FoodCandidate =
     FoodCandidate(
         ref = FoodRef.Barcode(gtin),
         displayName = brandedName(brand, name),
-        nutriments = toNutriments(),
+        nutriments = db.withFiber(name, toNutriments()),
         servingG = servingG,
     )
 

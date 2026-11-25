@@ -101,10 +101,22 @@ class FoodDb internal constructor(
         return ids.mapNotNull(found::get)
     }
 
+    /** Цифры товара с клетчаткой того же продукта справочника, если своей у товара нет — см. [estimateFiber]. */
+    fun withFiber(name: String, nutriments: Nutriments): Nutriments =
+        estimateFiber(name, nutriments) { phrases ->
+            connection.prepare(FoodDbQueries.genericsByAliases(phrases.size)).use { stmt ->
+                phrases.forEachIndexed { i, phrase -> stmt.bindText(i + 1, phrase) }
+                buildMap { while (stmt.step()) put(stmt.getText(ALIAS_COLUMN), stmt.readGeneric(exactMatch = true)) }
+            }
+        }
+
     override fun close() {
         connection.close()
     }
 }
+
+/** Алиас в [FoodDbQueries.genericsByAliases] идёт следом за колонками генерика. */
+private const val ALIAS_COLUMN = 9
 
 private fun SQLiteStatement.readProduct(): ProductRow =
     ProductRow(

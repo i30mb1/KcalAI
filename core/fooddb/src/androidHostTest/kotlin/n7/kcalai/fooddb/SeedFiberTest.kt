@@ -4,6 +4,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import n7.kcalai.model.Nutriments
 
 /**
  * Справочник, который едет в приложении, знает клетчатку каждого продукта.
@@ -27,6 +28,16 @@ class SeedFiberTest {
             mapOf(BUCKWHEAT_DRY to 1130, CHICKEN_BREAST to 0, APPLE to 240, WHEAT_BRAN to 4300),
             fiber,
         )
+    }
+
+    /** На российской пачке клетчатку не печатают — её подсказывает тот же продукт справочника. */
+    @Test
+    fun `товару без клетчатки её подсказывает справочник — по названию и цифрам`() {
+        val pack = Nutriments(kcal100 = 231, prot100 = 230, fat100 = 70, carb100 = 5750)
+        val curd = Nutriments(kcal100 = 167, prot100 = 1480, fat100 = 820, carb100 = 850)
+
+        assertEquals(710, db.withFiber("Чернослив без косточки", pack).fiber100)
+        assertEquals(null, db.withFiber("Творог 9% с черносливом", curd).fiber100)
     }
 
     private companion object {

@@ -60,6 +60,12 @@ internal class FoodDbQueries(hasFullDb: Boolean) {
 
         const val EMBEDDINGS: String = "SELECT generic_id, vec FROM main.generic_embedding"
 
+        /** Продукты, чей алиас совпал целиком с одной из фраз; последней колонкой — сам алиас. */
+        fun genericsByAliases(count: Int): String =
+            "SELECT $GENERIC_COLUMNS, a.alias FROM generic_alias a " +
+                "JOIN generic g ON g.id = a.generic_id " +
+                "WHERE a.alias IN (${List(count) { "?" }.joinToString(",")})"
+
         fun genericsByIds(count: Int): String =
             "SELECT $GENERIC_COLUMNS FROM generic g WHERE g.id IN (${List(count) { "?" }.joinToString(",")})"
     }
