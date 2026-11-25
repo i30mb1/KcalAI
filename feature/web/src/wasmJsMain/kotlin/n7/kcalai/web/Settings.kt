@@ -59,7 +59,7 @@ import n7.kcalai.webapi.WebMacros
  * Окно поверх страницы; закрывается крестиком, клавишей Esc и кликом мимо.
  */
 @Composable
-fun SettingsPanel(day: WebDay, link: PhoneLink, onClose: () -> Unit) {
+fun SettingsPanel(day: WebDay, link: PhoneLink, worldAlways: Boolean, onWorldAlways: (Boolean) -> Unit, onClose: () -> Unit) {
     val colors = KcalTheme.colors
     val dismiss = remember { MutableInteractionSource() }
     Box(
@@ -105,6 +105,7 @@ fun SettingsPanel(day: WebDay, link: PhoneLink, onClose: () -> Unit) {
             NameSection(day.owner, onSave = { link.send(ToPhone.SetName(it)) })
             GoalSection(day.goalMacros, onSave = { link.send(ToPhone.SetGoal(it.prot, it.fat, it.carb)) })
             GraceSection(day.grace, onPick = { link.send(ToPhone.SetGrace(it)) })
+            WorldSection(worldAlways, onWorldAlways)
             BrowsersSection(day, onRevoke = { link.send(ToPhone.Revoke(it)) }, onLeave = link::leave)
         }
     }
@@ -192,6 +193,18 @@ private fun GraceSection(current: PageGrace, onPick: (PageGrace) -> Unit) {
             PageGrace.entries.forEach { option ->
                 PageChip(option.title, primary = option == current, onClick = { onPick(option) })
             }
+        }
+    }
+}
+
+/** Мир прогулки за дневником: только на ходу — или всегда, и тогда видно, докуда дошёл за день. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WorldSection(always: Boolean, onPick: (Boolean) -> Unit) {
+    Section("Мир прогулки") {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            PageChip("Когда иду", primary = !always, onClick = { onPick(false) })
+            PageChip("Всегда", primary = always, onClick = { onPick(true) })
         }
     }
 }

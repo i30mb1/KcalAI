@@ -6,12 +6,13 @@ const LANE_X = 0;                              // дорога прогулки 
 const out = { x: 0, z: 0 };
 
 /**
- * Всё, что в прогулке настраивается на лету. Значения по умолчанию — здесь; панель (kcal/tune.js) меняет их
- * и зовёт apply(). speed: null — темп дорожки со страницы; heroLeft: 1 — герой слева от ленты, 0 — по центру.
+ * Всё, что в прогулке настраивается на лету. Значения по умолчанию — здесь (подобраны на странице дневника
+ * 2026-11-25); панель (kcal/tune.js) меняет их и зовёт apply(). speed: null — темп дорожки; heroLeft: 0 — герой
+ * по центру, 1 — слева от колонки дневника.
  */
 window.KcalTune = {
-  pitch: 36, distance: 10, fov: 27, screenUp: 1.1, speed: null, reach: 0, radius: 0.2, heroScale: 1, heroLeft: 1,
-  glassTint: 0.62, glassBlur: 10,
+  pitch: 40, distance: 16, fov: 24, screenUp: 0.2, speed: null, reach: -1.5, radius: 0.17, heroScale: 1.1, heroLeft: 0,
+  glassTint: 0, glassBlur: 0,
   farBlur: 1.0, blurPx: 12.5, sharpBand: 0.36,
   apply() {
     const root = document.documentElement.style;                 // стекло колонки дневника над миром (index.html)
@@ -58,4 +59,24 @@ const waitWorld = setInterval(() => {
   window.__pt.daynight.set(window.KcalNight.auto(), true);
   window.KcalTune.apply();
   addEventListener('resize', () => window.KcalTune.apply());
+  placeByProgress();
 }, 200);
+
+/**
+ * Пройденное за день — расстояние по дороге: герой встаёт там, докуда дошёл бы по шагам дня, и мир показывает
+ * прогресс, даже когда стоишь. Шаг — столько дороги, сколько герой проходит за шаг на ходу (его скорость при
+ * 4 км/ч — 1,15 единицы в секунду, а это ~1,6 шага), так что на ходу шаги и путь героя не расходятся.
+ * Ставится один раз за загрузку — как только телефон назвал шаги дня; дальше герой идёт сам.
+ */
+const STEP_UNITS = 0.7;
+function placeByProgress() {
+  const wait = setInterval(() => {
+    const pt = window.__pt, S = window.KcalWalk;
+    if (!pt || !S || !(S.steps >= 0)) return;          // -1 — телефон ещё не назвал шаги дня
+    clearInterval(wait);
+    if (!(S.steps > 0)) return;
+    const z = -S.steps * STEP_UNITS;
+    pt.traveller.teleport(LANE_X * T, z, 0, -1);
+    pt.follow.snap(pt.traveller);
+  }, 300);
+}

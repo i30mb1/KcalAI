@@ -151,8 +151,11 @@ fun DiaryPage(link: PhoneLink) {
     // фон страницы уходит — колонка становится матовым стеклом над миром (его рисует index.html).
     // Живые числа — с дорожки, подключённой к телефону (или демо по ?demo).
     val live = rememberDemoWalk() ?: diary?.day?.live
-    val walking = rememberWalking(colors.bg, live?.speedKmh ?: 0.0, diary?.day?.steps ?: 0, diary?.day?.stepsGoal ?: 0)
-    val pageBg by animateColorAsState(if (walking) colors.bg.copy(alpha = 0f) else colors.bg, tween(WALK_FADE_MS))
+    var worldAlways by remember { mutableStateOf(walkAlways()) }
+    // Мир виден на ходу — или всегда, если так выбрано в настройках: тогда герой стоит там, докуда дошёл за день.
+    val worldShown = rememberWalking(colors.bg, live?.speedKmh ?: 0.0, diary?.day?.steps ?: STEPS_UNKNOWN, diary?.day?.stepsGoal ?: 0, worldAlways)
+    val walking = (live?.speedKmh ?: 0.0) > MOVING_KMH
+    val pageBg by animateColorAsState(if (worldShown) colors.bg.copy(alpha = 0f) else colors.bg, tween(WALK_FADE_MS))
 
     Box(Modifier.fillMaxSize().background(pageBg), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = COLUMN_MAX).fillMaxSize().blur(blur)) {
@@ -195,7 +198,16 @@ fun DiaryPage(link: PhoneLink) {
         if (diary != null && offline) {
             OfflineOverlay(diary.offlineLine())
         } else if (settings && diary != null) {
-            SettingsPanel(diary.day, link, onClose = { settings = false })
+            SettingsPanel(
+                diary.day,
+                link,
+                worldAlways = worldAlways,
+                onWorldAlways = { on ->
+                    worldAlways = on
+                    setWalkAlways(on)
+                },
+                onClose = { settings = false },
+            )
         }
     }
 }
