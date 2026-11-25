@@ -1,6 +1,7 @@
 package n7.kcalai
 
 import n7.kcalai.walk.HealthConnectSteps
+import n7.kcalai.walk.RecordedSteps
 import androidx.health.connect.client.PermissionController
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothAdapter
@@ -82,9 +83,15 @@ class MainActivity : ComponentActivity() {
         if (bluetoothEnabled()) chooseTreadmill() else treadmillReady(false)
     }
 
-    /** Health Connect: запрос шагов — его окно, ответ — набор выданных разрешений. */
+    /** Health Connect: запрос шагов — его окно, ответ — набор выданных разрешений. Своя запись шагов тоже в счёт. */
     private val askSteps = registerForActivityResult(PermissionController.createRequestPermissionResultContract()) { granted ->
-        diary.onStepsResult(HealthConnectSteps.READ in granted)
+        diary.onStepsResult(HealthConnectSteps.READ in granted || container.recordedSteps.permitted)
+    }
+
+    /** «Физическая активность» — для своей записи шагов; за ней — Health Connect, если он есть. */
+    private val askActivity = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) lifecycleScope.launch { container.recordedSteps.start() }
+        askHealthConnect(recorded = granted)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -163,9 +170,17 @@ class MainActivity : ComponentActivity() {
         intent.removeExtra(MascotNotifier.EXTRA_MESSAGE_ID)
     }
 
-    /** «Считать» Зёрнышку или слово «шаги»: окно Health Connect; его нет на телефоне — шагов не будет. */
+    /**
+     * «Считать» Зёрнышку или слово «шаги»: сначала «Физическая активность» для своей записи шагов, потом окно
+     * Health Connect — там шаги других приложений. Нет ни того, ни другого — шагов не будет.
+     */
     private fun requestSteps() {
-        if (HealthConnectSteps(this).available) askSteps.launch(HealthConnectSteps.PERMISSIONS) else diary.onStepsResult(false)
+        val recorded = container.recordedSteps
+        if (recorded.available && !recorded.permitted) askActivity.launch(RecordedSteps.PERMISSION) else askHealthConnect(recorded.permitted)
+    }
+
+    private fun askHealthConnect(recorded: Boolean) {
+        if (HealthConnectSteps(this).available) askSteps.launch(HealthConnectSteps.PERMISSIONS) else diary.onStepsResult(recorded)
     }
 
     /**

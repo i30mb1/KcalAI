@@ -148,6 +148,8 @@ dependencies {
     implementation(project(":core:assistant"))
     implementation(libs.androidx.appfunctions)
     implementation(libs.health.connect)
+    // Своя запись шагов телефона (Recording API): в фоне, без аккаунта, данные остаются на телефоне.
+    implementation(libs.play.services.fitness)
     ksp(libs.androidx.appfunctions.compiler)
     implementation(project(":core:remote"))
     implementation(project(":core:ui"))

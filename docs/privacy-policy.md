@@ -1,6 +1,6 @@
 # Политика конфиденциальности Kcal AI
 
-Действует с 25 ноября 2026 года. Приложение: Kcal AI (`n7.kcalai`) для Android и iOS.
+Действует с 26 ноября 2026 года. Приложение: Kcal AI (`n7.kcalai`) для Android и iOS.
 
 ## Коротко
 
@@ -35,6 +35,8 @@
 ## Шаги (Health Connect)
 
 Если вы ответите «Да» на вопрос Зёрнышка про шаги и разрешите это в Health Connect, приложение читает из Health Connect **только число шагов** за сегодняшний и прошлые дни недели — те, что насчитал сам телефон или приложения вроде Samsung Health и Google Fit. Шаги показываются в приложении и на вашей странице дневника в браузере и складываются с шагами беговой дорожки в одну дневную цель; за время прогулки по дорожке шаги телефона не считаются, чтобы не посчитать их дважды. Приложение ничего не записывает в Health Connect и не читает другие данные о здоровье. Чтение — только пока приложение открыто: в фоне Health Connect приложению шаги не отдаёт.
+
+Если в Health Connect шаги никто не записывает, приложение считает их само: после вашего разрешения «Физическая активность» оно включает запись шагов телефона через Recording API сервисов Google Play. Шаги записываются датчиком телефона и хранятся на самом телефоне (не дольше десяти дней), без входа в аккаунт Google; приложение читает из этой записи только число шагов. Отключить запись можно, отозвав разрешение «Физическая активность» в настройках Android.
 
 Шаги из Health Connect остаются на телефоне: они не отправляются на наш сервер или третьим лицам, не продаются, не используются для рекламы и ни для чего, кроме показа ваших шагов вам. Отозвать доступ можно в любой момент в настройках Health Connect — приложение продолжит работать, шаги будут считаться только по беговой дорожке.
 
@@ -72,7 +74,7 @@
 
 # Kcal AI Privacy Policy (English)
 
-Effective November 25, 2026. App: Kcal AI (`n7.kcalai`) for Android.
+Effective November 26, 2026. App: Kcal AI (`n7.kcalai`) for Android.
 
 There is no sign-up. Your food diary, goals and body weight are stored only on your device. A custom food goes to the shared database only if you accept the Egg's offer to send it. We do not sell data, show ads, or share your diary with anyone.
 
@@ -80,7 +82,7 @@ There is no sign-up. Your food diary, goals and body weight are stored only on y
 
 **Camera:** used to scan barcodes and nutrition labels. Images are processed on the device and never uploaded. The app works without camera permission; you can type a barcode instead.
 
-**Steps (Health Connect):** if you answer "Yes" to the Grain's question about steps and allow it in Health Connect, the app reads **only the step count** for today and the past days of the week from Health Connect. Steps are shown in the app and on your diary page in the browser and are added to treadmill steps toward one daily goal. The app writes nothing to Health Connect and reads no other health data, and only while the app is open. Steps from Health Connect stay on the device: they are not sent to our server or to third parties, not sold, not used for advertising, and used for nothing but showing your steps to you. You can revoke access at any time in Health Connect settings.
+**Steps (Health Connect):** if you answer "Yes" to the Grain's question about steps and allow it in Health Connect, the app reads **only the step count** for today and the past days of the week from Health Connect. Steps are shown in the app and on your diary page in the browser and are added to treadmill steps toward one daily goal. The app writes nothing to Health Connect and reads no other health data, and only while the app is open. Steps from Health Connect stay on the device: they are not sent to our server or to third parties, not sold, not used for advertising, and used for nothing but showing your steps to you. You can revoke access at any time in Health Connect settings. If nobody writes steps to Health Connect, the app counts them itself: with your "Physical activity" permission it turns on the on-device step recording of Google Play services (Recording API). Steps are recorded by the phone's sensor and kept on the phone (for up to ten days), without signing in to a Google account; the app reads only the step count. You can stop it by revoking the "Physical activity" permission in Android settings.
 
 **Treadmill (Bluetooth):** if you answer "Yes" to the Grain's question about a treadmill, you pick it once in the Android system dialog and allow connecting to nearby devices. The app then connects only to that treadmill when the system reports it nearby; it does not scan for other devices and does not need location. It reads speed, distance, time and calories (FTMS standard), computes steps and stores walks on the device. This data is not sent anywhere except your own diary page in the browser.
 

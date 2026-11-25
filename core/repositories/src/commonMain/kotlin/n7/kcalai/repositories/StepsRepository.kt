@@ -20,9 +20,17 @@ import n7.kcalai.model.Walk
  * Шаги, которые насчитал сам телефон: Health Connect на Android, Core Motion на iOS. Платформа — только
  * чтение за промежуток; что с этим делать, решает общий код.
  */
-interface PhoneSteps {
+fun interface PhoneSteps {
     /** Шаги за промежуток [from, to), мс; `null` — телефон их не отдаёт (нет счётчика или доступа). */
     suspend fun between(from: Long, to: Long): Int?
+}
+
+/**
+ * Шагомеров у телефона бывает несколько: Health Connect, куда пишут другие приложения, и своя запись шагов
+ * телефона. Пустой Health Connect отвечает нулём, поэтому верим тому, кто насчитал больше; молчат все — `null`.
+ */
+class BestPhoneSteps(private val sources: List<PhoneSteps>) : PhoneSteps {
+    override suspend fun between(from: Long, to: Long): Int? = sources.mapNotNull { it.between(from, to) }.maxOrNull()
 }
 
 /** Телефон без шагомера — или пока человек не разрешил его читать. */

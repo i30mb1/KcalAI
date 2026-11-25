@@ -27,6 +27,8 @@ import n7.kcalai.work.PrefsOutboxMemory
 import n7.kcalai.work.ScanUploads
 import n7.kcalai.repositories.PhoneSteps
 import n7.kcalai.walk.HealthConnectSteps
+import n7.kcalai.walk.RecordedSteps
+import n7.kcalai.repositories.BestPhoneSteps
 import n7.kcalai.walk.TreadmillCompanion
 import n7.kcalai.walk.TreadmillLink
 
@@ -51,7 +53,12 @@ class AppContainer(context: Context) : AppGraph() {
 
     /** Шагомер телефона — Health Connect; без него или без разрешения шагов телефона нет. */
     private val healthSteps by lazy { HealthConnectSteps(appContext) }
-    override fun phoneSteps(): PhoneSteps = healthSteps
+
+    /** Своя запись шагов: на телефонах, где в Health Connect шаги никто не пишет. */
+    val recordedSteps by lazy { RecordedSteps(appContext) }
+
+    /** Шаги телефона — из того шагомера, что насчитал больше: пустой Health Connect отвечает нулём. */
+    override fun phoneSteps(): PhoneSteps = BestPhoneSteps(listOf(healthSteps, recordedSteps))
     override fun shade(): MascotShade = MascotNotifier(appContext)
     override fun outboxMemory(): OutboxMemory = PrefsOutboxMemory(appContext)
 
@@ -90,7 +97,9 @@ class AppContainer(context: Context) : AppGraph() {
         appScope.launch { mascotRoutines.onLaunch() }
         appScope.launch { mascotRoutines.tellWalks() }
         appScope.launch { mascotRoutines.askTreadmill(webUsed) }
-        appScope.launch { mascotRoutines.askSteps(healthSteps.available, webUsed) }
+        appScope.launch { mascotRoutines.askSteps(healthSteps.available || recordedSteps.available, webUsed) }
+        // Запись шагов включается сама, если «Физическую активность» уже разрешили.
+        appScope.launch { recordedSteps.start() }
         startTreadmill()
     }
 

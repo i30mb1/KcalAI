@@ -35,6 +35,21 @@ class StepsRepositoryTest {
         }
     }
 
+    /**
+     * Шагомеров у телефона бывает два: Health Connect (туда пишут другие приложения) и своя запись шагов.
+     * Пустой Health Connect отвечает нулём — верим тому, кто насчитал больше; молчат оба — шагов нет.
+     */
+    @Test
+    fun `из двух шагомеров — тот, что насчитал больше`() = runBlocking {
+        val empty = PhoneSteps { _, _ -> 0 }
+        val recorded = PhoneSteps { _, _ -> 4_200 }
+        val silent = PhoneSteps { _, _ -> null }
+
+        assertEquals(4_200, BestPhoneSteps(listOf(empty, recorded)).between(0, 1))
+        assertEquals(0, BestPhoneSteps(listOf(empty, silent)).between(0, 1))
+        assertNull(BestPhoneSteps(listOf(silent, silent)).between(0, 1))
+    }
+
     private suspend fun walk() = walks.record(TreadmillSample(speedKmh = 4.0, distanceM = 2_000, kcal = 80, elapsedS = 1_800), at(18, 30))
 
     @Test
