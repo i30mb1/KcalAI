@@ -1806,6 +1806,11 @@ class DiaryViewModel(
         }
     }
 
+    /** Корзинка у сообщения персонажа: из переписки — в приложении и на странице, — но не из памяти. */
+    fun onHideMessage(id: Long) {
+        viewModelScope.launch { brain.hide(id, clock.now()) }
+    }
+
     /** Телефон выбрал дорожку и получил Bluetooth — или нет. */
     fun onTreadmillResult(connected: Boolean) {
         viewModelScope.launch { brain.treadmillResult(connected, clock.now()) }

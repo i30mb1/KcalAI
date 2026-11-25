@@ -38,7 +38,7 @@ class WebMessageTest {
         walks = listOf(WebWalk(startMinute = 18 * 60 + 20, endMinute = 18 * 60 + 52, distanceM = 2_140, elapsedS = 1_920, steps = 3_242, topSpeedKmh = 4.5)),
         steps = 6_240,
         stepsGoal = 8_000,
-        said = listOf(WebSaid(mascot = Mascot.GRAIN, text = "Прогулка в копилке: 3 242 шага.", minute = 18 * 60 + 56)),
+        said = listOf(WebSaid(id = 41, mascot = Mascot.GRAIN, text = "Прогулка в копилке: 3 242 шага.", minute = 18 * 60 + 56)),
         live = TreadmillSample(speedKmh = 4.5, distanceM = 2_140, kcal = 90, elapsedS = 1_920),
     )
 
@@ -57,6 +57,7 @@ class WebMessageTest {
             ToPhone.SetGrace(PageGrace.FOREVER),
             ToPhone.SetGrams(entryId = 7, grams = 150),
             ToPhone.Delete(entryId = 9),
+            ToPhone.Hide(messageId = 41),
             ToPhone.Leave,
         )
 

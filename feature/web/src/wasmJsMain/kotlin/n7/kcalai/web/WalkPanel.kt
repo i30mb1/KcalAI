@@ -22,7 +22,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -45,6 +49,8 @@ import n7.kcalai.webapi.clockLabel
 import n7.kcalai.webapi.durationLabel
 import n7.kcalai.webapi.kmLabel
 import n7.kcalai.webapi.speedLabel
+import n7.kcalai.webapi.stepsPerSecond
+import n7.kcalai.webapi.stepsShown
 import n7.kcalai.webapi.stepsLabel
 import n7.kcalai.webapi.timerLabel
 
@@ -97,8 +103,10 @@ fun WalkPanel(day: WebDay, live: TreadmillSample?, walking: Boolean, modifier: M
 private fun Card(day: WebDay, live: TreadmillSample?, walking: Boolean, onClose: () -> Unit) {
     val colors = KcalTheme.colors
     val type = KcalTheme.type
+    // Пока идут, шаги бегут по одному в такт ходьбе, а не скачками раз в секунду, когда приходит итог.
+    val steps = rememberTickingSteps(day.steps, live?.speedKmh ?: 0.0, walking)
     val progress by animateFloatAsState(
-        if (day.stepsGoal > 0) day.steps.toFloat() / day.stepsGoal else 0f,
+        if (day.stepsGoal > 0) steps.toFloat() / day.stepsGoal else 0f,
         tween(NUMBER_MS, easing = EaseOutStrong),
     )
     Column(
@@ -112,7 +120,7 @@ private fun Card(day: WebDay, live: TreadmillSample?, walking: Boolean, onClose:
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(stepsLabel(day.steps), style = type.hero, color = colors.text)
+            Text(stepsLabel(steps), style = type.hero, color = colors.text)
             Spacer(Modifier.width(6.dp))
             Text("/ ${stepsLabel(day.stepsGoal)}", style = type.number, color = colors.text3, modifier = Modifier.padding(bottom = 4.dp))
         }
@@ -135,6 +143,39 @@ private fun Card(day: WebDay, live: TreadmillSample?, walking: Boolean, onClose:
             }
         }
     }
+}
+
+/**
+ * Шаги дня, бегущие по одному: между итогами с телефона — в темпе ходьбы, свежий итог догоняется
+ * плавно, назад число не идёт (см. [stepsShown]). Стоят — точный итог. Большой разрыв (другой день,
+ * страницу открыли посреди прогулки) — сразу к итогу, без пробежки через тысячи.
+ */
+@Composable
+private fun rememberTickingSteps(target: Int, speedKmh: Double, walking: Boolean): Int {
+    var shown by remember { mutableDoubleStateOf(target.toDouble()) }
+    val latest by rememberUpdatedState(target)
+    val speed by rememberUpdatedState(speedKmh)
+    LaunchedEffect(walking) {
+        if (!walking) return@LaunchedEffect
+        shown = latest.toDouble()
+        var lastFrame = -1L
+        var seen = -1
+        var seenAt = 0L
+        while (true) {
+            withFrameMillis { now ->
+                val goal = latest
+                if (goal != seen) {
+                    seen = goal
+                    seenAt = now
+                    if (goal - shown > SNAP_STEPS || shown - goal > SNAP_STEPS) shown = goal.toDouble()
+                }
+                val frame = if (lastFrame < 0) 0L else now - lastFrame
+                lastFrame = now
+                shown = stepsShown(shown, goal, now - seenAt, stepsPerSecond(speed), frame)
+            }
+        }
+    }
+    return if (walking) shown.toInt() else target
 }
 
 @Composable
@@ -180,6 +221,9 @@ private fun WalkRow(walk: WebWalk, live: Boolean) {
 }
 
 private const val PANEL_MS = 240
+
+/** Разрыв больше — не пробегать шаги, а сразу показать итог. */
+private const val SNAP_STEPS = 300
 private const val CARD_DP = 300
 private const val PILL_DP = 16
 private const val TRACK_DP = 8

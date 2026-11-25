@@ -58,6 +58,7 @@ class DiaryWebHostTest {
             override suspend fun setName(name: String) = Unit
             override suspend fun setGrace(grace: n7.kcalai.model.PageGrace) = Unit
             override val live = emptyFlow<n7.kcalai.model.TreadmillSample?>()
+            override suspend fun hideSaid(messageId: Long) = Unit
         },
         owner = MutableStateFlow("Женя"),
         grace = MutableStateFlow(n7.kcalai.model.PageGrace.MIN_5),

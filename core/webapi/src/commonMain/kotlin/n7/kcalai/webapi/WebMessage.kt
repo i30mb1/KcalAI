@@ -90,6 +90,9 @@ sealed interface ToPhone {
     /** «Выйти»: телефон забывает этот браузер, и в следующий раз его снова надо пустить. */
     data object Leave : ToPhone
 
+    /** Корзинка у реплики персонажа: убрать её из переписки — и на телефоне тоже. */
+    data class Hide(val messageId: Long) : ToPhone
+
 }
 
 /** Что телефон говорит странице. */
@@ -138,8 +141,13 @@ data class WebWalk(
     val avgSpeedKmh: Double get() = if (elapsedS > 0) distanceM * KMH_PER_MPS / elapsedS else 0.0
 }
 
-/** Реплика персонажа в ленте дня — итог прогулки. @param minute когда сказана, от полуночи */
-data class WebSaid(val mascot: Mascot, val text: String, val minute: Int)
+/**
+ * Реплика персонажа в ленте дня — итог прогулки.
+ *
+ * @param id сообщение на телефоне — по нему его скрывают корзинкой
+ * @param minute когда сказана, от полуночи
+ */
+data class WebSaid(val id: Long, val mascot: Mascot, val text: String, val minute: Int)
 
 private const val KMH_PER_MPS = 3.6
 
@@ -248,6 +256,7 @@ fun encode(message: ToPhone): String = envelope(
         is ToPhone.Revoke -> "revoke"
         is ToPhone.SetGrace -> "grace"
         ToPhone.Leave -> "leave"
+        is ToPhone.Hide -> "hide"
     },
 ) {
     when (message) {
@@ -274,6 +283,7 @@ fun encode(message: ToPhone): String = envelope(
         is ToPhone.Revoke -> put("id", message.browserId)
         is ToPhone.SetGrace -> put("grace", message.grace.name)
         ToPhone.Leave -> Unit
+        is ToPhone.Hide -> put("id", message.messageId)
     }
 }
 
@@ -368,6 +378,7 @@ private fun WebWalk.toJson() = buildJsonObject {
 }
 
 private fun WebSaid.toJson() = buildJsonObject {
+    put("id", id)
     put("mascot", mascot.name)
     put("text", text)
     put("minute", minute)
@@ -417,6 +428,7 @@ fun parseToPhone(text: String): ToPhone? {
         "revoke" -> ToPhone.Revoke(browserId = json.long("id") ?: return null)
         "grace" -> ToPhone.SetGrace(grace = json.grace() ?: return null)
         "leave" -> ToPhone.Leave
+        "hide" -> ToPhone.Hide(messageId = json.long("id") ?: return null)
         else -> null
     }
 }
@@ -506,6 +518,7 @@ private fun JsonObject.toLive(): TreadmillSample? = TreadmillSample(
 )
 
 private fun JsonObject.toSaid(): WebSaid? = WebSaid(
+    id = long("id") ?: return null,
     mascot = text("mascot")?.let { name -> Mascot.entries.firstOrNull { it.name == name } } ?: return null,
     text = text("text") ?: return null,
     minute = long("minute")?.toInt() ?: return null,

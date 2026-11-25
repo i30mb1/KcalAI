@@ -41,6 +41,10 @@ interface MascotDao {
      *
      * @return сколько вопросов получили ответ; ноль — ответ уже дан, второй не принимается
      */
+    /** Скрыть сообщение корзинкой — из переписки, но не из памяти персонажей. */
+    @Query("UPDATE mascot_message SET hiddenAt = :at WHERE id = :id")
+    suspend fun hide(id: Long, at: Long)
+
     @Query("UPDATE mascot_message SET choice = :choice WHERE topic = :topic AND choice IS NULL")
     suspend fun answer(topic: String, choice: Choice): Int
 

@@ -65,6 +65,7 @@ class RepositoryWebDiaryTest {
         walks = walks,
         walkSaid = { said },
         live = MutableStateFlow(null),
+        hide = {},
         suggestFood = { query ->
             if ("греч" in query) {
                 listOf(
@@ -188,7 +189,7 @@ class RepositoryWebDiaryTest {
     @Test
     fun `пакеты дорожки — прогулки дня, шаги и итог Зёрнышка`() = runTest {
         walks.record(TreadmillSample(speedKmh = 4.0, distanceM = 2_140, kcal = 90, elapsedS = 1_920), clock.now().toEpochMilliseconds())
-        said.value = listOf(WebSaid(Mascot.GRAIN, "Прогулка в копилке", minute = 9 * 60 + 5))
+        said.value = listOf(WebSaid(1, Mascot.GRAIN, "Прогулка в копилке", minute = 9 * 60 + 5))
 
         val shown = web.day(today).first()
 

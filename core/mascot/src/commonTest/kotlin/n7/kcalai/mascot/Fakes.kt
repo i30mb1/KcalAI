@@ -137,6 +137,10 @@ internal class FakeMascotDao : MascotDao {
     override suspend fun lastSaid(topic: String): Long? =
         messages.value.filter { it.topic == topic }.maxOfOrNull { it.createdAt }
 
+    override suspend fun hide(id: Long, at: Long) {
+        messages.value = messages.value.map { if (it.id == id) it.copy(hiddenAt = at) else it }
+    }
+
     override suspend fun markOpened(id: Long, at: Long) {
         messages.value = messages.value.map { if (it.id == id && it.openedAt == null) it.copy(openedAt = at) else it }
     }

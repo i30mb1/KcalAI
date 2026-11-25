@@ -76,7 +76,19 @@ class MascotBrain(
     /** Профиль; пока его строки нет — профиль по умолчанию: ничего не спрашивали, ничего не знаем. */
     val profile: Flow<MascotProfileEntity> = dao.observeProfile().map { it ?: MascotProfileEntity() }
 
-    fun messages(dateEpochDay: Long): Flow<List<MascotMessageEntity>> = dao.observeDay(dateEpochDay)
+    fun messages(dateEpochDay: Long): Flow<List<MascotMessageEntity>> =
+        dao.observeDay(dateEpochDay).map { said -> said.filter { it.hiddenAt == null } }
+
+    /**
+     * Человек скрыл сообщение корзинкой: из переписки — в приложении и на странице, — но не из памяти:
+     * персонажи по-прежнему знают, что это уже сказано, и не повторят. Вопрос без ответа не скрывается:
+     * он ждёт ответа и держит слово.
+     */
+    suspend fun hide(messageId: Long, now: Instant) {
+        val message = dao.findById(messageId) ?: return
+        if (message.question != null && message.choice == null) return
+        dao.hide(messageId, now.toEpochMilliseconds())
+    }
 
     /** Сказанное в облачках, новые первыми. Память на сессию: облачко живёт секунды. */
     private val speechMemory = ArrayDeque<List<String>>()

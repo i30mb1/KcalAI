@@ -645,6 +645,28 @@ class MascotBrainTest {
         assertEquals(Mascot.GRAIN, reply.mascot)
     }
 
+    /** Корзинка убирает сообщение из переписки, но персонажи помнят, что уже говорили. */
+    @Test
+    fun `скрытое сообщение уходит из переписки, но не из памяти`() = runTest {
+        started()
+        val brain = brain()
+        val said = brain.tellWebAddress(PAGE, at(now))!!
+
+        brain.hide(said.id, now)
+
+        assertTrue(brain.messages(today).first().none { it.id == said.id })
+        assertNull(brain.tellWebAddress(PAGE, at(now + 3.days)), "адрес уже называли — второй раз сам не скажет")
+    }
+
+    @Test
+    fun `вопрос без ответа корзинкой не скрывается`() = runTest {
+        val id = asked(MascotQuestion.TREADMILL)
+
+        brain().hide(id, now)
+
+        assertEquals(1, brain().messages(today).first().size)
+    }
+
     /** Про дорожку Зёрнышко спрашивает само один раз — вопросом в ленте, в свою очередь. */
     @Test
     fun `про беговую дорожку спрашивают один раз`() = runTest {

@@ -240,6 +240,16 @@ class WebSessionTest {
     }
 
     @Test
+    fun `корзинка со страницы скрывает реплику на телефоне`() = runTest {
+        val browser = admitted()
+
+        browser.say(ToPhone.Hide(messageId = 41))
+        runCurrent()
+
+        assertEquals(listOf(41L), diary.hidden)
+    }
+
+    @Test
     fun `цель, имя и запас со страницы доходят до телефона`() = runTest {
         val browser = admitted()
 
@@ -366,6 +376,7 @@ private class FakeWebDiary : WebDiary {
     val names = mutableListOf<String>()
     val graces = mutableListOf<PageGrace>()
     override val live = MutableStateFlow<TreadmillSample?>(null)
+    val hidden = mutableListOf<Long>()
 
     /** 2026-11-24. */
     override val today: Long = 20_781
@@ -398,5 +409,9 @@ private class FakeWebDiary : WebDiary {
 
     override suspend fun delete(entryId: Long) {
         deleted += entryId
+    }
+
+    override suspend fun hideSaid(messageId: Long) {
+        hidden += messageId
     }
 }

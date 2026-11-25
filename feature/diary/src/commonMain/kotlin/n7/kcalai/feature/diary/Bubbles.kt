@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -225,6 +226,8 @@ fun IncomingBubble(
     speaking: FeedItem,
     modifier: Modifier = Modifier,
     onDismiss: (() -> Unit)? = null,
+    /** Корзинка: убрать сообщение из переписки, чтобы не мешало записывать еду. */
+    onHide: (() -> Unit)? = null,
     /** Что встаёт справа от пузырька, как в мессенджере, — кнопка «поделиться». */
     trailing: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
@@ -276,6 +279,23 @@ fun IncomingBubble(
                         contentDescription = "Скрыть",
                         tint = colors.text3,
                         modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+            if (onHide != null) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .offset(x = 8.dp, y = (-6).dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onHide),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Удалить",
+                        tint = colors.text3.copy(alpha = HIDE_ALPHA),
+                        modifier = Modifier.size(17.dp),
                     )
                 }
             }
@@ -437,6 +457,9 @@ private fun DayOutlineBar(outline: DayOutline, modifier: Modifier = Modifier) {
 }
 
 private val OUTLINE_ALPHA = floatArrayOf(0.85f, 0.6f, 0.4f, 0.25f)
+
+/** Корзинка тише текста: действие на случай, а не главное в пузырьке. */
+private const val HIDE_ALPHA = 0.7f
 
 /**
  * Идея 4: приём пищи, который человек, похоже, забыл записать.
@@ -678,7 +701,7 @@ fun DeletedBubble(item: FeedItem.Deleted, onUndo: () -> Unit) {
  * собеседник, как в шторке, и его слова стоят там же, где были сказаны.
  */
 @Composable
-fun SaidBubble(item: FeedItem.Said) {
+fun SaidBubble(item: FeedItem.Said, onHide: (() -> Unit)? = null) {
     val share = LocalShareText.current
     val link = item.share
     IncomingBubble(
@@ -686,6 +709,7 @@ fun SaidBubble(item: FeedItem.Said) {
         // Как в мессенджере: иконка справа от сообщения, а не кнопка в нём. Это не ответ,
         // а действие — она не гаснет, и делиться можно сколько угодно раз.
         trailing = link?.let { { ShareButton(onClick = { share.share(it) }) } },
+        onHide = onHide,
     ) {
         BubbleText(item.text, time = item.time)
     }
@@ -717,7 +741,7 @@ private fun ShareButton(onClick: () -> Unit) {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit) {
+fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit, onHide: (() -> Unit)? = null) {
     val (yes, no) = when (item.question) {
         MascotQuestion.NAME -> "Сказать" to "Не скажу"
         MascotQuestion.WRITE -> "Пишите" to "Не надо"
@@ -725,7 +749,7 @@ fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit) {
     }
     val answered = item.choice
 
-    IncomingBubble(item) {
+    IncomingBubble(item, onHide = onHide) {
         BubbleText(item.text, time = item.time)
         FlowRow(
             modifier = Modifier.padding(top = 8.dp),

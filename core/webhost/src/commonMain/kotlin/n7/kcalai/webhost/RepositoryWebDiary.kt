@@ -57,12 +57,14 @@ import kotlin.time.Clock
  * @param walks прогулки по дорожке, подключённой к телефону
  * @param live её живые числа, см. [n7.kcalai.repositories.TreadmillFeed]
  * @param walkSaid что Зёрнышко сказало о прогулках в ленте дня
+ * @param hide скрыть реплику персонажа корзинкой — тем же путём, что в приложении
  */
 class RepositoryWebDiary(
     private val diary: DiaryRepository,
     private val walks: WalkRepository,
     private val walkSaid: (Long) -> Flow<List<WebSaid>>,
     override val live: Flow<TreadmillSample?>,
+    private val hide: suspend (Long) -> Unit,
     private val suggestFood: suspend (String) -> List<ResolvedItem>,
     private val regram: suspend (entryId: Long, grams: Int, now: Long) -> Unit,
     private val rename: suspend (String) -> Unit,
@@ -155,6 +157,8 @@ class RepositoryWebDiary(
     override suspend fun setName(name: String) = rename(name)
 
     override suspend fun setGrace(grace: PageGrace) = keepPage(grace)
+
+    override suspend fun hideSaid(messageId: Long) = hide(messageId)
 
     /** Опознанное, с весом, — и запомненное под этим запросом. */
     private suspend fun found(query: String): List<ResolvedItem> {

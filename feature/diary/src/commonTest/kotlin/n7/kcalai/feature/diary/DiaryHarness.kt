@@ -450,6 +450,10 @@ internal class FakeMascotDao : MascotDao {
 
     override suspend fun findById(id: Long): MascotMessageEntity? = messages.value.find { it.id == id }
 
+    override suspend fun hide(id: Long, at: Long) {
+        messages.value = messages.value.map { if (it.id == id) it.copy(hiddenAt = at) else it }
+    }
+
     override suspend fun markOpened(id: Long, at: Long) {
         messages.value = messages.value.map { if (it.id == id && it.openedAt == null) it.copy(openedAt = at) else it }
     }

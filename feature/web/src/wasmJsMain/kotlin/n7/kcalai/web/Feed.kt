@@ -1,5 +1,8 @@
 package n7.kcalai.web
 
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -155,7 +158,10 @@ fun Feed(diary: PageState.Diary, link: PhoneLink, modifier: Modifier) {
                         onDelete = { id -> link.send(ToPhone.Delete(id)) },
                     )
                     is FeedRow.Said -> IncomingLine(row.line, links = row.links)
-                    is FeedRow.Walked -> IncomingLine(PageLine(row.said.mascot, row.said.text))
+                    is FeedRow.Walked -> IncomingLine(
+                        PageLine(row.said.mascot, row.said.text),
+                        onHide = { link.send(ToPhone.Hide(row.said.id)) },
+                    )
                 }
             }
         }
@@ -375,6 +381,8 @@ fun IncomingLine(
     line: PageLine?,
     action: Pair<String, () -> Unit>? = null,
     links: List<Pair<String, String>> = emptyList(),
+    /** Корзинка: убрать реплику из переписки — на странице и на телефоне. */
+    onHide: (() -> Unit)? = null,
 ) {
     val colors = KcalTheme.colors
     if (line == null) return
@@ -400,7 +408,21 @@ fun IncomingLine(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(line.text, style = KcalTheme.type.body, color = colors.text)
+                Row(verticalAlignment = Alignment.Top) {
+                    Text(line.text, style = KcalTheme.type.body, color = colors.text, modifier = Modifier.weight(1f, fill = false))
+                    if (onHide != null) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Удалить",
+                            tint = colors.text3,
+                            modifier = Modifier
+                                .padding(start = 8.dp)
+                                .press(RoundedCornerShape(8.dp), colors.text.copy(alpha = HOVER_ALPHA), onHide)
+                                .padding(2.dp)
+                                .size(16.dp),
+                        )
+                    }
+                }
                 if (action != null || links.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         action?.let { (text, onClick) -> PageChip(text, primary = true, onClick = onClick) }

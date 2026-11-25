@@ -121,6 +121,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         onAnswerOffer = viewModel::onAnswerOffer,
         onAnswerBrowser = viewModel::onAnswerBrowser,
         onSendToPeer = viewModel::onSendToPeer,
+        onHideMessage = viewModel::onHideMessage,
     )
 
     // Пущенный браузер на связи — экрану гаснуть нельзя: страница живёт, пока открыт дневник.
@@ -241,6 +242,8 @@ fun DiaryScreen(
     onAnswerOffer: (Long, Boolean) -> Unit,
     onAnswerBrowser: (Long, Boolean) -> Unit,
     onSendToPeer: (String) -> Unit,
+    /** Корзинка у сообщения персонажа. */
+    onHideMessage: (Long) -> Unit = {},
     /** С персонажем что-то сделали: ткнули, взяли в руку, погладили, разбудили. */
     onMascotEvent: (MascotEvent) -> Unit,
 ) {
@@ -381,6 +384,7 @@ fun DiaryScreen(
             onAnswerOffer = onAnswerOffer,
             onAnswerBrowser = onAnswerBrowser,
             onSendToPeer = onSendToPeer,
+            onHideMessage = onHideMessage,
             modifier = Modifier.fillMaxSize().nestedScroll(expandOnPull),
         )
         }
@@ -493,6 +497,7 @@ private fun Feed(
     onAnswerOffer: (Long, Boolean) -> Unit,
     onAnswerBrowser: (Long, Boolean) -> Unit,
     onSendToPeer: (String) -> Unit,
+    onHideMessage: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     /*
@@ -638,11 +643,13 @@ private fun Feed(
                     is FeedItem.Answer -> AnswerBubble(item)
                     is FeedItem.Deleted -> DeletedBubble(item, onUndo = { onUndoDelete(item) })
                     is FeedItem.Outbox -> OutboxBubble(item, onSendOutbox, onDeclineOutbox)
-                    is FeedItem.Said -> SaidBubble(item)
+                    is FeedItem.Said -> SaidBubble(item, onHide = { onHideMessage(item.id) })
                     is FeedItem.Ask -> AskBubble(
                         item = item,
                         onYes = { onAnswerAsk(item.question, true) },
                         onNo = { onAnswerAsk(item.question, false) },
+                        // Отвеченный вопрос — уже просто переписка: его можно убрать; ждущий ответа — нет.
+                        onHide = { onHideMessage(item.id) }.takeIf { item.choice != null },
                     )
                     is FeedItem.Nearby -> NearbyBubble(item, onSendToPeer)
                     is FeedItem.Offer -> OfferBubble(

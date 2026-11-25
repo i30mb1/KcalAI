@@ -97,6 +97,9 @@ interface WebDiary {
 
     /** Беговая дорожка, подключённая к телефону, прямо сейчас; `null` — её нет на связи. */
     val live: Flow<TreadmillSample?>
+
+    /** Корзинка у реплики персонажа: из переписки, но не из памяти персонажей. */
+    suspend fun hideSaid(messageId: Long)
 }
 
 /** Сколько пущенных браузеров сейчас на связи — пока хоть один есть, экрану гаснуть нельзя. */
@@ -185,6 +188,7 @@ class WebSession(
                 is ToPhone.SetName -> diary.setName(message.name)
                 is ToPhone.Revoke -> clients.revoke(message.browserId, clock.now().toEpochMilliseconds())
                 is ToPhone.SetGrace -> diary.setGrace(message.grace)
+                is ToPhone.Hide -> diary.hideSaid(message.messageId)
                 ToPhone.Leave -> {
                     clients.leave(token, clock.now().toEpochMilliseconds())
                     break

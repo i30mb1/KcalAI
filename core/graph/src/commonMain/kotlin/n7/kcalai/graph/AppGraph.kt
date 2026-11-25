@@ -295,6 +295,7 @@ abstract class AppGraph {
                 walks = walkRepository,
                 walkSaid = ::walkSaid,
                 live = treadmillFeed.live,
+                hide = { id -> mascotBrain.hide(id, Clock.System.now()) },
                 suggestFood = { query -> textResolver.suggest(query) },
                 regram = personalRepository::onGramsEdited,
                 rename = mascotBrain::setName,
@@ -310,11 +311,11 @@ abstract class AppGraph {
     }
 
     /** Что Зёрнышко сказало о прогулках в ленте дня — страница показывает это в своей ленте. */
-    private fun walkSaid(day: Long) = database.mascotDao().observeDay(day).map { said ->
+    private fun walkSaid(day: Long) = mascotBrain.messages(day).map { said ->
         val zone = TimeZone.currentSystemDefault()
         said.filter { it.topic == Topic.WALK_DONE.name || it.topic == Topic.WALK_GOAL.name }.map {
             val at = Instant.fromEpochMilliseconds(it.createdAt).toLocalDateTime(zone)
-            WebSaid(it.mascot, it.text, minute = at.hour * MINUTES_PER_HOUR + at.minute)
+            WebSaid(it.id, it.mascot, it.text, minute = at.hour * MINUTES_PER_HOUR + at.minute)
         }
     }
 
