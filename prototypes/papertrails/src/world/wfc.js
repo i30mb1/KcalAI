@@ -277,9 +277,9 @@ function applyPath(mask) {
 }
 
 // ---------------------------------------------------------------- the start, hand laid (world cell coords)
-// Road: from the south border up through (0,0), over the bridge at (0,-2), out through the north border.
+// Road: the walk lane x = 0 straight from the south border, over the bridge at (0,-2), out through the north border.
 // River: west border -> past the house -> under the bridge -> east border.
-const ORIGIN_ROAD = [[1, 3], [1, 2], [1, 1], [0, 1], [0, 0], [0, -1], [0, -2], [0, -3], [1, -3], [1, -4]];
+const ORIGIN_ROAD = [[0, 3], [0, 2], [0, 1], [0, 0], [0, -1], [0, -2], [0, -3], [0, -4]]; // KcalAI: прямо по дороге прогулки
 const ORIGIN_RIVER = [[-3, -3], [-2, -3], [-2, -2], [-1, -2], [0, -2], [1, -2], [2, -2], [2, -3], [3, -3], [4, -3]];
 const ORIGIN_FIXED = [[0, 0, 'lantern_post:1010'], [-1, -1, 'house:0100'], [0, -1, 'path_t:1011']];
 
@@ -339,19 +339,23 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
   // border ids: H(kx,kz) = north border of chunk (kx,kz); V(kx,kz) = west border of chunk (kx,kz)
   const riverH = (kx, kz) => label(kx, kz) !== label(kx + 1, kz);
   const riverV = (kx, kz) => label(kx, kz) !== label(kx, kz + 1);
-  const riverPosH = (kx, kz) => 1 + (hash2(kx, kz, seed + 921) % (N - 2));
+  const riverPosH = (kx, kz) => { const p = 1 + (hash2(kx, kz, seed + 921) % (N - 2)); return kx === JKX && Math.abs(p - JLX) < 2 ? (JLX + 2 <= N - 2 ? JLX + 2 : JLX - 2) : p; };
   const riverPosV = (kx, kz) => ((kx === 0 || kx === 1) && kz === 0 ? -3 + OZ : 1 + (hash2(kx, kz, seed + 923) % (N - 2)));
   // roads
   const isStartCol = (cx, cz) => (cx === 0 && (cz === 0 || cz === 1)) || (cx === -1 && cz === 0);
   const roadChoice = (cx, cz) => (isStartCol(cx, cz) ? 0 : hash2(cx, cz, seed + 931) & 1); // 0 = north, 1 = east
   const roadExtra = (cx, cz) => !isStartCol(cx, cz) && u01(cx, cz, 933) < cfg.roadExtra;
-  const roadH = (kx, kz) => roadChoice(kx, kz) === 0 || roadExtra(kx, kz);
+  // KcalAI: дорога прогулки — прямая колонна клеток x = 0 на север через все чанки (чанк JKX, столбец JLX):
+  // у каждой её клетки дорога и на север, и на юг; улочки примыкают перекрёстками, реки пересекают по мостам.
+  const JKX = OX >> 3;
+  const JLX = OX & (N - 1);
+  const roadH = (kx, kz) => kx === JKX || roadChoice(kx, kz) === 0 || roadExtra(kx, kz);
   const roadV = (kx, kz) => !((kx === 0 || kx === 1) && kz === 0) && (roadChoice(kx - 1, kz) === 1 || roadExtra(kx - 1, kz));
   function roadPos(p, hasRiver, q) {
     if (hasRiver && Math.abs(p - q) < 2) p = q + 2 <= N - 2 ? q + 2 : q - 2;
     return p;
   }
-  const roadPosH = (kx, kz) => (kx === 0 && (kz === 0 || kz === 1) ? 1 + OX : roadPos(1 + (hash2(kx, kz, seed + 941) % (N - 2)), riverH(kx, kz), riverPosH(kx, kz)));
+  const roadPosH = (kx, kz) => (kx === JKX ? JLX : roadPos(1 + (hash2(kx, kz, seed + 941) % (N - 2)), riverH(kx, kz), riverPosH(kx, kz)));
   const roadPosV = (kx, kz) => roadPos(1 + (hash2(kx, kz, seed + 943) % (N - 2)), riverV(kx, kz), riverPosV(kx, kz));
 
   /** Border crossings of a chunk: [{ cell, out }] for rivers and roads (order n, e, s, w). */
@@ -434,6 +438,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
         fillCost(rng, cfg.riverNoise, 2.5);
         markNearRiver();
         for (let i = 0; i < NN; i++) { rBlocked[i] = rivMask[i] ? 1 : 0; if (nearRiver[i]) rCost[i] += 6; }
+        if (cx === JKX) for (let z = 0; z < N; z++) rCost[z * N + JLX] += 40;
         for (const r of roads) rBlocked[r.cell] = 1;
         for (const r of rivers) if (r !== a && r !== b) rBlocked[r.cell] = 1;
         rCost[a.cell] = 0; rCost[b.cell] = 0;
@@ -461,7 +466,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
           const a = az * N + ax;
           const b = bz * N + bx;
           fillCost(rng, cfg.riverNoise, 0);
-          for (let i = 0; i < NN; i++) { const x = i % N; const z = (i / N) | 0; rBlocked[i] = x === 0 || z === 0 || x === N - 1 || z === N - 1 ? 1 : 0; }
+          for (let i = 0; i < NN; i++) { const x = i % N; const z = (i / N) | 0; rBlocked[i] = x === 0 || z === 0 || x === N - 1 || z === N - 1 || (cx === JKX && x === JLX) ? 1 : 0; }
           rBlocked[a] = 1;
           routeBegin();
           for (let d = 0; d < 4; d++) routeStart((az + DZ[d]) * N + ax + DX[d], d);
@@ -478,6 +483,21 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
       }
       // ---- trunk road
       const nq = roads.length;
+      if (cx === JKX) {
+        for (let z = 0; z < N; z++) trunkMask[z * N + JLX] |= BIT[0] | BIT[2];
+        for (const a of roads) {
+          if (!trunkMask[a.cell]) {
+            fillCost(rng, cfg.roadNoise, 1.5);
+            rBlocked.fill(0);
+            avoidTrunk(1.5);
+            routeBegin();
+            routeStart(a.cell, (a.out + 2) & 3);
+            if (!routeRun(true, roadRun, cfg.roadTurnCost, cfg.bridgeCost, -1, -1)) return false;
+            applyPath(trunkMask);
+          }
+          trunkMask[a.cell] |= BIT[a.out];
+        }
+      } else {
       const ro = roads.slice();
       for (let i = nq - 1; i > 0; i--) { const j = (rng() * (i + 1)) | 0; const t = ro[i]; ro[i] = ro[j]; ro[j] = t; }
       markNearRiver();
@@ -591,6 +611,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
         }
       }
     }
+    }
     // ---- a river with a road nearby gets a bridge: a short lane over the water to a cottage on the far bank
     if (!isOrigin && rivers.length >= 2 && roads.length) {
       let bridged = false;
@@ -693,6 +714,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
       for (let d = 0; d < 2; d++) {
         const through = BIT[d] | BIT[d + 2];
         if ((trunkMask[i] & through) !== through) continue;
+        if (laneChunk && d === 0 && i % N === JLX) continue; // KcalAI: дорога прогулки прямая нарочно
         const total = 1 + runLen[i * 4 + d] + runLen[i * 4 + d + 2];
         const lim = runEdge[i * 4 + d] || runEdge[i * 4 + d + 2] ? cfg.maxBorderRun : cfg.maxInnerRun;
         if (total > lim) return false;
@@ -1054,6 +1076,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
   }
 
   // ------------------------------------------------------------ validation of a solved chunk
+  let laneChunk = false; // KcalAI: чанк с дорогой прогулки — её прямую колонну проверка прямых отрезков пропускает
   function validate() {
     // 1. every path cell hangs on the trunk road (no orphan lanes / house pairs)
     seen.fill(0);
@@ -1085,6 +1108,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
       const dB = axis === 0 ? 2 : 1; // s / e side
       for (let s = 1; s <= 2; s++) {
         for (let a = 0; a < N; a++) {
+          if (laneChunk && axis === 0 && a === JLX) continue;
           let run = 0;
           let fromBorder = false;
           for (let b = 0; b < N; b++) {
@@ -1114,6 +1138,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
 
   function generate(cx, cz) {
     const isOrigin = cx === 0 && cz === 0;
+    laneChunk = cx === JKX;
     originChunk = isOrigin;
     const X = crossings(cx, cz);
     computeFields(cx, cz);

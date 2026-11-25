@@ -22,16 +22,12 @@ function h2(seed, x, y, k) {
   return (h >>> 0) / 4294967296;
 }
 
+// KcalAI: зоны — полосами поперёк пути на север: каждый ряд площадок (BIOME_SITE клеток) — следующая зона,
+// все пять по очереди, края остаются волнистыми. Прогулка проходит их равномерно.
+const JOURNEY = [0, 3, 4, 2, 1]; // осенние поля, цветущий сад, хвойный лес, снег, пустыня
 function siteBiome(seed, gx, gy) {
-  if (gx === 0 && gy === 0) return 0;
-  if (gy === 0 && gx === 1) return 1;
-  if (gy === 0 && gx === -1) return 2;
-  if (gx === 0 && gy === 1) return 3;
-  if (gx === 0 && gy === -1) return 4;
-  const r = h2(seed, gx, gy, 3);
-  return r < 0.3 ? 0 : 1 + Math.min(3, Math.floor(((r - 0.3) / 0.7) * 4));
+  return JOURNEY[((-gy % JOURNEY.length) + JOURNEY.length) % JOURNEY.length];
 }
-
 // smooth value noise for the domain warp
 function vnoise(seed, x, y, k) {
   const xi = Math.floor(x); const yi = Math.floor(y);
