@@ -1,6 +1,8 @@
 // KcalAI: панель настроек прогулки поверх страницы — всё, что меняется на лету (window.KcalTune в autopilot.js).
 // Каждый может подогнать вид под себя: панель спрятана под шестерёнку в углу, пока загружен мир прогулки.
 // Значения запоминаются в браузере; «Скопировать» отдаёт их одной строкой, «Сбросить» — к умолчаниям.
+import { biomeAt } from '../src/core/biomes.js';
+
 const KEY = 'kcal.walk.tune';
 const OPEN_KEY = 'kcal.walk.tune.open';
 const ROWS = [
@@ -52,6 +54,20 @@ function start() {
     try { localStorage.setItem(OPEN_KEY, open ? '1' : '0'); } catch { /* приватное окно */ }
   };
   head.addEventListener('click', () => setOpen(body.style.display === 'none'));
+  // НА ВРЕМЯ РАЗРАБОТКИ: слайдер сцен — герой встаёт туда, докуда довели бы N шагов, чтобы посмотреть все зоны.
+  // Не сохраняется и не копируется; следующая загрузка ставит героя по настоящим шагам дня.
+  const ZONES = { heartland: 'поле', desert: 'пустыня', snow: 'снег', blossom: 'сад', pinewood: 'лес' };
+  const scene = document.createElement('label');
+  scene.style.cssText = 'display:grid;gap:3px;padding-bottom:6px;border-bottom:1px solid #3a3328';
+  const now = Math.max(0, (window.KcalWalk && window.KcalWalk.steps) | 0);
+  scene.innerHTML = `<span style="display:flex;justify-content:space-between;color:#e8c47a"><span>Сцена (разработка): шаги</span><b style="color:#f4efe4" data-v></b></span>`
+    + `<input type="range" min="0" max="12000" step="20" value="${now}" style="width:100%;accent-color:#e8c47a">`;
+  const sceneInput = scene.querySelector('input'), sceneShown = scene.querySelector('[data-v]');
+  const zoneOf = (steps) => ZONES[biomeAt(window.__pt.state.seed, 0, Math.round(-steps * 0.35))] || '';
+  const showScene = () => { const v = Number(sceneInput.value); sceneShown.textContent = `${v} · ${zoneOf(v)}`; };
+  sceneInput.addEventListener('input', () => { showScene(); window.KcalPlace && window.KcalPlace(Number(sceneInput.value)); });
+  showScene();
+  body.appendChild(scene);
   for (const [label, key, min, max, step] of ROWS) {
     const row = document.createElement('label');
     row.style.cssText = 'display:grid;gap:3px';
