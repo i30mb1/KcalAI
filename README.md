@@ -218,7 +218,7 @@ iOS собирается на Маке с Xcode: `iosApp/KcalAI.xcodeproj`, фр
 
 Публикация — `.\gradlew.bat :app:publishReleaseBundle` (Gradle Play Publisher): подписанный AAB уходит в production на всех сразу, страницу в Play задача не трогает. Ей нужен ключ сервисного аккаунта `play-service-account.json` в корне репозитория, в git его нет. Заметка к версии — `app/src/main/play/release-notes/ru-RU/default.txt`, до 500 знаков.
 
-Тексты и графика страницы лежат в `fastlane/metadata/android/ru-RU`, иконку и баннер перерисовывает `python tools/play/render_graphics.py`, скриншоты — `python tools/play/render_screenshots.py` (оба через headless Edge или Chrome), политика конфиденциальности — в `docs/privacy-policy.md`.
+Тексты и графика страницы лежат в `fastlane/metadata/android/ru-RU`, иконку и баннер перерисовывает `python tools/play/render_graphics.py`, скриншоты — `python tools/play/render_screenshots.py` (оба через headless Edge или Chrome), политика конфиденциальности — в `docs/privacy-policy.md`; на сайт (https://i30mb1.github.io/kcalai/policy/, соседний репозиторий `i30mb1.github.io`) её собирает `python tools/play/render_policy.py`.
 
 Юнит-тесты покрывают главные правила приложения и не требуют устройства:
 

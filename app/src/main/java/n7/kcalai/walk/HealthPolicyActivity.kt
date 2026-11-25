@@ -24,6 +24,6 @@ class HealthPolicyActivity : Activity() {
 
     companion object {
         /** Та же политика, что на странице приложения в Google Play. */
-        const val PRIVACY_POLICY_URL = "https://github.com/i30mb1/KcalAI/blob/main/docs/privacy-policy.md"
+        const val PRIVACY_POLICY_URL = "https://i30mb1.github.io/kcalai/policy/"
     }
 }
