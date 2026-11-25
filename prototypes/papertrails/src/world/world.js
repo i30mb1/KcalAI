@@ -1382,11 +1382,6 @@ export function createWorld({ scene, assets, wfc, materials, quality }) {
       }
       book.settle();
     },
-    /** KcalAI: куда сейчас идёт клетка (cx, cz): 1 — встаёт или стоит, 0 — лежит на странице. По нему встают свои предметы прогулки. */
-    cellTarget(cx, cz) {
-      const rec = lookup(cx, cz);
-      return rec !== null && rec.shown && rec.fold.target === 1 ? 1 : 0;
-    },
     /** Can the traveller stand at world (x,z)? Rivers/ponds block unless on a bridge; trees/houses block softly. */
     isWalkable(x, z) {
       return clearanceAt(x, z) > 0;

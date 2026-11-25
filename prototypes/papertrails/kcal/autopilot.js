@@ -12,6 +12,7 @@ const out = { x: 0, z: 0 };
 window.KcalTune = {
   pitch: 36, distance: 10, fov: 27, screenUp: 1.1, speed: null, reach: 0, radius: 0.2, heroScale: 1, heroLeft: 1,
   glassTint: 0.62, glassBlur: 10,
+  farBlur: 1.0, blurPx: 12.5, sharpBand: 0.36,
   apply() {
     const root = document.documentElement.style;                 // стекло колонки дневника над миром (index.html)
     root.setProperty('--glass-tint', this.glassTint);
@@ -21,6 +22,9 @@ window.KcalTune = {
     pt.follow.setPose({ pitchDeg: this.pitch, distance: this.distance, fov: this.fov, screenUp: this.screenUp, yawDeg: 0 });
     pt.state.viewReach = this.reach;                     // ± клеток к кругу (5), где встаёт окружение
     pt.CONFIG.player.radius = this.radius;               // насколько герой держится от карточек
+    pt.CONFIG.dof.farGain = this.farBlur;                // размытие вдали (tilt-shift, src/render/post.js)
+    pt.CONFIG.dof.maxBlurPx = this.blurPx;               // сила размытия, радиус при 1080p
+    pt.CONFIG.dof.focusBand = this.sharpBand;            // доля кадра вокруг героя, что остаётся резкой
     pt.traveller.model.scale.setScalar(this.heroScale);
     const cam = pt.follow.camera, W = innerWidth, H = innerHeight;
     const target = W / 2 + ((W > 1100 ? (W - 760) / 4 : W / 2) - W / 2) * this.heroLeft;

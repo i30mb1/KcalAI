@@ -6,9 +6,9 @@
 // the traveller show theirs too. Walking onto a piece picks it up for good (progress.collect, key "cx,cz").
 //
 // Rendering: ONE InstancedMesh (10 triangles per piece: the card, a strut and a round glue tab), one small icon atlas.
-// The atlas is drawn procedurally first; public/textures/art/game_icons.(png|json) cells named "scrap_<kind>"
-// replace the drawn shapes when they exist. Per frame nothing is allocated: slots are pooled, matrices and the
-// per-instance animation attribute are written in place.
+// KcalAI: the pieces are food — printed by kcal/food-prints.js; which food lies in a cell comes from its zone's set
+// (THEME) and the cell hash, the night star stays a star. Per frame nothing is allocated: slots are pooled, matrices
+// and the per-instance animation attribute are written in place.
 import * as THREE from 'three';
 import { CONFIG, TILE_SIZE } from '../core/config.js';
 import { bus } from '../core/events.js';
@@ -17,6 +17,7 @@ import { biomeAt } from '../core/biomes.js';
 import { rotToY } from '../core/models.js';
 import { SCRAPS, SCRAP_IDS } from './catalog.js';
 import * as gameConfig from '../core/config/game.js';
+import { FOOD_KINDS, THEME, drawFood } from '../../kcal/food-prints.js';
 
 const DEFAULTS = {
   density: 0.24, starDensity: 0.055, size: 0.21, starSize: 0.22, tilt: 0.62,
@@ -28,10 +29,12 @@ const DEFAULTS = {
 };
 
 const TAU = Math.PI * 2;
-const COLS = 4;
-const ROWS = 2;
+const COLS = 8;
+const ROWS = 4;
 const CELL = 128;
-const TAB_CELL = 6; // solid paper core: strut + glue tab
+const STAR_CELL = FOOD_KINDS.length; // food first, then the night star
+const TAB_CELL = STAR_CELL + 1; // solid paper core: strut + glue tab
+const HASH_FOOD = 7741;
 const FREE = 0; const IDLE = 1; const PICK = 2; const FX = 3;
 const cellKey = (cx, cz) => (cx + 32768) * 65536 + (cz + 32768);
 
@@ -46,67 +49,8 @@ function star(g, n, r0, r1, rot = -Math.PI / 2) {
 }
 function poly(g, p) { g.beginPath(); g.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]); g.closePath(); }
 
-/** Procedural fallback shapes, drawn in a [-1, 1] box (y down). `edge` = the cut paper core around the shape. */
+/** The night star, drawn in a [-1, 1] box (y down). */
 const DRAW = {
-  leaf(g, P) {
-    const pts = [0, -0.95, 0.26, -0.5, 0.74, -0.62, 0.6, -0.14, 0.94, 0.12, 0.5, 0.3, 0.56, 0.62, 0.14, 0.48, 0.05, 0.62, -0.05, 0.62, -0.14, 0.48, -0.56, 0.62, -0.5, 0.3, -0.94, 0.12, -0.6, -0.14, -0.74, -0.62, -0.26, -0.5];
-    g.lineJoin = 'round';
-    g.fillStyle = P.cutEdge; g.strokeStyle = P.cutEdge; g.lineWidth = 0.16; poly(g, pts); g.fill(); g.stroke();
-    g.fillStyle = P.terracotta; poly(g, pts); g.fill();
-    g.fillStyle = P.cutEdge; g.fillRect(-0.06, 0.5, 0.12, 0.46);
-    g.fillStyle = P.brown; g.fillRect(-0.035, 0.5, 0.07, 0.42);
-    g.strokeStyle = P.ochre; g.lineWidth = 0.06; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(0, 0.5); g.lineTo(0, -0.7); g.moveTo(0, 0.2); g.lineTo(0.55, -0.3); g.moveTo(0, 0.2); g.lineTo(-0.55, -0.3); g.moveTo(0, 0.34); g.lineTo(0.6, 0.2); g.moveTo(0, 0.34); g.lineTo(-0.6, 0.2); g.stroke();
-  },
-  shell(g, P) {
-    g.fillStyle = P.cutEdge; g.beginPath(); g.arc(0, 0, 0.94, 0, TAU); g.fill();
-    g.fillStyle = P.kraft; g.beginPath(); g.arc(0, 0, 0.82, 0, TAU); g.fill();
-    g.fillStyle = P.paper; g.beginPath(); g.arc(-0.06, -0.06, 0.68, 0, TAU); g.fill();
-    g.strokeStyle = P.brown; g.lineWidth = 0.1; g.lineCap = 'round'; g.beginPath();
-    for (let a = 0; a <= 15.2; a += 0.15) { const r = 0.05 + a * 0.048; const x = Math.cos(a) * r; const y = Math.sin(a) * r; if (a === 0) g.moveTo(x, y); else g.lineTo(x, y); }
-    g.stroke();
-    g.lineWidth = 0.05; g.strokeStyle = P.terracotta; g.beginPath();
-    for (let i = 0; i < 9; i++) { const a = 9.6 + i * 0.62; const r = 0.05 + a * 0.048; g.moveTo(Math.cos(a) * (r + 0.02), Math.sin(a) * (r + 0.02)); g.lineTo(Math.cos(a) * (r + 0.17), Math.sin(a) * (r + 0.17)); }
-    g.stroke();
-  },
-  snowflake(g, P) {
-    const arms = (w, col) => {
-      g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round'; g.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const a = (i * Math.PI) / 3 - Math.PI / 2; const c = Math.cos(a); const s = Math.sin(a);
-        g.moveTo(0, 0); g.lineTo(c * 0.82, s * 0.82);
-        for (const [d, l] of [[0.42, 0.26], [0.64, 0.18]]) for (const sg of [-1, 1]) {
-          const b = a + sg * 1.0; g.moveTo(c * d, s * d); g.lineTo(c * d + Math.cos(b) * l, s * d + Math.sin(b) * l);
-        }
-      }
-      g.stroke();
-    };
-    arms(0.3, P.teal); arms(0.2, '#cfe1ee'); arms(0.1, '#ffffff');
-    g.fillStyle = P.teal; star(g, 6, 0.26, 0.15); g.fill();
-    g.fillStyle = '#ffffff'; star(g, 6, 0.17, 0.1); g.fill();
-  },
-  petal(g, P) {
-    const petals = (r, rx, ry, col) => {
-      g.fillStyle = col;
-      for (let i = 0; i < 5; i++) { const a = (i * TAU) / 5 - Math.PI / 2; g.beginPath(); g.ellipse(Math.cos(a) * r, Math.sin(a) * r, rx, ry, a, 0, TAU); g.fill(); }
-    };
-    petals(0.5, 0.48, 0.38, P.cutEdge);
-    petals(0.5, 0.4, 0.3, '#f29db4');
-    petals(0.42, 0.24, 0.15, '#fbd3dc');
-    g.fillStyle = P.rust; g.beginPath(); g.arc(0, 0, 0.2, 0, TAU); g.fill();
-    g.fillStyle = P.ochre; g.beginPath(); g.arc(0, 0, 0.13, 0, TAU); g.fill();
-  },
-  feather(g, P) {
-    g.save(); g.rotate(0.5);
-    g.fillStyle = P.cutEdge; g.beginPath(); g.ellipse(0, -0.12, 0.42, 0.84, 0, 0, TAU); g.fill(); g.fillRect(-0.07, 0.5, 0.14, 0.48);
-    g.fillStyle = P.brown; g.beginPath(); g.ellipse(0, -0.12, 0.33, 0.75, 0, 0, TAU); g.fill();
-    g.save(); g.beginPath(); g.ellipse(0, -0.12, 0.33, 0.75, 0, 0, TAU); g.clip();
-    g.strokeStyle = P.paper; g.lineWidth = 0.11;
-    for (let y = -0.7; y < 0.7; y += 0.3) { g.beginPath(); g.moveTo(-0.5, y + 0.22); g.lineTo(0, y); g.lineTo(0.5, y + 0.22); g.stroke(); }
-    g.restore();
-    g.strokeStyle = P.ochre; g.lineWidth = 0.055; g.lineCap = 'round'; g.beginPath(); g.moveTo(0, -0.8); g.lineTo(0, 0.92); g.stroke();
-    g.restore();
-  },
   star(g, P) {
     g.lineJoin = 'round';
     g.fillStyle = P.cutEdge; star(g, 5, 0.98, 0.46); g.fill();
@@ -120,25 +64,6 @@ const DRAW = {
     g.globalAlpha = 1;
   },
 };
-
-/** Named pixel rect [x, y, w, h] (top-down) from a game_icons.json of any of the usual shapes, or null. */
-function iconRect(json, name, iw, ih) {
-  if (!json) return null;
-  const table = json.sprites || json.cells || json.icons || json.frames || json;
-  let e = table && table[name];
-  if (!e && Array.isArray(json.names)) {
-    // regular grid: { names: [...], cols, rows } or { grid: [cols, rows] }
-    const i = json.names.indexOf(name);
-    const cols = json.cols || (json.grid && json.grid[0]); const rows = json.rows || (json.grid && json.grid[1]);
-    if (i >= 0 && cols && rows) { const w = iw / cols; const h = ih / rows; return [(i % cols) * w, Math.floor(i / cols) * h, w, h]; }
-  }
-  if (!e) return null;
-  if (e.rect) e = e.rect; else if (e.frame) e = e.frame;
-  let r = Array.isArray(e) ? e : (e.x !== undefined ? [e.x, e.y, e.w ?? e.width, e.h ?? e.height] : null);
-  if (!r || r.length < 4 || !(r[2] > 0) || !(r[3] > 0)) return null;
-  if (r[0] <= 1 && r[1] <= 1 && r[2] <= 1 && r[3] <= 1) r = [r[0] * iw, r[1] * ih, r[2] * iw, r[3] * ih]; // normalised
-  return r;
-}
 
 function makeAtlas() {
   const P = CONFIG.palette;
@@ -155,35 +80,23 @@ function makeAtlas() {
   tex.anisotropy = 4;
   const origin = (c) => [(c % COLS) * CELL, Math.floor(c / COLS) * CELL];
 
-  function drawFallback(c, kind) {
+  function drawStar(c) {
     const [x, y] = origin(c);
     g.clearRect(x, y, CELL, CELL);
     g.save();
     g.beginPath(); g.rect(x, y, CELL, CELL); g.clip();
     g.translate(x + CELL / 2, y + CELL / 2); g.scale(CELL * 0.45, CELL * 0.45);
-    DRAW[kind](g, P);
+    DRAW.star(g, P);
     g.restore();
   }
-  function drawIcon(c, img, r, backing) {
+  function drawFoodCell(c, kind) {
     const [x, y] = origin(c);
-    const m = CELL * 0.05; const box = CELL - m * 2;
-    const k = Math.min(box / r[2], box / r[3]);
     g.clearRect(x, y, CELL, CELL);
-    g.imageSmoothingQuality = 'high';
-    const dx = x + (CELL - r[2] * k) / 2; const dy = y + (CELL - r[3] * k) / 2;
-    if (backing) {
-      // a pale piece on pale ground (the snowflake on snow): mount it on a darker backing sheet cut a little larger
-      const o = document.createElement('canvas'); o.width = CELL; o.height = CELL;
-      const og = o.getContext('2d');
-      og.imageSmoothingQuality = 'high';
-      og.drawImage(img, r[0], r[1], r[2], r[3], dx - x, dy - y, r[2] * k, r[3] * k);
-      og.globalCompositeOperation = 'source-in'; og.fillStyle = backing; og.fillRect(0, 0, CELL, CELL);
-      const rim = CELL * 0.035;
-      g.save(); g.beginPath(); g.rect(x, y, CELL, CELL); g.clip();
-      for (let i = 0; i < 12; i++) g.drawImage(o, x + Math.cos((i / 12) * TAU) * rim, y + Math.sin((i / 12) * TAU) * rim);
-      g.restore();
-    }
-    g.drawImage(img, r[0], r[1], r[2], r[3], dx, dy, r[2] * k, r[3] * k);
+    g.save();
+    g.beginPath(); g.rect(x, y, CELL, CELL); g.clip();
+    g.translate(x + CELL * 0.04, y + CELL * 0.04); g.scale(CELL * 0.0092, CELL * 0.0092);
+    drawFood(g, kind);
+    g.restore();
   }
   /** Canvas -> texture (rows flipped: v up). Transparent pixels take the cell's mean colour so mips do not darken the rim. */
   function upload() {
@@ -201,22 +114,11 @@ function makeAtlas() {
     tex.needsUpdate = true;
   }
 
-  SCRAP_IDS.forEach((kind, i) => { if (DRAW[kind]) drawFallback(i, kind); });
+  FOOD_KINDS.forEach((kind, i) => drawFoodCell(i, kind));
+  drawStar(STAR_CELL);
   { const [x, y] = origin(TAB_CELL); g.fillStyle = P.cutEdge; g.fillRect(x, y, CELL, CELL); }
   upload();
-
-  let art = false;
-  /** Replace the drawn shapes by the art icons named "scrap_<kind>" (any that exist). */
-  function useIcons(img, json) {
-    let n = 0;
-    SCRAP_IDS.forEach((kind, i) => {
-      const r = iconRect(json, 'scrap_' + kind, img.naturalWidth || img.width, img.naturalHeight || img.height);
-      if (r) { drawIcon(i, img, r, kind === 'snowflake' ? '#5f86b4' : null); n++; }
-    });
-    if (n) { upload(); art = true; }
-    return n;
-  }
-  return { tex, useIcons, get art() { return art; } };
+  return { tex };
 }
 
 // ---- geometry: card (leans + rocks), strut (leans), glue tab (flat on the page) ---------------------------------
@@ -300,8 +202,12 @@ export function createScraps(ctx) {
   const HASH_B = ((seed | 0) ^ 0x1b873593) >>> 0;
   const KIND_OF_BIOME = {};
   for (const id of SCRAP_IDS) if (SCRAPS[id].biome) KIND_OF_BIOME[SCRAPS[id].biome] = id;
-  const KIND_INDEX = {};
-  SCRAP_IDS.forEach((id, i) => { KIND_INDEX[id] = i; });
+  /** Клетка атласа куска: звезда — звезда; иначе еда из набора его зоны, своя у каждой клетки мира. */
+  function cellOf(kind, cx, cz) {
+    if (kind === 'star') return STAR_CELL;
+    const set = THEME[SCRAPS[kind].biome] || FOOD_KINDS;
+    return FOOD_KINDS.indexOf(set[Math.floor(hash2f(cx, cz, HASH_FOOD) * set.length)]);
+  }
 
   // ---- mesh ------------------------------------------------------------------------------------------------
   const atlas = makeAtlas();
@@ -354,18 +260,6 @@ vec3 scrapBend( vec3 p ) {
   for (let i = 0; i < N; i++) M[i * 16 + 15] = 1;
   scene.add(mesh);
 
-  // art icons, when the art agent's sheet exists (vite answers a missing file with index.html: the parse then fails)
-  let disposed = false;
-  (async () => {
-    try {
-      const res = await fetch(new URL('../../public/textures/art/', import.meta.url).href + 'game_icons.json');
-      if (!res.ok) return;
-      const json = await res.json();
-      const img = new Image();
-      img.onload = () => { if (!disposed) atlas.useIcons(img, json); };
-      img.src = new URL('../../public/textures/art/', import.meta.url).href + '' + (json.image || json.file || 'game_icons.png');
-    } catch { /* no icon sheet: the drawn shapes stay */ }
-  })();
 
   // ---- placement -----------------------------------------------------------------------------------------------
   const boxCache = new Map(); // tile model -> prop footprints
@@ -445,8 +339,8 @@ vec3 scrapBend( vec3 p ) {
   let clock = 0;
   let live = 0;
 
-  function setKind(sl, kind) {
-    const c = KIND_INDEX[kind] || 0;
+  function setKind(sl, kind, cx, cz) {
+    const c = cellOf(kind, cx, cz);
     const o = sl.i * 4;
     const e = 0.5 / (COLS * CELL); // half-texel inset: no bleeding from the neighbour cell
     rectArr[o] = (c % COLS) / COLS + e; rectArr[o + 1] = 1 - (Math.floor(c / COLS) + 1) / ROWS + e;
@@ -512,7 +406,7 @@ vec3 scrapBend( vec3 p ) {
           sl.state = IDLE; sl.def = d; sl.ck = k; sl.s = 0; sl.delay = 0; sl.t = 0;
           sl.x = d.x; sl.y = d.y; sl.z = d.z;
           sl.ph = hash2f(cx, cz, HASH_B + 3);
-          setKind(sl, d.kind);
+          setKind(sl, d.kind, d.cx, d.cz);
           byCell.set(k, sl);
         }
         sl.seen = scanId; sl.stale = false;
@@ -535,7 +429,7 @@ vec3 scrapBend( vec3 p ) {
         if (!f) break;
         f.state = FX; f.def = null; f.t = 0; f.x = d.x; f.y = d.y; f.z = d.z;
         f.ang = (i / S.flourishCount) * TAU + 0.3; f.ph = i / S.flourishCount;
-        setKind(f, d.kind);
+        setKind(f, d.kind, d.cx, d.cz);
       }
     }
   }
@@ -633,7 +527,6 @@ vec3 scrapBend( vec3 p ) {
       update(0);
     },
     dispose() {
-      disposed = true;
       for (const off of offs) off();
       scene.remove(mesh);
       geo.dispose(); mat.dispose(); atlas.tex.dispose();
@@ -659,7 +552,6 @@ vec3 scrapBend( vec3 p ) {
       for (let z = cz - r; z <= cz + r; z++) for (let x = cx - r; x <= cx + r; x++) { const d = defAt(x, z); if (d) out.push({ x: d.x, z: d.z, kind: d.kind, key: d.key, collected: progress.collected(d.key) }); }
       return out;
     },
-    get art() { return atlas.art; },
     mesh,
     trianglesPerPiece: TRIS_PER_PIECE,
   };

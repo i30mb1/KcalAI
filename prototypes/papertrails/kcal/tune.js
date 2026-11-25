@@ -1,7 +1,8 @@
 // KcalAI: панель настроек прогулки поверх страницы — всё, что меняется на лету (window.KcalTune в autopilot.js).
-// Видна, пока прогулку включает адрес со ?walk. Значения запоминаются в браузере; «Скопировать» отдаёт их
-// одной строкой, чтобы зашить в код.
+// Видна на странице дневника, пока загружен мир прогулки; сворачивается в плашку. Значения запоминаются в
+// браузере; «Скопировать» отдаёт их одной строкой, чтобы зашить в код.
 const KEY = 'kcal.walk.tune';
+const OPEN_KEY = 'kcal.walk.tune.open';
 const ROWS = [
   ['Камера: наклон, °', 'pitch', 15, 80, 1],
   ['Камера: удаление', 'distance', 5, 25, 0.5],
@@ -14,6 +15,9 @@ const ROWS = [
   ['Скорость, км/ч (0 — как дорожка)', 'speed', 0, 8, 0.5],
   ['Стекло дневника: плотность', 'glassTint', 0, 1, 0.02],
   ['Стекло дневника: размытие, px', 'glassBlur', 0, 30, 1],
+  ['Размытие вдали', 'farBlur', 0, 3, 0.05],
+  ['Размытие: сила, px', 'blurPx', 0, 25, 0.5],
+  ['Резкая полоса вокруг героя', 'sharpBand', 0.1, 0.9, 0.02],
 ];
 
 function start() {
@@ -27,7 +31,20 @@ function start() {
   box.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:3;width:250px;padding:12px 14px;border-radius:14px;'
     + 'background:rgba(28,25,20,.86);color:#f4efe4;font:12px/1.35 system-ui,sans-serif;display:grid;gap:8px;'
     + 'backdrop-filter:blur(8px);box-shadow:0 6px 24px rgba(0,0,0,.3)';
-  box.innerHTML = '<b style="font-size:13px">Прогулка — настройки</b>';
+  // заголовок сворачивает панель в плашку и раскрывает обратно; состояние запоминается
+  const head = document.createElement('b');
+  head.style.cssText = 'font-size:13px;cursor:pointer;display:flex;justify-content:space-between;gap:12px';
+  box.appendChild(head);
+  const body = document.createElement('div');
+  body.style.cssText = 'display:grid;gap:8px';
+  box.appendChild(body);
+  const setOpen = (open) => {
+    body.style.display = open ? 'grid' : 'none';
+    box.style.width = open ? '250px' : 'auto';
+    head.innerHTML = open ? '<span>Прогулка — настройки</span><span>–</span>' : '<span>Прогулка ⚙</span>';
+    try { localStorage.setItem(OPEN_KEY, open ? '1' : '0'); } catch { /* приватное окно */ }
+  };
+  head.addEventListener('click', () => setOpen(body.style.display === 'none'));
   for (const [label, key, min, max, step] of ROWS) {
     const row = document.createElement('label');
     row.style.cssText = 'display:grid;gap:3px';
@@ -41,7 +58,7 @@ function start() {
       shown.textContent = v;
       tune.apply(); save();
     });
-    box.appendChild(row);
+    body.appendChild(row);
   }
   const buttons = document.createElement('div');
   buttons.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px';
@@ -59,11 +76,12 @@ function start() {
     navigator.clipboard?.writeText(text).then(() => { copy.textContent = 'Скопировано'; }, () => { copy.textContent = text; });
   });
   btn('Сбросить', () => { try { localStorage.removeItem(KEY); } catch { /* ничего */ } location.reload(); });
-  box.appendChild(buttons);
+  body.appendChild(buttons);
   document.body.appendChild(box);
+  let open = true;
+  try { open = localStorage.getItem(OPEN_KEY) !== '0'; } catch { /* по умолчанию раскрыта */ }
+  setOpen(open);
   tune.apply();
 }
 
-if (/[?&]walk\b/.test(location.search)) {
-  const wait = setInterval(() => { if (window.__pt && window.KcalTune) { clearInterval(wait); start(); } }, 300);
-}
+const wait = setInterval(() => { if (window.__pt && window.KcalTune) { clearInterval(wait); start(); } }, 300);

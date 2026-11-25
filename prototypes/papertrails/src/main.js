@@ -97,7 +97,6 @@ async function boot() {
     state.listener.x = p.x; state.listener.z = p.z;
     state.listener.rightX = _right.x / rl; state.listener.rightZ = _right.z / rl;
     world.update(dt, p, traveller.moveDir);
-    if (window.__ptTick) window.__ptTick(dt); // KcalAI: свои предметы прогулки (walk/kcal/food.js) встают вместе с клетками
     views.update(dt);
     follow.update(dt, traveller);
     daynight.update(dt);
@@ -115,7 +114,7 @@ async function boot() {
   }
 
   const loop = createLoop({ update, render });
-  window.__pt = { traveller, controls, world, wfc, follow, daynight, life, state, bus, CONFIG, scene, materials }; // KcalAI: доступ для страницы дневника
+  window.__pt = { traveller, controls, world, wfc, follow, daynight, life, state, bus, CONFIG }; // KcalAI: доступ для страницы дневника
 
   // ---- resize -----------------------------------------------------------------------------------
   function resize() {
