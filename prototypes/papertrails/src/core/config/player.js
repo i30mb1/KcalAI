@@ -4,7 +4,7 @@ export const player = {
   runMul: 1.8, // Shift held: 1.8 x 1.15 = 2.07 (0.9 x the old speed)
   slowMul: 0.6, // Ctrl toggles a slow stroll: 0.6 x 1.15 = 0.69 (0.3 x the old speed)
   accel: 17, // units / s^2 toward the desired velocity (0 -> 90 % speed in ~0.13 s)
-  radius: 0.12, // collision radius: room (world.clearance) the feet keep from blockers (was an 8-probe ring at 0.16)
+  radius: 0.2, // KcalAI: Зёрнышко с ручками шире плоского путника (было 0.12). collision radius: room (world.clearance) the feet keep from blockers (was an 8-probe ring at 0.16)
   slideMin: 0.6, // fraction of the speed kept while sliding along / walking round an obstacle hit head-on
   // shortfall pass: held against an obstacle for roundAfter seconds he walks round it (follows its outline at roundSpeed x
   // speed) until the way on is free, for at most roundMax world units. round: false = he just stops, as before.

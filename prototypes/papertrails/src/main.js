@@ -113,7 +113,7 @@ async function boot() {
   }
 
   const loop = createLoop({ update, render });
-  window.__pt = { traveller, controls, world, wfc, follow, daynight, life, state, bus }; // KcalAI: доступ для страницы дневника
+  window.__pt = { traveller, controls, world, wfc, follow, daynight, life, state, bus, CONFIG }; // KcalAI: доступ для страницы дневника
 
   // ---- resize -----------------------------------------------------------------------------------
   function resize() {
