@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,10 +26,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.datetime.LocalDate
+import n7.kcalai.model.DEFAULT_STEPS_GOAL
 import n7.kcalai.model.formatDateCaps
+import n7.kcalai.model.stepsLabel
 import n7.kcalai.model.formatWeekdayShort
 import n7.kcalai.repositories.DaySummary
 import n7.kcalai.ui.KcalTheme
+import n7.kcalai.ui.MiniBar
 
 /**
  * Калории за неделю: семь столбиков и линия цели.
@@ -49,6 +53,9 @@ fun WeekChart(
     modifier: Modifier = Modifier,
     selected: Long = days.lastOrNull()?.dateEpochDay ?: 0,
     onSelectDay: ((Long) -> Unit)? = null,
+    /** Шаги по дням — тонкой полоской под столбиком до [stepsGoal]; пусто — строки полосок нет. */
+    steps: Map<Long, Int> = emptyMap(),
+    stepsGoal: Int = DEFAULT_STEPS_GOAL,
 ) {
     if (days.isEmpty()) return
 
@@ -56,7 +63,7 @@ fun WeekChart(
     // переписку этого дня. Столбик бывает в две точки высотой, и целиться
     // в него самого было бы издевательством.
     Box(modifier.fillMaxWidth()) {
-        WeekPlot(days, selected)
+        WeekPlot(days, selected, steps, stepsGoal)
         if (onSelectDay != null) {
             Row(Modifier.matchParentSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 days.forEach { day ->
@@ -68,7 +75,8 @@ fun WeekChart(
                             .clip(RoundedCornerShape(6.dp))
                             .clickable { onSelectDay(day.dateEpochDay) }
                             .semantics {
-                                contentDescription = "${formatDateCaps(date)}, ${day.kcal} ккал"
+                                contentDescription = "${formatDateCaps(date)}, ${day.kcal} ккал" +
+                                    steps[day.dateEpochDay]?.let { ", ${stepsLabel(it)} шагов" }.orEmpty()
                                 this.selected = day.dateEpochDay == selected
                             }
                     )
@@ -79,12 +87,15 @@ fun WeekChart(
 }
 
 @Composable
-private fun WeekPlot(days: List<DaySummary>, selected: Long, modifier: Modifier = Modifier) {
+private fun WeekPlot(days: List<DaySummary>, selected: Long, steps: Map<Long, Int>, stepsGoal: Int, modifier: Modifier = Modifier) {
 
     // Пустой недели нет смысла рисовать: семь серых черточек занимают
     // полтора сантиметра шапки и ничего не говорят. Остаётся строка дней.
     if (!hasWeekData(days)) {
-        WeekdayRow(days, selected, modifier)
+        Column(modifier) {
+            if (steps.isNotEmpty()) StepsRow(days, steps, stepsGoal)
+            WeekdayRow(days, selected, Modifier.padding(top = if (steps.isNotEmpty()) 5.dp else 0.dp))
+        }
         return
     }
 
@@ -129,9 +140,35 @@ private fun WeekPlot(days: List<DaySummary>, selected: Long, modifier: Modifier 
 
         }
 
+        if (steps.isNotEmpty()) StepsRow(days, steps, stepsGoal, Modifier.padding(top = 5.dp))
         WeekdayRow(days, selected, Modifier.padding(top = 5.dp))
     }
 }
+
+/**
+ * Шаги недели — тонкой полоской под каждым днём, цветом шагов, до цели шагов: видно, как шли дни,
+ * не мешая калориям. День без шагов — пустое место той же высоты: пустые дорожки под каждым днём
+ * читались бы чёрточками-заусенцами.
+ */
+@Composable
+private fun StepsRow(days: List<DaySummary>, steps: Map<Long, Int>, goal: Int, modifier: Modifier = Modifier) {
+    val fill = KcalTheme.colors.steps.fill
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        days.forEach { day ->
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                val walked = steps[day.dateEpochDay] ?: 0
+                if (walked > 0) {
+                    MiniBar(walked.toFloat() / goal.coerceAtLeast(1), fill, Modifier.fillMaxWidth(STEP_BAR_SHARE), height = STEP_BAR_HEIGHT)
+                } else {
+                    Spacer(Modifier.height(STEP_BAR_HEIGHT))
+                }
+            }
+        }
+    }
+}
+
+private const val STEP_BAR_SHARE = 0.7f
+private val STEP_BAR_HEIGHT = 3.dp
 
 /** Есть ли что рисовать: хоть один день с едой или с целью. */
 fun hasWeekData(days: List<DaySummary>): Boolean = days.any { it.kcal > 0 || it.goalKcal != null }

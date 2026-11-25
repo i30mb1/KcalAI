@@ -50,6 +50,11 @@ data class KcalColors(
     val carb: MacroColors,
     /** Клетчатка — тема Зёрнышка: тот же зелёный, только темнее, цвета его хохолка. */
     val fiber: MacroColors,
+    /**
+     * Шаги — свой синий: ни с одним макросом не путается, и полоска шагов под днём недели
+     * читается отдельно от калорий.
+     */
+    val steps: MacroColors,
     val isDark: Boolean,
 )
 
@@ -90,6 +95,12 @@ val LightKcalColors = KcalColors(
         text = Color(0xFF24502C),
         onBubble = Color(0xFFCFE6A8),
     ),
+    steps = MacroColors(
+        fill = Color(0xFF3B7BB8),
+        tile = Color(0xFFDCE8F3),
+        text = Color(0xFF24527F),
+        onBubble = Color(0xFF9CC5EC),
+    ),
     isDark = false,
 )
 
@@ -129,6 +140,12 @@ val DarkKcalColors = KcalColors(
         tile = Color(0xFF22331F),
         text = Color(0xFFBFE3A3),
         onBubble = Color(0xFF3A5F22),
+    ),
+    steps = MacroColors(
+        fill = Color(0xFF6AA6DE),
+        tile = Color(0xFF1E2A36),
+        text = Color(0xFF9CC5EC),
+        onBubble = Color(0xFF24527F),
     ),
     isDark = true,
 )

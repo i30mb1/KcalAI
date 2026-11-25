@@ -28,6 +28,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import n7.kcalai.model.DEFAULT_HEIGHT_CM
 import n7.kcalai.model.Mascot
+import n7.kcalai.model.heightInput
+import n7.kcalai.model.stepsGoalInput
 import n7.kcalai.model.stepsLabel
 import n7.kcalai.ui.KcalShapes
 import n7.kcalai.ui.KcalTheme
@@ -41,7 +43,7 @@ import n7.kcalai.ui.WideButton
  */
 @Composable
 fun StepsPill(item: FeedItem.Steps, onOpen: () -> Unit) {
-    val palette = KcalTheme.colors.carb
+    val palette = KcalTheme.colors.steps
     val shape = RoundedCornerShape(percent = 50)
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Row(
@@ -131,7 +133,7 @@ fun StepsSheet(goal: Int, heightCm: Int?, onConfirm: (goal: Int, heightCm: Int?)
     }
 }
 
-/** Поле шита шагов: число и единица; цель — в зелёном Зёрнышка, рост — нейтральный. */
+/** Поле шита шагов: число и единица; цель — в цвете шагов, рост — нейтральный. */
 @Composable
 private fun StepsField(
     value: String,
@@ -147,11 +149,11 @@ private fun StepsField(
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(KcalShapes.tile))
-            .background(if (tinted) colors.carb.tile else colors.chip)
+            .background(if (tinted) colors.steps.tile else colors.chip)
             .padding(horizontal = 11.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (tinted) StepsIcon(colors.carb.text, Modifier.padding(end = 6.dp), size = 14.dp)
+        if (tinted) StepsIcon(colors.steps.text, Modifier.padding(end = 6.dp), size = 14.dp)
         NumberInput(
             value = value,
             onValueChange = onValueChange,
@@ -160,15 +162,9 @@ private fun StepsField(
             imeAction = imeAction,
             modifier = Modifier.weight(1f).semantics { contentDescription = description },
         )
-        Text(" $unit", style = KcalTheme.type.macro, color = if (tinted) colors.carb.text else colors.text3)
+        Text(" $unit", style = KcalTheme.type.macro, color = if (tinted) colors.steps.text else colors.text3)
     }
 }
-
-/** Цель шагов из набранного: от тысячи до пятидесяти тысяч; иначе — не цель. */
-fun stepsGoalInput(text: String): Int? = text.trim().toIntOrNull()?.takeIf { it in STEPS_GOAL_RANGE }
-
-/** Рост из набранного, см: те же границы, что у помощника цели. */
-fun heightInput(text: String): Int? = text.trim().toIntOrNull()?.takeIf { it in HEIGHT_RANGE }
 
 /** В шите шагов Зёрнышко у реплики, остальные за сценой: полей-домиков у них здесь нет. */
 internal fun stepsSheetPlaces(): Map<Mascot, MascotPlace> =
@@ -178,7 +174,6 @@ internal fun stepsSheetPlaces(): Map<Mascot, MascotPlace> =
 
 private val STEPS_LINE = SheetLine(Mascot.GRAIN, "Сколько шагов в день берём? По росту мерю шаг на дорожке.")
 private val STEP_PRESETS = listOf(6_000, 8_000, 10_000, 12_000)
-private val STEPS_GOAL_RANGE = 1_000..50_000
 private const val HEIGHT_DIGITS = 3
 private const val STEPS_FIELD_WEIGHT = 1.4f
 private const val PILL_ALPHA = 0.12f

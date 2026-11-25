@@ -20,6 +20,8 @@ import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.model.DEFAULT_STEPS_GOAL
+import n7.kcalai.model.HEIGHT_CM_RANGE
+import n7.kcalai.model.STEPS_GOAL_RANGE
 import n7.kcalai.model.PageGrace
 import n7.kcalai.model.TreadmillSample
 import n7.kcalai.model.owner
@@ -86,6 +88,9 @@ sealed interface ToPhone {
 
     /** Сколько держать страницу, когда телефон убран. */
     data class SetGrace(val grace: PageGrace) : ToPhone
+
+    /** Цель шагов и рост — из панели шагов. [heightCm] `null` — рост не трогать. */
+    data class SetSteps(val goal: Int, val heightCm: Int?) : ToPhone
 
     /** «Выйти»: телефон забывает этот браузер, и в следующий раз его снова надо пустить. */
     data object Leave : ToPhone
@@ -168,6 +173,7 @@ private const val KMH_PER_MPS = 3.6
  * @param steps шаги дня: телефона и дорожки вместе
  * @param phoneSteps из них — насчитанные самим телефоном; `null` — телефон шаги не отдаёт
  * @param stepsGoal цель шагов на день
+ * @param heightCm рост из профиля — для панели шагов; `null` — не называли
  * @param said что персонажи сказали в ленте дня о прогулках
  * @param live беговая дорожка, подключённая к телефону, прямо сейчас; `null` — её нет на связи
  */
@@ -187,6 +193,7 @@ data class WebDay(
     val steps: Int = 0,
     val phoneSteps: Int? = null,
     val stepsGoal: Int = DEFAULT_STEPS_GOAL,
+    val heightCm: Int? = null,
     val said: List<WebSaid> = emptyList(),
     val live: TreadmillSample? = null,
 ) {
@@ -257,6 +264,7 @@ fun encode(message: ToPhone): String = envelope(
         is ToPhone.SetName -> "name"
         is ToPhone.Revoke -> "revoke"
         is ToPhone.SetGrace -> "grace"
+        is ToPhone.SetSteps -> "steps"
         ToPhone.Leave -> "leave"
         is ToPhone.Hide -> "hide"
     },
@@ -284,6 +292,10 @@ fun encode(message: ToPhone): String = envelope(
         is ToPhone.SetName -> put("name", message.name)
         is ToPhone.Revoke -> put("id", message.browserId)
         is ToPhone.SetGrace -> put("grace", message.grace.name)
+        is ToPhone.SetSteps -> {
+            put("goal", message.goal)
+            message.heightCm?.let { put("height", it) }
+        }
         ToPhone.Leave -> Unit
         is ToPhone.Hide -> put("id", message.messageId)
     }
@@ -325,6 +337,7 @@ fun encode(message: ToPage): String = envelope(
             put("steps", day.steps)
             day.phoneSteps?.let { put("phoneSteps", it) }
             put("stepsGoal", day.stepsGoal)
+            day.heightCm?.let { put("height", it) }
             put("said", buildJsonArray { day.said.forEach { add(it.toJson()) } })
             day.live?.let { live ->
                 put(
@@ -430,6 +443,10 @@ fun parseToPhone(text: String): ToPhone? {
         "name" -> ToPhone.SetName(name = json.text("name")?.trim()?.takeIf { it.isNotEmpty() }?.take(WEB_NAME_MAX) ?: return null)
         "revoke" -> ToPhone.Revoke(browserId = json.long("id") ?: return null)
         "grace" -> ToPhone.SetGrace(grace = json.grace() ?: return null)
+        "steps" -> ToPhone.SetSteps(
+            goal = json.long("goal")?.toInt()?.takeIf { it in STEPS_GOAL_RANGE } ?: return null,
+            heightCm = json.long("height")?.toInt()?.let { it.takeIf { cm -> cm in HEIGHT_CM_RANGE } ?: return null },
+        )
         "leave" -> ToPhone.Leave
         "hide" -> ToPhone.Hide(messageId = json.long("id") ?: return null)
         else -> null
@@ -460,6 +477,7 @@ fun parseToPage(text: String): ToPage? {
                 steps = json.long("steps")?.toInt() ?: return null,
                 phoneSteps = json.long("phoneSteps")?.toInt(),
                 stepsGoal = json.long("stepsGoal")?.toInt() ?: return null,
+                heightCm = json.long("height")?.toInt(),
                 said = json.list("said") { it.toSaid() } ?: return null,
                 live = (json["live"] as? JsonObject)?.let { it.toLive() ?: return null },
             )

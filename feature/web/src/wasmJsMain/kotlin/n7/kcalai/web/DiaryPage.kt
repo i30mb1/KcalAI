@@ -138,6 +138,7 @@ private const val OFFLINE_MS = 300
 @Composable
 fun DiaryPage(link: PhoneLink) {
     val state by link.state.collectAsState()
+    val setSteps = { goal: Int, heightCm: Int? -> link.send(ToPhone.SetSteps(goal, heightCm)) }
     val colors = KcalTheme.colors
     val diary = state as? PageState.Diary
     // Хозяева макросов живут в плитках шапки: новая запись — её хозяин подпрыгивает.
@@ -200,7 +201,7 @@ fun DiaryPage(link: PhoneLink) {
                     ) { shown -> Feed(shown, link, Modifier.fillMaxSize()) }
                     // Шаги дня — поверх ленты, в углу: окошко ничего не сдвигает (когда поля справа нет).
                     if (!docked && diary.day.date == diary.day.today) {
-                        WalkPanel(diary.day, live, walking, Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 16.dp))
+                        WalkPanel(diary.day, live, walking, onSetSteps = setSteps, modifier = Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 16.dp))
                     }
                 }
                 Composer(diary, link)
@@ -211,7 +212,8 @@ fun DiaryPage(link: PhoneLink) {
                 diary.day,
                 live,
                 walking,
-                Modifier.align(Alignment.TopEnd).padding(top = DOCK_MARGIN, end = DOCK_MARGIN),
+                onSetSteps = setSteps,
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = DOCK_MARGIN, end = DOCK_MARGIN),
                 docked = true,
                 width = minOf(DOCK_PANEL_MAX, gutter - DOCK_MARGIN * 2),
             )

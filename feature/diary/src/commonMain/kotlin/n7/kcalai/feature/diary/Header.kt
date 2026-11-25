@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlinx.datetime.LocalDate
 import n7.kcalai.database.DailyGoalEntity
+import n7.kcalai.model.DEFAULT_STEPS_GOAL
 import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.NutrimentTotals
@@ -78,6 +79,9 @@ fun Header(
     onOpenGoal: () -> Unit,
     onFiberTap: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Шаги по дням недели — полосками под столбиками. */
+    weekSteps: Map<Long, Int> = emptyMap(),
+    stepsGoal: Int = DEFAULT_STEPS_GOAL,
 ) {
     val colors = KcalTheme.colors
     val past = date < today
@@ -98,7 +102,7 @@ fun Header(
                 RemainingRow(date, past, totals, goal, fiber, fiberGoal, onOpenGoal, onFiberTap, toToday)
                 MacroTiles(totals, goal, emptyHomes, onOpenGoal)
                 // Один день — одна переписка: тап по столбику открывает его ленту.
-                WeekChart(week, selected = date.toEpochDays(), onSelectDay = onSelectDay)
+                WeekChart(week, selected = date.toEpochDays(), onSelectDay = onSelectDay, steps = weekSteps, stepsGoal = stepsGoal)
             }
         }
 

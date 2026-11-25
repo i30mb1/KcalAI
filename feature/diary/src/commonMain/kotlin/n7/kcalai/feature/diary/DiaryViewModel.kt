@@ -53,6 +53,7 @@ import n7.kcalai.mascot.awaitsAnswer
 import n7.kcalai.mascot.isNight
 import n7.kcalai.mascot.question
 import n7.kcalai.mascot.voice.Topic
+import n7.kcalai.model.DEFAULT_STEPS_GOAL
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FiberTotal
 import n7.kcalai.model.FoodCandidate
@@ -183,6 +184,10 @@ data class DiaryUiState(
     val fiber: FiberTotal = FiberTotal.ZERO,
     /** Калории по дням за неделю, последний элемент — сегодня. Всегда семь элементов. */
     val week: List<DaySummary> = emptyList(),
+    /** Шаги по дням той же недели — тонкой полоской под днём; пусто — шагов нет вовсе. */
+    val weekSteps: Map<Long, Int> = emptyMap(),
+    /** Цель шагов — до неё растут полоски недели. */
+    val stepsGoal: Int = DEFAULT_STEPS_GOAL,
     /** Открытый день: его переписка в ленте, его итоги в шапке. */
     val date: LocalDate = Clock.System.todayIn(TimeZone.currentSystemDefault()),
     /** Сегодня по календарю. Открытый день бывает прошлым, сегодня — нет. */
@@ -261,6 +266,8 @@ class DiaryViewModel(
     private val assistant: FoodAssistant? = null,
     /** Шаги дня — телефона и дорожки. `null` — шагов нет вовсе, и плашки в ленте не бывает. */
     private val daySteps: ((Long) -> Flow<DaySteps>)? = null,
+    /** Шаги семи дней, кончая данным: пары (день, шаги). `null` — шагов нет, и полосок под неделей тоже. */
+    private val weekSteps: ((Long) -> Flow<List<Pair<Long, Int>>>)? = null,
     private val clock: Clock = Clock.System,
     /** Зона, в которой считаются день и час: `createdAt` хранится в UTC. */
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
@@ -363,6 +370,7 @@ class DiaryViewModel(
                 // Какие браузеры просились в дневник; без страницы их не бывает.
                 browsers?.requests?.observeDay(day.toEpochDays()) ?: flowOf(emptyList()),
                 walkOf(day.toEpochDays()),
+                weekSteps?.invoke(now.toEpochDays())?.map { it.toMap() } ?: flowOf(emptyMap()),
                 ::Said,
             )
             combine(
@@ -372,8 +380,8 @@ class DiaryViewModel(
                 diary.observeWeek(now.toEpochDays()),
                 diary.observeGoal(now.toEpochDays()),
                 saidAndOffered,
-            ) { dayTotals, goal, week, todayGoal, (said, offers, asked, walked) ->
-                DayData(day, now, dayTotals, goal, week, todayGoal, said, offers, asked, walked)
+            ) { dayTotals, goal, week, todayGoal, (said, offers, asked, walked, stepsByDay) ->
+                DayData(day, now, dayTotals, goal, week, todayGoal, said, offers, asked, walked, stepsByDay)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -462,6 +470,8 @@ class DiaryViewModel(
             totals = loaded.day.totals,
             fiber = loaded.day.entries.fiber(),
             week = loaded.week,
+            weekSteps = loaded.weekSteps.filterValues { it > 0 },
+            stepsGoal = loaded.walked?.goal ?: DEFAULT_STEPS_GOAL,
             date = loaded.date,
             today = loaded.today,
             goal = loaded.goal,
@@ -583,6 +593,7 @@ class DiaryViewModel(
         val offers: List<PeerOfferEntity> = emptyList(),
         val browsers: List<WebClientEntity> = emptyList(),
         val walked: DayWalk? = null,
+        val weekSteps: Map<Long, Int> = emptyMap(),
     )
 
     /** Шаги дня и цель к ним. */
@@ -604,6 +615,7 @@ class DiaryViewModel(
         val offers: List<PeerOfferEntity>,
         val browsers: List<WebClientEntity>,
         val walked: DayWalk?,
+        val weekSteps: Map<Long, Int>,
     )
 
     /** Реплика сессии и день, в переписке которого она стоит. */

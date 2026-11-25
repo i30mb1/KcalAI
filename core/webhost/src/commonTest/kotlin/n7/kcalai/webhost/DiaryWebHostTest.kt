@@ -63,6 +63,7 @@ class DiaryWebHostTest {
             override suspend fun setGoal(goal: n7.kcalai.webapi.WebMacros) = Unit
             override suspend fun setName(name: String) = Unit
             override suspend fun setGrace(grace: n7.kcalai.model.PageGrace) = Unit
+            override suspend fun setSteps(goal: Int, heightCm: Int?) = Unit
             override val live = emptyFlow<n7.kcalai.model.TreadmillSample?>()
             override suspend fun hideSaid(messageId: Long) = Unit
         },

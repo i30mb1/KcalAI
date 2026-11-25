@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -14,6 +15,8 @@ import kotlinx.coroutines.test.setMain
 import n7.kcalai.database.MascotProfileEntity
 import n7.kcalai.model.DEFAULT_STEPS_GOAL
 import n7.kcalai.model.MealType
+import n7.kcalai.model.heightInput
+import n7.kcalai.model.stepsGoalInput
 import n7.kcalai.repositories.DaySteps
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -45,8 +48,12 @@ class StepsTest {
         return counted
     }
 
+    /** Шаги недели: позавчера 9 000, вчера ни шага, сегодня — как в плашке. */
+    private fun weekSteps(today: Long): Flow<List<Pair<Long, Int>>> =
+        counted.map { now -> (today - 6..today).map { it to if (it == today) now.total else if (it == today - 2) 9_000 else 0 } }
+
     private fun TestScope.screen(): DiaryViewModel =
-        harness.viewModel(dispatcher, daySteps = ::daySteps).also { vm ->
+        harness.viewModel(dispatcher, daySteps = ::daySteps, weekSteps = ::weekSteps).also { vm ->
             backgroundScope.launch { vm.state.collect {} }
             advanceUntilIdle()
         }
@@ -63,6 +70,17 @@ class StepsTest {
         assertEquals(FeedItem.Steps(steps = 5_242, goal = DEFAULT_STEPS_GOAL), shown)
         assertTrue(feed.indexOf(shown as FeedItem) > feed.indexOfLast { it is FeedItem.Meal }, "плашка — после записей")
         assertEquals(listOf(harness.today), asked.distinct())
+    }
+
+    /** Шаги под днями недели — тонкой полоской до цели: видно, как шли дни. */
+    @Test
+    fun `неделя — шаги по дням и цель для полосок`() = runTest(dispatcher) {
+        val vm = screen()
+
+        val state = vm.state.value
+        assertEquals(9_000, state.weekSteps[harness.today - 2])
+        assertEquals(5_242, state.weekSteps[harness.today])
+        assertEquals(DEFAULT_STEPS_GOAL, state.stepsGoal)
     }
 
     @Test

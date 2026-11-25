@@ -202,7 +202,7 @@ fun SproutIcon(color: Color, modifier: Modifier = Modifier, size: Dp = 11.dp) {
 }
 
 /**
- * Следы — знак шагов: два отпечатка лесенкой, как идут ноги. Цвет — зелёный Зёрнышка: прогулки — его тема.
+ * Следы — знак шагов: два отпечатка лесенкой, как идут ноги. Цвет — свой у шагов, см. [KcalColors.steps].
  */
 @Composable
 fun StepsIcon(color: Color, modifier: Modifier = Modifier, size: Dp = 12.dp) {

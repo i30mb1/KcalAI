@@ -265,6 +265,17 @@ class WebSessionTest {
     }
 
     @Test
+    fun `цель шагов и рост со страницы доходят до телефона, рост виден в панели`() = runTest {
+        val browser = admitted()
+
+        browser.say(ToPhone.SetSteps(goal = 10_000, heightCm = 182))
+        runCurrent()
+
+        assertEquals(listOf<Pair<Int, Int?>>(10_000 to 182), diary.steps)
+        assertEquals(176, browser.last<ToPage.Day>()?.day?.heightCm, "рост из профиля — в данных дня")
+    }
+
+    @Test
     fun `пущенные браузеры видны в настройках, свой отмечен`() = runTest {
         Browser(this).say(ToPhone.Hello(token = null))
         runCurrent()
@@ -375,13 +386,14 @@ private class FakeWebDiary : WebDiary {
     val goals = mutableListOf<WebMacros>()
     val names = mutableListOf<String>()
     val graces = mutableListOf<PageGrace>()
+    val steps = mutableListOf<Pair<Int, Int?>>()
     override val live = MutableStateFlow<TreadmillSample?>(null)
     val hidden = mutableListOf<Long>()
 
     /** 2026-11-24. */
     override val today: Long = 20_781
 
-    override fun day(date: Long) = entries.map { list -> WebDayContent(list.takeIf { date == today }.orEmpty(), 2_100) }
+    override fun day(date: Long) = entries.map { list -> WebDayContent(list.takeIf { date == today }.orEmpty(), 2_100, heightCm = 176) }
 
     override fun week(date: Long) = flowOf(emptyList<WebDaySummary>())
 
@@ -401,6 +413,10 @@ private class FakeWebDiary : WebDiary {
 
     override suspend fun setGrace(grace: PageGrace) {
         graces += grace
+    }
+
+    override suspend fun setSteps(goal: Int, heightCm: Int?) {
+        steps += goal to heightCm
     }
 
     override suspend fun setGrams(entryId: Long, grams: Int) {

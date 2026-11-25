@@ -59,6 +59,7 @@ data class WebDayContent(
     val steps: Int = 0,
     val phoneSteps: Int? = null,
     val stepsGoal: Int = DEFAULT_STEPS_GOAL,
+    val heightCm: Int? = null,
     val said: List<WebSaid> = emptyList(),
     val live: TreadmillSample? = null,
 )
@@ -95,6 +96,9 @@ interface WebDiary {
 
     /** Сколько держать страницу, когда телефон убран. */
     suspend fun setGrace(grace: PageGrace)
+
+    /** Цель шагов и рост из панели шагов; рост `null` — не трогать. */
+    suspend fun setSteps(goal: Int, heightCm: Int?)
 
     /** Беговая дорожка, подключённая к телефону, прямо сейчас; `null` — её нет на связи. */
     val live: Flow<TreadmillSample?>
@@ -189,6 +193,7 @@ class WebSession(
                 is ToPhone.SetName -> diary.setName(message.name)
                 is ToPhone.Revoke -> clients.revoke(message.browserId, clock.now().toEpochMilliseconds())
                 is ToPhone.SetGrace -> diary.setGrace(message.grace)
+                is ToPhone.SetSteps -> diary.setSteps(message.goal, message.heightCm)
                 is ToPhone.Hide -> diary.hideSaid(message.messageId)
                 ToPhone.Leave -> {
                     clients.leave(token, clock.now().toEpochMilliseconds())
@@ -231,6 +236,7 @@ class WebSession(
                     steps = content.steps,
                     phoneSteps = content.phoneSteps,
                     stepsGoal = content.stepsGoal,
+                    heightCm = content.heightCm,
                     said = content.said,
                     live = content.live,
                 )

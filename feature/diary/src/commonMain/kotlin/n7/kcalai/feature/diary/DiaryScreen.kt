@@ -421,6 +421,8 @@ fun DiaryScreen(
             fiberGoal = fiberGoal(state.goal),
             goal = state.goal,
             week = state.week,
+            weekSteps = state.weekSteps,
+            stepsGoal = state.stepsGoal,
             collapsed = collapsed,
             emptyHomes = emptyHomes(places),
             onOpenGoal = onOpenGoal,

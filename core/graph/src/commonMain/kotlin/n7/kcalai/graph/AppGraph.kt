@@ -24,6 +24,7 @@ import n7.kcalai.assistant.FoodAssistant
 import n7.kcalai.database.KcalDatabase
 import n7.kcalai.database.heightOrDefault
 import n7.kcalai.database.stepsGoalOrDefault
+import n7.kcalai.model.StepsSettings
 import n7.kcalai.feature.diary.Browsers
 import n7.kcalai.feature.diary.DiaryOutbox
 import n7.kcalai.feature.diary.DiaryViewModel
@@ -315,7 +316,8 @@ abstract class AppGraph {
                 regram = personalRepository::onGramsEdited,
                 rename = mascotBrain::setName,
                 keepPage = mascotBrain::setPageGrace,
-                stepsGoal = mascotBrain.profile.map { it.stepsGoalOrDefault },
+                stepsGoal = mascotBrain.profile.map { StepsSettings(it.stepsGoalOrDefault, it.heightCm) },
+                saveSteps = mascotBrain::setSteps,
             ),
             owner = mascotBrain.profile.map { it.name },
             grace = mascotBrain.profile.map { it.pageGrace },
@@ -379,6 +381,7 @@ abstract class AppGraph {
         assistant = assistant,
         // Шаги дня — плашкой в ленте: телефона и дорожки вместе.
         daySteps = stepsRepository::observeDay,
+        weekSteps = stepsRepository::observeWeek,
     )
 }
 

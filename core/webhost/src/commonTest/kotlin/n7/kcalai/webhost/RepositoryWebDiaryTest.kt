@@ -14,6 +14,7 @@ import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.DiaryDao
 import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.GoalDao
+import n7.kcalai.model.StepsSettings
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.FoodRef
@@ -62,8 +63,9 @@ class RepositoryWebDiaryTest {
     private val walks = WalkRepository(walkDao, TimeZone.UTC)
     private val said = MutableStateFlow<List<WebSaid>>(emptyList())
 
-    /** Цель шагов из профиля телефона. */
-    private val stepsGoal = MutableStateFlow(DEFAULT_STEPS_GOAL)
+    /** Цель шагов и рост из профиля телефона. */
+    private val stepsGoal = MutableStateFlow(StepsSettings())
+    private val savedSteps = mutableListOf<Pair<Int, Int?>>()
 
     private val web = RepositoryWebDiary(
         diary = DiaryRepository(diaryDao, goalDao, NoContributions),
@@ -87,6 +89,7 @@ class RepositoryWebDiaryTest {
         rename = { name -> names += name },
         keepPage = {},
         stepsGoal = stepsGoal,
+        saveSteps = { goal, height -> savedSteps += goal to height },
         clock = clock,
         zone = TimeZone.UTC,
     )
@@ -212,10 +215,19 @@ class RepositoryWebDiaryTest {
 
     /** Цель шагов на странице — та, что задана на телефоне, и меняется вместе с ней. */
     @Test
-    fun `цель шагов — из профиля телефона`() = runTest {
-        stepsGoal.value = 10_000
+    fun `цель шагов и рост — из профиля телефона`() = runTest {
+        stepsGoal.value = StepsSettings(goal = 10_000, heightCm = 182)
 
-        assertEquals(10_000, web.day(today).first().stepsGoal)
+        val shown = web.day(today).first()
+        assertEquals(10_000, shown.stepsGoal)
+        assertEquals(182, shown.heightCm)
+    }
+
+    @Test
+    fun `цель шагов со страницы — в профиль телефона`() = runTest {
+        web.setSteps(goal = 12_000, heightCm = null)
+
+        assertEquals(listOf<Pair<Int, Int?>>(12_000 to null), savedSteps)
     }
 
     @Test

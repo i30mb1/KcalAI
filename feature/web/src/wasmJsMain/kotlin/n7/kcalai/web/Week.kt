@@ -196,12 +196,12 @@ private fun DayColumn(
             style = KcalTheme.type.time,
             color = if (selected) colors.text else colors.text3,
         )
-        // Шаги дня — зелёной полоской Зёрнышка до цели шагов. Без шагов — пустое место той же высоты:
+        // Шаги дня — полоской своего цвета до цели шагов. Без шагов — пустое место той же высоты:
         // пустые полоски под каждым днём читались чёрточками-заусенцами, а место держит строку ровной.
         stepsGoal?.let { goalSteps ->
             val steps = summary?.steps ?: 0
             if (steps > 0) {
-                MiniBar((steps.toFloat() / goalSteps).coerceIn(0f, 1f), colors.carb.fill, Modifier.widthIn(max = STEP_BAR_DP.dp), height = 3.dp)
+                MiniBar((steps.toFloat() / goalSteps).coerceIn(0f, 1f), colors.steps.fill, Modifier.widthIn(max = STEP_BAR_DP.dp), height = 3.dp)
             } else {
                 Spacer(Modifier.height(3.dp))
             }

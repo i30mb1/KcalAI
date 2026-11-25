@@ -42,7 +42,22 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.input.KeyboardType
+import n7.kcalai.model.DEFAULT_HEIGHT_CM
 import n7.kcalai.model.TreadmillSample
+import n7.kcalai.model.heightInput
+import n7.kcalai.model.stepsGoalInput
 import n7.kcalai.ui.KcalTheme
 import n7.kcalai.webapi.WebDay
 import n7.kcalai.webapi.WebWalk
@@ -63,13 +78,18 @@ import n7.kcalai.webapi.timerLabel
  * место там свободно. На узком поля нет: окошко в углу ленты, раскрыто само, пока идут, а стоят —
  * от него остаётся плашка с шагами дня, тап раскрывает снова. Шагов и дорожки нет — нет и окошка.
  *
+ * Цель шагов и рост правятся здесь же: тап по «/ 8 000» — число цели становится полем, под ним готовые
+ * цели чипсами и рост, по которому меряется шаг дорожки.
+ *
  * @param width ширина раскрытой панели
+ * @param onSetSteps цель шагов и рост — телефону; рост `null` — не трогать
  */
 @Composable
 fun WalkPanel(
     day: WebDay,
     live: TreadmillSample?,
     walking: Boolean,
+    onSetSteps: (goal: Int, heightCm: Int?) -> Unit,
     modifier: Modifier = Modifier,
     docked: Boolean = false,
     width: Dp = CARD_DP.dp,
@@ -90,7 +110,7 @@ fun WalkPanel(
             Text(
                 "${stepsLabel(day.steps)} шагов",
                 style = KcalTheme.type.number,
-                color = colors.carb.text,
+                color = colors.steps.text,
                 modifier = Modifier
                     .shadow(4.dp, RoundedCornerShape(PILL_DP.dp))
                     .clip(RoundedCornerShape(PILL_DP.dp))
@@ -104,15 +124,35 @@ fun WalkPanel(
             enter = fadeIn(tween(PANEL_MS, easing = EaseOutStrong)) + scaleIn(tween(PANEL_MS, easing = EaseOutStrong), initialScale = 0.96f, transformOrigin = TransformOrigin(1f, 0f)),
             exit = fadeOut(tween(PANEL_MS / 2)) + scaleOut(tween(PANEL_MS / 2), targetScale = 0.96f, transformOrigin = TransformOrigin(1f, 0f)),
         ) {
-            Card(day, live, walking, width, onClose = { opened = false }.takeUnless { docked })
+            Card(day, live, walking, width, onSetSteps, onClose = { opened = false }.takeUnless { docked })
         }
     }
 }
 
 @Composable
-private fun Card(day: WebDay, live: TreadmillSample?, walking: Boolean, width: Dp, onClose: (() -> Unit)?) {
+private fun Card(
+    day: WebDay,
+    live: TreadmillSample?,
+    walking: Boolean,
+    width: Dp,
+    onSetSteps: (goal: Int, heightCm: Int?) -> Unit,
+    onClose: (() -> Unit)?,
+) {
     val colors = KcalTheme.colors
     val type = KcalTheme.type
+    // Правка цели: набранное живёт, пока правят; закрыли — в следующий раз снова от заданного.
+    var editing by remember { mutableStateOf(false) }
+    var goalText by remember(editing) { mutableStateOf(day.stepsGoal.toString()) }
+    var heightText by remember(editing) { mutableStateOf(day.heightCm?.toString().orEmpty()) }
+    val pickedGoal = stepsGoalInput(goalText)
+    val pickedHeight = heightInput(heightText)
+    val canSave = pickedGoal != null && (pickedHeight != null || heightText.isEmpty())
+    val save = {
+        if (canSave && pickedGoal != null) {
+            onSetSteps(pickedGoal, pickedHeight)
+            editing = false
+        }
+    }
     // Пока идут, шаги бегут по одному в такт ходьбе, а не скачками раз в секунду, когда приходит итог.
     val steps = rememberTickingSteps(day.steps, live?.speedKmh ?: 0.0, walking)
     // Цель одна на сумму; полоса — из двух отрезков: дорожка ярче, телефон тише.
@@ -127,19 +167,49 @@ private fun Card(day: WebDay, live: TreadmillSample?, walking: Boolean, width: D
             .shadow(12.dp, RoundedCornerShape(18.dp))
             .clip(RoundedCornerShape(18.dp))
             .background(colors.surface)
-            .then(if (walking || onClose == null) Modifier else Modifier.press(RoundedCornerShape(18.dp), colors.text.copy(alpha = HOVER_ALPHA / 2), onClose))
+            .then(if (walking || onClose == null || editing) Modifier else Modifier.press(RoundedCornerShape(18.dp), colors.text.copy(alpha = HOVER_ALPHA / 2), onClose))
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(stepsLabel(steps), style = type.hero, color = colors.text)
             Spacer(Modifier.width(6.dp))
-            Text("/ ${stepsLabel(day.stepsGoal)}", style = type.number, color = colors.text3, modifier = Modifier.padding(bottom = 4.dp))
+            if (editing) {
+                Text("/ ", style = type.number, color = colors.text3, modifier = Modifier.padding(bottom = 4.dp))
+                PanelNumber(goalText, { goalText = it }, digits = GOAL_DIGITS, fieldWidth = GOAL_FIELD_DP.dp, focus = true, onEnter = save, onEscape = { editing = false })
+            } else {
+                // Число цели и есть кнопка цели: подписи «задать цель» не нужно.
+                Text(
+                    "/ ${stepsLabel(day.stepsGoal)}",
+                    style = type.number,
+                    color = colors.text3,
+                    modifier = Modifier
+                        .padding(bottom = 2.dp)
+                        .press(RoundedCornerShape(8.dp), colors.text.copy(alpha = HOVER_ALPHA)) { editing = true }
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+            }
+        }
+        if (editing) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                STEP_PRESETS.forEach { preset ->
+                    PageChip(stepsLabel(preset), primary = pickedGoal == preset) { goalText = preset.toString() }
+                }
+            }
+            // Рост — по нему меряется шаг дорожки; не знают — пусто, и шаг по среднему.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("рост", style = type.label, color = colors.text2)
+                Spacer(Modifier.width(10.dp))
+                PanelNumber(heightText, { heightText = it }, digits = HEIGHT_DIGITS, fieldWidth = HEIGHT_FIELD_DP.dp, placeholder = DEFAULT_HEIGHT_CM.toString(), onEnter = save, onEscape = { editing = false })
+                Text(" см", style = type.label, color = colors.text3)
+                Spacer(Modifier.weight(1f))
+                PageChip("Сохранить", primary = canSave, onClick = save)
+            }
         }
         SplitBar(treadmillPart, phonePart)
         // Откуда шаги: телефон — если он их отдаёт, дорожка — если по ней ходили. Цвет точки — цвет отрезка полосы.
-        if (phone != null) Source("телефон", phone, colors.carb.fill.copy(alpha = PHONE_ALPHA))
-        if (treadmill > 0 || day.walks.isNotEmpty()) Source("дорожка", treadmill, colors.carb.fill)
+        if (phone != null) Source("телефон", phone, colors.steps.fill.copy(alpha = PHONE_ALPHA))
+        if (treadmill > 0 || day.walks.isNotEmpty()) Source("дорожка", treadmill, colors.steps.fill)
         // Идут — темп, путь и время этой прогулки прямо с дорожки; стоят — путь и время всего дня.
         // Ширина колонок одна: цифры не прыгают.
         Row(Modifier.fillMaxWidth()) {
@@ -193,6 +263,58 @@ private fun rememberTickingSteps(target: Int, speedKmh: Double, walking: Boolean
     return if (walking) shown.toInt() else target
 }
 
+/**
+ * Число в панели — поле с чертой снизу, тем же кеглем, что и надпись на его месте: правка не сдвигает
+ * соседей. Enter сохраняет, Escape бросает правку.
+ */
+@Composable
+private fun PanelNumber(
+    value: String,
+    onValue: (String) -> Unit,
+    digits: Int,
+    fieldWidth: Dp,
+    onEnter: () -> Unit,
+    onEscape: () -> Unit,
+    focus: Boolean = false,
+    placeholder: String = "",
+) {
+    val colors = KcalTheme.colors
+    val style = KcalTheme.type.number
+    val requester = remember { FocusRequester() }
+    if (focus) LaunchedEffect(Unit) { requester.requestFocus() }
+    Box(
+        Modifier
+            .width(fieldWidth)
+            .padding(bottom = 2.dp)
+            .drawBehind {
+                val y = size.height
+                drawLine(colors.steps.fill, Offset(0f, y), Offset(size.width, y), strokeWidth = 2.dp.toPx())
+            }
+            .padding(bottom = 2.dp),
+    ) {
+        if (value.isEmpty()) Text(placeholder, style = style, color = colors.text3)
+        BasicTextField(
+            value = value,
+            onValueChange = { onValue(it.filter(Char::isDigit).take(digits)) },
+            singleLine = true,
+            textStyle = style.copy(color = colors.text),
+            cursorBrush = SolidColor(colors.text),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(requester)
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (event.key) {
+                        Key.Enter, Key.NumPadEnter -> { onEnter(); true }
+                        Key.Escape -> { onEscape(); true }
+                        else -> false
+                    }
+                },
+        )
+    }
+}
+
 /** Полоса к цели из двух отрезков: дорожка, за ней телефон. */
 @Composable
 private fun SplitBar(treadmill: Float, phone: Float) {
@@ -202,8 +324,8 @@ private fun SplitBar(treadmill: Float, phone: Float) {
         drawRoundRect(colors.text.copy(alpha = 0.12f), cornerRadius = r)
         val a = size.width * treadmill.coerceIn(0f, 1f)
         val b = size.width * (treadmill + phone).coerceIn(0f, 1f)
-        if (b > 0f) drawRoundRect(colors.carb.fill.copy(alpha = PHONE_ALPHA), size = Size(b, size.height), cornerRadius = r)
-        if (a > 0f) drawRoundRect(colors.carb.fill, size = Size(a, size.height), cornerRadius = r)
+        if (b > 0f) drawRoundRect(colors.steps.fill.copy(alpha = PHONE_ALPHA), size = Size(b, size.height), cornerRadius = r)
+        if (a > 0f) drawRoundRect(colors.steps.fill, size = Size(a, size.height), cornerRadius = r)
     }
 }
 
@@ -224,7 +346,7 @@ private fun Stat(text: String, modifier: Modifier, align: TextAlign) {
     Text(text, style = KcalTheme.type.number, color = KcalTheme.colors.text2, textAlign = align, modifier = modifier)
 }
 
-/** Сутки полосой: где ходили — зелёным; идущая прогулка — ярче. Подписи — шесть, двенадцать, восемнадцать. */
+/** Сутки полосой: где ходили — цветом шагов; идущая прогулка — ярче. Подписи — шесть, двенадцать, восемнадцать. */
 @Composable
 private fun DayTrack(walks: List<WebWalk>, walking: Boolean) {
     val colors = KcalTheme.colors
@@ -235,7 +357,7 @@ private fun DayTrack(walks: List<WebWalk>, walking: Boolean) {
             walks.forEachIndexed { i, walk ->
                 val from = size.width * walk.startMinute / DAY_MINUTES
                 val to = maxOf(from + MIN_SEGMENT_PX, size.width * walk.endMinute / DAY_MINUTES)
-                val fill = if (walking && i == walks.lastIndex) colors.carb.fill else colors.carb.fill.copy(alpha = 0.7f)
+                val fill = if (walking && i == walks.lastIndex) colors.steps.fill else colors.steps.fill.copy(alpha = 0.7f)
                 drawRoundRect(fill, topLeft = Offset(from, 0f), size = Size(to - from, size.height), cornerRadius = r)
             }
         }
@@ -250,7 +372,7 @@ private fun DayTrack(walks: List<WebWalk>, walking: Boolean) {
 private fun WalkRow(walk: WebWalk, live: Boolean) {
     val colors = KcalTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(if (live) colors.carb.fill else colors.text.copy(alpha = 0f)))
+        Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(if (live) colors.steps.fill else colors.text.copy(alpha = 0f)))
         Spacer(Modifier.width(6.dp))
         Text("${clockLabel(walk.startMinute)}–${clockLabel(walk.endMinute)}", style = KcalTheme.type.number, color = colors.text, modifier = Modifier.weight(1f))
         Text(
@@ -263,7 +385,14 @@ private fun WalkRow(walk: WebWalk, live: Boolean) {
 
 private const val PANEL_MS = 240
 
-/** Шаги телефона — тем же зелёным, но тише: главное в этой панели — прогулка. */
+/** Готовые цели шагов — те же, что в шите шагов на телефоне. */
+private val STEP_PRESETS = listOf(6_000, 8_000, 10_000, 12_000)
+private const val GOAL_DIGITS = 5
+private const val HEIGHT_DIGITS = 3
+private const val GOAL_FIELD_DP = 64
+private const val HEIGHT_FIELD_DP = 40
+
+/** Шаги телефона — тем же цветом шагов, но тише: главное в этой панели — прогулка. */
 private const val PHONE_ALPHA = 0.45f
 
 /** Разрыв больше — не пробегать шаги, а сразу показать итог. */

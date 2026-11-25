@@ -1,6 +1,6 @@
 package n7.kcalai.webhost
 
-import n7.kcalai.model.DEFAULT_STEPS_GOAL
+import n7.kcalai.model.StepsSettings
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -61,7 +61,8 @@ import kotlin.time.Clock
  * @param live её живые числа, см. [n7.kcalai.repositories.TreadmillFeed]
  * @param walkSaid что Зёрнышко сказало о прогулках в ленте дня
  * @param hide скрыть реплику персонажа корзинкой — тем же путём, что в приложении
- * @param stepsGoal цель шагов на день — из профиля телефона
+ * @param stepsGoal цель шагов на день и рост — из профиля телефона
+ * @param saveSteps цель шагов и рост из панели шагов — в профиль; рост `null` — не трогать
  */
 class RepositoryWebDiary(
     private val diary: DiaryRepository,
@@ -74,7 +75,8 @@ class RepositoryWebDiary(
     private val regram: suspend (entryId: Long, grams: Int, now: Long) -> Unit,
     private val rename: suspend (String) -> Unit,
     private val keepPage: suspend (PageGrace) -> Unit,
-    private val stepsGoal: Flow<Int> = flowOf(DEFAULT_STEPS_GOAL),
+    private val stepsGoal: Flow<StepsSettings> = flowOf(StepsSettings()),
+    private val saveSteps: suspend (goal: Int, heightCm: Int?) -> Unit = { _, _ -> },
     private val clock: Clock = Clock.System,
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
 ) : WebDiary {
@@ -92,7 +94,8 @@ class RepositoryWebDiary(
                 walks = walked.map { it.toWeb(date) },
                 steps = counted.total,
                 phoneSteps = counted.phone,
-                stepsGoal = target,
+                stepsGoal = target.goal,
+                heightCm = target.heightCm,
                 said = said,
                 entries = totals.entries.map { it.toWeb(zone) },
                 goalKcal = goal?.kcal?.takeIf { it > 0 },
@@ -168,6 +171,8 @@ class RepositoryWebDiary(
     override suspend fun setName(name: String) = rename(name)
 
     override suspend fun setGrace(grace: PageGrace) = keepPage(grace)
+
+    override suspend fun setSteps(goal: Int, heightCm: Int?) = saveSteps(goal, heightCm)
 
     override suspend fun hideSaid(messageId: Long) = hide(messageId)
 

@@ -39,6 +39,7 @@ class WebMessageTest {
         steps = 6_240,
         phoneSteps = 2_998,
         stepsGoal = 8_000,
+        heightCm = 182,
         said = listOf(WebSaid(id = 41, mascot = Mascot.GRAIN, text = "Прогулка в копилке: 3 242 шага.", minute = 18 * 60 + 56)),
         live = TreadmillSample(speedKmh = 4.5, distanceM = 2_140, kcal = 90, elapsedS = 1_920),
     )
@@ -59,6 +60,8 @@ class WebMessageTest {
             ToPhone.SetGrams(entryId = 7, grams = 150),
             ToPhone.Delete(entryId = 9),
             ToPhone.Hide(messageId = 41),
+            ToPhone.SetSteps(goal = 10_000, heightCm = 182),
+            ToPhone.SetSteps(goal = 6_000, heightCm = null),
             ToPhone.Leave,
         )
 
@@ -113,6 +116,13 @@ class WebMessageTest {
     fun `невозможная цель не разбирается`() {
         assertNull(parseToPhone(encode(ToPhone.SetGoal(prot = 0, fat = 70, carb = 230))))
         assertNull(parseToPhone(encode(ToPhone.SetGoal(prot = 120, fat = 70, carb = 100_000))))
+    }
+
+    /** Цель шагов и рост — те же пределы, что в шите шагов на телефоне. */
+    @Test
+    fun `невозможная цель шагов или рост не разбираются`() {
+        assertNull(parseToPhone(encode(ToPhone.SetSteps(goal = 100, heightCm = 182))))
+        assertNull(parseToPhone(encode(ToPhone.SetSteps(goal = 10_000, heightCm = 40))))
     }
 
     /** Граммы со страницы — от человека, но через сеть: ноль и десять тонн не записываются. */

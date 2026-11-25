@@ -127,6 +127,25 @@ const val DEFAULT_HEIGHT_CM = 175
 /** Цель шагов на день, пока её не задали. */
 const val DEFAULT_STEPS_GOAL = 8_000
 
+/**
+ * Цель шагов и рост — из профиля телефона.
+ *
+ * @param heightCm рост; `null` — не называли, шаг меряется по [DEFAULT_HEIGHT_CM]
+ */
+data class StepsSettings(val goal: Int = DEFAULT_STEPS_GOAL, val heightCm: Int? = null)
+
+/** Цель шагов, которую можно задать: от тысячи до пятидесяти тысяч. */
+val STEPS_GOAL_RANGE = 1_000..50_000
+
+/** Рост, по которому считают: и шаг дорожки, и помощник цели. */
+val HEIGHT_CM_RANGE = 120..230
+
+/** Цель шагов из набранного; вне [STEPS_GOAL_RANGE] — не цель. */
+fun stepsGoalInput(text: String): Int? = text.trim().toIntOrNull()?.takeIf { it in STEPS_GOAL_RANGE }
+
+/** Рост из набранного, см; вне [HEIGHT_CM_RANGE] — не рост. */
+fun heightInput(text: String): Int? = text.trim().toIntOrNull()?.takeIf { it in HEIGHT_CM_RANGE }
+
 /** Прогулка, к которой вернулись, узнаётся по началу: «сейчас минус время дорожки». */
 private const val SAME_START_MS = 90_000L
 

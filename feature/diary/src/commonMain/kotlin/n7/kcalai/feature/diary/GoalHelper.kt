@@ -2,6 +2,7 @@ package n7.kcalai.feature.diary
 
 import kotlin.math.roundToInt
 import n7.kcalai.database.DailyGoalEntity
+import n7.kcalai.model.HEIGHT_CM_RANGE
 import n7.kcalai.model.GoalMacros
 import n7.kcalai.model.KCAL_PER_CARB
 import n7.kcalai.model.KCAL_PER_FAT
@@ -92,7 +93,7 @@ fun bodyOrNull(
     aim: Aim,
 ): Body? {
     val years = age.trim().toIntOrNull()?.takeIf { it in AGE_RANGE } ?: return null
-    val cm = height.trim().toIntOrNull()?.takeIf { it in HEIGHT_RANGE } ?: return null
+    val cm = height.trim().toIntOrNull()?.takeIf { it in HEIGHT_CM_RANGE } ?: return null
     val kg = weight.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in WEIGHT_RANGE } ?: return null
     return Body(sex ?: return null, years, cm, kg, activity, aim)
 }
@@ -169,5 +170,4 @@ private const val PROT_CHANGE = 1.8
 private const val FAT_SHARE = 0.3
 
 private val AGE_RANGE = 14..100
-internal val HEIGHT_RANGE = 120..230
 private val WEIGHT_RANGE = 30.0..300.0
