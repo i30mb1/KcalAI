@@ -1,0 +1,72 @@
+package n7.kcalai.repositories
+
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
+import n7.kcalai.model.TreadmillSample
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.time.Clock
+import kotlin.time.Instant
+
+/** Шаги дня — телефона и дорожки вместе, без двойного счёта: телефон в кармане на дорожке тоже шагает. */
+class StepsRepositoryTest {
+
+    private val zone = TimeZone.UTC
+    private val walkDao = MemoryWalkDao()
+    private val walks = WalkRepository(walkDao, zone)
+    private val today = LocalDate(2026, 11, 25).toEpochDays()
+    private fun at(hour: Int, minute: Int = 0) = LocalDateTime(2026, 11, 25, hour, minute).toInstant(zone).toEpochMilliseconds()
+
+    private val clock = object : Clock {
+        override fun now(): Instant = Instant.fromEpochMilliseconds(at(20))
+    }
+
+    /** Телефон: 100 шагов в час весь день, а пока шли по дорожке (18:00–18:30) — ещё 1500 «шагов в кармане». */
+    private val pocket = object : PhoneSteps {
+        override suspend fun between(from: Long, to: Long): Int {
+            val hours = (to - from) / 3_600_000.0
+            val walk = (minOf(to, at(18, 30)) - maxOf(from, at(18))).coerceAtLeast(0) / 1_800_000.0
+            return (hours * 100 + walk * 1_500).toInt()
+        }
+    }
+
+    private suspend fun walk() = walks.record(TreadmillSample(speedKmh = 4.0, distanceM = 2_000, kcal = 80, elapsedS = 1_800), at(18, 30))
+
+    @Test
+    fun `шаги телефона и дорожки складываются, а телефон на дорожке не считается дважды`() = runBlocking {
+        walk()
+        val day = StepsRepository(walks, pocket, zone, clock).day(today)
+
+        val treadmill = walks.day(today).single().steps.toInt()
+        assertEquals(treadmill, day.treadmill)
+        assertEquals(1_950, day.phone, "20 часов по 100, без получаса прогулки — без её 50 и 1500 в кармане")
+        assertEquals(day.phone!! + treadmill, day.total)
+    }
+
+    @Test
+    fun `телефон шаги не отдаёт — только дорожка`() = runBlocking {
+        walk()
+        val silent = object : PhoneSteps {
+            override suspend fun between(from: Long, to: Long): Int? = null
+        }
+        val day = StepsRepository(walks, silent, zone, clock).day(today)
+
+        assertNull(day.phone)
+        assertEquals(day.treadmill, day.total)
+    }
+
+    @Test
+    fun `неделя шагов — по дням, вместе с телефоном`() = runBlocking {
+        walk()
+        val week = StepsRepository(walks, pocket, zone, clock).observeWeek(today).first()
+
+        assertEquals((today - 6..today).toList(), week.map { it.first })
+        assertEquals(StepsRepository(walks, pocket, zone, clock).day(today).total, week.last().second)
+        assertEquals(2_400, week.first().second, "прошлый день — целиком: 24 часа по 100")
+    }
+}

@@ -1,5 +1,6 @@
 package n7.kcalai.ios
 
+import n7.kcalai.repositories.PhoneSteps
 import n7.kcalai.assistant.AppleAssistant
 import n7.kcalai.assistant.AppleModelBridge
 import n7.kcalai.assistant.FoodAssistant
@@ -23,6 +24,10 @@ import platform.Foundation.NSBundle
 class AppContainer : AppGraph() {
 
     override fun openDatabase(): KcalDatabase = buildKcalDatabase()
+
+    /** Шагомер iPhone — Core Motion; без разрешения «Движение и фитнес» шагов телефона нет. */
+    val iosSteps by lazy { IosPhoneSteps() }
+    override fun phoneSteps(): PhoneSteps = iosSteps
     override fun seedPath(): String = installSeed().toString()
 
     /** Адрес сервера — из Info.plist, как на Android из BuildConfig: в исходниках его нет. */

@@ -16,3 +16,13 @@ private val PUNCTUATION = Regex("""[?!.,:;]""")
 private val TREADMILL_WORDS = setOf("дорожка", "дорожку", "дорожки", "дорожке")
 
 private val LEADS = setOf("беговая", "беговую", "подключи", "подключить")
+
+/** Человек просит считать шаги телефона: «шаги», «шагомер», «считай шаги». */
+fun asksForSteps(text: String): Boolean {
+    val words = text.lowercase().replace(PUNCTUATION, " ").split(' ').filter(String::isNotBlank)
+    return words.isNotEmpty() && words.size <= 2 && words.last() in STEPS_WORDS && words.dropLast(1).all { it in STEPS_LEADS }
+}
+
+private val STEPS_WORDS = setOf("шаги", "шагов", "шагомер", "шагомера")
+
+private val STEPS_LEADS = setOf("считай", "считать", "мои", "подключи")

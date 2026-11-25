@@ -25,6 +25,8 @@ import n7.kcalai.semantic.EmbeddingModelInfo
 import n7.kcalai.semantic.LiteRtQueryEmbedder
 import n7.kcalai.work.PrefsOutboxMemory
 import n7.kcalai.work.ScanUploads
+import n7.kcalai.repositories.PhoneSteps
+import n7.kcalai.walk.HealthConnectSteps
 import n7.kcalai.walk.TreadmillCompanion
 import n7.kcalai.walk.TreadmillLink
 
@@ -46,6 +48,10 @@ class AppContainer(context: Context) : AppGraph() {
     override val userAgent = "KcalAI/1.0 (Android; n7.kcalai)"
 
     override fun discovery(): NearbyDiscovery = NsdDiscovery(appContext)
+
+    /** Шагомер телефона — Health Connect; без него или без разрешения шагов телефона нет. */
+    private val healthSteps by lazy { HealthConnectSteps(appContext) }
+    override fun phoneSteps(): PhoneSteps = healthSteps
     override fun shade(): MascotShade = MascotNotifier(appContext)
     override fun outboxMemory(): OutboxMemory = PrefsOutboxMemory(appContext)
 
@@ -84,6 +90,7 @@ class AppContainer(context: Context) : AppGraph() {
         appScope.launch { mascotRoutines.onLaunch() }
         appScope.launch { mascotRoutines.tellWalks() }
         appScope.launch { mascotRoutines.askTreadmill(webUsed) }
+        appScope.launch { mascotRoutines.askSteps(healthSteps.available, webUsed) }
         startTreadmill()
     }
 

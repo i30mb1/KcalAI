@@ -746,6 +746,7 @@ fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit, onHide: (
         MascotQuestion.NAME -> "Сказать" to "Не скажу"
         MascotQuestion.WRITE -> "Пишите" to "Не надо"
         MascotQuestion.TREADMILL -> "Подключить" to "Не надо"
+        MascotQuestion.STEPS -> "Считать" to "Не надо"
     }
     val answered = item.choice
 

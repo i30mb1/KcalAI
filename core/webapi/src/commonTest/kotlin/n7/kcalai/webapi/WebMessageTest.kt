@@ -37,6 +37,7 @@ class WebMessageTest {
         week = listOf(WebDaySummary(date = 20_781, kcal = 320, goalKcal = 2_100, steps = 6_240), WebDaySummary(date = 20_782, kcal = 0, goalKcal = null)),
         walks = listOf(WebWalk(startMinute = 18 * 60 + 20, endMinute = 18 * 60 + 52, distanceM = 2_140, elapsedS = 1_920, steps = 3_242, topSpeedKmh = 4.5)),
         steps = 6_240,
+        phoneSteps = 2_998,
         stepsGoal = 8_000,
         said = listOf(WebSaid(id = 41, mascot = Mascot.GRAIN, text = "Прогулка в копилке: 3 242 шага.", minute = 18 * 60 + 56)),
         live = TreadmillSample(speedKmh = 4.5, distanceM = 2_140, kcal = 90, elapsedS = 1_920),
@@ -71,7 +72,7 @@ class WebMessageTest {
             ToPage.Denied,
             ToPage.Busy,
             ToPage.Day(day),
-            ToPage.Day(day.copy(goalKcal = null, goalMacros = null, peers = emptyList(), entries = emptyList(), week = emptyList(), walks = emptyList(), said = emptyList(), live = null)),
+            ToPage.Day(day.copy(goalKcal = null, goalMacros = null, peers = emptyList(), entries = emptyList(), week = emptyList(), walks = emptyList(), said = emptyList(), live = null, phoneSteps = null)),
             ToPage.Day(day.copy(browsers = listOf(WebBrowser(id = 4, label = "Chrome на Windows", here = true), WebBrowser(id = 5, label = "Safari на Mac", here = false)))),
             ToPage.Suggestions(
                 query = "гречка",

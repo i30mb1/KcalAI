@@ -16,4 +16,10 @@ class TreadmillAskTest {
             assertFalse(asksForTreadmill(it), it)
         }
     }
+
+    @Test
+    fun `просьба о шагах телефона — словами, а не еда`() {
+        listOf("шаги", "Шагомер", "считай шаги", "мои шаги?").forEach { assertTrue(asksForSteps(it), it) }
+        listOf("гречка", "шаги до магазина", "").forEach { assertFalse(asksForSteps(it), it) }
+    }
 }

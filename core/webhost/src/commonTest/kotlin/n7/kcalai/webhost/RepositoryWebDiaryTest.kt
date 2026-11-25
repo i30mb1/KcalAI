@@ -24,6 +24,8 @@ import n7.kcalai.model.Nutriments
 import n7.kcalai.model.TreadmillSample
 import n7.kcalai.database.WalkDao
 import n7.kcalai.database.WalkEntity
+import n7.kcalai.repositories.NoPhoneSteps
+import n7.kcalai.repositories.StepsRepository
 import n7.kcalai.repositories.WalkRepository
 import n7.kcalai.webapi.WebSaid
 import n7.kcalai.repositories.DiaryRepository
@@ -63,6 +65,7 @@ class RepositoryWebDiaryTest {
     private val web = RepositoryWebDiary(
         diary = DiaryRepository(diaryDao, goalDao, NoContributions),
         walks = walks,
+        steps = StepsRepository(walks, NoPhoneSteps, TimeZone.UTC, clock),
         walkSaid = { said },
         live = MutableStateFlow(null),
         hide = {},

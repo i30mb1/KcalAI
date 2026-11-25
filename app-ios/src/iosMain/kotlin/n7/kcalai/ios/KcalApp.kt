@@ -55,6 +55,7 @@ object KcalApp {
         // Итоги прогулок по дорожке — так же, как на Android.
         scope.launch { container.mascotRoutines.tellWalks() }
         scope.launch { container.mascotRoutines.askTreadmill(container.webUsed) }
+        scope.launch { container.mascotRoutines.askSteps(container.iosSteps.available, container.webUsed) }
         // Знакомая беговая дорожка — iOS подключится к ней сама, когда её включат.
         treadmill.resume()
     }
@@ -104,6 +105,10 @@ object KcalApp {
                 diary.notificationRequests.collect {
                     diary.onNotificationsResult(container.notifier.requestPermission())
                 }
+            }
+            // «Считать» Зёрнышку или «шаги»: системный вопрос «Движение и фитнес», ответ — обратно в дневник.
+            LaunchedEffect(Unit) {
+                diary.stepsRequests.collect { diary.onStepsResult(container.iosSteps.request()) }
             }
             // «Подключить» Зёрнышку или «дорожка»: ищем дорожку рядом, итог — обратно в дневник.
             LaunchedEffect(Unit) {

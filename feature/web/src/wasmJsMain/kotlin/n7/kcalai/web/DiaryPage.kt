@@ -99,6 +99,9 @@ import n7.kcalai.webapi.offlineLine
  */
 private val COLUMN_MAX = 760.dp
 
+/** Скругление низа плашки шапки над миром прогулки. */
+private val PLATE_CORNER = 22.dp
+
 /** Шагомер в поле справа: не уже этого — иначе окошком в ленте; шире — без пользы. */
 private val DOCK_PANEL = 280.dp
 private val DOCK_PANEL_MAX = 360.dp
@@ -250,12 +253,31 @@ private fun Header(day: WebDay, puppets: Map<Mascot, MascotPuppet>, onSettings: 
             .fillMaxWidth()
             // Шапка отделена от ленты тонкой линией, как в приложении: лента под ней прокручивается.
             // Своя плашка цвета страницы: над миром прогулки шапка читается и без стекла колонки.
-            .background(colors.bg.copy(alpha = PLATE_ALPHA), RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp))
-            .drawBehind { drawLine(colors.line, Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1f) }
+            .background(colors.bg.copy(alpha = PLATE_ALPHA), RoundedCornerShape(bottomStart = PLATE_CORNER, bottomEnd = PLATE_CORNER))
+            // Линия — между скруглениями плашки, а не через них: иначе её концы торчат за углы.
+            .drawBehind {
+                val inset = PLATE_CORNER.toPx()
+                drawLine(colors.line, Offset(inset, size.height), Offset(size.width - inset, size.height), strokeWidth = 1f)
+            }
             .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // Итог дня и чей это день — одной строкой: число слева, подпись дня и настройки справа.
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // Тап по итогу — к цели, как в приложении: подпись «задать цель» не нужна.
+            Row(
+                Modifier.press(RoundedCornerShape(KcalShapes.tile), colors.text.copy(alpha = HOVER_ALPHA), onSettings),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Text("$kcal", style = type.hero, color = if (over) colors.error else colors.text)
+                Text(
+                    if (goal != null) "из $goal ккал" else "ккал",
+                    style = type.label,
+                    color = if (over) colors.error else colors.text2,
+                    modifier = Modifier.padding(start = 6.dp, bottom = 4.dp),
+                )
+            }
+            Spacer(Modifier.weight(1f))
             // Чей дневник и какой день. Прошлый день — тапом обратно в сегодня, как в шапке приложения.
             Crossfade(targetState = label, animationSpec = tween(DAY_IN_MS), label = "date") { shown ->
                 CapsLabel(
@@ -266,7 +288,7 @@ private fun Header(day: WebDay, puppets: Map<Mascot, MascotPuppet>, onSettings: 
                         .padding(vertical = 4.dp),
                 )
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
             // Прошлый день — кнопка обратно, на виду: стрелку в подписи находят не сразу.
             if (past) {
                 PageChip("Сегодня", primary = true, onClick = { onOpen(day.today) })
@@ -282,27 +304,12 @@ private fun Header(day: WebDay, puppets: Map<Mascot, MascotPuppet>, onSettings: 
                     .size(20.dp),
             )
         }
-        // Тап по итогу — к цели, как в приложении: подпись «задать цель» не нужна.
-        Column(
-            Modifier.press(RoundedCornerShape(KcalShapes.tile), colors.text.copy(alpha = HOVER_ALPHA), onSettings),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text("$kcal", style = type.hero, color = if (over) colors.error else colors.text)
-                Text(
-                    if (goal != null) "из $goal ккал" else "ккал",
-                    style = type.label,
-                    color = if (over) colors.error else colors.text2,
-                    modifier = Modifier.padding(start = 6.dp, bottom = 4.dp),
-                )
-            }
-            // Место под полосу есть всегда: появление цели не сдвигает плитки.
-            if (goal != null) {
-                val fraction by animateFloatAsState(totals.kcal.toFloat() / goal, tween(NUMBER_MS, easing = EaseOutStrong))
-                MiniBar(fraction = fraction, fill = if (over) colors.error else colors.bubble, height = 6.dp)
-            } else {
-                Spacer(Modifier.height(6.dp))
-            }
+        // Место под полосу есть всегда: появление цели не сдвигает плитки.
+        if (goal != null) {
+            val fraction by animateFloatAsState(totals.kcal.toFloat() / goal, tween(NUMBER_MS, easing = EaseOutStrong))
+            MiniBar(fraction = fraction, fill = if (over) colors.error else colors.bubble, height = 6.dp)
+        } else {
+            Spacer(Modifier.height(6.dp))
         }
         MacroTiles(totals, day.goalMacros, day.fiber(), day.fiberGoal, puppets, past)
         WeekStrip(day, onOpen)

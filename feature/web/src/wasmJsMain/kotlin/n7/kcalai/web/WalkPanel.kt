@@ -37,13 +37,13 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import n7.kcalai.model.TreadmillSample
 import n7.kcalai.ui.KcalTheme
-import n7.kcalai.ui.MiniBar
 import n7.kcalai.webapi.WebDay
 import n7.kcalai.webapi.WebWalk
 import n7.kcalai.webapi.clockLabel
@@ -115,10 +115,12 @@ private fun Card(day: WebDay, live: TreadmillSample?, walking: Boolean, width: D
     val type = KcalTheme.type
     // Пока идут, шаги бегут по одному в такт ходьбе, а не скачками раз в секунду, когда приходит итог.
     val steps = rememberTickingSteps(day.steps, live?.speedKmh ?: 0.0, walking)
-    val progress by animateFloatAsState(
-        if (day.stepsGoal > 0) steps.toFloat() / day.stepsGoal else 0f,
-        tween(NUMBER_MS, easing = EaseOutStrong),
-    )
+    // Цель одна на сумму; полоса — из двух отрезков: дорожка ярче, телефон тише.
+    val phone = day.phoneSteps
+    val treadmill = (steps - (phone ?: 0)).coerceAtLeast(0)
+    val goal = day.stepsGoal.coerceAtLeast(1).toFloat()
+    val treadmillPart by animateFloatAsState(treadmill / goal, tween(NUMBER_MS, easing = EaseOutStrong))
+    val phonePart by animateFloatAsState((phone ?: 0) / goal, tween(NUMBER_MS, easing = EaseOutStrong))
     Column(
         Modifier
             .width(width)
@@ -134,7 +136,10 @@ private fun Card(day: WebDay, live: TreadmillSample?, walking: Boolean, width: D
             Spacer(Modifier.width(6.dp))
             Text("/ ${stepsLabel(day.stepsGoal)}", style = type.number, color = colors.text3, modifier = Modifier.padding(bottom = 4.dp))
         }
-        MiniBar(progress, colors.carb.fill, height = 6.dp)
+        SplitBar(treadmillPart, phonePart)
+        // Откуда шаги: телефон — если он их отдаёт, дорожка — если по ней ходили. Цвет точки — цвет отрезка полосы.
+        if (phone != null) Source("телефон", phone, colors.carb.fill.copy(alpha = PHONE_ALPHA))
+        if (treadmill > 0 || day.walks.isNotEmpty()) Source("дорожка", treadmill, colors.carb.fill)
         // Идут — темп, путь и время этой прогулки прямо с дорожки; стоят — путь и время всего дня.
         // Ширина колонок одна: цифры не прыгают.
         Row(Modifier.fillMaxWidth()) {
@@ -188,6 +193,32 @@ private fun rememberTickingSteps(target: Int, speedKmh: Double, walking: Boolean
     return if (walking) shown.toInt() else target
 }
 
+/** Полоса к цели из двух отрезков: дорожка, за ней телефон. */
+@Composable
+private fun SplitBar(treadmill: Float, phone: Float) {
+    val colors = KcalTheme.colors
+    Canvas(Modifier.fillMaxWidth().height(6.dp)) {
+        val r = CornerRadius(size.height / 2)
+        drawRoundRect(colors.text.copy(alpha = 0.12f), cornerRadius = r)
+        val a = size.width * treadmill.coerceIn(0f, 1f)
+        val b = size.width * (treadmill + phone).coerceIn(0f, 1f)
+        if (b > 0f) drawRoundRect(colors.carb.fill.copy(alpha = PHONE_ALPHA), size = Size(b, size.height), cornerRadius = r)
+        if (a > 0f) drawRoundRect(colors.carb.fill, size = Size(a, size.height), cornerRadius = r)
+    }
+}
+
+/** Строка источника шагов: точка цвета его отрезка, откуда и сколько. */
+@Composable
+private fun Source(label: String, steps: Int, color: Color) {
+    val colors = KcalTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(color))
+        Spacer(Modifier.width(8.dp))
+        Text(label, style = KcalTheme.type.label, color = colors.text2, modifier = Modifier.weight(1f))
+        Text(stepsLabel(steps), style = KcalTheme.type.number, color = colors.text)
+    }
+}
+
 @Composable
 private fun Stat(text: String, modifier: Modifier, align: TextAlign) {
     Text(text, style = KcalTheme.type.number, color = KcalTheme.colors.text2, textAlign = align, modifier = modifier)
@@ -231,6 +262,9 @@ private fun WalkRow(walk: WebWalk, live: Boolean) {
 }
 
 private const val PANEL_MS = 240
+
+/** Шаги телефона — тем же зелёным, но тише: главное в этой панели — прогулка. */
+private const val PHONE_ALPHA = 0.45f
 
 /** Разрыв больше — не пробегать шаги, а сразу показать итог. */
 private const val SNAP_STEPS = 300

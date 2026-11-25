@@ -38,6 +38,17 @@
     <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
 
     <!--
+        Шагомер телефона — Health Connect, только чтение шагов: они складываются с дорожкой в одну цель.
+        Чтение в фоне — потому что день у телефона спрашивает страница дневника, пока экран погашен.
+        Спрашивается вопросом Зёрнышка в ленте, не на старте.
+    -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
+
+    <!--
         WorkManager и Play Asset Delivery объявляют foreground-сервисы «на всякий случай»,
         а Google Play за каждое такое разрешение требует декларацию с видео. Отправка вкладов
         и распаковка пака идут обычной фоновой работой и в передний план не выходят.
@@ -73,7 +84,23 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Health Connect до Android 14 спрашивает, зачем приложению шаги, — показываем само приложение. -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
         </activity>
+
+        <!-- То же для Health Connect с Android 14: без этого входа система не покажет запрос шагов. -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
 
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"

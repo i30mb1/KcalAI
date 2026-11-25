@@ -208,8 +208,10 @@ class MascotBrain(
      *
      * @return заданный вопрос; `null` — уже спрашивали
      */
-    suspend fun askTreadmill(clock: Clock = Clock.System): MascotMessageEntity? {
-        val question = MascotQuestion.TREADMILL
+    suspend fun askTreadmill(clock: Clock = Clock.System): MascotMessageEntity? = askOnce(MascotQuestion.TREADMILL, clock)
+
+    /** Задать вопрос один раз за всю жизнь — в свою очередь, как новости. */
+    private suspend fun askOnce(question: MascotQuestion, clock: Clock): MascotMessageEntity? {
         if (dao.lastSaid(question.topic) != null) return null
         awaitTurn(clock)
         if (dao.lastSaid(question.topic) != null) return null
@@ -242,6 +244,20 @@ class MascotBrain(
     /** Телефон выбрал дорожку и получил Bluetooth — или нет. */
     suspend fun treadmillResult(connected: Boolean, now: Instant): MascotMessageEntity? =
         answer(if (connected) Topic.TREADMILL_YES else Topic.TREADMILL_FAILED, Mascot.GRAIN, now)
+
+    /** Спросить про шагомер телефона — один раз за всю жизнь, в свою очередь, см. [askTreadmill]. */
+    suspend fun askSteps(clock: Clock = Clock.System): MascotMessageEntity? = askOnce(MascotQuestion.STEPS, clock)
+
+    /** «Считать» или «Не надо» про шаги телефона; второй ответ не принимается. На «Считать» отвечают после телефона. */
+    suspend fun answerSteps(yes: Boolean, now: Instant): Boolean {
+        if (dao.answer(MascotQuestion.STEPS.topic, if (yes) Choice.YES else Choice.NO) == 0) return false
+        if (!yes) answer(Topic.STEPS_NO, Mascot.GRAIN, now)
+        return true
+    }
+
+    /** Телефон дал читать шаги — или нет. */
+    suspend fun stepsResult(granted: Boolean, now: Instant): MascotMessageEntity? =
+        answer(if (granted) Topic.STEPS_YES else Topic.STEPS_FAILED, Mascot.GRAIN, now)
 
     /** Телефон разрешил уведомления или нет. */
     suspend fun notificationsResult(granted: Boolean, now: Instant): MascotMessageEntity? =

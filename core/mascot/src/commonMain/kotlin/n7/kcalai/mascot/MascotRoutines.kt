@@ -20,6 +20,7 @@ import n7.kcalai.model.WALK_OVER_MS
 import n7.kcalai.model.totals
 import n7.kcalai.personal.PersonalRepository
 import n7.kcalai.repositories.DiaryRepository
+import n7.kcalai.repositories.StepsRepository
 import n7.kcalai.repositories.WalkRepository
 import n7.kcalai.repositories.toWalk
 
@@ -65,6 +66,7 @@ class MascotRoutines(
     private val personal: PersonalRepository,
     private val shade: MascotShade,
     private val walks: WalkRepository,
+    private val steps: StepsRepository,
     private val zone: TimeZone,
     private val clock: Clock = Clock.System,
 ) {
@@ -103,8 +105,9 @@ class MascotRoutines(
             guarded("не удалось рассказать о прогулке") {
                 val now = clock.now()
                 val today = now.toLocalDateTime(zone).date.toEpochDays()
-                val told = last.dateEpochDay != today ||
-                    brain.tellWalk(last.toWalk(), walks.day(last.dateEpochDay).totals(), goal, clock) != null
+                // «до цели» — по шагам дня вместе: телефона и дорожки
+                val day = walks.day(last.dateEpochDay).totals().copy(steps = steps.day(last.dateEpochDay).total)
+                val told = last.dateEpochDay != today || brain.tellWalk(last.toWalk(), day, goal, clock) != null
                 if (told) walks.markTold(last, clock.now().toEpochMilliseconds())
             }
         }
@@ -119,6 +122,16 @@ class MascotRoutines(
     suspend fun askTreadmill(webUsed: Flow<Boolean>) {
         webUsed.first { it }
         guarded("не удалось спросить про дорожку") { brain.askTreadmill(clock) }
+    }
+
+    /**
+     * Спросить про шагомер телефона — тоже тем, кто открывает дневник с компьютера: шаги видны на странице.
+     * Только если у телефона он есть ([available]); один раз за всю жизнь, см. [MascotBrain.askSteps].
+     */
+    suspend fun askSteps(available: Boolean, webUsed: Flow<Boolean>) {
+        if (!available) return
+        webUsed.first { it }
+        guarded("не удалось спросить про шаги") { brain.askSteps(clock) }
     }
 
     /**

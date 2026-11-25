@@ -100,6 +100,15 @@ enum class Topic(val kind: TopicKind) {
     /** Дорожку не выбрали или телефон не дал Bluetooth. */
     TREADMILL_FAILED(TopicKind.ANSWER),
 
+    /** Шагомер телефона разрешили читать — его шаги идут в дневник вместе с дорожкой. */
+    STEPS_YES(TopicKind.ANSWER),
+
+    /** «Не надо» на вопрос про шаги телефона. */
+    STEPS_NO(TopicKind.ANSWER),
+
+    /** Телефон не дал шагомер или его нет. */
+    STEPS_FAILED(TopicKind.ANSWER),
+
     /** Третий тык подряд. */
     POKE(TopicKind.SPEECH),
 

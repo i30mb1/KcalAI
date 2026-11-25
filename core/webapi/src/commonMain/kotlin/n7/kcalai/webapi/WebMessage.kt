@@ -166,6 +166,7 @@ private const val KMH_PER_MPS = 3.6
  * @param grace сколько страница живёт, когда телефон убран, — для настроек
  * @param walks прогулки дня по дорожке
  * @param steps шаги дня: телефона и дорожки вместе
+ * @param phoneSteps из них — насчитанные самим телефоном; `null` — телефон шаги не отдаёт
  * @param stepsGoal цель шагов на день
  * @param said что персонажи сказали в ленте дня о прогулках
  * @param live беговая дорожка, подключённая к телефону, прямо сейчас; `null` — её нет на связи
@@ -184,6 +185,7 @@ data class WebDay(
     val grace: PageGrace = PageGrace.MIN_5,
     val walks: List<WebWalk> = emptyList(),
     val steps: Int = 0,
+    val phoneSteps: Int? = null,
     val stepsGoal: Int = DEFAULT_STEPS_GOAL,
     val said: List<WebSaid> = emptyList(),
     val live: TreadmillSample? = null,
@@ -321,6 +323,7 @@ fun encode(message: ToPage): String = envelope(
             put("grace", day.grace.name)
             put("walks", buildJsonArray { day.walks.forEach { add(it.toJson()) } })
             put("steps", day.steps)
+            day.phoneSteps?.let { put("phoneSteps", it) }
             put("stepsGoal", day.stepsGoal)
             put("said", buildJsonArray { day.said.forEach { add(it.toJson()) } })
             day.live?.let { live ->
@@ -455,6 +458,7 @@ fun parseToPage(text: String): ToPage? {
                 grace = json.grace() ?: return null,
                 walks = json.list("walks") { it.toWalk() } ?: return null,
                 steps = json.long("steps")?.toInt() ?: return null,
+                phoneSteps = json.long("phoneSteps")?.toInt(),
                 stepsGoal = json.long("stepsGoal")?.toInt() ?: return null,
                 said = json.list("said") { it.toSaid() } ?: return null,
                 live = (json["live"] as? JsonObject)?.let { it.toLive() ?: return null },

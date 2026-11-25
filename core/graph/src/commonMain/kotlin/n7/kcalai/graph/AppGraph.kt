@@ -57,6 +57,9 @@ import n7.kcalai.repositories.FoodRepository
 import n7.kcalai.repositories.PersonalSemantic
 import n7.kcalai.repositories.QueryEmbedder
 import n7.kcalai.repositories.RemoteProductSource
+import n7.kcalai.repositories.NoPhoneSteps
+import n7.kcalai.repositories.PhoneSteps
+import n7.kcalai.repositories.StepsRepository
 import n7.kcalai.repositories.TreadmillFeed
 import n7.kcalai.repositories.WalkRepository
 import n7.kcalai.resolver.TextFoodResolver
@@ -190,6 +193,12 @@ abstract class AppGraph {
     /** Прогулки по беговой дорожке, подключённой к телефону. */
     val walkRepository: WalkRepository by lazy { WalkRepository(database.walkDao(), TimeZone.currentSystemDefault()) }
 
+    /** Шагомер самого телефона: Health Connect / Core Motion. Без доступа — шагов телефона нет. */
+    open fun phoneSteps(): PhoneSteps = NoPhoneSteps
+
+    /** Шаги дня вместе — телефона и дорожки, без двойного счёта. */
+    val stepsRepository: StepsRepository by lazy { StepsRepository(walkRepository, phoneSteps(), TimeZone.currentSystemDefault()) }
+
     /** Дорожка у телефона: платформа отдаёт сюда пакеты Bluetooth, отсюда — прогулки и живые числа. */
     val treadmillFeed: TreadmillFeed by lazy { TreadmillFeed(walkRepository) }
 
@@ -252,6 +261,7 @@ abstract class AppGraph {
             personal = personalRepository,
             shade = shade(),
             walks = walkRepository,
+            steps = stepsRepository,
             zone = TimeZone.currentSystemDefault(),
         )
     }
@@ -293,6 +303,7 @@ abstract class AppGraph {
             diary = RepositoryWebDiary(
                 diary = diaryRepository,
                 walks = walkRepository,
+                steps = stepsRepository,
                 walkSaid = ::walkSaid,
                 live = treadmillFeed.live,
                 hide = { id -> mascotBrain.hide(id, Clock.System.now()) },

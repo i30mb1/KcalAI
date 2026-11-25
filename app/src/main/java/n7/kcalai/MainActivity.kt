@@ -1,5 +1,7 @@
 package n7.kcalai
 
+import n7.kcalai.walk.HealthConnectSteps
+import androidx.health.connect.client.PermissionController
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothAdapter
 import android.annotation.SuppressLint
@@ -80,6 +82,11 @@ class MainActivity : ComponentActivity() {
         if (bluetoothEnabled()) chooseTreadmill() else treadmillReady(false)
     }
 
+    /** Health Connect: запрос шагов — его окно, ответ — набор выданных разрешений. */
+    private val askSteps = registerForActivityResult(PermissionController.createRequestPermissionResultContract()) { granted ->
+        diary.onStepsResult(HealthConnectSteps.READ in granted)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -92,6 +99,11 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 diary.treadmillRequests.collect { requestTreadmill() }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                diary.stepsRequests.collect { requestSteps() }
             }
         }
         lifecycleScope.launch {
@@ -149,6 +161,11 @@ class MainActivity : ComponentActivity() {
         val messageId = intent.getLongExtra(MascotNotifier.EXTRA_MESSAGE_ID, 0)
         if (messageId > 0) diary.onOpenedFromMessage(messageId)
         intent.removeExtra(MascotNotifier.EXTRA_MESSAGE_ID)
+    }
+
+    /** «Считать» Зёрнышку или слово «шаги»: окно Health Connect; его нет на телефоне — шагов не будет. */
+    private fun requestSteps() {
+        if (HealthConnectSteps(this).available) askSteps.launch(HealthConnectSteps.PERMISSIONS) else diary.onStepsResult(false)
     }
 
     /**

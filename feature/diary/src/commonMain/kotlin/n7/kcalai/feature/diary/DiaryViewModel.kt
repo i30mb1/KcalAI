@@ -664,7 +664,7 @@ class DiaryViewModel(
                     // И по просьбе об адресе страницы: «компьютер» — не еда.
                     if (text.isBlank() || parseWeight(text) != null || text.continuesScan() ||
                         text.none(Char::isLetter) || (assist.value.ready && isQuestion(text)) ||
-                        (peers != null && asksForPage(text)) || asksForTreadmill(text)
+                        (peers != null && asksForPage(text)) || asksForTreadmill(text) || asksForSteps(text)
                     ) {
                         null
                     } else {
@@ -1445,6 +1445,12 @@ class DiaryViewModel(
                 treadmillAsks.trySend(Unit)
                 true
             }
+            asksForSteps(text) -> {
+                input.value = ""
+                answer.value = null
+                stepsAsks.trySend(Unit)
+                true
+            }
             assist.value.ready && isQuestion(text) -> {
                 askDiary(text)
                 true
@@ -1804,6 +1810,22 @@ class DiaryViewModel(
         viewModelScope.launch {
             if (brain.answerTreadmill(yes, clock.now()) && yes) treadmillAsks.send(Unit)
         }
+    }
+
+    /** Просьбы дать читать шагомер телефона: на «Считать» Зёрнышку и на слово «шаги». Ответ — [onStepsResult]. */
+    private val stepsAsks = Channel<Unit>(Channel.BUFFERED)
+    val stepsRequests: Flow<Unit> = stepsAsks.receiveAsFlow()
+
+    /** «Считать» или «Не надо» про шаги телефона; повторный тап ничего не запускает. */
+    fun onAnswerSteps(yes: Boolean) {
+        viewModelScope.launch {
+            if (brain.answerSteps(yes, clock.now()) && yes) stepsAsks.send(Unit)
+        }
+    }
+
+    /** Телефон дал читать шаги — или нет. */
+    fun onStepsResult(granted: Boolean) {
+        viewModelScope.launch { brain.stepsResult(granted, clock.now()) }
     }
 
     /** Корзинка у сообщения персонажа: из переписки — в приложении и на странице, — но не из памяти. */

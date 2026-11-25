@@ -147,6 +147,7 @@ dependencies {
     // Gemini Nano на телефоне: разбор фраз, вопросы к дневнику, второе мнение по этикетке.
     implementation(project(":core:assistant"))
     implementation(libs.androidx.appfunctions)
+    implementation(libs.health.connect)
     ksp(libs.androidx.appfunctions.compiler)
     implementation(project(":core:remote"))
     implementation(project(":core:ui"))

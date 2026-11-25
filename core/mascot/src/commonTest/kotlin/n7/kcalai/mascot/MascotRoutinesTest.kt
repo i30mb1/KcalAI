@@ -34,6 +34,8 @@ import n7.kcalai.model.MealType
 import n7.kcalai.model.ModelDelivery
 import n7.kcalai.model.Nutriments
 import n7.kcalai.model.TreadmillSample
+import n7.kcalai.repositories.NoPhoneSteps
+import n7.kcalai.repositories.StepsRepository
 import n7.kcalai.repositories.WalkRepository
 import n7.kcalai.personal.PersonalRepository
 import n7.kcalai.repositories.DiaryRepository
@@ -68,7 +70,7 @@ class MascotRoutinesTest {
             zone = zone,
             random = Random(1),
         )
-        return MascotRoutines(brain, DiaryRepository(diary, goals, NoContributions), personal, shade, walks, zone, clock)
+        return MascotRoutines(brain, DiaryRepository(diary, goals, NoContributions), personal, shade, walks, StepsRepository(walks, NoPhoneSteps, zone, clock), zone, clock)
     }
 
     private suspend fun eat(at: Instant) = diary.insert(

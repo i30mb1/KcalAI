@@ -25,10 +25,10 @@ import n7.kcalai.personal.defaultPastMeal
 import n7.kcalai.personal.mealForHour
 import n7.kcalai.personal.pastEntryTime
 import n7.kcalai.repositories.DiaryRepository
+import n7.kcalai.repositories.StepsRepository
 import n7.kcalai.repositories.WalkRepository
 import n7.kcalai.model.TreadmillSample
 import n7.kcalai.model.Walk
-import n7.kcalai.model.totals
 import n7.kcalai.webapi.WebSaid
 import n7.kcalai.webapi.WebWalk
 import kotlin.math.roundToInt
@@ -55,6 +55,7 @@ import kotlin.time.Clock
  * @param rename новое имя — туда же, куда его кладёт ответ Яйцу
  * @param keepPage сколько держать страницу, когда телефон убран, — в профиль
  * @param walks прогулки по дорожке, подключённой к телефону
+ * @param steps шаги дня — телефона и дорожки вместе
  * @param live её живые числа, см. [n7.kcalai.repositories.TreadmillFeed]
  * @param walkSaid что Зёрнышко сказало о прогулках в ленте дня
  * @param hide скрыть реплику персонажа корзинкой — тем же путём, что в приложении
@@ -62,6 +63,7 @@ import kotlin.time.Clock
 class RepositoryWebDiary(
     private val diary: DiaryRepository,
     private val walks: WalkRepository,
+    private val steps: StepsRepository,
     private val walkSaid: (Long) -> Flow<List<WebSaid>>,
     override val live: Flow<TreadmillSample?>,
     private val hide: suspend (Long) -> Unit,
@@ -81,10 +83,11 @@ class RepositoryWebDiary(
     override val today: Long get() = clock.todayIn(zone).toEpochDays()
 
     override fun day(date: Long): Flow<WebDayContent> =
-        combine(diary.observeDay(date), diary.observeGoal(date), walks.observeDay(date), walkSaid(date)) { totals, goal, walked, said ->
+        combine(diary.observeDay(date), diary.observeGoal(date), walks.observeDay(date), steps.observeDay(date), walkSaid(date)) { totals, goal, walked, counted, said ->
             WebDayContent(
                 walks = walked.map { it.toWeb(date) },
-                steps = walked.totals().steps,
+                steps = counted.total,
+                phoneSteps = counted.phone,
                 said = said,
                 entries = totals.entries.map { it.toWeb(zone) },
                 goalKcal = goal?.kcal?.takeIf { it > 0 },
@@ -96,8 +99,8 @@ class RepositoryWebDiary(
 
     override fun week(date: Long): Flow<List<WebDaySummary>> {
         val week = weekOf(date)
-        return combine(diary.observeWeek(todayEpochDay = week.last, days = week.count()), walks.observeWeekSteps(week.last)) { days, steps ->
-            val stepsOf = steps.toMap()
+        return combine(diary.observeWeek(todayEpochDay = week.last, days = week.count()), steps.observeWeek(week.last)) { days, counted ->
+            val stepsOf = counted.toMap()
             days.map { WebDaySummary(date = it.dateEpochDay, kcal = it.kcal, goalKcal = it.goalKcal, steps = stepsOf[it.dateEpochDay] ?: 0) }
         }
     }

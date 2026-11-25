@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -195,14 +196,15 @@ private fun DayColumn(
             style = KcalTheme.type.time,
             color = if (selected) colors.text else colors.text3,
         )
-        // Шаги дня — зелёной полоской Зёрнышка до цели шагов.
+        // Шаги дня — зелёной полоской Зёрнышка до цели шагов. Без шагов — пустое место той же высоты:
+        // пустые полоски под каждым днём читались чёрточками-заусенцами, а место держит строку ровной.
         stepsGoal?.let { goalSteps ->
-            MiniBar(
-                ((summary?.steps ?: 0).toFloat() / goalSteps).coerceIn(0f, 1f),
-                colors.carb.fill,
-                Modifier.widthIn(max = STEP_BAR_DP.dp),
-                height = 3.dp,
-            )
+            val steps = summary?.steps ?: 0
+            if (steps > 0) {
+                MiniBar((steps.toFloat() / goalSteps).coerceIn(0f, 1f), colors.carb.fill, Modifier.widthIn(max = STEP_BAR_DP.dp), height = 3.dp)
+            } else {
+                Spacer(Modifier.height(3.dp))
+            }
         }
         // Точка под сегодняшним днём: видно, где «сейчас», даже когда открыт другой.
         Box(Modifier.size(4.dp).clip(RoundedCornerShape(2.dp)).background(if (today) colors.text2 else colors.text.copy(alpha = 0f)))

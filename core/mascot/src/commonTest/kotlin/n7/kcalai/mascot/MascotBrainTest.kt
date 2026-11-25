@@ -667,6 +667,29 @@ class MascotBrainTest {
         assertEquals(1, brain().messages(today).first().size)
     }
 
+    /** Про шаги телефона Зёрнышко спрашивает само один раз; ответ ложится в вопрос и второй раз не принимается. */
+    @Test
+    fun `про шаги телефона спрашивают один раз, ответ — тоже один`() = runTest {
+        started()
+        val brain = brain()
+
+        assertEquals(MascotQuestion.STEPS.topic, brain.askSteps(at(now))?.topic)
+        assertNull(brain.askSteps(at(now + 3.days)))
+        assertTrue(brain.answerSteps(yes = true, now))
+        assertFalse(brain.answerSteps(yes = false, now + 1.minutes))
+    }
+
+    @Test
+    fun `на «Не надо» про шаги Зёрнышко отвечает сразу, на «Считать» — после ответа телефона`() = runTest {
+        asked(MascotQuestion.STEPS)
+        val brain = brain()
+        brain.answerSteps(yes = false, now)
+        assertEquals(Topic.STEPS_NO.name, mascots.messages.value.last().topic)
+
+        assertEquals(Topic.STEPS_YES.name, brain.stepsResult(granted = true, now)?.topic)
+        assertEquals(Topic.STEPS_FAILED.name, brain.stepsResult(granted = false, now)?.topic)
+    }
+
     /** Про дорожку Зёрнышко спрашивает само один раз — вопросом в ленте, в свою очередь. */
     @Test
     fun `про беговую дорожку спрашивают один раз`() = runTest {
