@@ -1,0 +1,711 @@
+<meta charset="utf-8">
+<title>Ходьба на странице дневника</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+  /* Страница дневника как есть; на время ходьбы фон за ней — тропа от первого лица, поверх ленты — окошко шагов. */
+  :root {
+    --bg: #F4EFE4; --surface: #FDFBF5; --chip: #F0E9D9; --line: #E5DCC9;
+    --text: #2C2618; --text2: #6B6250; --text3: #8D8370;
+    --bubble: #2C2618; --on-bubble: #F4EFE4; --on-bubble2: #B5AB96;
+    --prot: #C2456F; --prot-tile: #F6DCE4; --fat: #C98A1E; --fat-tile: #F7E7C6;
+    --carb: #4C8F5A; --carb-tile: #DDEBD8; --fiber: #2F5E36; --fiber-tile: #E3EDD9;
+    --walk: #3F7D58; --walk-soft: #D8E9DD;
+    --glass: rgba(244, 239, 228, .80);
+    --font-ui: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-data: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1C1914; --surface: #26221B; --chip: #332D23; --line: #3A3428;
+      --text: #F4EFE4; --text2: #B5AB96; --text3: #8D8370;
+      --bubble: #F4EFE4; --on-bubble: #1C1914; --on-bubble2: #6B6250;
+      --prot: #E77FA0; --prot-tile: #3A2129; --fat: #E5B159; --fat-tile: #3A2E19;
+      --carb: #7FBF8C; --carb-tile: #22331F; --fiber: #A9D88A; --fiber-tile: #24301E;
+      --walk: #6FB98A; --walk-soft: #213328;
+      --glass: rgba(28, 25, 20, .74);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1C1914; --surface: #26221B; --chip: #332D23; --line: #3A3428;
+    --text: #F4EFE4; --text2: #B5AB96; --text3: #8D8370;
+    --bubble: #F4EFE4; --on-bubble: #1C1914; --on-bubble2: #6B6250;
+    --prot: #E77FA0; --prot-tile: #3A2129; --fat: #E5B159; --fat-tile: #3A2E19;
+    --carb: #7FBF8C; --carb-tile: #22331F; --fiber: #A9D88A; --fiber-tile: #24301E;
+    --walk: #6FB98A; --walk-soft: #213328;
+    --glass: rgba(28, 25, 20, .74);
+    color-scheme: dark;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text); }
+  body {
+    margin: 0; font: 500 15px/1.4 var(--font-ui); -webkit-font-smoothing: antialiased;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 12px;
+    box-sizing: border-box;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--walk); outline-offset: 3px; border-radius: 8px; }
+
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 1.2s ease; pointer-events: none; }
+  body.walking #scene { opacity: 1; }
+
+  .page { position: relative; max-width: 760px; height: 100%; margin: 0 auto; display: grid; grid-template-rows: auto 1fr auto; gap: 10px; }
+  /* Геометрия одна и та же: в ходьбе меняется только фон панелей — ничего не прыгает. */
+  .panel { border-radius: 22px; background: var(--bg); transition: background .8s ease; }
+  body.walking .panel { background: var(--glass); backdrop-filter: blur(16px) saturate(1.15); -webkit-backdrop-filter: blur(16px) saturate(1.15); }
+
+  .head { padding: 14px 18px 12px; display: grid; gap: 12px; }
+  .caps { font: 500 11px/1.2 var(--font-data); letter-spacing: .14em; text-transform: uppercase; color: var(--text3); }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .hero { display: flex; align-items: baseline; gap: 6px; }
+  .hero b { font: 700 34px/1 var(--font-data); letter-spacing: -.02em; }
+  .hero span { color: var(--text2); font-weight: 600; font-size: 13px; }
+  .bar { height: 6px; border-radius: 99px; background: color-mix(in srgb, var(--text) 10%, transparent); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: inherit; background: var(--bubble); }
+  .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  @media (max-width: 520px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .tile { border-radius: 14px; padding: 8px 10px 10px 12px; display: grid; gap: 6px; }
+  .tile b { font: 700 17px/1 var(--font-data); }
+  .tile small { font: 500 17px/1 var(--font-data); }
+  .mini { height: 4px; border-radius: 99px; background: color-mix(in srgb, var(--text) 12%, transparent); overflow: hidden; }
+  .mini i { display: block; height: 100%; }
+
+  .week { padding: 0 18px 12px; display: grid; gap: 6px; }
+  .wtop { display: grid; grid-template-columns: 32px 1fr 32px; align-items: center; text-align: center; color: var(--text2); }
+  .days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+  .day { border-radius: 12px; padding: 8px 2px; display: grid; justify-items: center; gap: 5px; }
+  .day.sel { background: color-mix(in srgb, var(--text) 6%, transparent); }
+  .day.future { opacity: .35; }
+  .kc { font: 500 11px/1 var(--font-data); color: var(--text3); height: 11px; }
+  .col { position: relative; width: min(40px, 100%); height: 56px; border-radius: 8px; background: color-mix(in srgb, var(--text) 5%, transparent); overflow: hidden; }
+  .col i { position: absolute; inset: auto 0 0 0; border-radius: 8px; background: color-mix(in srgb, var(--text) 30%, transparent); }
+  .day.sel .col i { background: var(--bubble); }
+  .day.sel .kc, .day.sel .wd { color: var(--text); }
+  .wd, .dn { font: 500 11px/1 var(--font-data); color: var(--text3); }
+  .wd { letter-spacing: .14em; text-transform: uppercase; }
+  .stepbar { width: min(40px, 100%); height: 4px; border-radius: 99px; background: var(--walk-soft); overflow: hidden; }
+  .stepbar i { display: block; height: 100%; background: var(--walk); transition: width .5s cubic-bezier(.23,1,.32,1); }
+
+  .feedwrap { position: relative; min-height: 0; }
+  .feed { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; padding: 0 4px; overflow: auto; }
+  .sep { align-self: center; padding: 5px 10px; border-radius: 99px; transition: background .8s ease; }
+  body.walking .sep { background: var(--glass); backdrop-filter: blur(12px); }
+  .incoming { align-self: flex-start; max-width: 78%; display: flex; gap: 8px; align-items: flex-end; }
+  .incoming p { margin: 0; background: var(--surface); border-radius: 20px 20px 20px 7px; padding: 12px 15px; font-weight: 600; }
+  .ava { width: 34px; height: 34px; flex: none; }
+  .meal { align-self: flex-end; max-width: 82%; background: var(--bubble); color: var(--on-bubble); border-radius: 20px 20px 7px 20px; padding: 14px 16px; display: grid; gap: 10px; }
+  .meal h4 { margin: 0; font: 600 14px/1.3 var(--font-ui); }
+  .meal h4 span { font: 500 12px/1 var(--font-data); color: var(--on-bubble2); margin-left: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .fchip { background: color-mix(in srgb, var(--on-bubble) 14%, transparent); border-radius: 13px; padding: 7px 12px; font: 600 13px/1 var(--font-ui); }
+  .input { border: 1px solid var(--line); background: var(--surface); border-radius: 24px; padding: 17px 22px; color: var(--text3); font-weight: 600; }
+
+  /* окошко шагов: поверх верха ленты, ничего не сдвигает */
+  .card { position: absolute; top: 0; right: 4px; width: 250px; z-index: 2; padding: 12px 14px 13px; border-radius: 18px;
+    background: var(--glass); backdrop-filter: blur(16px) saturate(1.15); -webkit-backdrop-filter: blur(16px) saturate(1.15);
+    box-shadow: 0 8px 30px rgba(0,0,0,.14); display: grid; gap: 9px;
+    opacity: 0; transform: translateY(-6px) scale(.96); transform-origin: top right; pointer-events: none;
+    transition: opacity .3s cubic-bezier(.23,1,.32,1), transform .3s cubic-bezier(.23,1,.32,1); }
+  body.walking .card { opacity: 1; transform: none; pointer-events: auto; }
+  .card .steps { display: flex; align-items: baseline; gap: 6px; }
+  .card .steps b { font: 700 28px/1 var(--font-data); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .card .steps span { color: var(--text3); font: 500 12px/1 var(--font-data); }
+  .card .pbar { height: 6px; border-radius: 99px; background: color-mix(in srgb, var(--walk) 18%, transparent); overflow: hidden; }
+  .card .pbar i { display: block; height: 100%; background: var(--walk); border-radius: inherit; transition: width .4s cubic-bezier(.23,1,.32,1); }
+  .card .stats { display: flex; justify-content: space-between; font: 500 12px/1 var(--font-data); color: var(--text2); font-variant-numeric: tabular-nums; }
+  .card .stats b { color: var(--text); font-weight: 700; }
+  .card .wait { font: 600 12px/1.2 var(--font-ui); color: var(--fat); height: 15px; }
+
+  /* без телефона размыта только калорийная часть */
+  .cal { transition: filter .3s ease, opacity .3s ease; }
+  body.offline .cal { filter: blur(5px); opacity: .5; pointer-events: none; }
+
+  /* симулятор — не часть страницы */
+  .sim { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 10; width: 230px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px; display: grid; gap: 10px; font-size: 12px; color: var(--text2); box-shadow: 0 6px 24px rgba(0,0,0,.15); }
+  .sim b { color: var(--text); font-size: 13px; }
+  .sim .btns { display: flex; gap: 6px; }
+  .sim .btn { flex: 1; background: var(--bubble); color: var(--on-bubble); border-radius: 10px; padding: 8px; font-weight: 700; transition: transform .14s cubic-bezier(.23,1,.32,1); }
+  .sim .btn.ghost { background: var(--chip); color: var(--text); }
+  .sim .btn:active { transform: scale(.97); }
+  .sim label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .sim input[type=range] { width: 100%; accent-color: var(--walk); }
+  .scenes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  .scenes button { background: var(--chip); color: var(--text); border-radius: 8px; padding: 7px 0; font-weight: 700; font-size: 12px; }
+  .scenes button[aria-pressed="true"] { background: var(--bubble); color: var(--on-bubble); }
+  @media (max-width: 1100px) { .sim { width: 200px; } }
+</style>
+
+<canvas id="scene" aria-hidden="true"></canvas>
+
+<div class="page">
+  <div class="panel">
+    <header class="head cal">
+      <div class="row"><span class="caps">Женя · сегодня</span><span style="flex:1"></span><span class="caps">⚙</span></div>
+      <div class="hero"><b>1 486</b><span>из 2 030 ккал</span></div>
+      <div class="bar"><i style="width:73%"></i></div>
+      <div class="tiles">
+        <div class="tile" style="background:var(--prot-tile)"><div><b>84</b><small style="color:var(--prot)">/120</small></div><div class="mini"><i style="width:70%;background:var(--prot)"></i></div></div>
+        <div class="tile" style="background:var(--fat-tile)"><div><b>52</b><small style="color:var(--fat)">/70</small></div><div class="mini"><i style="width:74%;background:var(--fat)"></i></div></div>
+        <div class="tile" style="background:var(--carb-tile)"><div><b>168</b><small style="color:var(--carb)">/230</small></div><div class="mini"><i style="width:73%;background:var(--carb)"></i></div></div>
+        <div class="tile" style="background:var(--fiber-tile)"><div><b>19</b><small style="color:var(--fiber)">/28</small></div><div class="mini"><i style="width:68%;background:var(--fiber)"></i></div></div>
+      </div>
+    </header>
+    <div class="week" id="week"></div>
+  </div>
+
+  <div class="feedwrap">
+    <div class="card" id="card" aria-live="polite">
+      <div class="steps"><b id="cSteps">6 240</b><span id="cGoal">/ 8 000</span></div>
+      <div class="pbar"><i id="cBar"></i></div>
+      <div class="stats"><span><b id="cSpeed">0,0</b> км/ч</span><span><b id="cKm">0,00</b> км</span><span><b id="cTime">0:00</b></span></div>
+      <div class="wait" id="cWait"></div>
+    </div>
+    <div class="feed" id="feed">
+      <span class="caps sep">сегодня</span>
+      <div class="incoming cal"><svg class="ava" viewBox="0 0 120 110" id="egg"></svg><p>Записала обед. Белка 84 из 120 г — вечером творог добьёт.</p></div>
+      <div class="meal cal"><h4>Обед<span>612 ккал</span></h4><div class="chips"><span class="fchip">Гречка отварная · 200 г</span><span class="fchip">Курица гриль · 150 г</span></div></div>
+    </div>
+  </div>
+
+  <div class="cal"><div class="input">Написать, что съели…</div></div>
+</div>
+
+<aside class="sim" aria-label="Симулятор дорожки">
+  <b>Симулятор дорожки</b>
+  <div class="btns"><button class="btn" id="go">Идти</button><button class="btn ghost" id="stop">Стоп</button></div>
+  <button class="btn ghost" id="zero">Шаги с нуля — увидеть всю прогулку</button>
+  <label for="speed">Скорость <span id="speedVal">0 км/ч</span></label>
+  <input id="speed" type="range" min="0" max="8" step="0.5" value="0">
+  <div class="scenes" role="group" aria-label="Сцена">
+    <button aria-pressed="true" data-scene="forest">Лес</button><button aria-pressed="false" data-scene="winter">Зима</button><button aria-pressed="false" data-scene="sea">Море</button><button aria-pressed="false" data-scene="night">Ночь</button>
+  </div>
+  <label><span>Шаги ×20</span><input type="checkbox" id="fast" checked></label>
+  <label><span>Телефон отключился</span><input type="checkbox" id="off"></label>
+</aside>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const clamp = (x, a, b) => Math.min(Math.max(x, a), b);
+const fmt = (n) => Math.round(n).toLocaleString('ru-RU');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const S = { speed: 0, vis: 0, steps: 6240, goal: 8000, walkSteps: 0, walkM: 0, walkS: 0, pending: 0, walking: false, idle: 0, phase: 0, fast: true, offline: false };
+const WEEK = [5200, 9100, 6240, 0, 0, 0, 0], KCAL = [1810, 2120, 1486, 0, 0, 0, 0], TODAY = 2;
+
+$('#egg').innerHTML = '<ellipse cx="60" cy="60" rx="34" ry="42" fill="#F4E9D2" stroke="#D8C7A4" stroke-width="2"/><circle cx="50" cy="58" r="4.5" fill="#2C2618"/><circle cx="70" cy="58" r="4.5" fill="#2C2618"/><path d="M53,72 C57,76 63,76 67,72" stroke="#2C2618" stroke-width="2.2" fill="none" stroke-linecap="round"/>';
+
+function renderWeek() {
+  WEEK[TODAY] = S.steps;
+  const names = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+  $('#week').innerHTML = `<div class="wtop"><span>‹</span><span class="caps" style="color:var(--text2)">23–29 нояб</span><span style="opacity:.3">›</span></div><div class="days">${names.map((wd, i) => `
+    <div class="day ${i === TODAY ? 'sel' : ''} ${i > TODAY ? 'future' : ''}">
+      <span class="kc cal">${KCAL[i] ? fmt(KCAL[i]) : ' '}</span>
+      <div class="col cal"><i style="height:${KCAL[i] / 24}%"></i></div>
+      <span class="wd">${wd}</span><span class="dn">${23 + i}</span>
+      <div class="stepbar" title="${fmt(WEEK[i])} шагов"><i style="width:${clamp(WEEK[i] / S.goal, 0, 1) * 100}%"></i></div>
+    </div>`).join('')}</div>`;
+}
+
+// ================= сцена: тропа от первого лица =================
+const cv = $('#scene'), g = cv.getContext('2d');
+let W = 0, H = 0, F = 0, vignette = null, lastDraw = 0;
+const NEAR = 0.8, FAR = 140, CAM_H = 1.6, PW = 0.9, FOG = 60, SHORE = 6, LAMP_HEAD = 34 / 400;
+const cam = { z: 100, x: 0, dir: 0 };
+const roadX = (z) => 6 * Math.sin(z / 53) + 3.5 * Math.sin(z / 23 + 1.3) + 1.2 * Math.sin(z / 11 + .7);
+const roadDX = (z) => 6 / 53 * Math.cos(z / 53) + 3.5 / 23 * Math.cos(z / 23 + 1.3) + 1.2 / 11 * Math.cos(z / 11 + .7);
+function rng(seed) { let a = seed >>> 0 || 1; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+const hex = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+const rgb = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+
+// ---------- спрайты: рисуются один раз ----------
+function tree(seed) {
+  const r = rng(seed), c = mk(280, 420), x = c.getContext('2d'), cx = 140;
+  const tg = x.createLinearGradient(cx - 12, 0, cx + 12, 0);
+  tg.addColorStop(0, '#3a2a1c'); tg.addColorStop(.4, '#6b5038'); tg.addColorStop(1, '#22180f');
+  x.fillStyle = tg; x.beginPath(); x.moveTo(cx - 12, 420); x.lineTo(cx - 5, 190); x.lineTo(cx + 5, 190); x.lineTo(cx + 12, 420); x.fill();
+  const dark = hex('#1f3517'), mid = hex('#4f7a2c'), light = hex('#a9c96a'), blobs = [];
+  for (let i = 0; i < 150; i++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()), nx = Math.cos(a) * d, ny = Math.sin(a) * d;
+    blobs.push({ x: cx + nx * 115, y: 160 + ny * 125, rad: 12 + r() * 22, lit: Math.min(Math.max(.5 - nx * .3 - ny * .4 + (d - .5) * .3 + (r() - .5) * .2, 0), 1) });
+  }
+  blobs.sort((a, b) => a.lit - b.lit);
+  for (const b of blobs) {
+    const col = b.lit < .5 ? mix(dark, mid, b.lit * 2) : mix(mid, light, (b.lit - .5) * 2);
+    const rg = x.createRadialGradient(b.x - b.rad * .35, b.y - b.rad * .4, b.rad * .1, b.x, b.y, b.rad);
+    rg.addColorStop(0, rgb(mix(col, light, .3))); rg.addColorStop(1, rgb(mix(col, dark, .35)));
+    x.fillStyle = rg; x.beginPath(); x.arc(b.x, b.y, b.rad, 0, 7); x.fill();
+  }
+  return c;
+}
+function pine(seed, snow) {
+  const r = rng(seed), c = mk(200, 440), x = c.getContext('2d'), cx = 100;
+  x.fillStyle = '#3b2a1c'; x.fillRect(cx - 6, 300, 12, 140);
+  for (let i = 0; i < 10; i++) {
+    const t = i / 9, y = 400 - t * 360, w = (1 - t) * 90 + 8, top = y - 70 + t * 20;
+    x.beginPath(); x.moveTo(cx, top); x.lineTo(cx + w, y + 6);
+    for (let k = 10; k >= -10; k--) x.lineTo(cx + k / 10 * w, y + 6 - (k % 2 ? 0 : 7 + r() * 4));
+    x.closePath();
+    const lg = x.createLinearGradient(cx - w, 0, cx + w, 0);
+    if (snow) { lg.addColorStop(0, '#4a7258'); lg.addColorStop(.45, '#24432f'); lg.addColorStop(1, '#0f2216'); }
+    else { lg.addColorStop(0, '#5d8a4c'); lg.addColorStop(.45, '#2f5531'); lg.addColorStop(1, '#14291a'); }
+    x.fillStyle = lg; x.fill();
+    const sh = x.createLinearGradient(0, y - 20, 0, y + 6); sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,.3)');
+    x.fillStyle = sh; x.fill();
+    if (snow) {   // снежная шапка на каждой лапе
+      const sg = x.createLinearGradient(cx - w, 0, cx + w, 0); sg.addColorStop(0, '#ffffff'); sg.addColorStop(1, '#c9d6e8');
+      x.fillStyle = sg; x.beginPath(); x.moveTo(cx, top); x.lineTo(cx + w * .85, y - 4); x.lineTo(cx + w * .4, y - 10 - r() * 4); x.lineTo(cx, y - 18);
+      x.lineTo(cx - w * .4, y - 10 - r() * 4); x.lineTo(cx - w * .85, y - 4); x.closePath(); x.fill();
+    }
+  }
+  return c;
+}
+function grass(seed, flowers, pal = ['#3f6a26', '#b5b65a'], n = 22) {
+  const r = rng(seed), c = mk(90, 70), x = c.getContext('2d');
+  for (let i = 0; i < n; i++) {
+    const bx = 45 + (r() - .5) * 34, lean = (r() - .5) * 46, h = 28 + r() * 40;
+    x.strokeStyle = rgb(mix(hex(pal[0]), hex(pal[1]), r() * .7)); x.lineWidth = 1.5 + r() * 1.5; x.lineCap = 'round';
+    x.beginPath(); x.moveTo(bx, 70); x.quadraticCurveTo(bx + lean * .3, 70 - h * .6, bx + lean, 70 - h); x.stroke();
+    if (flowers && i % 6 === 0) { x.fillStyle = ['#ffffff', '#f2d14b', '#b48ad6'][i % 3]; x.beginPath(); x.arc(bx + lean, 70 - h, 3.5, 0, 7); x.fill(); }
+  }
+  return c;
+}
+function stone(seed) {
+  const r = rng(seed), c = mk(120, 70), x = c.getContext('2d');
+  x.beginPath();
+  for (let i = 0; i <= 12; i++) { const a = Math.PI + i / 12 * Math.PI, rr = 1 - r() * .15; x.lineTo(60 + Math.cos(a) * 56 * rr, 68 + Math.sin(a) * 60 * rr); }
+  const lg = x.createLinearGradient(20, 10, 100, 68); lg.addColorStop(0, '#b9b4a8'); lg.addColorStop(1, '#55524b');
+  x.fillStyle = lg; x.fill();
+  return c;
+}
+function bare(seed) {   // голое зимнее дерево, снег на толстых ветках
+  const r = rng(seed), c = mk(300, 420), x = c.getContext('2d');
+  x.lineCap = 'round';
+  const br = (x0, y0, a, len, w, d) => {
+    const x1 = x0 + Math.cos(a) * len, y1 = y0 + Math.sin(a) * len;
+    x.strokeStyle = '#3b3029'; x.lineWidth = w; x.beginPath(); x.moveTo(x0, y0); x.lineTo(x1, y1); x.stroke();
+    if (w > 3) { x.strokeStyle = 'rgba(250,252,255,.9)'; x.lineWidth = w * .35; x.beginPath(); x.moveTo(x0, y0 - w * .35); x.lineTo(x1, y1 - w * .35); x.stroke(); }
+    if (d <= 0) return;
+    const n = 2 + (r() < .4 ? 1 : 0);
+    for (let i = 0; i < n; i++) br(x1, y1, a + (r() - .5) * 1.1, len * (.62 + r() * .15), w * .68, d - 1);
+  };
+  br(150, 420, -Math.PI / 2 + (r() - .5) * .1, 130, 14, 6);
+  return c;
+}
+function palm(seed) {
+  const r = rng(seed), c = mk(440, 480), x = c.getContext('2d'), bx = 220, lean = 20 + r() * 30, top = [bx + lean, 110];
+  for (let i = 0; i <= 24; i++) {
+    const t = i / 24;
+    x.fillStyle = i % 2 ? '#8a6a48' : '#6f5338';
+    x.beginPath(); x.ellipse(bx + lean * t * t, 480 - t * 370, 13 - t * 5, 9, 0, 0, 7); x.fill();
+  }
+  x.lineCap = 'round';
+  for (let f = 0; f < 9; f++) {
+    const a = -Math.PI / 2 + (f / 8 - .5) * 3.4 + (r() - .5) * .3, len = 110 + r() * 50;
+    const ex = top[0] + Math.cos(a) * len, ey = top[1] + Math.sin(a) * len * .6 + len * .35;
+    const mx = top[0] + Math.cos(a) * len * .5, my = top[1] + Math.sin(a) * len * .5 - 25;
+    const col = mix(hex('#2f5a2a'), hex('#7fa55a'), r());
+    x.strokeStyle = rgb(mix(col, [40, 60, 30], .3)); x.lineWidth = 4;
+    x.beginPath(); x.moveTo(top[0], top[1]); x.quadraticCurveTo(mx, my, ex, ey); x.stroke();
+    x.strokeStyle = rgb(col); x.lineWidth = 3;
+    for (let s = 1; s <= 14; s++) {
+      const t = s / 15, u = 1 - t;
+      const qx = u * u * top[0] + 2 * u * t * mx + t * t * ex, qy = u * u * top[1] + 2 * u * t * my + t * t * ey;
+      const tx = 2 * u * (mx - top[0]) + 2 * t * (ex - mx), ty = 2 * u * (my - top[1]) + 2 * t * (ey - my), l = Math.hypot(tx, ty) || 1;
+      const nx = -ty / l, ny = tx / l, L = 34 * (1 - t * .7);
+      for (const sd of [-1, 1]) { x.beginPath(); x.moveTo(qx, qy); x.lineTo(qx + nx * L * sd, qy + ny * L * sd + 14); x.stroke(); }
+    }
+  }
+  return c;
+}
+function lamp() {
+  const c = mk(60, 400), x = c.getContext('2d');
+  x.fillStyle = '#2b2b30'; x.fillRect(27, 44, 6, 356); x.fillRect(22, 392, 16, 8);
+  x.fillStyle = '#3a3a40'; x.beginPath(); x.moveTo(16, 18); x.lineTo(44, 18); x.lineTo(38, 48); x.lineTo(22, 48); x.closePath(); x.fill();
+  x.fillStyle = '#ffe7a0'; x.fillRect(23, 24, 14, 20); x.fillStyle = '#3a3a40'; x.fillRect(20, 12, 20, 7);
+  return c;
+}
+const SP = {
+  tree: [1, 2, 3].map(tree), pine: [4, 5].map(s => pine(s, false)),
+  grass: [6, 7, 8].map(s => grass(s, false)).concat([grass(9, true)]), stone: [10, 11].map(stone),
+  snowpine: [12, 13].map(s => pine(s, true)), bare: [14, 15].map(bare),
+  dry: [16, 17].map(s => grass(s, false, ['#7d6c40', '#cdb77c'], 9)),
+  dune: [18, 19].map(s => grass(s, false, ['#8d8f50', '#d9c98c'], 16)),
+  palm: [20, 21].map(palm), lamp: [lamp()],
+};
+
+// холмы на горизонте — замкнутые по кругу, чтобы листаться при поворотах тропы
+function ridge(seed, n, rough) {
+  const r = rng(seed), a = new Float32Array(n + 1);
+  for (let step = n; step > 1; step >>= 1) {
+    for (let i = step / 2; i < n; i += step) a[i] = (a[i - step / 2] + a[i + step / 2]) / 2 + (r() - .5) * rough * step / n;
+  }
+  let lo = Infinity, hi = -Infinity; for (const v of a) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  return a.map(v => (v - lo) / (hi - lo || 1));
+}
+
+// ---------- сцены: прогресс к цели — время суток ----------
+const SCENES = {
+  forest: {
+    sky: [
+      { top: '#5E93CF', hor: '#E6E0CC', haze: '#C5D3D7', sun: '#FFF6DE', grade: '#FFF4DA' },
+      { top: '#4C82C2', hor: '#F2DAB0', haze: '#D8CFB6', sun: '#FFE7B0', grade: '#FFE0A8' },
+      { top: '#31507F', hor: '#FFAE6B', haze: '#E0A986', sun: '#FFC27A', grade: '#FF9C5A' },
+    ],
+    ground: ['#6b8a44', '#5e7f36', '#41612a'], path: ['#a08a66', '#9a805a', '#7a6244'], pebble: ['#6d5a40', '#c9bca2'], shadow: '20,30,10',
+    ridges: [{ a: ridge(21, 256, 2.2), h: .17, col: '#6f8496', haze: .6 }, { a: ridge(22, 256, 3.5), h: .07, col: '#2f4a2c', haze: .35 }],
+    gen(r, k, list) {
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 4; i++) {
+          const p = r() < .45;
+          list.push({ k: p ? 'pine' : 'tree', x: side * (3 + Math.pow(r(), 1.4) * 24), z: k * CH + r() * CH, h: p ? 9 + r() * 8 : 7 + r() * 6, sp: (r() * (p ? 2 : 3)) | 0 });
+        }
+        for (let i = 0; i < 14; i++) list.push({ k: 'grass', x: side * (PW - .1 + Math.pow(r(), 2) * 2.4), z: k * CH + r() * CH, h: .25 + r() * .3, sp: (r() * 4) | 0 });
+        if (r() < .5) list.push({ k: 'stone', x: side * (PW + .3 + r() * 3), z: k * CH + r() * CH, h: .2 + r() * .3, sp: (r() * 2) | 0 });
+      }
+      for (let i = 0; i < 12; i++) list.push({ k: 'pebble', x: (r() * 2 - 1) * (PW - .1), z: k * CH + r() * CH, h: .03 + r() * .05, c: r() });
+    },
+  },
+  winter: {
+    sky: [
+      { top: '#8FA8C4', hor: '#E6E4E2', haze: '#DDE3EA', sun: '#FFF6E8', grade: '#E8F0FF' },
+      { top: '#7C93B8', hor: '#F2D9CF', haze: '#E6DCDD', sun: '#FFE2C8', grade: '#FFE6E0' },
+      { top: '#4B5D8C', hor: '#F7B7A3', haze: '#E9C4C2', sun: '#FFB79A', grade: '#FFB8B0' },
+    ],
+    ground: ['#e8eef4', '#dde5ec', '#c8d3de'], path: ['#d4dbe3', '#c2cbd5', '#a9b3bf'], shadow: '60,80,130', snow: true,
+    ridges: [{ a: ridge(31, 256, 2.6), h: .2, col: '#c3cfdd', haze: .45 }, { a: ridge(32, 256, 3.5), h: .06, col: '#33463f', haze: .4 }],
+    gen(r, k, list) {
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 4; i++) {
+          const p = r() < .6;
+          list.push({ k: p ? 'snowpine' : 'bare', x: side * (3 + Math.pow(r(), 1.4) * 24), z: k * CH + r() * CH, h: p ? 8 + r() * 8 : 7 + r() * 5, sp: (r() * 2) | 0 });
+        }
+        for (let i = 0; i < 4; i++) list.push({ k: 'dry', x: side * (PW + Math.pow(r(), 2) * 2.5), z: k * CH + r() * CH, h: .3 + r() * .3, sp: (r() * 2) | 0 });
+      }
+    },
+  },
+  sea: {
+    sky: [
+      { top: '#4F8FD6', hor: '#DCEAF0', haze: '#CFE0E8', sun: '#FFF8E6', grade: '#FFF6E0' },
+      { top: '#5A84C0', hor: '#F6D6A6', haze: '#E8D6BC', sun: '#FFE2A8', grade: '#FFDDA0' },
+      { top: '#3A4A80', hor: '#FF9A5C', haze: '#EFA27E', sun: '#FFB066', grade: '#FF8E50' },
+    ],
+    ground: ['#e6d2a6', '#d9bf8e', '#c4a472'], path: ['#b08860', '#9c7550', '#80603f'], shadow: '90,70,40', sea: true, planks: true,
+    lamps: (p) => Math.min(Math.max((p - .55) / .45, 0), 1) * .9,
+    ridges: [{ a: ridge(41, 256, 2), h: .05, col: '#55707e', haze: .65 }],
+    gen(r, k, list) {
+      if (r() < .8) list.push({ k: 'palm', x: 3 + r() * 8, z: k * CH + r() * CH, h: 7 + r() * 4, sp: (r() * 2) | 0 });
+      if (r() < .4) list.push({ k: 'palm', x: 9 + r() * 14, z: k * CH + r() * CH, h: 7 + r() * 4, sp: (r() * 2) | 0 });
+      for (let i = 0; i < 10; i++) list.push({ k: 'dune', x: PW + .1 + Math.pow(r(), 2) * 3, z: k * CH + r() * CH, h: .3 + r() * .35, sp: (r() * 2) | 0 });
+      for (let i = 0; i < 4; i++) list.push({ k: 'dune', x: -(PW + .1 + r() * 1.5), z: k * CH + r() * CH, h: .25 + r() * .25, sp: (r() * 2) | 0 });
+      if (k % 2 === 0) list.push({ k: 'lamp', x: PW + .5, z: k * CH + 5, h: 3.6, sp: 0 });
+    },
+  },
+  night: {
+    sky: [
+      { top: '#060A18', hor: '#1A2440', haze: '#1E2840', sun: '#E8ECFF', grade: '#6070C0' },
+      { top: '#0C1430', hor: '#3A3A60', haze: '#343A58', sun: '#FFE0C0', grade: '#8A80C0' },
+      { top: '#2A3A6E', hor: '#F2A070', haze: '#9A8A9A', sun: '#FFC080', grade: '#FFB080' },
+    ],
+    ground: ['#6b8a44', '#5e7f36', '#41612a'], path: ['#8a8a86', '#77756f', '#5d5b56'], pebble: ['#4a4a48', '#8a8a84'], shadow: '0,0,0',
+    night: '#26305c', stars: true, rise: true, flies: true, lamps: (p) => 1 - p * .7,
+    ridges: [{ a: ridge(51, 256, 2.4), h: .09, col: '#141c30', haze: .25 }, { a: ridge(52, 256, 3.5), h: .05, col: '#0b130d', haze: .15 }],
+    gen(r, k, list) {
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 3; i++) {
+          const p = r() < .4;
+          list.push({ k: p ? 'pine' : 'tree', x: side * (3.5 + Math.pow(r(), 1.4) * 22), z: k * CH + r() * CH, h: p ? 9 + r() * 8 : 7 + r() * 6, sp: (r() * (p ? 2 : 3)) | 0 });
+        }
+        for (let i = 0; i < 10; i++) list.push({ k: 'grass', x: side * (PW + .3 + Math.pow(r(), 2) * 2.4), z: k * CH + r() * CH, h: .25 + r() * .3, sp: (r() * 3) | 0 });
+      }
+      list.push({ k: 'lamp', x: (k % 2 ? 1 : -1) * (PW + .5), z: k * CH + 5, h: 3.6, sp: 0 });
+      for (let i = 0; i < 4; i++) list.push({ k: 'fly', x: (r() * 2 - 1) * 4, z: k * CH + r() * CH, y: .4 + r() * 1.4, ph: r() * 6 });
+      for (let i = 0; i < 8; i++) list.push({ k: 'pebble', x: (r() * 2 - 1) * (PW - .1), z: k * CH + r() * CH, h: .03 + r() * .04, c: r() });
+    },
+  },
+};
+let SCENE = SCENES.forest;
+
+// дымка и ночь — перекрашенные копии спрайтов, пересчитываются, только когда сдвинулся цвет
+const FOGSP = {}, LITSP = {};
+let tintKey = '';
+const dimAmount = (p) => SCENE.night ? (1 - p * p) * .88 : 0;   // ночь держится долго, рассвет — у самой цели
+const dim = (c, p) => SCENE.night ? mix(c, c.map((v, i) => v * hex(SCENE.night)[i] / 255), dimAmount(p)) : c;
+function retint(haze, p) {
+  const nightMul = rgb(mix([255, 255, 255], hex(SCENE.night || '#ffffff'), dimAmount(p)));
+  for (const k in SP) {
+    FOGSP[k] = SP[k].map(img => {
+      const c = mk(img.width, img.height), x = c.getContext('2d');
+      x.drawImage(img, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = haze; x.fillRect(0, 0, c.width, c.height); return c;
+    });
+    LITSP[k] = !SCENE.night ? SP[k] : SP[k].map(img => {
+      const c = mk(img.width, img.height), x = c.getContext('2d');
+      x.drawImage(img, 0, 0); x.globalCompositeOperation = 'multiply'; x.fillStyle = nightMul; x.fillRect(0, 0, c.width, c.height);
+      x.globalCompositeOperation = 'destination-in'; x.drawImage(img, 0, 0); return c;
+    });
+  }
+}
+
+const CH = 10, chunks = new Map();
+function chunk(k) {
+  if (chunks.has(k)) return chunks.get(k);
+  const list = [];
+  SCENE.gen(rng(k * 7919 + 13), k, list);
+  chunks.set(k, list);
+  if (chunks.size > 40) chunks.delete(chunks.keys().next().value);
+  return list;
+}
+function setScene(name) { SCENE = SCENES[name]; chunks.clear(); tintKey = ''; }
+
+function skyAt(p) {
+  const sky = SCENE.sky, t = p * (sky.length - 1), i = Math.min(Math.floor(t), sky.length - 2), f = t - i, out = {};
+  for (const k in sky[0]) out[k] = mix(hex(sky[i][k]), hex(sky[i + 1][k]), f);
+  return out;
+}
+
+const sr = rng(77);
+const STARS = Array.from({ length: 220 }, () => ({ x: sr(), y: Math.pow(sr(), 1.5) * .9, a: .3 + sr() * .7, tw: sr() * 6 }));
+const FLAKES = Array.from({ length: 260 }, () => ({ x: sr(), y: sr(), z: .3 + sr() * .7, ph: sr() * 6 }));
+
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 1.5);
+  W = innerWidth; H = innerHeight; F = H * .9;
+  cv.width = W * dpr | 0; cv.height = H * dpr | 0; g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  vignette = mk(W, H); const vx = vignette.getContext('2d');
+  const vg = vx.createRadialGradient(W / 2, H * .45, H * .3, W / 2, H * .5, Math.hypot(W, H) * .6);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.38)'); vx.fillStyle = vg; vx.fillRect(0, 0, W, H);
+}
+addEventListener('resize', resize); resize();
+
+function glowAt(x, y, r, color, a) {
+  const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, rgb(color, a)); rg.addColorStop(1, rgb(color, 0));
+  g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2);
+}
+
+function draw(t) {
+  const dt = Math.min((t - lastDraw) / 1000 || 0, .1); lastDraw = t;
+  const sc = SCENE, p = clamp(S.steps / S.goal, 0, 1), sky = skyAt(p);
+  const key = sky.haze.map(v => v | 0).join() + '|' + Math.round(dimAmount(p) * 20);
+  if (key !== tintKey) { tintKey = key; retint(rgb(sky.haze), p); }
+  const amp = reduce ? 0 : clamp(S.vis / 4, 0, 1.3);
+  const bob = (-Math.abs(Math.sin(Math.PI * S.phase)) + .5) * 5 * amp, sway = Math.sin(Math.PI * S.phase) * 2.5 * amp;
+  const hor = H * .46 + bob;
+  cam.x = roadX(cam.z) + .15; cam.dir = roadDX(cam.z);
+  const turn = -cam.dir * F;
+  const proj = (wx, wz) => { const dz = wz - cam.z, s = F / dz; return { x: W / 2 + (wx - cam.x - cam.dir * dz) * s + sway, y: hor + CAM_H * s, s, dz }; };
+
+  // небо, звёзды, солнце
+  let lg = g.createLinearGradient(0, 0, 0, hor); lg.addColorStop(0, rgb(sky.top)); lg.addColorStop(1, rgb(sky.hor));
+  g.fillStyle = lg; g.fillRect(0, 0, W, hor + 1);
+  if (sc.stars) {
+    const a0 = 1 - p * 1.4;
+    if (a0 > 0) {
+      const span = W * 2;
+      for (const st of STARS) {
+        const x = ((st.x * span + turn * .9) % span + span) % span - W * .5;
+        g.fillStyle = `rgba(255,255,255,${a0 * st.a * (.6 + .4 * Math.sin(t * .002 + st.tw))})`; g.fillRect(x, st.y * hor, 1.6, 1.6);
+      }
+      const mx = W * .26 + turn, my = H * .14;
+      glowAt(mx, my, H * .16, [210, 222, 255], .22 * a0);
+      g.fillStyle = `rgba(240,240,228,${a0})`; g.beginPath(); g.arc(mx, my, H * .022, 0, 7); g.fill();
+    }
+  }
+  const sx = W * .68 + turn;
+  const sy = sc.rise ? hor + H * .05 - H * .17 * Math.pow(p, 2.2) : hor - H * (.32 - .29 * Math.pow(p, 1.2));
+  const sunA = sc.rise ? p * p : 1;
+  glowAt(sx, Math.min(sy, hor), H * .4, sky.sun, .75 * sunA);
+  if (!sc.rise || p > .5) { g.fillStyle = rgb(sky.sun); g.beginPath(); g.arc(sx, sy, H * .028, 0, 7); g.fill(); }
+
+  // холмы: поворачивают вместе с тропой
+  for (const R of sc.ridges) {
+    const span = W * 3, x0 = ((turn % span) + span) % span - span;
+    g.fillStyle = rgb(mix(hex(R.col), sky.haze, R.haze)); g.beginPath(); g.moveTo(x0, hor + 2);
+    for (let rep = 0; rep < 2; rep++) for (let i = 0; i <= 256; i += 2) g.lineTo(x0 + rep * span + i / 256 * span, hor - R.a[i] * R.h * H - 2);
+    g.lineTo(x0 + 2 * span, hor + 2); g.fill();
+  }
+
+  // земля
+  const G = sc.ground.map(c => dim(hex(c), p));
+  lg = g.createLinearGradient(0, hor, 0, H); lg.addColorStop(0, rgb(mix(G[0], sky.haze, .65))); lg.addColorStop(.25, rgb(G[1])); lg.addColorStop(1, rgb(G[2]));
+  g.fillStyle = lg; g.fillRect(0, hor, W, H - hor);
+  if (sc.sea) drawSea(t, proj, hor, sky, sx, turn);
+
+  // тропа
+  const pts = [];
+  for (let i = 0; i <= 80; i++) { const dz = NEAR * Math.pow(FAR / NEAR, 1 - i / 80), z = cam.z + dz, c = roadX(z); pts.push([proj(c - PW, z), proj(c + PW, z)]); }
+  g.beginPath(); pts.forEach(([l], i) => i ? g.lineTo(l.x, l.y) : g.moveTo(l.x, l.y));
+  for (let i = pts.length - 1; i >= 0; i--) g.lineTo(pts[i][1].x, pts[i][1].y);
+  const P = sc.path.map(c => dim(hex(c), p));
+  lg = g.createLinearGradient(0, hor, 0, H); lg.addColorStop(0, rgb(mix(P[0], sky.haze, .7))); lg.addColorStop(.2, rgb(P[1])); lg.addColorStop(1, rgb(P[2]));
+  g.fillStyle = lg; g.fill();
+  if (sc.planks) {   // доски настила
+    for (let z = Math.ceil((cam.z + NEAR) / .55) * .55; z < cam.z + 45; z += .55) {
+      const c = roadX(z), l = proj(c - PW, z), rr = proj(c + PW, z);
+      g.strokeStyle = `rgba(60,40,20,${.35 * (1 - (z - cam.z) / 45)})`; g.lineWidth = Math.max(.6, .03 * l.s);
+      g.beginPath(); g.moveTo(l.x, l.y); g.lineTo(rr.x, rr.y); g.stroke();
+    }
+  }
+
+  // предметы — от дальних к ближним
+  const vis = [], lamps = [], flies = [];
+  for (let k = Math.floor((cam.z + NEAR) / CH); k <= Math.floor((cam.z + FAR) / CH); k++) for (const o of chunk(k)) {
+    const dz = o.z - cam.z;
+    if (dz < NEAR || dz > FAR) continue;
+    if (o.k === 'fly') { if (dz < 50) flies.push(o); continue; }
+    if ((o.k === 'grass' || o.k === 'dry' || o.k === 'dune') && dz > 40) continue;
+    if (o.k === 'pebble' && dz > 25) continue;
+    vis.push(o);
+  }
+  vis.sort((a, b) => b.z - a.z);
+  for (const o of vis) {
+    const pr = proj(roadX(o.z) + o.x, o.z), fog = 1 - Math.exp(-pr.dz / FOG);
+    if (o.k === 'pebble') {
+      const rx = o.h * pr.s; if (rx < .5) continue;
+      g.fillStyle = rgb(mix(dim(mix(hex(sc.pebble[0]), hex(sc.pebble[1]), o.c), p), sky.haze, fog));
+      g.beginPath(); g.ellipse(pr.x, pr.y, rx, rx * .5, 0, 0, 7); g.fill(); continue;
+    }
+    const img = LITSP[o.k][o.sp], hp = o.h * pr.s; if (hp < 1.5) continue;
+    const wp = hp * img.width / img.height, left = pr.x - wp / 2;
+    if (o.k === 'lamp') lamps.push({ x: pr.x, y: pr.y - hp * (1 - LAMP_HEAD), by: pr.y, s: pr.s, dz: pr.dz, fog });
+    if (left > W || left + wp < 0) continue;
+    if (!['grass', 'dry', 'dune', 'lamp'].includes(o.k)) {
+      const rx = wp * (o.k === 'stone' ? .45 : .2) * (1 + p);
+      g.fillStyle = `rgba(${sc.shadow},${.16 * (1 - fog)})`;
+      g.beginPath(); g.ellipse(pr.x + rx * .5, pr.y, rx, Math.max(1, rx * CAM_H / pr.dz), 0, 0, 7); g.fill();
+    }
+    g.drawImage(img, left, pr.y - hp, wp, hp);
+    if (fog > .03) { g.globalAlpha = fog; g.drawImage(FOGSP[o.k][o.sp], left, pr.y - hp, wp, hp); g.globalAlpha = 1; }
+  }
+
+  // свет: фонари, светлячки, блик солнца, тон, снег, виньетка
+  g.globalCompositeOperation = 'lighter';
+  const on = sc.lamps ? sc.lamps(p) : 0;
+  if (on > 0) for (const L of lamps) {
+    const a = on * (1 - L.fog * .7);
+    glowAt(L.x, L.y, 1.8 * L.s, [255, 214, 140], .7 * a);
+    g.save(); g.translate(L.x, L.by); g.scale(1, clamp(CAM_H / L.dz, .04, 1));
+    const pg = g.createRadialGradient(0, 0, 0, 0, 0, 3 * L.s); pg.addColorStop(0, `rgba(255,210,140,${.45 * a})`); pg.addColorStop(1, 'rgba(255,200,120,0)');
+    g.fillStyle = pg; g.fillRect(-3 * L.s, -3 * L.s, 6 * L.s, 6 * L.s); g.restore();
+  }
+  for (const o of flies) {
+    const pr = proj(roadX(o.z) + o.x, o.z), y = pr.y - (o.y + Math.sin(t * .001 + o.ph) * .2) * pr.s;
+    const a = (.5 + .5 * Math.sin(t * .003 + o.ph * 5)) * (1 - p) * Math.exp(-pr.dz / FOG);
+    glowAt(pr.x + Math.sin(t * .0007 + o.ph) * .3 * pr.s, y, clamp(.25 * pr.s, 6, 26), [230, 255, 140], a * clamp(30 / (.25 * pr.s), .3, 1));
+  }
+  glowAt(sx, sy, H * .7, sky.sun, .16 * sunA);
+  g.globalCompositeOperation = 'soft-light'; g.fillStyle = rgb(sky.grade, .1 + .3 * p); g.fillRect(0, 0, W, H);
+  g.globalCompositeOperation = 'source-over';
+  if (sc.snow) drawSnow(t, dt);
+  g.drawImage(vignette, 0, 0, W, H);
+}
+
+function drawSea(t, proj, hor, sky, sx, turn) {
+  const pts = [];
+  for (let i = 0; i <= 60; i++) { const dz = NEAR * Math.pow(FAR / NEAR, 1 - i / 60), z = cam.z + dz; pts.push(proj(roadX(z) - SHORE, z)); }
+  const shore = new Path2D(); shore.moveTo(-20, hor); pts.forEach(q => shore.lineTo(q.x, q.y)); shore.lineTo(-20, H + 20); shore.closePath();
+  const wg = g.createLinearGradient(0, hor, 0, H);
+  wg.addColorStop(0, rgb(mix(sky.hor, sky.haze, .3))); wg.addColorStop(.15, rgb(mix(hex('#2f6f8f'), sky.top, .35))); wg.addColorStop(1, rgb(mix(hex('#123c56'), sky.top, .2)));
+  g.save(); g.clip(shore); g.fillStyle = wg; g.fillRect(0, hor, W, H - hor);
+  for (let i = 0; i < 140; i++) {   // рябь
+    const d = (i * .6180339) % 1, y = hor + Math.pow(d, 2.2) * (H - hor), len = 4 + 60 * d * d;
+    const x = ((i * 137.7 + t * .006 * (1 + d * 3) + turn * .5) % (W + 200) + W + 200) % (W + 200) - 100;
+    g.strokeStyle = `rgba(255,255,255,${.08 + .1 * d})`; g.lineWidth = 1 + d * 2;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + len, y); g.stroke();
+  }
+  for (let i = 0; i < 90; i++) {   // солнечная дорожка
+    const d = (i * .38196) % 1, y = hor + Math.pow(d, 1.8) * (H - hor) * .8, fl = .5 + .5 * Math.sin(t * .004 + i * 12.9898);
+    const x = sx + Math.sin(i * 78.233) * (10 + d * W * .12), w = 3 + d * 30;
+    g.fillStyle = rgb(sky.sun, .5 * fl * (1 - d * .6)); g.fillRect(x - w / 2, y, w, 1 + d * 2.5);
+  }
+  g.restore();
+  // мокрый песок и пена — полосами вдоль берега, в перспективе
+  const band = (from, to, fill) => {
+    g.beginPath();
+    for (let i = 0; i <= 60; i++) { const dz = NEAR * Math.pow(FAR / NEAR, 1 - i / 60), z = cam.z + dz, q = proj(roadX(z) - SHORE + from, z); i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y); }
+    for (let i = 60; i >= 0; i--) { const dz = NEAR * Math.pow(FAR / NEAR, 1 - i / 60), z = cam.z + dz, q = proj(roadX(z) - SHORE + to, z); g.lineTo(q.x, q.y); }
+    g.fillStyle = fill; g.fill();
+  };
+  const surf = .25 + .15 * Math.sin(t * .0012);   // накат волны
+  band(0, 1.4, 'rgba(120,95,60,.28)');
+  band(-.2, surf, 'rgba(255,255,255,.7)');
+}
+
+function drawSnow(t, dt) {
+  g.fillStyle = '#ffffff';
+  for (const f of FLAKES) {
+    f.y += (.05 + .1 * f.z) * dt;
+    f.x += (Math.sin(t * .0007 + f.ph) * .02 + .01) * dt * f.z;
+    const k = S.vis * .03 * f.z * dt;   // на ходу снег летит навстречу
+    f.x += (f.x - .5) * k; f.y += (f.y - .45) * k;
+    if (f.y > 1.02 || f.x < -.02 || f.x > 1.02) {
+      if (S.vis > .5 && Math.random() < .5) { f.x = .4 + Math.random() * .2; f.y = .35 + Math.random() * .2; } else { f.x = Math.random(); f.y = -.02; }
+    }
+    g.globalAlpha = .45 + .5 * f.z;
+    g.beginPath(); g.arc(f.x * W, f.y * H, (1 + 2.6 * f.z) * H / 800, 0, 7); g.fill();
+  }
+  g.globalAlpha = 1;
+}
+
+// ================= цикл =================
+let last = performance.now(), fadeUntil = 0, weekAt = 0;
+function frame(t) {
+  const dt = Math.min((t - last) / 1000, .1); last = t;
+  S.vis += (S.speed - S.vis) * (1 - Math.exp(-dt / .9));   // дорожка разгоняется и тормозит плавно
+  if (S.speed === 0 && S.vis < .05) S.vis = 0;
+  if (S.vis > 0) {
+    const mps = S.vis / 3.6, stride = 1.75 * (.26 + .035 * Math.max(S.vis, 2)), k = S.fast ? 20 : 1;
+    const st = mps * dt * k / stride;
+    S.steps += st; S.walkSteps += st; S.walkM += mps * dt * k; S.walkS += dt * k;
+    if (S.offline) S.pending += st;
+    cam.z += mps * dt; S.phase += mps * dt / stride; S.idle = 0;
+    if (!S.walking) setWalking(true);
+  } else if (S.walking && (S.idle += dt) > 8) setWalking(false);
+  if (S.walking || t < fadeUntil) draw(t);
+  if (S.walking) updateCard();
+  if (t - weekAt > 400) { renderWeek(); weekAt = t; }
+  requestAnimationFrame(frame);
+}
+function updateCard() {
+  $('#cSteps').textContent = fmt(S.steps);
+  $('#cGoal').textContent = `/ ${fmt(S.goal)}`;
+  $('#cBar').style.width = `${clamp(S.steps / S.goal, 0, 1) * 100}%`;
+  $('#cSpeed').textContent = S.vis.toFixed(1).replace('.', ',');
+  $('#cKm').textContent = (S.walkM / 1000).toFixed(2).replace('.', ',');
+  const m = Math.floor(S.walkS / 60);
+  $('#cTime').textContent = `${m}:${String(Math.floor(S.walkS % 60)).padStart(2, '0')}`;
+  $('#cWait').textContent = S.offline ? `Телефон не отвечает · ждут ${fmt(S.pending)} шагов` : '';
+}
+function setWalking(on) {
+  S.walking = on;
+  document.body.classList.toggle('walking', on);
+  if (on) { S.walkSteps = 0; S.walkM = 0; S.walkS = 0; return; }
+  fadeUntil = performance.now() + 1400;
+  if (S.walkSteps > 50) {   // итог прогулки — одной репликой в ленту, как переписка
+    const msg = document.createElement('div');
+    msg.className = 'incoming';
+    const done = S.steps >= S.goal ? ` За день ${fmt(S.steps)} — цель есть!` : ` До цели ещё ${fmt(S.goal - S.steps)}.`;
+    msg.innerHTML = `<svg class="ava" viewBox="0 0 120 110"><path d="M60,20 C80,20 90,46 90,64 C90,84 76,94 60,94 C44,94 30,84 30,64 C30,46 40,20 60,20 Z" fill="#7FBF8C"/><path d="M60,22 L53,6 M60,22 L60,2 M60,22 L67,6" stroke="#4C8F5A" stroke-width="4" stroke-linecap="round"/><circle cx="52" cy="62" r="5" fill="#2C2618"/><circle cx="68" cy="62" r="5" fill="#2C2618"/><path d="M54,75 C57,79 63,79 66,75" stroke="#2C2618" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg><p>Прошли ${fmt(S.walkSteps)} шагов, ${(S.walkM / 1000).toFixed(1).replace('.', ',')} км за ${Math.round(S.walkS / 60)} мин.${done}</p>`;
+    $('#feed').appendChild(msg);
+  }
+}
+
+function setSpeed(v) { S.speed = v; $('#speed').value = v; $('#speedVal').textContent = `${String(v).replace('.', ',')} км/ч`; }
+$('#speed').addEventListener('input', e => setSpeed(+e.target.value));
+$('#go').addEventListener('click', () => setSpeed(4.5));
+$('#stop').addEventListener('click', () => setSpeed(0));
+$('#zero').addEventListener('click', () => { S.steps = 0; tintKey = ''; });
+$('#fast').addEventListener('change', e => { S.fast = e.target.checked; });
+$('#off').addEventListener('change', e => { S.offline = e.target.checked; document.body.classList.toggle('offline', S.offline); if (!S.offline) S.pending = 0; });
+document.querySelectorAll('.scenes button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.scenes button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  setScene(b.dataset.scene);
+}));
+renderWeek();
+requestAnimationFrame(frame);
+</script>

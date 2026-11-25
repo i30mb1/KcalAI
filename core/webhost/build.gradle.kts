@@ -55,6 +55,11 @@ val syncWebBundle by tasks.registering(Sync::class) {
     from(webBundle)
     // Карты исходников нужны только разработчику страницы, а весят полтора мегабайта.
     exclude("**/*.map")
+    // ПРОБА: прототип прогулки (papertrails) — рядом со страницей, по адресу /walk/kcal.html
+    from(rootProject.file("prototypes/papertrails")) {
+        include("kcal.html", "kcal/**", "src/**", "public/**", "LICENSE")
+        into("walk")
+    }
     into(layout.buildDirectory.dir("webBundle/files/web"))
 }
 

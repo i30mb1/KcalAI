@@ -105,6 +105,8 @@ private fun contentType(path: String): ContentType = when (path.substringAfterLa
     "css" -> ContentType.Text.CSS
     "ttf" -> ContentType("font", "ttf")
     "png" -> ContentType.Image.PNG
+    "jpg", "jpeg" -> ContentType.Image.JPEG
+    "webp" -> ContentType("image", "webp")
     "svg" -> ContentType.Image.SVG
     else -> ContentType.Application.OctetStream
 }
