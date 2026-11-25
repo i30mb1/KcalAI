@@ -4,6 +4,8 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import n7.kcalai.model.DEFAULT_HEIGHT_CM
+import n7.kcalai.model.DEFAULT_STEPS_GOAL
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.PageGrace
 import n7.kcalai.model.Sex
@@ -82,4 +84,14 @@ data class MascotProfileEntity(
     /** Сколько держать страницу дневника в браузере, когда телефон убран. */
     @ColumnInfo(defaultValue = "MIN_5")
     val pageGrace: PageGrace = PageGrace.MIN_5,
+    /** Цель шагов на день; `null` — не задавали, см. [stepsGoalOrDefault]. */
+    val stepsGoal: Int? = null,
+    /** Рост, см: по нему меряется шаг на дорожке; `null` — не называли, см. [heightOrDefault]. */
+    val heightCm: Int? = null,
 )
+
+/** Цель шагов на день — заданная или общая, пока её не задали. */
+val MascotProfileEntity.stepsGoalOrDefault: Int get() = stepsGoal ?: DEFAULT_STEPS_GOAL
+
+/** Рост для длины шага — названный или средний, пока его не назвали. */
+val MascotProfileEntity.heightOrDefault: Int get() = heightCm ?: DEFAULT_HEIGHT_CM

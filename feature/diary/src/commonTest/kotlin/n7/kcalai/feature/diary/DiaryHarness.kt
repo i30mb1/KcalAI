@@ -37,6 +37,7 @@ import n7.kcalai.model.FoodRef
 import n7.kcalai.model.MealType
 import n7.kcalai.model.Nutriments
 import n7.kcalai.personal.PersonalRepository
+import n7.kcalai.repositories.DaySteps
 import n7.kcalai.repositories.DiaryRepository
 import n7.kcalai.repositories.FoodDbSource
 import n7.kcalai.repositories.FoodRepository
@@ -88,6 +89,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
         peerOffers: PeerOfferDao? = null,
         peers: NearbyPeers? = null,
         browsers: Browsers? = null,
+        daySteps: ((Long) -> Flow<DaySteps>)? = null,
     ): DiaryViewModel {
         val personal = PersonalRepository(diaryDao, FakePersonalDao(), bodyMetricDao, goalDao, zone)
         val food = FoodRepository(
@@ -116,6 +118,7 @@ internal class DiaryHarness(now: String = "2026-10-31T09:00:00Z") {
             peers = peers,
             browsers = browsers,
             assistant = assistant,
+            daySteps = daySteps,
             clock = clock,
             zone = zone,
         )

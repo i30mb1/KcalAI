@@ -180,6 +180,22 @@ class MascotBrain(
         if (profile.pageGrace != grace) dao.upsertProfile(profile.copy(pageGrace = grace))
     }
 
+    /**
+     * Цель шагов и рост — из шита шагов, тапом по плашке шагов в ленте.
+     *
+     * @param heightCm рост; `null` — не назвали, остаётся прежний
+     */
+    suspend fun setSteps(goal: Int, heightCm: Int?) {
+        val profile = dao.profile() ?: MascotProfileEntity()
+        dao.upsertProfile(profile.copy(stepsGoal = goal, heightCm = heightCm ?: profile.heightCm))
+    }
+
+    /** Рост из помощника цели: второй раз его не спрашивают, по нему же меряется шаг на дорожке. */
+    suspend fun setHeight(heightCm: Int) {
+        val profile = dao.profile() ?: MascotProfileEntity()
+        if (profile.heightCm != heightCm) dao.upsertProfile(profile.copy(heightCm = heightCm))
+    }
+
     /** Пол из помощника цели: с ним персонажи говорят «ты ел» и «ты ела» правильно. */
     suspend fun setSex(sex: Sex) {
         val profile = dao.profile() ?: MascotProfileEntity()

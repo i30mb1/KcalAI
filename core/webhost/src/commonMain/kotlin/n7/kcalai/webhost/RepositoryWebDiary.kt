@@ -1,5 +1,7 @@
 package n7.kcalai.webhost
 
+import n7.kcalai.model.DEFAULT_STEPS_GOAL
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -59,6 +61,7 @@ import kotlin.time.Clock
  * @param live её живые числа, см. [n7.kcalai.repositories.TreadmillFeed]
  * @param walkSaid что Зёрнышко сказало о прогулках в ленте дня
  * @param hide скрыть реплику персонажа корзинкой — тем же путём, что в приложении
+ * @param stepsGoal цель шагов на день — из профиля телефона
  */
 class RepositoryWebDiary(
     private val diary: DiaryRepository,
@@ -71,6 +74,7 @@ class RepositoryWebDiary(
     private val regram: suspend (entryId: Long, grams: Int, now: Long) -> Unit,
     private val rename: suspend (String) -> Unit,
     private val keepPage: suspend (PageGrace) -> Unit,
+    private val stepsGoal: Flow<Int> = flowOf(DEFAULT_STEPS_GOAL),
     private val clock: Clock = Clock.System,
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
 ) : WebDiary {
@@ -83,11 +87,12 @@ class RepositoryWebDiary(
     override val today: Long get() = clock.todayIn(zone).toEpochDays()
 
     override fun day(date: Long): Flow<WebDayContent> =
-        combine(diary.observeDay(date), diary.observeGoal(date), walks.observeDay(date), steps.observeDay(date), walkSaid(date)) { totals, goal, walked, counted, said ->
+        combine(diary.observeDay(date), diary.observeGoal(date), walks.observeDay(date), counted(date), walkSaid(date)) { totals, goal, walked, (counted, target), said ->
             WebDayContent(
                 walks = walked.map { it.toWeb(date) },
                 steps = counted.total,
                 phoneSteps = counted.phone,
+                stepsGoal = target,
                 said = said,
                 entries = totals.entries.map { it.toWeb(zone) },
                 goalKcal = goal?.kcal?.takeIf { it > 0 },
@@ -96,6 +101,9 @@ class RepositoryWebDiary(
                 fiberGoal = goal?.fiber ?: suggestedFiber(goal?.kcal),
             )
         }
+
+    /** Шаги дня и цель к ним — одним потоком: у типизированного combine потолок в пять. */
+    private fun counted(date: Long) = combine(steps.observeDay(date), stepsGoal) { counted, target -> counted to target }
 
     override fun week(date: Long): Flow<List<WebDaySummary>> {
         val week = weekOf(date)

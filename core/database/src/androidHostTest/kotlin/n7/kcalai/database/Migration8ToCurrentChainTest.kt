@@ -9,11 +9,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Обновление из Google Play: версия 1.3 оставила базу версии 8, а приложение открывает её версией 15. Цепочка
- * миграций 8 → 15 целиком — на базе с записями во всех главных таблицах. После неё каждая таблица и каждый индекс —
- * ровно как в схеме 15 (то же сверяет Room при открытии: расхождение — падение у людей), а записанное — на месте.
+ * Обновление из Google Play: версия 1.3 оставила базу версии 8, а приложение открывает её текущей. Цепочка
+ * миграций от 8 целиком — на базе с записями во всех главных таблицах. После неё каждая таблица и каждый индекс —
+ * ровно как в текущей схеме (то же сверяет Room при открытии: расхождение — падение у людей), а записанное — на месте.
  */
-class Migration8To15ChainTest {
+class Migration8ToCurrentChainTest {
 
     private val connection = BundledSQLiteDriver().open(":memory:")
 
@@ -21,7 +21,7 @@ class Migration8To15ChainTest {
     fun close() = connection.close()
 
     @Test
-    fun `база из Google Play доходит до версии 15 с дневником на месте`() {
+    fun `база из Google Play доходит до текущей версии с дневником на месте`() {
         schemaOf(8).create().forEach(connection::execSQL)
         RECORDS.forEach(connection::execSQL)
 
@@ -33,6 +33,7 @@ class Migration8To15ChainTest {
             KcalDatabase_AutoMigration_12_13_Impl(),
             KcalDatabase_AutoMigration_13_14_Impl(),
             KcalDatabase_AutoMigration_14_15_Impl(),
+            KcalDatabase_AutoMigration_15_16_Impl(),
         ).forEach { it.migrate(connection) }
 
         val target = schemaOf(KCAL_DB_VERSION)

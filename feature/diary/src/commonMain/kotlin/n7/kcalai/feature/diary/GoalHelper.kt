@@ -169,5 +169,5 @@ private const val PROT_CHANGE = 1.8
 private const val FAT_SHARE = 0.3
 
 private val AGE_RANGE = 14..100
-private val HEIGHT_RANGE = 120..230
+internal val HEIGHT_RANGE = 120..230
 private val WEIGHT_RANGE = 30.0..300.0

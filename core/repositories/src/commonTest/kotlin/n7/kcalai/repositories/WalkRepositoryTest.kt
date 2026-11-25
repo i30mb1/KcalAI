@@ -39,6 +39,21 @@ class WalkRepositoryTest {
         assertEquals(at(25, 18, 0), walks.single().startedAt)
     }
 
+    /** Шаг дорожки — по росту из профиля: у высокого шаг длиннее, и на тот же путь шагов меньше. */
+    @Test
+    fun `шаги дорожки считаются по росту`() = runBlocking {
+        val sample = TreadmillSample(4.0, 1_000, 40, 900)
+        val short = WalkRepository(MemoryWalkDao(), zone, height = { 160 })
+        val tall = WalkRepository(MemoryWalkDao(), zone, height = { 200 })
+        short.record(sample, at(25, 9))
+        tall.record(sample, at(25, 9))
+
+        val shortSteps = short.observeDay(today).first().single().steps
+        val tallSteps = tall.observeDay(today).first().single().steps
+
+        assertEquals(200.0 / 160.0, shortSteps / tallSteps, 0.001)
+    }
+
     @Test
     fun `прогулка относится к дню, в который началась`() = runBlocking {
         repository.record(TreadmillSample(3.0, 2000, 80, 1800), at(26, 0, 10))

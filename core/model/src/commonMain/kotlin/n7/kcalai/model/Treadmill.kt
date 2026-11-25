@@ -116,6 +116,11 @@ fun List<Walk>.totals(): WalkTotals = WalkTotals(
 
 private fun avgKmh(s: TreadmillSample) = if (s.elapsedS > 0) s.distanceM / s.elapsedS.toDouble() * MPS_TO_KMH else 0.0
 
+/** «6 240» — шаги до единицы, с разрядами: в ленте телефона и на странице одинаково. */
+fun stepsLabel(steps: Int): String = steps.toString().reversed().chunked(DIGITS_GROUP).joinToString(" ").reversed()
+
+private const val DIGITS_GROUP = 3
+
 /** Рост, пока в профиле его нет: длина шага считается по нему. */
 const val DEFAULT_HEIGHT_CM = 175
 

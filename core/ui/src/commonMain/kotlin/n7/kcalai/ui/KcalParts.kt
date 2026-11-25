@@ -200,3 +200,22 @@ fun SproutIcon(color: Color, modifier: Modifier = Modifier, size: Dp = 11.dp) {
         drawPath(leaves, color)
     }
 }
+
+/**
+ * Следы — знак шагов: два отпечатка лесенкой, как идут ноги. Цвет — зелёный Зёрнышка: прогулки — его тема.
+ */
+@Composable
+fun StepsIcon(color: Color, modifier: Modifier = Modifier, size: Dp = 12.dp) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        // подошва — овал, пятка — кружок под ним; правый след выше левого на полшага
+        fun foot(cx: Float, top: Float) {
+            drawOval(color, Offset(cx - w * 0.15f, top), androidx.compose.ui.geometry.Size(w * 0.30f, h * 0.40f))
+            drawCircle(color, radius = w * 0.09f, center = Offset(cx, top + h * 0.53f))
+        }
+        foot(w * 0.30f, h * 0.06f)
+        foot(w * 0.70f, h * 0.32f)
+    }
+}
+

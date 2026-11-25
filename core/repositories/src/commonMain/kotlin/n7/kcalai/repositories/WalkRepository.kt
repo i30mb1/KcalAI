@@ -8,6 +8,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import n7.kcalai.database.WalkDao
 import n7.kcalai.database.WalkEntity
+import n7.kcalai.model.DEFAULT_HEIGHT_CM
 import n7.kcalai.model.TreadmillSample
 import n7.kcalai.model.Walk
 import n7.kcalai.model.track
@@ -15,13 +16,19 @@ import n7.kcalai.model.track
 /**
  * Прогулки по беговой дорожке. Пакеты шлёт страница дневника, к которой дорожка подключена
  * по Bluetooth; здесь они складываются в прогулки (см. [track]) и живут в базе телефона.
+ *
+ * @param height рост человека, см: по нему меряется шаг — дорожка знает путь, а не шаги
  */
-class WalkRepository(private val dao: WalkDao, private val zone: TimeZone) {
+class WalkRepository(
+    private val dao: WalkDao,
+    private val zone: TimeZone,
+    private val height: suspend () -> Int = { DEFAULT_HEIGHT_CM },
+) {
 
     /** Пакет дорожки: продолжает последнюю прогулку или заводит новую. Рассказанная остаётся рассказанной. */
     suspend fun record(sample: TreadmillSample, now: Long) {
         val last = dao.last()
-        val walk = track(last?.toWalk(), sample, now) ?: return
+        val walk = track(last?.toWalk(), sample, now, height()) ?: return
         val told = last?.toldAt?.takeIf { last.startedAt == walk.startedAt }
         dao.upsert(walk.toEntity(dayOf(walk.startedAt), told))
     }

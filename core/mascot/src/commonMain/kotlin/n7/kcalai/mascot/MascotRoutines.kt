@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import n7.kcalai.database.stepsGoalOrDefault
 import n7.kcalai.database.MascotMessageEntity
 import n7.kcalai.mascot.voice.Topic
 import n7.kcalai.model.BackgroundModel
@@ -15,7 +16,6 @@ import n7.kcalai.model.EntrySource
 import n7.kcalai.model.Log
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.ModelDelivery
-import n7.kcalai.model.DEFAULT_STEPS_GOAL
 import n7.kcalai.model.WALK_OVER_MS
 import n7.kcalai.model.totals
 import n7.kcalai.personal.PersonalRepository
@@ -97,7 +97,7 @@ class MascotRoutines(
      * ожидание, и итог не прозвучит посреди ходьбы. Прогулка прошлых дней (телефон был выключен) не
      * рассказывается — помечается рассказанной молча: вчерашний итог сегодня — уже не новость.
      */
-    suspend fun tellWalks(goal: Int = DEFAULT_STEPS_GOAL) {
+    suspend fun tellWalks() {
         walks.observeLast().collectLatest { last ->
             if (last == null || last.toldAt != null) return@collectLatest
             val wait = last.seenAt + WALK_OVER_MS - clock.now().toEpochMilliseconds()
@@ -107,6 +107,7 @@ class MascotRoutines(
                 val today = now.toLocalDateTime(zone).date.toEpochDays()
                 // «до цели» — по шагам дня вместе: телефона и дорожки
                 val day = walks.day(last.dateEpochDay).totals().copy(steps = steps.day(last.dateEpochDay).total)
+                val goal = brain.profile.first().stepsGoalOrDefault
                 val told = last.dateEpochDay != today || brain.tellWalk(last.toWalk(), day, goal, clock) != null
                 if (told) walks.markTold(last, clock.now().toEpochMilliseconds())
             }

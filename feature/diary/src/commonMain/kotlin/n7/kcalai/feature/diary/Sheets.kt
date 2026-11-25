@@ -106,6 +106,10 @@ fun GoalSheet(
     onDismiss: () -> Unit,
     /** Пол из помощника — отдаётся вместе с сохранённой целью, чтобы персонажи не путали род. */
     onSex: (Sex) -> Unit = {},
+    /** Рост, уже известный: помощник подставляет его сам. */
+    heightCm: Int? = null,
+    /** Рост из помощника — вместе с сохранённой целью: по нему же меряется шаг на дорожке. */
+    onHeight: (Int) -> Unit = {},
 ) {
     val colors = KcalTheme.colors
     val start = remember { goalMacros(goal) }
@@ -117,6 +121,7 @@ fun GoalSheet(
     // Пол из помощника запоминается, только если цель сохранили: посчитать
     // и закрыть шит — не повод что-то о человеке хранить.
     var helperSex by remember { mutableStateOf<Sex?>(null) }
+    var helperHeight by remember { mutableStateOf<Int?>(null) }
     var focused by remember { mutableStateOf<Macro?>(null) }
     // Цели ещё нет — новичок своих граммов обычно не знает: помощник открыт сразу, поля граммов — для тех, кто знает.
     var helperOpen by remember { mutableStateOf(goal == null) }
@@ -176,8 +181,10 @@ fun GoalSheet(
             open = helperOpen,
             onToggle = { helperOpen = it },
             lastWeightGrams = lastWeightGrams,
-            onSuggest = { suggestion, sex ->
-                helperSex = sex
+            heightCm = heightCm,
+            onSuggest = { suggestion, body ->
+                helperSex = body.sex
+                helperHeight = body.heightCm
                 prot = suggestion.prot.toString()
                 fat = suggestion.fat.toString()
                 carb = suggestion.carb.toString()
@@ -191,6 +198,7 @@ fun GoalSheet(
             onClick = {
                 onConfirm(macros.kcal, macros.prot, macros.fat, macros.carb)
                 helperSex?.let(onSex)
+                helperHeight?.let(onHeight)
             },
             // Во всю ширину, как в шите правки: узкая кнопка у левого края
             // выглядела недоделанной и терялась под текстом.
@@ -223,8 +231,9 @@ fun GoalSheet(
  * человек их видит, правит и сохраняет сам. Подписей у полей нет — их называют
  * единицы: «лет», «см», «кг».
  *
- * Рост и возраст не хранятся: подсказка нужна раз, на старте. Пол — хранится,
- * если цель сохранили: по нему персонажи говорят «ты ел» и «ты ела» правильно.
+ * Возраст не хранится: подсказка нужна раз, на старте. Пол и рост — хранятся, если цель
+ * сохранили: по полу персонажи говорят «ты ел» и «ты ела» правильно, по росту меряется шаг.
+ * Известный рост поле подставляет само.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -232,7 +241,8 @@ private fun GoalHelper(
     open: Boolean,
     onToggle: (Boolean) -> Unit,
     lastWeightGrams: Int?,
-    onSuggest: (GoalSuggestion, Sex) -> Unit,
+    heightCm: Int?,
+    onSuggest: (GoalSuggestion, Body) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = KcalTheme.colors
@@ -240,7 +250,7 @@ private fun GoalHelper(
 
     var sex by remember { mutableStateOf<Sex?>(null) }
     var age by remember { mutableStateOf("") }
-    var height by remember { mutableStateOf("") }
+    var height by remember { mutableStateOf(heightCm?.toString().orEmpty()) }
     // Вес, уже записанный строкой «вес 82,4», второй раз не набирают.
     var weight by remember { mutableStateOf(lastWeightGrams?.let { formatKg(it).removeSuffix(" кг") }.orEmpty()) }
     var activity by remember { mutableStateOf(Activity.LIGHT) }
@@ -272,7 +282,7 @@ private fun GoalHelper(
                 text = "Посчитать",
                 enabled = body != null,
                 onClick = {
-                    body?.let { onSuggest(suggestGoal(it), it.sex) }
+                    body?.let { onSuggest(suggestGoal(it), it) }
                     onToggle(false)
                     focusManager.clearFocus()
                 },
@@ -287,7 +297,7 @@ private fun GoalHelper(
  * Сменилась реплика — сменяются и пузырёк, и тот, кто говорит.
  */
 @Composable
-private fun SheetSpeech(line: SheetLine, modifier: Modifier = Modifier) {
+internal fun SheetSpeech(line: SheetLine, modifier: Modifier = Modifier) {
     val colors = KcalTheme.colors
     Row(modifier, verticalAlignment = Alignment.Bottom) {
         // Место говорящего: он сам перебегает сюда со сцены шита.
@@ -314,7 +324,7 @@ private const val SPEECH_LINES = 2
 /** Выбор одного из нескольких — чипсами, выбранный тёмный. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun <T> Choices(options: List<T>, selected: T?, title: (T) -> String, onPick: (T) -> Unit) {
+internal fun <T> Choices(options: List<T>, selected: T?, title: (T) -> String, onPick: (T) -> Unit) {
     val colors = KcalTheme.colors
     // Одна категория — одна строка равных частей: длинный вариант переносится внутри своей части,
     // а не уезжает на вторую строку отдельно от соседей. Высота у всех — по самому высокому.
@@ -1080,7 +1090,7 @@ internal fun Sheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
  * от 15sp на плитке до 34sp у веса.
  */
 @Composable
-private fun NumberInput(
+internal fun NumberInput(
     value: String,
     onValueChange: (String) -> Unit,
     style: TextStyle,

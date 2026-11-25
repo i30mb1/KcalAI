@@ -22,6 +22,8 @@ import kotlin.time.Instant
 import n7.kcalai.assistant.DiaryTools
 import n7.kcalai.assistant.FoodAssistant
 import n7.kcalai.database.KcalDatabase
+import n7.kcalai.database.heightOrDefault
+import n7.kcalai.database.stepsGoalOrDefault
 import n7.kcalai.feature.diary.Browsers
 import n7.kcalai.feature.diary.DiaryOutbox
 import n7.kcalai.feature.diary.DiaryViewModel
@@ -191,7 +193,9 @@ abstract class AppGraph {
     }
 
     /** Прогулки по беговой дорожке, подключённой к телефону. */
-    val walkRepository: WalkRepository by lazy { WalkRepository(database.walkDao(), TimeZone.currentSystemDefault()) }
+    val walkRepository: WalkRepository by lazy {
+        WalkRepository(database.walkDao(), TimeZone.currentSystemDefault(), height = { mascotBrain.profile.first().heightOrDefault })
+    }
 
     /** Шагомер самого телефона: Health Connect / Core Motion. Без доступа — шагов телефона нет. */
     open fun phoneSteps(): PhoneSteps = NoPhoneSteps
@@ -311,6 +315,7 @@ abstract class AppGraph {
                 regram = personalRepository::onGramsEdited,
                 rename = mascotBrain::setName,
                 keepPage = mascotBrain::setPageGrace,
+                stepsGoal = mascotBrain.profile.map { it.stepsGoalOrDefault },
             ),
             owner = mascotBrain.profile.map { it.name },
             grace = mascotBrain.profile.map { it.pageGrace },
@@ -372,6 +377,8 @@ abstract class AppGraph {
         // Браузеры у страницы дневника: просьбы пустить — в ленту, кто на связи — держит экран.
         browsers = Browsers(database.webClientDao(), webPresence.admitted),
         assistant = assistant,
+        // Шаги дня — плашкой в ленте: телефона и дорожки вместе.
+        daySteps = stepsRepository::observeDay,
     )
 }
 

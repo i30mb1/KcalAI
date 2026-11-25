@@ -105,6 +105,14 @@ sealed interface FeedItem {
     }
 
     /**
+     * Шаги дня — тихая плашка после записей, одна на день: число меняется на месте, новой не добавляется.
+     * Тап открывает цель шагов и рост.
+     */
+    data class Steps(val steps: Int, val goal: Int) : FeedItem {
+        override val key get() = "steps"
+    }
+
+    /**
      * Прошлый день без записей: не утренняя сводка, а приглашение дописать.
      *
      * «Доброе утро!» над вчерашним днём было бы неправдой,
@@ -355,7 +363,8 @@ enum class Assist {
  * и их ведёт Яйцо: у ленты должен быть один голос по умолчанию, а не жребий.
  */
 fun speakerOf(item: FeedItem): Mascot? = when (item) {
-    is FeedItem.DaySeparator, is FeedItem.Meal, is FeedItem.Question -> null
+    // Плашка шагов — отметка в переписке, как дата: её никто не говорит.
+    is FeedItem.DaySeparator, is FeedItem.Meal, is FeedItem.Question, is FeedItem.Steps -> null
     is FeedItem.Said -> item.mascot
     is FeedItem.Ask -> item.question.mascot
     is FeedItem.Over -> Mascot.BUTTER

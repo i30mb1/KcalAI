@@ -31,6 +31,10 @@ import n7.kcalai.database.DiaryEntryEntity
 import n7.kcalai.database.MascotMessageEntity
 import n7.kcalai.database.MascotProfileEntity
 import n7.kcalai.database.WriteConsent
+import n7.kcalai.database.heightOrDefault
+import n7.kcalai.database.stepsGoalOrDefault
+import n7.kcalai.model.DEFAULT_HEIGHT_CM
+import n7.kcalai.model.DEFAULT_STEPS_GOAL
 import n7.kcalai.mascot.voice.Topic
 import n7.kcalai.model.BackgroundModel
 import n7.kcalai.model.EntrySource
@@ -607,6 +611,30 @@ class MascotBrainTest {
         brain().setPageGrace(PageGrace.FOREVER)
 
         assertEquals(PageGrace.FOREVER, mascots.profileRow.value?.pageGrace)
+    }
+
+    /** Цель шагов и рост — из шита шагов, хранятся в профиле; пока их не задали — 8 000 и 175 см. */
+    @Test
+    fun `цель шагов и рост хранятся в профиле`() = runTest {
+        val fresh = brain().profile.first()
+        assertEquals(DEFAULT_STEPS_GOAL, fresh.stepsGoalOrDefault)
+        assertEquals(DEFAULT_HEIGHT_CM, fresh.heightOrDefault)
+
+        brain().setSteps(goal = 10_000, heightCm = 182)
+
+        assertEquals(10_000, mascots.profileRow.value?.stepsGoal)
+        assertEquals(182, mascots.profileRow.value?.heightCm)
+    }
+
+    /** Рост, названный помощнику цели, второй раз не спрашивают: по нему же меряется шаг. */
+    @Test
+    fun `рост из помощника цели запоминается, цель шагов не трогается`() = runTest {
+        brain().setSteps(goal = 6_000, heightCm = 170)
+
+        brain().setHeight(158)
+
+        assertEquals(158, mascots.profileRow.value?.heightCm)
+        assertEquals(6_000, mascots.profileRow.value?.stepsGoal)
     }
 
     /** Имя меняют и со страницы: оно же больше не спрашивается — человек его уже назвал. */

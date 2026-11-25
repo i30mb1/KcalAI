@@ -73,6 +73,8 @@ import n7.kcalai.ui.popIn
 @Composable
 fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Рост из профиля: помощник цели подставляет его сам.
+    val height by viewModel.heightCm.collectAsStateWithLifecycle()
 
     // Экран мог пролежать в фоне через полночь — дата пересматривается на каждом возврате.
     LifecycleResumeEffect(Unit) {
@@ -108,6 +110,7 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         onLogWeight = viewModel::onLogWeight,
         onSubmit = viewModel::onSubmit,
         onOpenGoal = viewModel::onOpenGoal,
+        onOpenSteps = viewModel::onOpenSteps,
         onFiberTap = viewModel::onFiberTapped,
         onOpenScan = viewModel::onOpenScan,
         onOpenLabelDebug = if (labelDebug) viewModel::onOpenLabelDebug else null,
@@ -147,6 +150,8 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
             onConfirm = viewModel::onSetGoal,
             onDismiss = viewModel::onDismissOverlay,
             onSex = viewModel::onSex,
+            heightCm = height,
+            onHeight = viewModel::onHeight,
         )
 
         is Overlay.EditEntry -> EntrySheet(
@@ -202,6 +207,13 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
             onConfirm = viewModel::onAnswerName,
             onDismiss = viewModel::onDismissOverlay,
         )
+
+        is Overlay.Steps -> StepsSheet(
+            goal = overlay.goal,
+            heightCm = overlay.heightCm,
+            onConfirm = viewModel::onSetSteps,
+            onDismiss = viewModel::onDismissOverlay,
+        )
     }
 }
 
@@ -237,6 +249,8 @@ fun DiaryScreen(
     onLogWeight: () -> Unit,
     onSubmit: () -> Boolean,
     onOpenGoal: () -> Unit,
+    /** Тап по плашке шагов в ленте: цель шагов и рост. */
+    onOpenSteps: () -> Unit,
     /** Тап по клетчатке в шапке: о ней рассказывает Зёрнышко. */
     onFiberTap: () -> Unit,
     onOpenScan: () -> Unit,
@@ -353,7 +367,7 @@ fun DiaryScreen(
     val row = visibleRow(state.composer, composerFocused)
     val owner by rememberUpdatedState(chipOwner(row))
     // Шиты со своими персонажами: на главном экране их на это время нет.
-    val offstage by rememberUpdatedState(state.overlay is Overlay.Goal || state.overlay is Overlay.AddProduct)
+    val offstage by rememberUpdatedState(state.overlay is Overlay.Goal || state.overlay is Overlay.AddProduct || state.overlay is Overlay.Steps)
     val places by remember(anchors) {
         derivedStateOf {
             mascotPlaces(feed, shownAnchors(anchors.rects, anchors.coverBottom, anchors.floorTop), owner, offstage)
@@ -386,6 +400,7 @@ fun DiaryScreen(
             onAddProduct = onAddProduct,
             onPickPlan = onPickPlan,
             onOpenGoal = onOpenGoal,
+            onOpenSteps = onOpenSteps,
             onAnswerAsk = onAnswerAsk,
             onAnswerOffer = onAnswerOffer,
             onAnswerBrowser = onAnswerBrowser,
@@ -501,6 +516,7 @@ private fun Feed(
     onAddProduct: (String) -> Unit,
     onPickPlan: (PlanOption) -> Unit,
     onOpenGoal: () -> Unit,
+    onOpenSteps: () -> Unit,
     onAnswerAsk: (MascotQuestion, Boolean) -> Unit,
     onAnswerOffer: (Long, Boolean) -> Unit,
     onAnswerBrowser: (Long, Boolean) -> Unit,
@@ -610,7 +626,7 @@ private fun Feed(
             // Реплика вырастает из своего «хвоста»: исходящая — справа снизу,
             // ответ — слева снизу, как в любом мессенджере.
             val origin = when (item) {
-                is FeedItem.DaySeparator -> TransformOrigin.Center
+                is FeedItem.DaySeparator, is FeedItem.Steps -> TransformOrigin.Center
                 is FeedItem.Meal, is FeedItem.Question -> TransformOrigin(1f, 1f)
                 else -> TransformOrigin(0f, 1f)
             }
@@ -640,6 +656,8 @@ private fun Feed(
                     is FeedItem.Remaining -> RemainingBubble(item, onPickPlan)
 
                     is FeedItem.Over -> OverBubble(item)
+
+                    is FeedItem.Steps -> StepsPill(item, onOpenSteps)
 
                     is FeedItem.NotFound -> NotFoundBubble(
                         item = item,

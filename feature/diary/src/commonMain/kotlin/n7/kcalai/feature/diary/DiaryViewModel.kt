@@ -1,5 +1,8 @@
 package n7.kcalai.feature.diary
 
+import kotlinx.coroutines.flow.StateFlow
+import n7.kcalai.database.stepsGoalOrDefault
+import n7.kcalai.repositories.DaySteps
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlin.math.roundToInt
@@ -125,6 +128,9 @@ sealed interface Overlay {
 
     /** «Как тебя зовут?» — ответ на вопрос Яйца. */
     data object Name : Overlay
+
+    /** Цель шагов и рост — тапом по плашке шагов в ленте; открывается с тем, что уже задано. */
+    data class Steps(val goal: Int, val heightCm: Int?) : Overlay
 }
 
 /** Что стоит над строкой ввода. Ряд ровно один — выбор между ними делает состояние. */
@@ -253,6 +259,8 @@ class DiaryViewModel(
     /** Браузеры у страницы дневника. `null` — страницы нет, и просьб в ленте не бывает. */
     private val browsers: Browsers? = null,
     private val assistant: FoodAssistant? = null,
+    /** Шаги дня — телефона и дорожки. `null` — шагов нет вовсе, и плашки в ленте не бывает. */
+    private val daySteps: ((Long) -> Flow<DaySteps>)? = null,
     private val clock: Clock = Clock.System,
     /** Зона, в которой считаются день и час: `createdAt` хранится в UTC. */
     private val zone: TimeZone = TimeZone.currentSystemDefault(),
@@ -354,6 +362,7 @@ class DiaryViewModel(
                 peerOffers?.observeDay(day.toEpochDays()) ?: flowOf(emptyList()),
                 // Какие браузеры просились в дневник; без страницы их не бывает.
                 browsers?.requests?.observeDay(day.toEpochDays()) ?: flowOf(emptyList()),
+                walkOf(day.toEpochDays()),
                 ::Said,
             )
             combine(
@@ -363,8 +372,8 @@ class DiaryViewModel(
                 diary.observeWeek(now.toEpochDays()),
                 diary.observeGoal(now.toEpochDays()),
                 saidAndOffered,
-            ) { dayTotals, goal, week, todayGoal, (said, offers, asked) ->
-                DayData(day, now, dayTotals, goal, week, todayGoal, said, offers, asked)
+            ) { dayTotals, goal, week, todayGoal, (said, offers, asked, walked) ->
+                DayData(day, now, dayTotals, goal, week, todayGoal, said, offers, asked, walked)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -573,13 +582,28 @@ class DiaryViewModel(
         val said: List<MascotMessageEntity>,
         val offers: List<PeerOfferEntity> = emptyList(),
         val browsers: List<WebClientEntity> = emptyList(),
+        val walked: DayWalk? = null,
     )
 
-    /** Что в переписке дня сказали не записи: персонажи, соседи и браузеры. */
+    /** Шаги дня и цель к ним. */
+    private data class DayWalk(val steps: DaySteps, val goal: Int)
+
+    /** Шаги дня с целью из профиля; без шагомера и дорожки — `null` сразу, ждать нечего. */
+    private fun walkOf(day: Long): Flow<DayWalk?> {
+        val steps = daySteps ?: return flowOf(null)
+        return combine(steps(day).distinctUntilChanged(), brain.profile.map { it.stepsGoalOrDefault }.distinctUntilChanged(), ::DayWalk)
+    }
+
+    /** Рост из профиля — помощник цели подставляет его сам. */
+    val heightCm: StateFlow<Int?> = brain.profile.map { it.heightCm }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Что в переписке дня сказали не записи: персонажи, соседи и браузеры, — и шаги дня. */
     private data class Said(
         val said: List<MascotMessageEntity>,
         val offers: List<PeerOfferEntity>,
         val browsers: List<WebClientEntity>,
+        val walked: DayWalk?,
     )
 
     /** Реплика сессии и день, в переписке которого она стоит. */
@@ -788,6 +812,7 @@ class DiaryViewModel(
             body.add(gapPosition(body, gap.gap, zone), gap)
         }
         feed += body
+        stepsOf(loaded)?.let { feed += it }
         feed += replies.filterNot { it is FeedItem.Gap }
         // Предложение отправить — тоже реплика: пока вопрос ждёт ответа, оно ждёт с ним.
         pending?.takeUnless { waiting }?.let { feed += it }
@@ -811,6 +836,16 @@ class DiaryViewModel(
         }
 
         return feed
+    }
+
+    /**
+     * Плашка шагов дня — после записей. Сегодня она стоит и при нуле, если шагомер телефона отдаёт шаги:
+     * утром ей есть куда расти. Прошлый день без шагов — без плашки: там уже ничего не прибавится.
+     */
+    private fun stepsOf(loaded: DayData): FeedItem.Steps? {
+        val (steps, goal) = loaded.walked ?: return null
+        val shown = if (loaded.date == loaded.today) steps.phone != null || steps.treadmill > 0 else steps.total > 0
+        return if (shown) FeedItem.Steps(steps = steps.total, goal = goal) else null
     }
 
     /**
@@ -1854,6 +1889,25 @@ class DiaryViewModel(
     /** Пол из помощника цели: с ним персонажи говорят «ты ел» и «ты ела» правильно. */
     fun onSex(sex: Sex) {
         viewModelScope.launch { brain.setSex(sex) }
+    }
+
+    /** Рост из помощника цели — запоминается вместе с сохранённой целью, как пол. */
+    fun onHeight(heightCm: Int) {
+        viewModelScope.launch { brain.setHeight(heightCm) }
+    }
+
+    /** Тап по плашке шагов: шит с целью шагов и ростом — с тем, что уже задано. */
+    fun onOpenSteps() {
+        viewModelScope.launch {
+            val profile = brain.profile.first()
+            overlay.value = Overlay.Steps(goal = profile.stepsGoalOrDefault, heightCm = profile.heightCm)
+        }
+    }
+
+    /** @param heightCm рост; `null` — не назвали, остаётся прежний */
+    fun onSetSteps(goal: Int, heightCm: Int?) {
+        overlay.value = Overlay.None
+        viewModelScope.launch { brain.setSteps(goal, heightCm) }
     }
 
     fun onSetGoal(kcal: Int, prot: Int, fat: Int, carb: Int) {

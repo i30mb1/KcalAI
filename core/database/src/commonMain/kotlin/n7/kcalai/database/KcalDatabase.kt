@@ -54,6 +54,8 @@ import kotlinx.coroutines.IO
         AutoMigration(from = 13, to = 14),
         // Убрать корзинкой просьбу браузера и предложение соседа — новые столбцы, у прежних пусты.
         AutoMigration(from = 14, to = 15),
+        // Цель шагов и рост в профиле — новые столбцы, пока не заданы — пусты.
+        AutoMigration(from = 15, to = 16),
     ],
 )
 @ConstructedBy(KcalDatabaseConstructor::class)
@@ -73,7 +75,7 @@ abstract class KcalDatabase : RoomDatabase() {
 }
 
 /** Версия схемы базы. Константой — её читают тесты обновления и выгрузки схемы. */
-const val KCAL_DB_VERSION = 15
+const val KCAL_DB_VERSION = 16
 
 /** Реализацию для каждой платформы генерирует Room. */
 @Suppress("KotlinNoActualForExpect")

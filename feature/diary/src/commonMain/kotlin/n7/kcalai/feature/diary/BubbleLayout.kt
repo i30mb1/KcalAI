@@ -49,10 +49,13 @@ internal val SIDE_CHANGE_GAP = 10.dp
  */
 internal fun gapBefore(previous: FeedItem?, item: FeedItem): Dp = when {
     previous == null -> 0.dp
-    previous is FeedItem.DaySeparator || item is FeedItem.DaySeparator -> SIDE_CHANGE_GAP
+    previous.centered || item.centered -> SIDE_CHANGE_GAP
     previous.outgoing == item.outgoing -> SAME_SIDE_GAP
     else -> SIDE_CHANGE_GAP
 }
+
+/** По центру, ничья: дата и плашка шагов — просторно от обоих соседей. */
+private val FeedItem.centered: Boolean get() = this is FeedItem.DaySeparator || this is FeedItem.Steps
 
 /** Реплика человека — справа: записанная еда и вопрос к дневнику. */
 private val FeedItem.outgoing: Boolean get() = this is FeedItem.Meal || this is FeedItem.Question

@@ -151,6 +151,19 @@ class MascotRoutinesTest {
         assertNotNull(walkDao.last()?.toldAt)
     }
 
+    /** «До цели» — по цели шагов из профиля, а не по восьми тысячам для всех. */
+    @Test
+    fun `итог прогулки меряется целью шагов из профиля`() = runTest {
+        eat(now - 1.days)
+        mascots.upsertProfile(MascotProfileEntity(stepsGoal = 2_000))
+        walks.record(TreadmillSample(speedKmh = 4.0, distanceM = 2_140, kcal = 90, elapsedS = 1_920), (now - 10.minutes).toEpochMilliseconds())
+
+        backgroundScope.launch { routines().tellWalks() }
+        runCurrent()
+
+        assertEquals(Topic.WALK_GOAL.name, mascots.messages.value.single().topic)
+    }
+
     @Test
     fun `пока прогулка идёт, о ней молчат`() = runTest {
         eat(now - 1.days)

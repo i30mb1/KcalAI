@@ -7,9 +7,6 @@ import kotlin.math.roundToInt
  * путь в километрах с сотыми, темп с десятой, запятая вместо точки.
  */
 
-/** «6 240» — шаги до единицы, с разрядами. */
-fun stepsLabel(steps: Int): String = steps.toString().reversed().chunked(DIGITS_GROUP).joinToString(" ").reversed()
-
 /** «08:05» — время дня из минут от полуночи. */
 fun clockLabel(minute: Int): String = "${pad(minute / MINUTES_PER_HOUR)}:${pad(minute % MINUTES_PER_HOUR)}"
 
@@ -38,7 +35,6 @@ fun timerLabel(seconds: Int): String {
 
 private fun pad(n: Int) = n.toString().padStart(2, '0')
 
-private const val DIGITS_GROUP = 3
 private const val MINUTES_PER_HOUR = 60
 private const val SECONDS_PER_MINUTE = 60
 private const val SECONDS_PER_HOUR = 3_600

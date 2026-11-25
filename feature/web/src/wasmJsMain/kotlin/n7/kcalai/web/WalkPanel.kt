@@ -52,7 +52,7 @@ import n7.kcalai.webapi.kmLabel
 import n7.kcalai.webapi.speedLabel
 import n7.kcalai.webapi.stepsPerSecond
 import n7.kcalai.webapi.stepsShown
-import n7.kcalai.webapi.stepsLabel
+import n7.kcalai.model.stepsLabel
 import n7.kcalai.webapi.timerLabel
 
 /**

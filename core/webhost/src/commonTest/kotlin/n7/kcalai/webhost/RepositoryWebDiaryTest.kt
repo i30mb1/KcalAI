@@ -62,6 +62,9 @@ class RepositoryWebDiaryTest {
     private val walks = WalkRepository(walkDao, TimeZone.UTC)
     private val said = MutableStateFlow<List<WebSaid>>(emptyList())
 
+    /** Цель шагов из профиля телефона. */
+    private val stepsGoal = MutableStateFlow(DEFAULT_STEPS_GOAL)
+
     private val web = RepositoryWebDiary(
         diary = DiaryRepository(diaryDao, goalDao, NoContributions),
         walks = walks,
@@ -83,6 +86,7 @@ class RepositoryWebDiaryTest {
         regram = { id, grams, _ -> regrammed += id to grams },
         rename = { name -> names += name },
         keepPage = {},
+        stepsGoal = stepsGoal,
         clock = clock,
         zone = TimeZone.UTC,
     )
@@ -204,6 +208,14 @@ class RepositoryWebDiaryTest {
         assertEquals(DEFAULT_STEPS_GOAL, shown.stepsGoal)
         assertEquals("Прогулка в копилке", shown.said.single().text)
         assertEquals(walk.steps, web.week(today).first().single { it.date == today }.steps)
+    }
+
+    /** Цель шагов на странице — та, что задана на телефоне, и меняется вместе с ней. */
+    @Test
+    fun `цель шагов — из профиля телефона`() = runTest {
+        stepsGoal.value = 10_000
+
+        assertEquals(10_000, web.day(today).first().stepsGoal)
     }
 
     @Test
