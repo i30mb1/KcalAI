@@ -763,6 +763,7 @@ fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit, onHide: (
         MascotQuestion.WRITE -> "Пишите" to "Не надо"
         MascotQuestion.TREADMILL -> "Подключить" to "Не надо"
         MascotQuestion.STEPS -> "Считать" to "Не надо"
+        MascotQuestion.WEB -> "Расскажи" to "Не сейчас"
     }
     IncomingBubble(item, onHide = onHide, hideLater = true) {
         Answerable(item.choice, yes, no, onYes, onNo, item.text, item.time)

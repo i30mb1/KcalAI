@@ -451,14 +451,14 @@ class MascotBrainTest {
         eat("Гречка", now - 10.minutes)
         asking.value = listOf((now - 5.minutes).toEpochMilliseconds())
 
-        val said = async { brain.tellWebAddress(PAGE, at(now)) }
+        val said = async { brain.offerWeb(used = { false }, clock = at(now)) }
         advanceUntilIdle()
         assertFalse(said.isCompleted)
 
         asking.value = emptyList()
         advanceUntilIdle()
 
-        assertEquals(Topic.WEB_ADDRESS.name, said.await()?.topic)
+        assertEquals(MascotQuestion.WEB, said.await()?.question)
     }
 
     /** Ответ Яйца на имя и новость о поиске в одну секунду — два сообщения разом. */
@@ -672,33 +672,65 @@ class MascotBrainTest {
         assertTrue("8 100 шагов" in said!!.text, said.text)
     }
 
+    /** Функцию предлагают, а не навязывают: сначала — что она даёт и «рассказать?», без адреса. */
     @Test
-    fun `адрес страницы Зёрнышко называет в ленте`() = runTest {
+    fun `дневник с компьютера Зёрнышко предлагает вопросом, без инструкции`() = runTest {
         started()
 
-        val said = brain().tellWebAddress(PAGE, at(now))
+        val said = brain().offerWeb(used = { false }, clock = at(now))
 
         assertNotNull(said)
-        assertEquals(Topic.WEB_ADDRESS.name, said.topic)
+        assertEquals(MascotQuestion.WEB, said.question)
         assertEquals(Mascot.GRAIN, said.mascot)
-        assertEquals(Delivery.FEED, said.delivery)
-        assertTrue(PAGE in said.text, said.text)
+        assertFalse(PAGE in said.text, said.text)
     }
 
-    /** Знакомит один раз: дальше адрес — по просьбе. */
+    /** «Да» — и только тогда инструкция с адресом. */
     @Test
-    fun `сам об адресе страницы говорит один раз`() = runTest {
+    fun `на «да» — инструкция с адресом страницы`() = runTest {
         started()
-        brain().tellWebAddress(PAGE, at(now))
+        val brain = brain()
+        brain.offerWeb(used = { false }, clock = at(now))
 
-        assertNull(brain().tellWebAddress(PAGE, at(now + 3.days)))
+        assertTrue(brain.answerWeb(yes = true, address = PAGE, now = now + 1.minutes))
+
+        val reply = mascots.messages.value.last()
+        assertEquals(Topic.WEB_ADDRESS.name, reply.topic)
+        assertTrue(PAGE in reply.text, reply.text)
+        assertFalse(brain.answerWeb(yes = true, address = PAGE, now = now + 2.minutes), "второй тап ничего не запускает")
+    }
+
+    @Test
+    fun `на «нет» — без адреса, и как вернуться к этому`() = runTest {
+        started()
+        val brain = brain()
+        brain.offerWeb(used = { false }, clock = at(now))
+
+        brain.answerWeb(yes = false, address = PAGE, now = now + 1.minutes)
+
+        val reply = mascots.messages.value.last()
+        assertEquals(Topic.WEB_LATER.name, reply.topic)
+        assertFalse(PAGE in reply.text)
+    }
+
+    /** Не пользуются — напоминают раз в месяц, не чаще; пользуются — молчат. */
+    @Test
+    fun `предложение повторяется через месяц, пока страницей не пользуются`() = runTest {
+        started()
+        val brain = brain()
+        brain.offerWeb(used = { false }, clock = at(now))
+
+        assertNull(brain.offerWeb(used = { false }, clock = at(now + 20.days)), "через три недели — рано")
+        eat("Гречка", now + 31.days - 1.hours)
+        assertNotNull(brain.offerWeb(used = { false }, clock = at(now + 31.days)), "через месяц — снова")
+        assertNull(brain.offerWeb(used = { true }, clock = at(now + 70.days)), "уже пользуются — молчат")
     }
 
     /** Человек спросил — отвечают сразу и сколько угодно раз: он хочет освежить в памяти. */
     @Test
     fun `по просьбе адрес называют снова`() = runTest {
         started()
-        brain().tellWebAddress(PAGE, at(now))
+        brain().answerWebAddress(PAGE, now)
 
         val again = brain().answerWebAddress(PAGE, now + 1.hours)
 
@@ -768,12 +800,12 @@ class MascotBrainTest {
     fun `скрытое сообщение уходит из переписки, но не из памяти`() = runTest {
         started()
         val brain = brain()
-        val said = brain.tellWebAddress(PAGE, at(now))!!
+        val said = brain.answerWebAddress(PAGE, now)!!
 
         brain.hide(said.id, now)
 
         assertTrue(brain.messages(today).first().none { it.id == said.id })
-        assertNull(brain.tellWebAddress(PAGE, at(now + 3.days)), "адрес уже называли — второй раз сам не скажет")
+        assertTrue(said.id in mascots.recent(10).map { it.id }, "персонажи помнят сказанное")
     }
 
     @Test

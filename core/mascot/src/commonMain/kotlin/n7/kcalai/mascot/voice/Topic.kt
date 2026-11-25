@@ -81,6 +81,8 @@ enum class Topic(val kind: TopicKind) {
 
     /** Дневник открывается и с компьютера: адрес страницы на телефоне — один раз сам, дальше по просьбе. */
     WEB_ADDRESS(TopicKind.ANSWER),
+    /** «Нет» на предложение вести дневник с компьютера: без адреса, и как к нему вернуться. */
+    WEB_LATER(TopicKind.ANSWER),
 
     /** Адрес страницы спросили, а его нет: телефон не в Wi-Fi. */
     WEB_NO_WIFI(TopicKind.ANSWER),

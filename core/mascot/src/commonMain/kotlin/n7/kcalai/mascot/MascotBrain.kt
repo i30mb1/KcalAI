@@ -232,7 +232,11 @@ class MascotBrain(
         if (dao.lastSaid(question.topic) != null) return null
         awaitTurn(clock)
         if (dao.lastSaid(question.topic) != null) return null
-        val now = clock.now()
+        return insertQuestion(question, clock.now())
+    }
+
+    /** Вопрос — в ленту, сообщением своего персонажа. */
+    private suspend fun insertQuestion(question: MascotQuestion, now: Instant): MascotMessageEntity {
         val message = MascotMessageEntity(
             mascot = question.mascot,
             topic = question.topic,
@@ -328,20 +332,39 @@ class MascotBrain(
     }
 
     /**
-     * Дневник открывается и с компьютера — Зёрнышко называет адрес страницы.
+     * Дневник открывается и с компьютера — Зёрнышко предлагает это вопросом: что даёт и «рассказать?».
+     * Функции предлагают, а не навязывают: адрес — только после «да», см. [answerWeb]. Пока страницей
+     * не пользуются ([used]), предложение повторяется раз в месяц, не чаще. Очередь та же, что у новостей.
      *
-     * Сам — один раз за всю жизнь: это знакомство с возможностью, а не напоминание.
-     * Очередь та же, что у новостей, — см. [awaitTurn]. Дальше адрес — по просьбе,
-     * см. [answerWebAddress].
-     *
-     * @return сказанное; `null` — уже говорили
+     * @param used пользуются ли страницей — спрашивается и до очереди, и после: пока ждали, могли начать
+     * @return заданный вопрос; `null` — пользуются или рано
      */
-    suspend fun tellWebAddress(address: String, clock: Clock = Clock.System): MascotMessageEntity? {
-        if (dao.lastSaid(Topic.WEB_ADDRESS.name) != null) return null
+    suspend fun offerWeb(used: suspend () -> Boolean, clock: Clock = Clock.System): MascotMessageEntity? {
+        if (used() || !webOfferDue(clock.now())) return null
         awaitTurn(clock)
-        // Пока ждали очереди, адрес могли назвать по просьбе — второй раз не нужно.
-        if (dao.lastSaid(Topic.WEB_ADDRESS.name) != null) return null
-        return answerWebAddress(address, clock.now())
+        // Пока ждали очереди, могли и спросить, и начать пользоваться — тогда не нужно.
+        if (used() || !webOfferDue(clock.now())) return null
+        return insertQuestion(MascotQuestion.WEB, clock.now())
+    }
+
+    private suspend fun webOfferDue(now: Instant): Boolean =
+        dao.lastSaid(MascotQuestion.WEB.topic)?.let { now.toEpochMilliseconds() - it >= WEB_OFFER_EVERY.inWholeMilliseconds } ?: true
+
+    /**
+     * Ответ на предложение вести дневник с компьютера: «да» — инструкция с адресом (нет Wi-Fi — что сделать),
+     * «нет» — без адреса, и как к нему вернуться. Второй ответ не принимается.
+     *
+     * @param address адрес страницы; `null` — телефон не в Wi-Fi
+     * @return принят ли ответ
+     */
+    suspend fun answerWeb(yes: Boolean, address: String?, now: Instant): Boolean {
+        if (dao.answer(MascotQuestion.WEB.topic, if (yes) Choice.YES else Choice.NO) == 0) return false
+        when {
+            !yes -> answer(Topic.WEB_LATER, Mascot.GRAIN, now)
+            address != null -> answerWebAddress(address, now)
+            else -> answerNoWifi(now)
+        }
+        return true
     }
 
     /**
@@ -710,3 +733,6 @@ private fun DiaryEntryEntity.foodKey(): String =
 internal fun isStreakMilestone(days: Int): Boolean = days in STREAK_MILESTONES || (days > 100 && days % 100 == 0)
 
 private val STREAK_MILESTONES = setOf(3, 7, 14, 21, 30, 50, 100)
+
+/** Не пользуются дневником с компьютера — предложение повторяется не чаще этого. */
+private val WEB_OFFER_EVERY = 30.days

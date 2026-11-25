@@ -15,6 +15,8 @@ import kotlinx.coroutines.test.setMain
 import n7.kcalai.database.Choice
 import n7.kcalai.database.DailyGoalEntity
 import n7.kcalai.database.WebClientEntity
+import n7.kcalai.mascot.MascotQuestion
+import n7.kcalai.mascot.question
 import n7.kcalai.mascot.voice.Topic
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
@@ -164,13 +166,14 @@ class BrowserTest {
 
         val said = vm.state.value.feed.filterIsInstance<FeedItem.Said>().last { PAGE in it.text }
         assertEquals(Mascot.GRAIN, said.mascot)
-        assertEquals(2, harness.mascotDao.messages.value.count { it.topic == Topic.WEB_ADDRESS.name }, "само рассказал и по просьбе повторил")
+        assertEquals(1, harness.mascotDao.messages.value.count { it.topic == Topic.WEB_ADDRESS.name }, "адрес — по просьбе; сам он только предлагает")
         assertTrue(PAGE in said.text, said.text)
         assertEquals("", vm.state.value.input)
     }
 
+    /** Функцию предлагают, а не навязывают: сначала вопрос «рассказать?», адреса без «да» нет. */
     @Test
-    fun `о странице Зёрнышко рассказывает само — один раз`() = runTest(dispatcher) {
+    fun `о странице Зёрнышко само только предлагает — вопросом, один раз`() = runTest(dispatcher) {
         harness.addEntry("Гречка отварная", grams = 200, meal = MealType.BREAKFAST, daysAgo = 1)
 
         screen()
@@ -178,15 +181,36 @@ class BrowserTest {
         screen()
         advanceUntilIdle()
 
-        assertEquals(1, harness.mascotDao.messages.value.count { it.topic == Topic.WEB_ADDRESS.name })
+        val messages = harness.mascotDao.messages.value
+        assertEquals(1, messages.count { it.question == MascotQuestion.WEB })
+        assertTrue(messages.none { it.topic == Topic.WEB_ADDRESS.name }, "адрес — только после «да»")
+    }
+
+    /** Браузер уже просился — страницей пользуются, предлагать её незачем. */
+    @Test
+    fun `пользуются страницей — не предлагают`() = runTest(dispatcher) {
+        harness.addEntry("Гречка отварная", grams = 200, meal = MealType.BREAKFAST, daysAgo = 1)
+        asks()
+
+        screen()
+        advanceUntilIdle()
+
+        assertTrue(harness.mascotDao.messages.value.none { it.question == MascotQuestion.WEB })
+    }
+
+    private fun TestScope.agreed(): DiaryViewModel {
+        val vm = screen()
+        advanceUntilIdle()
+        vm.onAnswerWeb(yes = true)
+        advanceUntilIdle()
+        return vm
     }
 
     /** Ссылку удобно скинуть себе в мессенджер и открыть на компьютере: у адреса — «Поделиться». */
     @Test
     fun `у адреса страницы — ссылка, которой можно поделиться`() = runTest(dispatcher) {
         harness.addEntry("Гречка отварная", grams = 200, meal = MealType.BREAKFAST, daysAgo = 1)
-        val vm = screen()
-        advanceUntilIdle()
+        val vm = agreed()
 
         val said = vm.state.value.feed.filterIsInstance<FeedItem.Said>()
         assertEquals(PAGE, said.single { PAGE in it.text }.share)
@@ -198,8 +222,7 @@ class BrowserTest {
     fun `знакомство со страницей говорит, как спросить адрес снова`() = runTest(dispatcher) {
         harness.addEntry("Гречка отварная", grams = 200, meal = MealType.BREAKFAST, daysAgo = 1)
 
-        screen()
-        advanceUntilIdle()
+        agreed()
 
         val intro = harness.mascotDao.messages.value.single { it.topic == Topic.WEB_ADDRESS.name }
         assertTrue("«компьютер»" in intro.text, intro.text)

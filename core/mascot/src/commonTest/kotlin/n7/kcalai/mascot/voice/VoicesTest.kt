@@ -64,6 +64,7 @@ class VoicesTest {
         put(Topic.STEPS_FAILED, setOf(GRAIN))
         put(Topic.STREAK_DAY, setOf(EGG))
         put(Topic.WEEK_SUMMARY, setOf(BUTTER))
+        put(Topic.WEB_LATER, setOf(GRAIN))
     }
 
     /** Факты, при которых у каждой темы есть о чём сказать. */

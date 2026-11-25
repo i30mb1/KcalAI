@@ -681,10 +681,11 @@ class DiaryViewModel(
     }
 
     init {
-        // Страница дневника поднялась — Зёрнышко расскажет о ней. Один раз за всю жизнь
-        // и в свою очередь: когда и сколько, решает мозг персонажей.
+        // Страница дневника поднялась — Зёрнышко предложит вести дневник с компьютера: вопросом, в свою
+        // очередь и раз в месяц, пока ни одного браузера не пускали. Когда и как, решает мозг персонажей.
         viewModelScope.launch {
-            brain.tellWebAddress(pageAddress.filterNotNull().first(), clock)
+            pageAddress.filterNotNull().first()
+            brain.offerWeb(used = ::webUsed, clock = clock)
         }
         // Предложения пересобираются на паузу в наборе, а не на каждый символ:
         // поиск ходит в базу, и дёргать её на «г», «гр», «гре» незачем.
@@ -1883,6 +1884,17 @@ class DiaryViewModel(
     val stepsRequests: Flow<Unit> = stepsAsks.receiveAsFlow()
 
     /** «Считать» или «Не надо» про шаги телефона; повторный тап ничего не запускает. */
+    /** Пользуются ли страницей: браузер пущен — или сегодня уже просился. */
+    private suspend fun webUsed(): Boolean {
+        val requests = browsers?.requests ?: return false
+        return requests.observeAdmitted().first().isNotEmpty() || requests.observeDay(today).first().isNotEmpty()
+    }
+
+    /** «Да» на предложение дневника с компьютера — инструкция с адресом; второй тап ничего не запускает. */
+    fun onAnswerWeb(yes: Boolean) {
+        viewModelScope.launch { brain.answerWeb(yes, pageAddress.value, clock.now()) }
+    }
+
     fun onAnswerSteps(yes: Boolean) {
         viewModelScope.launch {
             if (brain.answerSteps(yes, clock.now()) && yes) stepsAsks.send(Unit)
