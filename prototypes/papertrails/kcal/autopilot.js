@@ -15,13 +15,22 @@ function pathSides(pt, cx, cz) {
 function nearestPath(pt, cx, cz) {
   for (let r = 0; r <= 6; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
     if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
-    if (pathSides(pt, cx + dx, cz + dz).some(Boolean)) return [cx + dx, cz + dz];
+    if (pathSides(pt, cx + dx, cz + dz).some(Boolean) && passable(pt, cx + dx, cz + dz)) return [cx + dx, cz + dz];
   }
   return [cx, cz];
 }
+// куда можно зайти: не во дворик дома (единственная дорожка ведёт к двери, дом — посреди клетки),
+// не туда, где середина клетки занята, и не туда, где уже застревали
+const blocked = new Set();
+function passable(pt, cx, cz) {
+  if (blocked.has(key(cx, cz))) return false;
+  const c = pt.wfc.get(cx, cz), paths = SIDES.filter((d) => c.sockets[d] === 'path').length;
+  if (paths <= 1 && c.tags && c.tags.includes('house')) return false;
+  return pt.world.isWalkable(cx * T, cz * T);
+}
 function pickDir(pt, cx, cz, from) {
   const p = pathSides(pt, cx, cz), back = (from + 2) % 4;
-  let opts = [0, 1, 2, 3].filter((d) => p[d] && d !== back);
+  let opts = [0, 1, 2, 3].filter((d) => p[d] && d !== back && passable(pt, cx + DX[d], cz + DZ[d]));
   if (!opts.length) opts = p[back] ? [back] : [];   // тупик — обратно
   if (!opts.length) return null;
   const visits = (d) => seen.get(key(cx + DX[d], cz + DZ[d])) || 0;
@@ -67,8 +76,11 @@ window.__ptInput = (dt) => {
     dir = nd; goTo(cell.cx + DX[nd], cell.cz + DZ[nd]);
     return out;
   }
-  // застрял (обходит препятствие слишком долго) — заново от ближайшей дороги
-  if (d < lastD - 0.02) { lastD = d; stuckT = 0; } else if ((stuckT += dt) > 3) target = null;
+  // застрял (обходит препятствие слишком долго) — эту клетку больше не выбирать, назад к середине прежней
+  if (d < lastD - 0.02) { lastD = d; stuckT = 0; } else if ((stuckT += dt) > 2) {
+    blocked.add(key(target.cx, target.cz));
+    if (cell) { const c = cell; cell = null; goTo(c.cx, c.cz); } else target = null;
+  }
   out.x = dx / d; out.z = dz / d;
   return out;
 };
