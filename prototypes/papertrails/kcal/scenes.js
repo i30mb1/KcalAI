@@ -5,16 +5,17 @@ import { BIOME_INDEX } from '../src/core/biomes.js';
 
 const KEY = 'kcal.walk.scenes';
 
-/** Все сцены в порядке выбора: первая отмеченная — у старта. skin 1 — печать Поля Зёрнышка (field-prints.js). */
+/** Все сцены в порядке выбора: первая отмеченная — у старта. skin — вид печати (skins.js): 1 — Поле, 2 — Молочный край. */
 export const SCENES = [
   { id: 'field', label: 'Поле Зёрнышка', biome: 'heartland', skin: 1 },
   { id: 'autumn', label: 'Осенние поля', biome: 'heartland', skin: 0 },
   { id: 'desert', label: 'Пустыня', biome: 'desert', skin: 0 },
+  { id: 'dairy', label: 'Молочный край', biome: 'snow', skin: 2 },
   { id: 'snow', label: 'Снег', biome: 'snow', skin: 0 },
   { id: 'blossom', label: 'Цветущий сад', biome: 'blossom', skin: 0 },
   { id: 'pinewood', label: 'Хвойный лес', biome: 'pinewood', skin: 0 },
 ];
-const DEFAULT = ['field', 'desert', 'snow', 'blossom', 'pinewood'];
+const DEFAULT = ['field', 'dairy', 'desert', 'blossom', 'pinewood'];
 
 /** Отмеченные сцены (id) в порядке SCENES; ничего не отмечено или не сохранено — по умолчанию. */
 export function chosenIds() {

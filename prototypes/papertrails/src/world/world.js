@@ -238,7 +238,8 @@ export function createWorld({ scene, assets, wfc, materials, quality }) {
       shader.vertexShader = vs.replace(stock, mine).replace('vPaperArtUv = uv1;', remap)
         .replace('void main() {', 'void main() {\n\tvBt0 = vec4( 1.0, 0.0, 0.0, 0.0 ); vBt1 = vec4( 0.0, 1.0, 0.0, 0.0 ); vBt2 = vec4( 0.0, 0.0, 1.0, 0.0 ); vBtK = 0.0; vSkin = 0.0;')
         .replace('#include <common>', `#include <common>${pars}#ifdef USE_BATCHING_COLOR\nuniform highp sampler2D uSkinTable;\nuniform vec4 uSkinScale;\nuniform vec4 uBiomeP[${NB * 3}];\nuniform float uBiomePK[${NB}];\n#endif\n`);
-      const apply = '\ndiffuseColor.rgb = biomeTint( diffuseColor.rgb, vBt0, vBt1, vBt2, vBtK );\n';
+      // KcalAI: перепечатанное видом сцены нарисовано в своих цветах (kcal/skins.js) — зональный тон на него не ложится
+      const apply = '\nif ( vSkin < 0.5 ) diffuseColor.rgb = biomeTint( diffuseColor.rgb, vBt0, vBt1, vBt2, vBtK );\n';
       let fs = shader.fragmentShader.replace('#include <common>', '#include <common>' + pars + BIOME_TINT_GLSL);
       // KcalAI: перепечатанное видом сцены место — из общего листа видов (uPaperArtSkin, kcal/skins.js)
       fs = fs.replace('uniform sampler2D uPaperArtTex;', 'uniform sampler2D uPaperArtTex;\nuniform sampler2D uPaperArtSkin;')
@@ -251,7 +252,7 @@ export function createWorld({ scene, assets, wfc, materials, quality }) {
       fs = fs.includes(anchor) ? fs.replace(anchor, apply + anchor) : fs.replace('#include <color_fragment>', '#include <color_fragment>' + apply);
       shader.fragmentShader = fs;
     };
-    m.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|biome-tint-v4';
+    m.customProgramCacheKey = () => (prevKey ? prevKey.call(m) : '') + '|biome-tint-v5';
     m.needsUpdate = true;
   }
 
