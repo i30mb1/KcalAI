@@ -99,6 +99,11 @@ import n7.kcalai.webapi.offlineLine
  */
 private val COLUMN_MAX = 760.dp
 
+/** Шагомер в поле справа: не уже этого — иначе окошком в ленте; шире — без пользы. */
+private val DOCK_PANEL = 280.dp
+private val DOCK_PANEL_MAX = 360.dp
+private val DOCK_MARGIN = 24.dp
+
 /** Число калорий доезжает до нового — но быстро: это ответ на действие, а не заставка. */
 internal const val NUMBER_MS = 280
 
@@ -157,7 +162,10 @@ fun DiaryPage(link: PhoneLink) {
     val walking = (live?.speedKmh ?: 0.0) > MOVING_KMH
     val pageBg by animateColorAsState(if (worldShown) colors.bg.copy(alpha = 0f) else colors.bg, tween(WALK_FADE_MS))
 
-    Box(Modifier.fillMaxSize().background(pageBg), contentAlignment = Alignment.TopCenter) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(pageBg), contentAlignment = Alignment.TopCenter) {
+        // Поле справа от колонки: хватает места — шагомер стоит там отдельной панелью, а не поверх ленты.
+        val gutter = (maxWidth - COLUMN_MAX) / 2
+        val docked = gutter >= DOCK_PANEL + DOCK_MARGIN * 2
         Column(Modifier.widthIn(max = COLUMN_MAX).fillMaxSize().blur(blur)) {
             if (diary == null) {
                 // До пуска на странице только разговор: код, отказ или пропавшая связь.
@@ -187,13 +195,23 @@ fun DiaryPage(link: PhoneLink) {
                         modifier = Modifier.fillMaxSize(),
                         label = "day",
                     ) { shown -> Feed(shown, link, Modifier.fillMaxSize()) }
-                    // Шаги дня — поверх ленты, в углу: окошко ничего не сдвигает.
-                    if (diary.day.date == diary.day.today) {
+                    // Шаги дня — поверх ленты, в углу: окошко ничего не сдвигает (когда поля справа нет).
+                    if (!docked && diary.day.date == diary.day.today) {
                         WalkPanel(diary.day, live, walking, Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 16.dp))
                     }
                 }
                 Composer(diary, link)
             }
+        }
+        if (docked && diary != null && diary.day.date == diary.day.today) {
+            WalkPanel(
+                diary.day,
+                live,
+                walking,
+                Modifier.align(Alignment.TopEnd).padding(top = DOCK_MARGIN, end = DOCK_MARGIN),
+                docked = true,
+                width = minOf(DOCK_PANEL_MAX, gutter - DOCK_MARGIN * 2),
+            )
         }
         if (diary != null && offline) {
             OfflineOverlay(diary.offlineLine())

@@ -39,6 +39,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import n7.kcalai.model.TreadmillSample
 import n7.kcalai.ui.KcalTheme
@@ -55,20 +56,29 @@ import n7.kcalai.webapi.stepsLabel
 import n7.kcalai.webapi.timerLabel
 
 /**
- * Шаги дня поверх ленты — окошко в правом верхнем углу, которое ничего не сдвигает.
+ * Шагомер дня: шаги к цели, темп, путь и время прогулки, полоса суток — когда ходили, и прогулки
+ * дня с их темпом. Фон свой, плотный: читается и над миром прогулки без стекла.
  *
- * Пока идут по дорожке, оно раскрыто само: шаги к цели, темп, путь и время этой прогулки,
- * полоса суток — когда ходили, и прогулки дня с их темпом. Стоят — от окошка остаётся
- * плашка с шагами дня, тап раскрывает его снова. Шагов нет и дорожки нет — нет и окошка.
- * Фон у окошка свой, плотный: оно читается и без стекла колонки.
+ * На широком экране он стоит отдельной панелью в поле справа от колонки ([docked]) — всегда раскрыт,
+ * место там свободно. На узком поля нет: окошко в углу ленты, раскрыто само, пока идут, а стоят —
+ * от него остаётся плашка с шагами дня, тап раскрывает снова. Шагов и дорожки нет — нет и окошка.
+ *
+ * @param width ширина раскрытой панели
  */
 @Composable
-fun WalkPanel(day: WebDay, live: TreadmillSample?, walking: Boolean, modifier: Modifier = Modifier) {
+fun WalkPanel(
+    day: WebDay,
+    live: TreadmillSample?,
+    walking: Boolean,
+    modifier: Modifier = Modifier,
+    docked: Boolean = false,
+    width: Dp = CARD_DP.dp,
+) {
     val colors = KcalTheme.colors
     var opened by remember { mutableStateOf(false) }
     val any = day.steps > 0 || day.walks.isNotEmpty() || walking
     if (!any) return
-    val open = walking || opened
+    val open = docked || walking || opened
 
     Box(modifier, contentAlignment = Alignment.TopEnd) {
         // Плашка и окошко — в одном углу: раскрытие растёт из плашки, а не из ниоткуда.
@@ -94,13 +104,13 @@ fun WalkPanel(day: WebDay, live: TreadmillSample?, walking: Boolean, modifier: M
             enter = fadeIn(tween(PANEL_MS, easing = EaseOutStrong)) + scaleIn(tween(PANEL_MS, easing = EaseOutStrong), initialScale = 0.96f, transformOrigin = TransformOrigin(1f, 0f)),
             exit = fadeOut(tween(PANEL_MS / 2)) + scaleOut(tween(PANEL_MS / 2), targetScale = 0.96f, transformOrigin = TransformOrigin(1f, 0f)),
         ) {
-            Card(day, live, walking, onClose = { opened = false })
+            Card(day, live, walking, width, onClose = { opened = false }.takeUnless { docked })
         }
     }
 }
 
 @Composable
-private fun Card(day: WebDay, live: TreadmillSample?, walking: Boolean, onClose: () -> Unit) {
+private fun Card(day: WebDay, live: TreadmillSample?, walking: Boolean, width: Dp, onClose: (() -> Unit)?) {
     val colors = KcalTheme.colors
     val type = KcalTheme.type
     // Пока идут, шаги бегут по одному в такт ходьбе, а не скачками раз в секунду, когда приходит итог.
@@ -111,11 +121,11 @@ private fun Card(day: WebDay, live: TreadmillSample?, walking: Boolean, onClose:
     )
     Column(
         Modifier
-            .width(CARD_DP.dp)
+            .width(width)
             .shadow(12.dp, RoundedCornerShape(18.dp))
             .clip(RoundedCornerShape(18.dp))
             .background(colors.surface)
-            .then(if (walking) Modifier else Modifier.press(RoundedCornerShape(18.dp), colors.text.copy(alpha = HOVER_ALPHA / 2), onClose))
+            .then(if (walking || onClose == null) Modifier else Modifier.press(RoundedCornerShape(18.dp), colors.text.copy(alpha = HOVER_ALPHA / 2), onClose))
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {

@@ -1,6 +1,6 @@
 // KcalAI: панель настроек прогулки поверх страницы — всё, что меняется на лету (window.KcalTune в autopilot.js).
-// Видна на странице дневника, пока загружен мир прогулки; сворачивается в плашку. Значения запоминаются в
-// браузере; «Скопировать» отдаёт их одной строкой, чтобы зашить в код.
+// Каждый может подогнать вид под себя: панель спрятана под шестерёнку в углу, пока загружен мир прогулки.
+// Значения запоминаются в браузере; «Скопировать» отдаёт их одной строкой, «Сбросить» — к умолчаниям.
 const KEY = 'kcal.walk.tune';
 const OPEN_KEY = 'kcal.walk.tune.open';
 const ROWS = [
@@ -40,8 +40,15 @@ function start() {
   box.appendChild(body);
   const setOpen = (open) => {
     body.style.display = open ? 'grid' : 'none';
-    box.style.width = open ? '250px' : 'auto';
-    head.innerHTML = open ? '<span>Прогулка — настройки</span><span>–</span>' : '<span>Прогулка ⚙</span>';
+    box.style.width = open ? '250px' : '40px';
+    box.style.height = open ? 'auto' : '40px';
+    box.style.padding = open ? '12px 14px' : '0';
+    box.style.borderRadius = open ? '14px' : '20px';
+    head.style.justifyContent = open ? 'space-between' : 'center';
+    head.style.alignItems = 'center';
+    head.style.height = open ? 'auto' : '40px';
+    head.title = open ? '' : 'Вид прогулки';
+    head.innerHTML = open ? '<span>Вид прогулки</span><span style="font-size:16px">×</span>' : '<span style="font-size:20px;line-height:1">⚙</span>';
     try { localStorage.setItem(OPEN_KEY, open ? '1' : '0'); } catch { /* приватное окно */ }
   };
   head.addEventListener('click', () => setOpen(body.style.display === 'none'));
@@ -78,8 +85,8 @@ function start() {
   btn('Сбросить', () => { try { localStorage.removeItem(KEY); } catch { /* ничего */ } location.reload(); });
   body.appendChild(buttons);
   document.body.appendChild(box);
-  let open = true;
-  try { open = localStorage.getItem(OPEN_KEY) !== '0'; } catch { /* по умолчанию раскрыта */ }
+  let open = false;
+  try { open = localStorage.getItem(OPEN_KEY) === '1'; } catch { /* по умолчанию спрятана */ }
   setOpen(open);
   tune.apply();
 }
