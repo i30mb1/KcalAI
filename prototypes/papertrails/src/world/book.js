@@ -899,7 +899,7 @@ vec3 pageColor() {
     U.uTrav.value.x = px - ax * TILE_SIZE; U.uTrav.value.y = pz - az * TILE_SIZE;
     gutterWorld = B.gutterX0 + PERIOD * Math.round((centre.x - B.gutterX0) / PERIOD);
     gutterLocal = gutterWorld - centre.x;
-    gutterFade = 1;
+    gutterFade = B.gutter === false ? 0 : 1;
     U.uGut.value.x = gutterLocal;
     U.uGut2.value.x = gutterFade;
     const tpx = Math.round(centre.x);

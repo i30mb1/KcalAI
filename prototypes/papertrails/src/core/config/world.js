@@ -153,6 +153,11 @@ export const book = {
   /** Dead zone (world units): the book only slides once the traveller is this far from its centre. */
   slackX: 0.2,
   slackZ: 0.5,
+  /**
+   * KcalAI: корешок разворота (желобок и тёмная линия сгиба) выключен — прогулка идёт строго на север по x = 0,
+   * и корешок у x = -1 тянулся линией вдоль всей дороги. Без него страница ровная; true вернёт сгиб.
+   */
+  gutter: false,
   /** World X of gutter number 0 (must be on a tile seam: odd number). */
   gutterX0: -1,
   /** Gutter valley: half width, depth on the printed area, extra depth toward head/tail edge (world units). */
