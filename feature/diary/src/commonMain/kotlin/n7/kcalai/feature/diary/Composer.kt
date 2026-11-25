@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
@@ -581,7 +582,8 @@ private fun ResolvedChip(item: ResolvedItem, onClick: () -> Unit) {
             color = colors.text,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 7.dp),
+            // Лента подсказок прокручивается вбок, ширина у чипа не ограничена: длинное название — до своей ширины.
+            modifier = Modifier.padding(start = 7.dp).widthIn(max = NAME_MAX_DP.dp),
         )
         ChipNumbers(
             "· ${formatGrams(item.grams)} · ${kcalFor(candidate, item.grams)}",
@@ -609,11 +611,15 @@ private fun PredictionChip(candidate: FoodCandidate, onClick: () -> Unit) {
             color = colors.text,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 7.dp),
+            // Лента подсказок прокручивается вбок, ширина у чипа не ограничена: длинное название — до своей ширины.
+            modifier = Modifier.padding(start = 7.dp).widthIn(max = NAME_MAX_DP.dp),
         )
         ChipNumbers("· ${formatGrams(grams)} · ${kcalFor(candidate, grams)}", colors.text3)
     }
 }
+
+/** Самое длинное название на чипе подсказки: дальше — многоточие, чтобы один чип не занимал всю ленту. */
+private const val NAME_MAX_DP = 220
 
 private fun kcalFor(candidate: FoodCandidate, grams: Int): Int =
     ((candidate.nutriments.kcal100.toLong() * grams + 50) / 100).toInt()

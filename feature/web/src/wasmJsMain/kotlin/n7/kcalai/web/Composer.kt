@@ -179,6 +179,8 @@ private fun SuggestionChip(item: WebSuggestion, chosen: Boolean, onClick: () -> 
             "· ${formatGrams(item.grams)} · ${item.kcal}",
             style = KcalTheme.type.time,
             color = if (chosen) colors.onBubble2 else colors.text3,
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier.padding(start = 6.dp),
         )
         if (chosen) {

@@ -129,10 +129,13 @@ fun KcalChip(
     )
 }
 
-/** Моноширинная приписка к названию на чипсе: «· 150 г · 121». */
+/**
+ * Моноширинная приписка к названию на чипсе: «· 150 г · 121». Не переносится никогда: место отдаёт название —
+ * у него `weight(1f, fill = false)`, иначе длинное название забирает всю строку и цифры встают в столбик.
+ */
 @Composable
 fun ChipNumbers(text: String, color: Color, style: TextStyle = KcalTheme.type.time) {
-    Text(text, style = style, color = color, modifier = Modifier.padding(start = 6.dp))
+    Text(text, style = style, color = color, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 6.dp))
 }
 
 /** Кнопка с надписью — там, где действие нельзя назвать данными. */

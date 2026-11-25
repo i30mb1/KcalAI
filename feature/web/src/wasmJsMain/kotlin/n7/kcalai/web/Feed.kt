@@ -275,6 +275,8 @@ private fun EntryChip(entry: WebEntry, onClick: () -> Unit, onDelete: () -> Unit
             "· ${formatGrams(entry.grams)}",
             style = KcalTheme.type.time,
             color = colors.onBubble2,
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier.padding(start = 6.dp),
         )
         Text(

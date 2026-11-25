@@ -187,13 +187,14 @@ private fun EntryChip(entry: DiaryEntryEntity, onClick: () -> Unit) {
 
     KcalChip(onClick = onClick, background = colors.chipOnBubble) {
         MacroDot(macro.colors().onBubble)
+        // Длинное название — в две строки, а граммы остаются справа целиком.
         Text(
             entry.displayName,
             style = KcalTheme.type.chip,
             color = colors.onBubble,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 7.dp),
+            modifier = Modifier.padding(start = 7.dp).weight(1f, fill = false),
         )
         ChipNumbers("· ${formatGrams(entry.grams)}", colors.onBubble2)
         // Росток у порции, которая всерьёз добавила клетчатки: видно, что сработало.
@@ -929,7 +930,7 @@ fun CandidateChip(candidate: FoodCandidate, chosen: Boolean? = null, onClick: ()
             },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 7.dp),
+            modifier = Modifier.padding(start = 7.dp).weight(1f, fill = false),
         )
         ChipNumbers("· ${formatGrams(grams)}", colors.text3)
     }
