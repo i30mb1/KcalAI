@@ -6,9 +6,12 @@ import kotlinx.datetime.LocalTime
 import n7.kcalai.mascot.voice.clock
 import n7.kcalai.mascot.voice.countPhrase
 import n7.kcalai.mascot.voice.daysPhrase
+import n7.kcalai.mascot.voice.distancePhrase
 import n7.kcalai.mascot.voice.foodName
 import n7.kcalai.mascot.voice.hoursPhrase
 import n7.kcalai.mascot.voice.ordinal
+import n7.kcalai.mascot.voice.stepsPhrase
+import n7.kcalai.mascot.voice.walkTimePhrase
 import n7.kcalai.mascot.voice.weekdayName
 import n7.kcalai.model.MealType
 import n7.kcalai.model.Sex
@@ -71,6 +74,8 @@ data class Facts(
     val foodDaysInRow: Int = 0,
     /** Адрес страницы дневника на телефоне — для браузера в той же сети. */
     val address: String? = null,
+    /** Только что кончившаяся прогулка по дорожке. */
+    val walk: WalkFacts? = null,
 ) {
     val partOfDay: PartOfDay
         get() = when (now.hour) {
@@ -119,6 +124,11 @@ internal fun Facts.value(key: String): String? = when (key) {
     // Цифры в вариантах запрещены, а в адресе они есть — поэтому плейсхолдером.
     "mail" -> FEEDBACK_EMAIL
     "address" -> address
+    "walkSteps" -> walk?.steps?.let(::stepsPhrase)
+    "walkKm" -> walk?.distanceM?.let(::distancePhrase)
+    "walkTime" -> walk?.elapsedS?.let(::walkTimePhrase)
+    "daySteps" -> walk?.daySteps?.let(::stepsPhrase)
+    "stepsLeft" -> walk?.stepsLeft?.takeIf { it > 0 }?.let(::stepsPhrase)
     else -> null
 }
 
@@ -126,7 +136,10 @@ internal fun Facts.value(key: String): String? = when (key) {
 internal val KNOWN_KEYS = setOf(
     "name", "gap", "last", "lastTime", "meal", "mealGen", "usualTime", "usual", "usualGrams",
     "protLeft", "protIdea", "streak", "away", "absent", "fav", "food", "foodRun", "today", "mail",
-    "address",
+    "address", "walkSteps", "walkKm", "walkTime", "daySteps", "stepsLeft",
 )
+
+/** Прогулка по дорожке и шаги дня — для итога прогулки в ленте. */
+data class WalkFacts(val steps: Int, val distanceM: Int, val elapsedS: Int, val daySteps: Int, val stepsLeft: Int)
 
 private const val DAY_MINUTES = 24 * 60

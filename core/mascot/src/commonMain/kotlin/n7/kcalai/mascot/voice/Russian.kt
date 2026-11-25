@@ -58,6 +58,32 @@ fun countPhrase(n: Int, one: String, few: String, many: String, feminine: Boolea
     return "$number ${plural(n, one, few, many)}"
 }
 
+/** «3 242 шага» — с разрядами, как на экране дорожки: шаги считают до единицы, словами их не пишут. */
+fun stepsPhrase(n: Int): String = "${grouped(n)} ${plural(n, "шаг", "шага", "шагов")}"
+
+/** «650 м», «2,1 км» — путь прогулки. */
+@Suppress("MagicNumber")
+fun distancePhrase(meters: Int): String = when {
+    meters < 1000 -> "$meters м"
+    meters % 1000 < 50 || meters % 1000 >= 950 -> "${(meters + 500) / 1000} км"
+    else -> "${meters / 1000},${meters % 1000 / 100} км"
+}
+
+/** Сколько шли — «за 32 минуты», после часа — «за полтора часа». */
+@Suppress("MagicNumber")
+fun walkTimePhrase(seconds: Int): String {
+    val minutes = seconds / 60
+    return when {
+        minutes < 1 -> "меньше минуты"
+        minutes == 1 -> "одну минуту"
+        minutes < 60 -> countPhrase(minutes, "минуту", "минуты", "минут", feminine = true)
+        else -> hoursPhrase(minutes)
+    }
+}
+
+@Suppress("MagicNumber")
+private fun grouped(n: Int): String = n.toString().reversed().chunked(3).joinToString(" ").reversed()
+
 /** «второй», «третий» — «третий день подряд». Дальше десяти — «11-й». */
 fun ordinal(n: Int): String = ORDINALS.getOrNull(n) ?: "$n-й"
 

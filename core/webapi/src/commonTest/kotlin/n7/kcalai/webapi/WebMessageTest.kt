@@ -4,6 +4,7 @@ import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
 import n7.kcalai.model.PageGrace
+import n7.kcalai.model.TreadmillSample
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -33,7 +34,11 @@ class WebMessageTest {
         grace = PageGrace.MIN_15,
         date = 20_781,
         today = 20_782,
-        week = listOf(WebDaySummary(date = 20_781, kcal = 320, goalKcal = 2_100), WebDaySummary(date = 20_782, kcal = 0, goalKcal = null)),
+        week = listOf(WebDaySummary(date = 20_781, kcal = 320, goalKcal = 2_100, steps = 6_240), WebDaySummary(date = 20_782, kcal = 0, goalKcal = null)),
+        walks = listOf(WebWalk(startMinute = 18 * 60 + 20, endMinute = 18 * 60 + 52, distanceM = 2_140, elapsedS = 1_920, steps = 3_242, topSpeedKmh = 4.5)),
+        steps = 6_240,
+        stepsGoal = 8_000,
+        said = listOf(WebSaid(mascot = Mascot.GRAIN, text = "Прогулка в копилке: 3 242 шага.", minute = 18 * 60 + 56)),
     )
 
     @Test
@@ -51,6 +56,7 @@ class WebMessageTest {
             ToPhone.SetGrace(PageGrace.FOREVER),
             ToPhone.SetGrams(entryId = 7, grams = 150),
             ToPhone.Delete(entryId = 9),
+            ToPhone.Treadmill(TreadmillSample(speedKmh = 4.5, distanceM = 2_140, kcal = 90, elapsedS = 1_920)),
             ToPhone.Leave,
         )
 
@@ -64,7 +70,7 @@ class WebMessageTest {
             ToPage.Denied,
             ToPage.Busy,
             ToPage.Day(day),
-            ToPage.Day(day.copy(goalKcal = null, goalMacros = null, peers = emptyList(), entries = emptyList(), week = emptyList())),
+            ToPage.Day(day.copy(goalKcal = null, goalMacros = null, peers = emptyList(), entries = emptyList(), week = emptyList(), walks = emptyList(), said = emptyList())),
             ToPage.Day(day.copy(browsers = listOf(WebBrowser(id = 4, label = "Chrome на Windows", here = true), WebBrowser(id = 5, label = "Safari на Mac", here = false)))),
             ToPage.Suggestions(
                 query = "гречка",

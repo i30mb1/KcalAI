@@ -36,6 +36,7 @@ import kotlinx.datetime.LocalDate
 import n7.kcalai.model.formatWeekRange
 import n7.kcalai.model.formatWeekdayShort
 import n7.kcalai.ui.KcalTheme
+import n7.kcalai.ui.MiniBar
 import n7.kcalai.webapi.WebDay
 import n7.kcalai.webapi.WebDaySummary
 import n7.kcalai.webapi.weekOf
@@ -57,6 +58,8 @@ fun WeekStrip(day: WebDay, onOpen: (Long) -> Unit) {
         day.week.mapNotNull { it.goalKcal }.maxOrNull() ?: 0,
         day.week.maxOfOrNull { it.kcal } ?: 0,
     ).coerceAtLeast(1)
+    // Полоски шагов — только у недели, где ходили: у остальных место под них не нужно.
+    val steps = day.week.any { it.steps > 0 }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
     // Какая это неделя — датами, между стрелками, которые её листают.
@@ -93,6 +96,7 @@ fun WeekStrip(day: WebDay, onOpen: (Long) -> Unit) {
                     future = date > day.today,
                     onClick = { onOpen(date) },
                     modifier = Modifier.weight(1f),
+                    stepsGoal = day.stepsGoal.takeIf { steps },
                 )
             }
         }
@@ -110,6 +114,7 @@ private fun DayColumn(
     future: Boolean,
     onClick: () -> Unit,
     modifier: Modifier,
+    stepsGoal: Int?,
 ) {
     val colors = KcalTheme.colors
     val kcal = summary?.kcal ?: 0
@@ -190,6 +195,15 @@ private fun DayColumn(
             style = KcalTheme.type.time,
             color = if (selected) colors.text else colors.text3,
         )
+        // Шаги дня — зелёной полоской Зёрнышка до цели шагов.
+        stepsGoal?.let { goalSteps ->
+            MiniBar(
+                ((summary?.steps ?: 0).toFloat() / goalSteps).coerceIn(0f, 1f),
+                colors.carb.fill,
+                Modifier.widthIn(max = STEP_BAR_DP.dp),
+                height = 3.dp,
+            )
+        }
         // Точка под сегодняшним днём: видно, где «сейчас», даже когда открыт другой.
         Box(Modifier.size(4.dp).clip(RoundedCornerShape(2.dp)).background(if (today) colors.text2 else colors.text.copy(alpha = 0f)))
     }
@@ -210,3 +224,4 @@ private fun Arrow(icon: ImageVector, description: String, enabled: Boolean, onCl
 }
 
 private const val DAYS_IN_WEEK = 7
+private const val STEP_BAR_DP = 28

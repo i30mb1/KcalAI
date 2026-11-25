@@ -2,6 +2,7 @@ package n7.kcalai.mascot
 
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.datetime.TimeZone
@@ -13,8 +14,13 @@ import n7.kcalai.model.EntrySource
 import n7.kcalai.model.Log
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.ModelDelivery
+import n7.kcalai.model.DEFAULT_STEPS_GOAL
+import n7.kcalai.model.WALK_OVER_MS
+import n7.kcalai.model.totals
 import n7.kcalai.personal.PersonalRepository
 import n7.kcalai.repositories.DiaryRepository
+import n7.kcalai.repositories.WalkRepository
+import n7.kcalai.repositories.toWalk
 
 /**
  * Шторка платформы: как выглядит сообщение персонажа. Что и когда писать — решает общий код.
@@ -57,6 +63,7 @@ class MascotRoutines(
     private val diary: DiaryRepository,
     private val personal: PersonalRepository,
     private val shade: MascotShade,
+    private val walks: WalkRepository,
     private val zone: TimeZone,
     private val clock: Clock = Clock.System,
 ) {
@@ -78,6 +85,27 @@ class MascotRoutines(
     suspend fun narrate(model: BackgroundModel, deliveries: Flow<ModelDelivery>) {
         deliveries.collectLatest { delivery ->
             guarded("не удалось рассказать про $model: $delivery") { brain.report(model, delivery, clock) }
+        }
+    }
+
+    /**
+     * Прогулки по дорожке: кончилась — дорожка молчит дольше [WALK_OVER_MS] — и Зёрнышко одной репликой
+     * рассказывает итог, см. [MascotBrain.tellWalk]. `collectLatest`: новый пакет той же прогулки отменяет
+     * ожидание, и итог не прозвучит посреди ходьбы. Прогулка прошлых дней (телефон был выключен) не
+     * рассказывается — помечается рассказанной молча: вчерашний итог сегодня — уже не новость.
+     */
+    suspend fun tellWalks(goal: Int = DEFAULT_STEPS_GOAL) {
+        walks.observeLast().collectLatest { last ->
+            if (last == null || last.toldAt != null) return@collectLatest
+            val wait = last.seenAt + WALK_OVER_MS - clock.now().toEpochMilliseconds()
+            if (wait > 0) delay(wait)
+            guarded("не удалось рассказать о прогулке") {
+                val now = clock.now()
+                val today = now.toLocalDateTime(zone).date.toEpochDays()
+                val told = last.dateEpochDay != today ||
+                    brain.tellWalk(last.toWalk(), walks.day(last.dateEpochDay).totals(), goal, clock) != null
+                if (told) walks.markTold(last, clock.now().toEpochMilliseconds())
+            }
         }
     }
 

@@ -72,7 +72,7 @@ class AppContainer(context: Context) : AppGraph() {
     }
 
     /**
-     * Старт процесса: фоновая докачка словами персонажей и «приложение новое».
+     * Старт процесса: фоновая докачка словами персонажей, «приложение новое» и итоги прогулок по дорожке.
      * Слушает всю жизнь процесса: модель докачивается и без экрана, а сказанное
      * лежит в базе и дождётся человека.
      */
@@ -80,5 +80,6 @@ class AppContainer(context: Context) : AppGraph() {
         appScope.launch { mascotRoutines.narrate(BackgroundModel.SEARCH, embedder.delivery) }
         appScope.launch { mascotRoutines.narrate(BackgroundModel.ASSISTANT, nano.delivery.filterNotNull()) }
         appScope.launch { mascotRoutines.onLaunch() }
+        appScope.launch { mascotRoutines.tellWalks() }
     }
 }

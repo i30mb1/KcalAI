@@ -59,7 +59,7 @@ import n7.kcalai.webapi.WebMacros
  * Окно поверх страницы; закрывается крестиком, клавишей Esc и кликом мимо.
  */
 @Composable
-fun SettingsPanel(day: WebDay, link: PhoneLink, onClose: () -> Unit) {
+fun SettingsPanel(day: WebDay, link: PhoneLink, treadmill: TreadmillLink, onPair: () -> Unit, onClose: () -> Unit) {
     val colors = KcalTheme.colors
     val dismiss = remember { MutableInteractionSource() }
     Box(
@@ -105,6 +105,7 @@ fun SettingsPanel(day: WebDay, link: PhoneLink, onClose: () -> Unit) {
             NameSection(day.owner, onSave = { link.send(ToPhone.SetName(it)) })
             GoalSection(day.goalMacros, onSave = { link.send(ToPhone.SetGoal(it.prot, it.fat, it.carb)) })
             GraceSection(day.grace, onPick = { link.send(ToPhone.SetGrace(it)) })
+            if (treadmill != TreadmillLink.UNSUPPORTED) TreadmillSection(treadmill, onPair)
             BrowsersSection(day, onRevoke = { link.send(ToPhone.Revoke(it)) }, onLeave = link::leave)
         }
     }
@@ -197,6 +198,19 @@ private fun GraceSection(current: PageGrace, onPick: (PageGrace) -> Unit) {
 }
 
 /** Пущенные браузеры: чужой — «Отозвать», свой — «Выйти». Забытый в гостях компьютер дневник больше не откроет. */
+/** Беговая дорожка по Bluetooth: подключена, ждёт включения — или кнопка, чтобы выбрать её. */
+@Composable
+private fun TreadmillSection(state: TreadmillLink, onPair: () -> Unit) {
+    Section("Беговая дорожка") {
+        when (state) {
+            TreadmillLink.CONNECTED -> Text("Подключена — шаги идут в дневник", style = KcalTheme.type.body, color = KcalTheme.colors.text2)
+            TreadmillLink.CONNECTING -> Text("Подключаюсь…", style = KcalTheme.type.body, color = KcalTheme.colors.text2)
+            TreadmillLink.WAITING -> Text("Подключится сама, когда её включат", style = KcalTheme.type.body, color = KcalTheme.colors.text2)
+            else -> PageChip("Подключить", primary = true, onClick = onPair)
+        }
+    }
+}
+
 @Composable
 private fun BrowsersSection(day: WebDay, onRevoke: (Long) -> Unit, onLeave: () -> Unit) {
     val colors = KcalTheme.colors

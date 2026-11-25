@@ -19,6 +19,8 @@ import n7.kcalai.database.PortionSampleEntity
 import n7.kcalai.database.RankerStateEntity
 import n7.kcalai.database.RankerWeightEntity
 import n7.kcalai.database.SuggestionEventEntity
+import n7.kcalai.database.WalkDao
+import n7.kcalai.database.WalkEntity
 import n7.kcalai.model.MealType
 
 /** Дневник в памяти: тот же порядок, что у Room, — день, время, id. */
@@ -155,5 +157,25 @@ internal class FakeMascotDao : MascotDao {
 
     override suspend fun upsertProfile(profile: MascotProfileEntity) {
         profileRow.value = profile
+    }
+}
+
+internal class FakeWalkDao : WalkDao {
+    private val rows = MutableStateFlow<List<WalkEntity>>(emptyList())
+
+    override suspend fun upsert(walk: WalkEntity) {
+        rows.value = (rows.value.filter { it.startedAt != walk.startedAt } + walk).sortedBy { it.startedAt }
+    }
+
+    override suspend fun last(): WalkEntity? = rows.value.lastOrNull()
+
+    override fun observeLast(): Flow<WalkEntity?> = rows.map { it.lastOrNull() }
+
+    override fun observeDays(from: Long, to: Long): Flow<List<WalkEntity>> = rows.map { list -> list.filter { it.dateEpochDay in from..to } }
+
+    override suspend fun day(dateEpochDay: Long): List<WalkEntity> = rows.value.filter { it.dateEpochDay == dateEpochDay }
+
+    override suspend fun markTold(startedAt: Long, at: Long) {
+        rows.value = rows.value.map { if (it.startedAt == startedAt) it.copy(toldAt = at) else it }
     }
 }

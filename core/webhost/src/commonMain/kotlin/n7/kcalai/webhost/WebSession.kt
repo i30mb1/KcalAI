@@ -21,8 +21,10 @@ import n7.kcalai.database.Choice
 import n7.kcalai.database.WebClientDao
 import n7.kcalai.database.WebClientEntity
 import n7.kcalai.database.admitted
+import n7.kcalai.model.DEFAULT_STEPS_GOAL
 import n7.kcalai.model.MealType
 import n7.kcalai.model.PageGrace
+import n7.kcalai.model.TreadmillSample
 import n7.kcalai.webapi.ToPage
 import n7.kcalai.webapi.ToPhone
 import n7.kcalai.webapi.WebBrowser
@@ -31,7 +33,9 @@ import n7.kcalai.webapi.WebDaySummary
 import n7.kcalai.webapi.WebEntry
 import n7.kcalai.webapi.WebMacros
 import n7.kcalai.webapi.WebPeer
+import n7.kcalai.webapi.WebSaid
 import n7.kcalai.webapi.WebSuggestion
+import n7.kcalai.webapi.WebWalk
 import kotlin.random.Random
 import kotlin.time.Clock
 import kotlin.uuid.ExperimentalUuidApi
@@ -45,12 +49,16 @@ import kotlin.uuid.Uuid
  */
 const val WEB_WAITING_MAX = 3
 
-/** День для страницы: записи и цель того дня. */
+/** День для страницы: записи и цель того дня, прогулки по дорожке, шаги и что о прогулках сказано. */
 data class WebDayContent(
     val entries: List<WebEntry>,
     val goalKcal: Int?,
     val goalMacros: WebMacros? = null,
     val fiberGoal: Int? = null,
+    val walks: List<WebWalk> = emptyList(),
+    val steps: Int = 0,
+    val stepsGoal: Int = DEFAULT_STEPS_GOAL,
+    val said: List<WebSaid> = emptyList(),
 )
 
 /**
@@ -85,6 +93,9 @@ interface WebDiary {
 
     /** Сколько держать страницу, когда телефон убран. */
     suspend fun setGrace(grace: PageGrace)
+
+    /** Пакет беговой дорожки, подключённой к странице, — в прогулки. */
+    suspend fun treadmill(sample: TreadmillSample)
 }
 
 /** Сколько пущенных браузеров сейчас на связи — пока хоть один есть, экрану гаснуть нельзя. */
@@ -173,6 +184,7 @@ class WebSession(
                 is ToPhone.SetName -> diary.setName(message.name)
                 is ToPhone.Revoke -> clients.revoke(message.browserId, clock.now().toEpochMilliseconds())
                 is ToPhone.SetGrace -> diary.setGrace(message.grace)
+                is ToPhone.Treadmill -> diary.treadmill(message.sample)
                 ToPhone.Leave -> {
                     clients.leave(token, clock.now().toEpochMilliseconds())
                     break
@@ -208,6 +220,10 @@ class WebSession(
                     browsers = admitted,
                     fiberGoal = content.fiberGoal,
                     grace = keep,
+                    walks = content.walks,
+                    steps = content.steps,
+                    stepsGoal = content.stepsGoal,
+                    said = content.said,
                 )
             }
                 .distinctUntilChanged()

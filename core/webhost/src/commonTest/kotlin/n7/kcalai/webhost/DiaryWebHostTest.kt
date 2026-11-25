@@ -57,6 +57,7 @@ class DiaryWebHostTest {
             override suspend fun setGoal(goal: n7.kcalai.webapi.WebMacros) = Unit
             override suspend fun setName(name: String) = Unit
             override suspend fun setGrace(grace: n7.kcalai.model.PageGrace) = Unit
+            override suspend fun treadmill(sample: n7.kcalai.model.TreadmillSample) = Unit
         },
         owner = MutableStateFlow("Женя"),
         grace = MutableStateFlow(n7.kcalai.model.PageGrace.MIN_5),

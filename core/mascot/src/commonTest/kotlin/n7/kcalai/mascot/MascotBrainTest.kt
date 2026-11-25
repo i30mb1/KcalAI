@@ -37,6 +37,8 @@ import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.ModelDelivery
 import n7.kcalai.model.PageGrace
+import n7.kcalai.model.Walk
+import n7.kcalai.model.WalkTotals
 import n7.kcalai.personal.PersonalRepository
 
 /**
@@ -524,6 +526,32 @@ class MascotBrainTest {
 
         assertEquals("Женя", mascots.profileRow.value?.name)
         assertEquals(true, mascots.profileRow.value?.nameAsked)
+    }
+
+    /** Итог прогулки по дорожке — одной репликой Зёрнышка в ленте: сколько прошли и сколько до цели. */
+    @Test
+    fun `после прогулки Зёрнышко пишет в ленту, сколько прошли`() = runTest {
+        started()
+        val walk = Walk(startedAt = 0, seenAt = 0, distanceM = 2140, kcal = 90, elapsedS = 32 * 60, steps = 3242.4, topSpeedKmh = 4.5)
+
+        val said = brain().tellWalk(walk, WalkTotals(steps = 5242, distanceM = 3500, elapsedS = 3000, kcal = 150, walks = 2), goal = 8000, clock = at(now))
+
+        assertNotNull(said)
+        assertEquals(Topic.WALK_DONE.name, said.topic)
+        assertEquals(Mascot.GRAIN, said.mascot)
+        assertEquals(Delivery.FEED, said.delivery)
+        assertTrue("3 242 шага" in said.text && "2,1 км" in said.text && "2 758 шагов" in said.text, said.text)
+    }
+
+    @Test
+    fun `прогулка добрала цель дня — Зёрнышко говорит о цели`() = runTest {
+        started()
+        val walk = Walk(startedAt = 0, seenAt = 0, distanceM = 2140, kcal = 90, elapsedS = 32 * 60, steps = 3242.0, topSpeedKmh = 4.5)
+
+        val said = brain().tellWalk(walk, WalkTotals(steps = 8100, distanceM = 6000, elapsedS = 5000, kcal = 250, walks = 3), goal = 8000, clock = at(now))
+
+        assertEquals(Topic.WALK_GOAL.name, said?.topic)
+        assertTrue("8 100 шагов" in said!!.text, said.text)
     }
 
     @Test

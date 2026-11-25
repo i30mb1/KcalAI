@@ -149,7 +149,12 @@ fun DiaryPage(link: PhoneLink) {
     val blur by animateDpAsState(if (offline) OFFLINE_BLUR else 0.dp, tween(OFFLINE_MS, easing = EaseOutStrong))
     // Прогулка: под дневником оживает бумажный мир, по нему идёт Зёрнышко (см. Walk.kt). Пока идём,
     // фон страницы уходит — колонка становится матовым стеклом над миром (его рисует index.html).
-    val walking = rememberWalking(colors.bg)
+    val scope = rememberCoroutineScope()
+    val treadmill = remember { PageTreadmill(link::send, scope) }
+    LaunchedEffect(treadmill) { treadmill.start() }
+    val live by treadmill.live.collectAsState()
+    val treadmillLink by treadmill.link.collectAsState()
+    val walking = rememberWalking(colors.bg, live?.speedKmh ?: 0.0, diary?.day?.steps ?: 0, diary?.day?.stepsGoal ?: 0)
     val pageBg by animateColorAsState(if (walking) colors.bg.copy(alpha = 0f) else colors.bg, tween(WALK_FADE_MS))
 
     Box(Modifier.fillMaxSize().background(pageBg), contentAlignment = Alignment.TopCenter) {
@@ -168,26 +173,32 @@ fun DiaryPage(link: PhoneLink) {
                 )
                 // Смена дня — лента уезжает в сторону листания и растворяется, а не подменяется
                 // разом. Обновления того же дня сменой не считаются: ключ — дата.
-                AnimatedContent(
-                    targetState = diary,
-                    contentKey = { it.day.date },
-                    transitionSpec = {
-                        val forward = targetState.day.date > initialState.day.date
-                        val enterFrom: (Int) -> Int = { width -> if (forward) width / DAY_SLIDE else -width / DAY_SLIDE }
-                        val exitTo: (Int) -> Int = { width -> if (forward) -width / DAY_SLIDE else width / DAY_SLIDE }
-                        (slideInHorizontally(tween(DAY_IN_MS, easing = EaseOutStrong), enterFrom) + fadeIn(tween(DAY_IN_MS))) togetherWith
-                            (slideOutHorizontally(tween(DAY_OUT_MS, easing = EaseOutStrong), exitTo) + fadeOut(tween(DAY_OUT_MS)))
-                    },
-                    modifier = Modifier.weight(1f),
-                    label = "day",
-                ) { shown -> Feed(shown, link, Modifier.fillMaxSize()) }
+                Box(Modifier.weight(1f)) {
+                    AnimatedContent(
+                        targetState = diary,
+                        contentKey = { it.day.date },
+                        transitionSpec = {
+                            val forward = targetState.day.date > initialState.day.date
+                            val enterFrom: (Int) -> Int = { width -> if (forward) width / DAY_SLIDE else -width / DAY_SLIDE }
+                            val exitTo: (Int) -> Int = { width -> if (forward) -width / DAY_SLIDE else width / DAY_SLIDE }
+                            (slideInHorizontally(tween(DAY_IN_MS, easing = EaseOutStrong), enterFrom) + fadeIn(tween(DAY_IN_MS))) togetherWith
+                                (slideOutHorizontally(tween(DAY_OUT_MS, easing = EaseOutStrong), exitTo) + fadeOut(tween(DAY_OUT_MS)))
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        label = "day",
+                    ) { shown -> Feed(shown, link, Modifier.fillMaxSize(), treadmillLink, treadmill::pair) }
+                    // Шаги дня — поверх ленты, в углу: окошко ничего не сдвигает.
+                    if (diary.day.date == diary.day.today) {
+                        WalkPanel(diary.day, live, walking, Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 16.dp))
+                    }
+                }
                 Composer(diary, link)
             }
         }
         if (diary != null && offline) {
             OfflineOverlay(diary.offlineLine())
         } else if (settings && diary != null) {
-            SettingsPanel(diary.day, link, onClose = { settings = false })
+            SettingsPanel(diary.day, link, treadmillLink, treadmill::pair, onClose = { settings = false })
         }
     }
 }
@@ -211,6 +222,8 @@ private fun Header(day: WebDay, puppets: Map<Mascot, MascotPuppet>, onSettings: 
         Modifier
             .fillMaxWidth()
             // Шапка отделена от ленты тонкой линией, как в приложении: лента под ней прокручивается.
+            // Своя плашка цвета страницы: над миром прогулки шапка читается и без стекла колонки.
+            .background(colors.bg.copy(alpha = PLATE_ALPHA), RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp))
             .drawBehind { drawLine(colors.line, Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1f) }
             .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),

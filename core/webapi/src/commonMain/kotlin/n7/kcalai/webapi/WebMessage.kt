@@ -11,6 +11,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import n7.kcalai.model.FiberTotal
@@ -18,7 +19,9 @@ import n7.kcalai.model.GoalMacros
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.NutrimentTotals
+import n7.kcalai.model.DEFAULT_STEPS_GOAL
 import n7.kcalai.model.PageGrace
+import n7.kcalai.model.TreadmillSample
 import n7.kcalai.model.owner
 
 /*
@@ -38,6 +41,11 @@ const val WEB_SOCKET_PATH = "/ws"
 
 /** Больше десяти килограммов за раз человек не ест, а ноль записывать нечего. */
 const val WEB_GRAMS_MAX = 10_000
+
+/** Пакет дорожки с невозможными числами — помеха в эфире, а не прогулка: быстрее 30 км/ч дорожки не едут. */
+const val WEB_SPEED_MAX_KMH = 30.0
+const val WEB_DISTANCE_MAX_M = 200_000L
+const val WEB_ELAPSED_MAX_S = 86_400L
 
 /** Имя — подпись в чужой ленте и во вкладке, а не документ. */
 const val WEB_NAME_MAX = 40
@@ -86,6 +94,9 @@ sealed interface ToPhone {
 
     /** «Выйти»: телефон забывает этот браузер, и в следующий раз его снова надо пустить. */
     data object Leave : ToPhone
+
+    /** Пакет беговой дорожки: к ней по Bluetooth подключена страница, а прогулки хранит телефон. */
+    data class Treadmill(val sample: TreadmillSample) : ToPhone
 }
 
 /** Что телефон говорит странице. */
@@ -114,8 +125,30 @@ sealed interface ToPage {
 /** Пущенный браузер. @param here это тот, в котором открыта страница */
 data class WebBrowser(val id: Long, val label: String, val here: Boolean)
 
-/** День недели в полосе над дневником: калории и цель того дня. */
-data class WebDaySummary(val date: Long, val kcal: Int, val goalKcal: Int?)
+/** День недели в полосе над дневником: калории и цель того дня, шаги. */
+data class WebDaySummary(val date: Long, val kcal: Int, val goalKcal: Int?, val steps: Int = 0)
+
+/**
+ * Прогулка по дорожке. Время — минутами от полуночи по часам телефона: страница своим часам не верит.
+ *
+ * @param endMinute когда дорожка последний раз о ней сообщила
+ */
+data class WebWalk(
+    val startMinute: Int,
+    val endMinute: Int,
+    val distanceM: Int,
+    val elapsedS: Int,
+    val steps: Int,
+    val topSpeedKmh: Double,
+) {
+    /** Средний темп, км/ч. */
+    val avgSpeedKmh: Double get() = if (elapsedS > 0) distanceM * KMH_PER_MPS / elapsedS else 0.0
+}
+
+/** Реплика персонажа в ленте дня — итог прогулки. @param minute когда сказана, от полуночи */
+data class WebSaid(val mascot: Mascot, val text: String, val minute: Int)
+
+private const val KMH_PER_MPS = 3.6
 
 /**
  * Дневник дня глазами страницы.
@@ -130,6 +163,10 @@ data class WebDaySummary(val date: Long, val kcal: Int, val goalKcal: Int?)
  * @param browsers пущенные браузеры — для настроек; вместе с днём, чтобы не ждать отдельного слова
  * @param fiberGoal клетчатка на день, граммы: своя цель или по калориям цели, как в приложении
  * @param grace сколько страница живёт, когда телефон убран, — для настроек
+ * @param walks прогулки дня по дорожке
+ * @param steps шаги дня: телефона и дорожки вместе
+ * @param stepsGoal цель шагов на день
+ * @param said что персонажи сказали в ленте дня о прогулках
  */
 data class WebDay(
     val owner: String,
@@ -143,6 +180,10 @@ data class WebDay(
     val browsers: List<WebBrowser> = emptyList(),
     val fiberGoal: Int? = null,
     val grace: PageGrace = PageGrace.MIN_5,
+    val walks: List<WebWalk> = emptyList(),
+    val steps: Int = 0,
+    val stepsGoal: Int = DEFAULT_STEPS_GOAL,
+    val said: List<WebSaid> = emptyList(),
 ) {
     val kcal: Int get() = entries.sumOf { it.kcal }
 
@@ -212,6 +253,7 @@ fun encode(message: ToPhone): String = envelope(
         is ToPhone.Revoke -> "revoke"
         is ToPhone.SetGrace -> "grace"
         ToPhone.Leave -> "leave"
+        is ToPhone.Treadmill -> "treadmill"
     },
 ) {
     when (message) {
@@ -238,6 +280,12 @@ fun encode(message: ToPhone): String = envelope(
         is ToPhone.Revoke -> put("id", message.browserId)
         is ToPhone.SetGrace -> put("grace", message.grace.name)
         ToPhone.Leave -> Unit
+        is ToPhone.Treadmill -> {
+            put("speed", message.sample.speedKmh)
+            put("distance", message.sample.distanceM)
+            put("kcal", message.sample.kcal)
+            put("elapsed", message.sample.elapsedS)
+        }
     }
 }
 
@@ -273,6 +321,10 @@ fun encode(message: ToPage): String = envelope(
             put("browsers", buildJsonArray { day.browsers.forEach { add(it.toJson()) } })
             day.fiberGoal?.let { put("fiberGoal", it) }
             put("grace", day.grace.name)
+            put("walks", buildJsonArray { day.walks.forEach { add(it.toJson()) } })
+            put("steps", day.steps)
+            put("stepsGoal", day.stepsGoal)
+            put("said", buildJsonArray { day.said.forEach { add(it.toJson()) } })
         }
         is ToPage.Suggestions -> {
             put("query", message.query)
@@ -304,6 +356,22 @@ private fun WebDaySummary.toJson() = buildJsonObject {
     put("date", date)
     put("kcal", kcal)
     goalKcal?.let { put("goal", it) }
+    put("steps", steps)
+}
+
+private fun WebWalk.toJson() = buildJsonObject {
+    put("from", startMinute)
+    put("to", endMinute)
+    put("distance", distanceM)
+    put("elapsed", elapsedS)
+    put("steps", steps)
+    put("top", topSpeedKmh)
+}
+
+private fun WebSaid.toJson() = buildJsonObject {
+    put("mascot", mascot.name)
+    put("text", text)
+    put("minute", minute)
 }
 
 private fun WebBrowser.toJson() = buildJsonObject {
@@ -350,6 +418,14 @@ fun parseToPhone(text: String): ToPhone? {
         "revoke" -> ToPhone.Revoke(browserId = json.long("id") ?: return null)
         "grace" -> ToPhone.SetGrace(grace = json.grace() ?: return null)
         "leave" -> ToPhone.Leave
+        "treadmill" -> ToPhone.Treadmill(
+            TreadmillSample(
+                speedKmh = json.double("speed")?.takeIf { it in 0.0..WEB_SPEED_MAX_KMH } ?: return null,
+                distanceM = json.long("distance")?.takeIf { it in 0..WEB_DISTANCE_MAX_M }?.toInt() ?: return null,
+                kcal = json.long("kcal")?.takeIf { it >= 0 }?.toInt() ?: return null,
+                elapsedS = json.long("elapsed")?.takeIf { it in 0..WEB_ELAPSED_MAX_S }?.toInt() ?: return null,
+            ),
+        )
         else -> null
     }
 }
@@ -374,6 +450,10 @@ fun parseToPage(text: String): ToPage? {
                 browsers = json.list("browsers") { it.toBrowser() } ?: return null,
                 fiberGoal = json.long("fiberGoal")?.toInt(),
                 grace = json.grace() ?: return null,
+                walks = json.list("walks") { it.toWalk() } ?: return null,
+                steps = json.long("steps")?.toInt() ?: return null,
+                stepsGoal = json.long("stepsGoal")?.toInt() ?: return null,
+                said = json.list("said") { it.toSaid() } ?: return null,
             )
         )
         "suggestions" -> ToPage.Suggestions(
@@ -414,6 +494,22 @@ private fun JsonObject.toSummary(): WebDaySummary? = WebDaySummary(
     date = long("date") ?: return null,
     kcal = long("kcal")?.toInt() ?: return null,
     goalKcal = long("goal")?.toInt(),
+    steps = long("steps")?.toInt() ?: return null,
+)
+
+private fun JsonObject.toWalk(): WebWalk? = WebWalk(
+    startMinute = long("from")?.toInt() ?: return null,
+    endMinute = long("to")?.toInt() ?: return null,
+    distanceM = long("distance")?.toInt() ?: return null,
+    elapsedS = long("elapsed")?.toInt() ?: return null,
+    steps = long("steps")?.toInt() ?: return null,
+    topSpeedKmh = double("top") ?: return null,
+)
+
+private fun JsonObject.toSaid(): WebSaid? = WebSaid(
+    mascot = text("mascot")?.let { name -> Mascot.entries.firstOrNull { it.name == name } } ?: return null,
+    text = text("text") ?: return null,
+    minute = long("minute")?.toInt() ?: return null,
 )
 
 private fun JsonObject.toBrowser(): WebBrowser? = WebBrowser(
@@ -447,6 +543,8 @@ private fun JsonObject.grams(): Int? = long("grams")?.takeIf { it in 1..WEB_GRAM
 private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 
 private fun JsonObject.long(key: String): Long? = (this[key] as? JsonPrimitive)?.takeUnless { it.isString }?.longOrNull
+
+private fun JsonObject.double(key: String): Double? = (this[key] as? JsonPrimitive)?.takeUnless { it.isString }?.doubleOrNull
 
 /** Список, где каждый элемент обязан разобраться: запись без цифр хуже, чем отказ целиком. */
 private fun <T> JsonObject.list(key: String, item: (JsonObject) -> T?): List<T>? =

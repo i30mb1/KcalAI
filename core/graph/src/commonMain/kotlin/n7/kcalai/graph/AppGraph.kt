@@ -17,6 +17,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 import n7.kcalai.assistant.DiaryTools
 import n7.kcalai.assistant.FoodAssistant
 import n7.kcalai.database.KcalDatabase
@@ -34,6 +36,7 @@ import n7.kcalai.mascot.FactsBuilder
 import n7.kcalai.mascot.MascotBrain
 import n7.kcalai.mascot.MascotRoutines
 import n7.kcalai.mascot.MascotShade
+import n7.kcalai.mascot.voice.Topic
 import n7.kcalai.nearby.DatabaseOfferInbox
 import n7.kcalai.nearby.LAN_PORT
 import n7.kcalai.nearby.pageUrl
@@ -54,9 +57,11 @@ import n7.kcalai.repositories.FoodRepository
 import n7.kcalai.repositories.PersonalSemantic
 import n7.kcalai.repositories.QueryEmbedder
 import n7.kcalai.repositories.RemoteProductSource
+import n7.kcalai.repositories.WalkRepository
 import n7.kcalai.resolver.TextFoodResolver
 import n7.kcalai.resolver.parseSegment
 import n7.kcalai.webapi.WebPeer
+import n7.kcalai.webapi.WebSaid
 import n7.kcalai.webhost.DiaryWebHost
 import n7.kcalai.webhost.RepositoryWebDiary
 import n7.kcalai.webhost.ResourceWebBundle
@@ -181,6 +186,9 @@ abstract class AppGraph {
         DiaryRepository(database.diaryDao(), database.goalDao(), database.contributionDao())
     }
 
+    /** Прогулки по беговой дорожке: шаги шлёт страница дневника, к которой дорожка подключена. */
+    val walkRepository: WalkRepository by lazy { WalkRepository(database.walkDao(), TimeZone.currentSystemDefault()) }
+
     /**
      * Зона нужна моделям: `createdAt` хранится в UTC, а привычки у человека
      * в местном времени — завтрак в восемь утра остаётся завтраком и после перелёта.
@@ -236,6 +244,7 @@ abstract class AppGraph {
             diary = diaryRepository,
             personal = personalRepository,
             shade = shade(),
+            walks = walkRepository,
             zone = TimeZone.currentSystemDefault(),
         )
     }
@@ -276,6 +285,8 @@ abstract class AppGraph {
             clients = database.webClientDao(),
             diary = RepositoryWebDiary(
                 diary = diaryRepository,
+                walks = walkRepository,
+                walkSaid = ::walkSaid,
                 suggestFood = { query -> textResolver.suggest(query) },
                 regram = personalRepository::onGramsEdited,
                 rename = mascotBrain::setName,
@@ -288,6 +299,15 @@ abstract class AppGraph {
             presence = webPresence,
             bundle = ResourceWebBundle,
         )
+    }
+
+    /** Что Зёрнышко сказало о прогулках в ленте дня — страница показывает это в своей ленте. */
+    private fun walkSaid(day: Long) = database.mascotDao().observeDay(day).map { said ->
+        val zone = TimeZone.currentSystemDefault()
+        said.filter { it.topic == Topic.WALK_DONE.name || it.topic == Topic.WALK_GOAL.name }.map {
+            val at = Instant.fromEpochMilliseconds(it.createdAt).toLocalDateTime(zone)
+            WebSaid(it.mascot, it.text, minute = at.hour * MINUTES_PER_HOUR + at.minute)
+        }
     }
 
     /** Предложение Яйца отправить продукты. `null` — сервера нет, отправлять некуда. */
@@ -334,3 +354,5 @@ abstract class AppGraph {
         assistant = assistant,
     )
 }
+
+private const val MINUTES_PER_HOUR = 60

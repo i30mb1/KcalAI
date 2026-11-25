@@ -1,5 +1,6 @@
 package n7.kcalai.mascot
 
+import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
@@ -33,6 +34,8 @@ import n7.kcalai.model.Mascot
 import n7.kcalai.model.ModelDelivery
 import n7.kcalai.model.PageGrace
 import n7.kcalai.model.Sex
+import n7.kcalai.model.Walk
+import n7.kcalai.model.WalkTotals
 import n7.kcalai.model.owner
 import n7.kcalai.model.parseFoodRef
 import n7.kcalai.model.serialize
@@ -253,6 +256,25 @@ class MascotBrain(
         // Пока ждали очереди, адрес могли назвать по просьбе — второй раз не нужно.
         if (dao.lastSaid(Topic.WEB_ADDRESS.name) != null) return null
         return answerWebAddress(address, clock.now())
+    }
+
+    /**
+     * Прогулка по дорожке кончилась — Зёрнышко одной репликой говорит, сколько прошли и сколько
+     * осталось до цели шагов (или что цель дня есть). Очередь та же, что у новостей, — см. [awaitTurn];
+     * что о прогулке уже рассказали, помнит сама прогулка.
+     *
+     * @param day итог шагов дня вместе с этой прогулкой
+     */
+    suspend fun tellWalk(walk: Walk, day: WalkTotals, goal: Int, clock: Clock = Clock.System): MascotMessageEntity? {
+        awaitTurn(clock)
+        val now = clock.now()
+        val steps = walk.steps.roundToInt()
+        val facts = lightFacts(now).copy(
+            walk = WalkFacts(steps, walk.distanceM, walk.elapsedS, daySteps = day.steps, stepsLeft = goal - day.steps),
+        )
+        val topic = if (day.steps >= goal) Topic.WALK_GOAL else Topic.WALK_DONE
+        val said = Voices.of(Mascot.GRAIN).compose(topic, facts, dao.recent(MEMORY).memory(), random) ?: return null
+        return save(Mascot.GRAIN, topic, said, Delivery.FEED, facts.now.date.toEpochDays(), now)
     }
 
     /** Человек спросил адрес страницы — отвечают сразу и сколько угодно раз. */

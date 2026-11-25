@@ -9,8 +9,12 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.TimeZone
 import n7.kcalai.database.ContributionDao
@@ -29,6 +33,8 @@ import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.ModelDelivery
 import n7.kcalai.model.Nutriments
+import n7.kcalai.model.TreadmillSample
+import n7.kcalai.repositories.WalkRepository
 import n7.kcalai.personal.PersonalRepository
 import n7.kcalai.repositories.DiaryRepository
 
@@ -43,6 +49,8 @@ class MascotRoutinesTest {
     private val goals = FakeGoalDao()
     private val mascots = FakeMascotDao()
     private val shade = FakeShade()
+    private val walkDao = FakeWalkDao()
+    private val walks = WalkRepository(walkDao, zone)
 
     /** Пятница, 16:00. */
     private val now = Instant.parse("2026-11-06T16:00:00Z")
@@ -60,7 +68,7 @@ class MascotRoutinesTest {
             zone = zone,
             random = Random(1),
         )
-        return MascotRoutines(brain, DiaryRepository(diary, goals, NoContributions), personal, shade, zone, clock)
+        return MascotRoutines(brain, DiaryRepository(diary, goals, NoContributions), personal, shade, walks, zone, clock)
     }
 
     private suspend fun eat(at: Instant) = diary.insert(
@@ -124,6 +132,32 @@ class MascotRoutinesTest {
         routines().narrate(BackgroundModel.SEARCH, flowOf(ModelDelivery.READY))
 
         assertEquals(Topic.SEARCH_READY.name, mascots.messages.value.single().topic)
+    }
+
+    /** Прогулка кончилась — дорожка давно молчит: итог одной репликой Зёрнышка, и только раз. */
+    @Test
+    fun `о кончившейся прогулке Зёрнышко рассказывает один раз`() = runTest {
+        eat(now - 1.days)
+        walks.record(TreadmillSample(speedKmh = 4.0, distanceM = 2_140, kcal = 90, elapsedS = 1_920), (now - 10.minutes).toEpochMilliseconds())
+
+        backgroundScope.launch { routines().tellWalks() }
+        runCurrent()
+
+        val said = mascots.messages.value.single()
+        assertEquals(Topic.WALK_DONE.name, said.topic)
+        assertEquals(Mascot.GRAIN, said.mascot)
+        assertNotNull(walkDao.last()?.toldAt)
+    }
+
+    @Test
+    fun `пока прогулка идёт, о ней молчат`() = runTest {
+        eat(now - 1.days)
+        walks.record(TreadmillSample(speedKmh = 4.0, distanceM = 2_140, kcal = 90, elapsedS = 1_920), (now - 10.seconds).toEpochMilliseconds())
+
+        backgroundScope.launch { routines().tellWalks() }
+        runCurrent()
+
+        assertTrue(mascots.messages.value.isEmpty())
     }
 
     // --- «Записать» из шторки ---------------------------------------------------------------

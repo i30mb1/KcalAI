@@ -12,6 +12,7 @@ import kotlinx.datetime.TimeZone
 import n7.kcalai.database.Choice
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.PageGrace
+import n7.kcalai.model.TreadmillSample
 import n7.kcalai.model.MealType
 import n7.kcalai.webapi.ToPage
 import n7.kcalai.webapi.ToPhone
@@ -224,6 +225,17 @@ class WebSessionTest {
         assertEquals(listOf(Added("гречка", 0, 200, diary.today - 1, MealType.DINNER)), diary.added)
     }
 
+    /** Дорожка подключена к странице, а прогулки хранит телефон — пакеты доходят до него. */
+    @Test
+    fun `пакеты дорожки со страницы доходят до телефона`() = runTest {
+        val browser = admitted()
+
+        browser.say(ToPhone.Treadmill(TreadmillSample(speedKmh = 4.0, distanceM = 120, kcal = 6, elapsedS = 110)))
+        runCurrent()
+
+        assertEquals(listOf(TreadmillSample(4.0, 120, 6, 110)), diary.samples)
+    }
+
     @Test
     fun `цель, имя и запас со страницы доходят до телефона`() = runTest {
         val browser = admitted()
@@ -350,6 +362,7 @@ private class FakeWebDiary : WebDiary {
     val goals = mutableListOf<WebMacros>()
     val names = mutableListOf<String>()
     val graces = mutableListOf<PageGrace>()
+    val samples = mutableListOf<TreadmillSample>()
 
     /** 2026-11-24. */
     override val today: Long = 20_781
@@ -382,5 +395,9 @@ private class FakeWebDiary : WebDiary {
 
     override suspend fun delete(entryId: Long) {
         deleted += entryId
+    }
+
+    override suspend fun treadmill(sample: TreadmillSample) {
+        samples += sample
     }
 }

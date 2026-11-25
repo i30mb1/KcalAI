@@ -29,6 +29,29 @@ class RussianTest {
     }
 
     @Test
+    fun `шаги — с разрядами, как на экране дорожки`() {
+        assertEquals("1 шаг", stepsPhrase(1))
+        assertEquals("640 шагов", stepsPhrase(640))
+        assertEquals("3 242 шага", stepsPhrase(3242))
+        assertEquals("12 000 шагов", stepsPhrase(12_000))
+    }
+
+    @Test
+    fun `путь — в метрах до километра, дальше в километрах с десятой`() {
+        assertEquals("650 м", distancePhrase(650))
+        assertEquals("1 км", distancePhrase(1000))
+        assertEquals("2,1 км", distancePhrase(2140))
+    }
+
+    @Test
+    fun `время прогулки — минутами, после часа — часами`() {
+        assertEquals("меньше минуты", walkTimePhrase(40))
+        assertEquals("одну минуту", walkTimePhrase(60))
+        assertEquals("32 минуты", walkTimePhrase(32 * 60 + 10))
+        assertEquals("полтора часа", walkTimePhrase(95 * 60))
+    }
+
+    @Test
     fun `дни отсутствия — как сказал бы друг`() {
         assertEquals("день", daysPhrase(1))
         assertEquals("два дня", daysPhrase(2))

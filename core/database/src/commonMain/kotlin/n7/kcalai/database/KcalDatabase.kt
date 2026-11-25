@@ -27,6 +27,7 @@ import kotlinx.coroutines.IO
         TextEmbeddingEntity::class,
         PeerOfferEntity::class,
         WebClientEntity::class,
+        WalkEntity::class,
     ],
     version = KCAL_DB_VERSION,
     exportSchema = true,
@@ -47,6 +48,8 @@ import kotlinx.coroutines.IO
         AutoMigration(from = 10, to = 11),
         // Сколько держать страницу дневника — новый столбец профиля, у всех — пять минут.
         AutoMigration(from = 11, to = 12),
+        // Прогулки по беговой дорожке — новая таблица, дневник не трогается.
+        AutoMigration(from = 12, to = 13),
     ],
 )
 @ConstructedBy(KcalDatabaseConstructor::class)
@@ -62,10 +65,11 @@ abstract class KcalDatabase : RoomDatabase() {
     abstract fun semanticDao(): SemanticDao
     abstract fun peerOfferDao(): PeerOfferDao
     abstract fun webClientDao(): WebClientDao
+    abstract fun walkDao(): WalkDao
 }
 
 /** Версия схемы базы. Константой — её читают тесты обновления и выгрузки схемы. */
-const val KCAL_DB_VERSION = 12
+const val KCAL_DB_VERSION = 13
 
 /** Реализацию для каждой платформы генерирует Room. */
 @Suppress("KotlinNoActualForExpect")

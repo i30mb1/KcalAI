@@ -223,6 +223,29 @@ internal val GrainVoice: Voice = voice(Mascot.GRAIN) {
     }
 
     // Не «не нашлось»: спросили не еду, а адрес, и сказать надо, что сделать.
+    // Прогулка по дорожке — Зёрнышко: топливо пошло в дело. Числа — плейсхолдерами, путь — в каждом варианте.
+    topic(Topic.WALK_DONE) {
+        say {
+            +"Погнали и пришли: {walkSteps}, {walkKm} за {walkTime}. До цели дня — {stepsLeft}."
+            +"Батарейка зарядилась! {walkSteps} за {walkTime}, это {walkKm}. Осталось {stepsLeft} до цели."
+            +"Хохолок доволен: {walkKm}, {walkSteps}. До цели ещё {stepsLeft} — добьём!"
+            +"Прогулка в копилке: {walkSteps}, {walkKm} за {walkTime}. До цели дня ещё {stepsLeft}."
+            +"Вот это ход! {walkKm} за {walkTime} — {walkSteps}. Ещё {stepsLeft} — и цель наша."
+            +"Топливо в дело: {walkSteps}, {walkKm}. До цели осталось {stepsLeft}."
+        }
+    }
+
+    topic(Topic.WALK_GOAL) {
+        say {
+            +"Цель дня есть! За сегодня {daySteps}, из них {walkSteps} — эта прогулка."
+            +"Погнали — и догнали: {daySteps} за день! Прогулка добавила {walkSteps} за {walkTime}."
+            +"Хохолок торчит от гордости: {daySteps} сегодня. Последний рывок — {walkKm}."
+            +"Батарейка полная: {daySteps} за день, цель закрыта. Эта прогулка — {walkKm}."
+            +"Есть цель шагов! {daySteps} сегодня — {walkSteps} принесла эта прогулка."
+            +"Цель дня — наша: {daySteps}. А прогулка — {walkKm} за {walkTime}."
+        }
+    }
+
     topic(Topic.WEB_NO_WIFI) {
         say {
             +"Адреса пока нет: телефон не в Wi-Fi. Подключись к той же сети, что и компьютер, — и напиши снова."

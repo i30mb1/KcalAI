@@ -85,6 +85,12 @@ enum class Topic(val kind: TopicKind) {
     /** Адрес страницы спросили, а его нет: телефон не в Wi-Fi. */
     WEB_NO_WIFI(TopicKind.ANSWER),
 
+    /** Прогулка по дорожке кончилась: сколько прошли и сколько ещё до цели шагов. */
+    WALK_DONE(TopicKind.ANSWER),
+
+    /** Прогулка добрала цель шагов на день. */
+    WALK_GOAL(TopicKind.ANSWER),
+
     /** Третий тык подряд. */
     POKE(TopicKind.SPEECH),
 

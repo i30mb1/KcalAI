@@ -12,6 +12,7 @@ import n7.kcalai.mascot.Chronotype
 import n7.kcalai.mascot.Facts
 import n7.kcalai.mascot.KNOWN_KEYS
 import n7.kcalai.mascot.MissedMeal
+import n7.kcalai.mascot.WalkFacts
 import n7.kcalai.model.MealType
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.Mascot.BUTTER
@@ -50,6 +51,8 @@ class VoicesTest {
         put(Topic.APP_NEW, setOf(BUTTER))
         put(Topic.WEB_ADDRESS, setOf(GRAIN))
         put(Topic.WEB_NO_WIFI, setOf(GRAIN))
+        put(Topic.WALK_DONE, setOf(GRAIN))
+        put(Topic.WALK_GOAL, setOf(GRAIN))
     }
 
     /** Факты, при которых у каждой темы есть о чём сказать. */
@@ -82,6 +85,7 @@ class VoicesTest {
         food = food,
         foodDaysInRow = 3,
         address = "http://192.168.100.200:47800/",
+        walk = WalkFacts(steps = 13_480, distanceM = 10_350, elapsedS = 7_100, daySteps = 21_480, stepsLeft = 7_480),
     )
 
     /** Самые длинные факты, какие бывают: имя в двадцать букв, название — в предел. */

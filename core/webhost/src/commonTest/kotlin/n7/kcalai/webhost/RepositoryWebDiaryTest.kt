@@ -17,9 +17,15 @@ import n7.kcalai.database.GoalDao
 import n7.kcalai.model.EntrySource
 import n7.kcalai.model.FoodCandidate
 import n7.kcalai.model.FoodRef
+import n7.kcalai.model.DEFAULT_STEPS_GOAL
 import n7.kcalai.model.Mascot
 import n7.kcalai.model.MealType
 import n7.kcalai.model.Nutriments
+import n7.kcalai.model.TreadmillSample
+import n7.kcalai.database.WalkDao
+import n7.kcalai.database.WalkEntity
+import n7.kcalai.repositories.WalkRepository
+import n7.kcalai.webapi.WebSaid
 import n7.kcalai.repositories.DiaryRepository
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.webapi.WebMacros
@@ -50,8 +56,13 @@ class RepositoryWebDiaryTest {
     private val buckwheat = FoodCandidate(FoodRef.Generic(1), "Гречка отварная", Nutriments(110, 420, 110, 2_130, 280), servingG = 200)
     private val kernel = FoodCandidate(FoodRef.Generic(2), "Гречка ядрица", Nutriments(313, 1_260, 330, 6_200, 1_000), servingG = 60)
 
+    private val walkDao = FakeWalkDao()
+    private val said = MutableStateFlow<List<WebSaid>>(emptyList())
+
     private val web = RepositoryWebDiary(
         diary = DiaryRepository(diaryDao, goalDao, NoContributions),
+        walks = WalkRepository(walkDao, TimeZone.UTC),
+        walkSaid = { said },
         suggestFood = { query ->
             if ("греч" in query) {
                 listOf(
@@ -171,6 +182,24 @@ class RepositoryWebDiaryTest {
         assertEquals(220, week.single { it.date == today }.kcal)
     }
 
+    /** Прогулки — со временем по часам телефона, шаги дня — их сумма, реплики о них — в ленту дня. */
+    @Test
+    fun `пакеты дорожки — прогулки дня, шаги и итог Зёрнышка`() = runTest {
+        web.treadmill(TreadmillSample(speedKmh = 4.0, distanceM = 2_140, kcal = 90, elapsedS = 1_920))
+        said.value = listOf(WebSaid(Mascot.GRAIN, "Прогулка в копилке", minute = 9 * 60 + 5))
+
+        val shown = web.day(today).first()
+
+        val walk = shown.walks.single()
+        assertEquals(8 * 60 + 28, walk.startMinute, "началась 32 минуты назад, в 08:28")
+        assertEquals(9 * 60, walk.endMinute)
+        assertEquals(2_140, walk.distanceM)
+        assertEquals(walk.steps, shown.steps)
+        assertEquals(DEFAULT_STEPS_GOAL, shown.stepsGoal)
+        assertEquals("Прогулка в копилке", shown.said.single().text)
+        assertEquals(walk.steps, web.week(today).first().single { it.date == today }.steps)
+    }
+
     @Test
     fun `сегодняшний день — записи с числами на их вес и цель`() = runTest {
         diaryDao.insert(entry(day = today, grams = 200))
@@ -252,4 +281,20 @@ private object NoContributions : ContributionDao {
     override suspend fun pending(limit: Int): List<ContributionEntity> = emptyList()
     override suspend fun pendingCount(): Int = 0
     override suspend fun markSent(ids: List<Long>, sentAt: Long) = Unit
+}
+
+private class FakeWalkDao : WalkDao {
+    private val rows = MutableStateFlow<List<WalkEntity>>(emptyList())
+
+    override suspend fun upsert(walk: WalkEntity) = rows.update { list -> (list.filter { it.startedAt != walk.startedAt } + walk).sortedBy { it.startedAt } }
+
+    override suspend fun last(): WalkEntity? = rows.value.lastOrNull()
+
+    override fun observeLast(): Flow<WalkEntity?> = rows.map { it.lastOrNull() }
+
+    override fun observeDays(from: Long, to: Long): Flow<List<WalkEntity>> = rows.map { list -> list.filter { it.dateEpochDay in from..to } }
+
+    override suspend fun day(dateEpochDay: Long): List<WalkEntity> = rows.value.filter { it.dateEpochDay == dateEpochDay }
+
+    override suspend fun markTold(startedAt: Long, at: Long) = rows.update { list -> list.map { if (it.startedAt == startedAt) it.copy(toldAt = at) else it } }
 }

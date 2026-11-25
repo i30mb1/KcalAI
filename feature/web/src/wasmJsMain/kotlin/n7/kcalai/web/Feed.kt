@@ -65,7 +65,9 @@ import n7.kcalai.ui.letter
 import n7.kcalai.ui.mascot.MascotFigure
 import n7.kcalai.ui.mascot.MascotPose
 import n7.kcalai.ui.mascot.macro
+import n7.kcalai.model.Mascot
 import n7.kcalai.webapi.PageLine
+import n7.kcalai.webapi.WebSaid
 import n7.kcalai.webapi.PageState
 import n7.kcalai.webapi.ToPhone
 import n7.kcalai.webapi.WEB_GRAMS_MAX
@@ -78,6 +80,10 @@ import n7.kcalai.webapi.totals
 
 /** Ширина пузырька приёма: как в мессенджере, реплика не тянется от края до края. */
 private const val BUBBLE_WIDTH = 0.82f
+private const val SEPARATOR_DP = 10
+
+/** Плашки под подписями: почти цвет страницы — над миром прогулки они читаются, а дома их не видно. */
+internal const val PLATE_ALPHA = 0.9f
 
 /** Строка ленты: разделитель дня, приём или реплика персонажа. */
 private sealed interface FeedRow {
@@ -94,6 +100,16 @@ private sealed interface FeedRow {
     data class Said(val line: PageLine, val links: List<Pair<String, String>> = emptyList()) : FeedRow {
         override val key get() = "said-${line.mascot}"
     }
+
+    /** Итог прогулки: его сказал персонаж в ленте телефона, и он там остаётся — как переписка. */
+    data class Walked(val said: WebSaid) : FeedRow {
+        override val key get() = "walked-${said.minute}-${said.text.hashCode()}"
+    }
+
+    /** Знакомая дорожка рядом, но браузер подключится к ней только по касанию. */
+    data object Treadmill : FeedRow {
+        override val key get() = "treadmill"
+    }
 }
 
 /**
@@ -101,12 +117,14 @@ private sealed interface FeedRow {
  * как в мессенджере; новая запись — лента доезжает до неё.
  */
 @Composable
-fun Feed(diary: PageState.Diary, link: PhoneLink, modifier: Modifier) {
+fun Feed(diary: PageState.Diary, link: PhoneLink, modifier: Modifier, treadmill: TreadmillLink = TreadmillLink.UNSUPPORTED, onPair: () -> Unit = {}) {
     val day = diary.day
     var editing by remember { mutableStateOf<Long?>(null) }
     val rows = buildList {
         add(FeedRow.Separator(dayLabel(LocalDate.fromEpochDays(day.date), LocalDate.fromEpochDays(day.today))))
         day.byMeal().forEach { (meal, entries) -> add(FeedRow.Meal(meal, entries)) }
+        day.said.sortedBy { it.minute }.forEach { add(FeedRow.Walked(it)) }
+        if (treadmill == TreadmillLink.NEED_TAP && day.date == day.today) add(FeedRow.Treadmill)
         // Персонажи говорят последними, у поля: это ответ на то, что сейчас на экране.
         diary.line()?.let { add(FeedRow.Said(it)) }
         diary.peersLine()?.let { add(FeedRow.Said(it, day.peers.map { peer -> peer.name to peer.url })) }
@@ -125,7 +143,16 @@ fun Feed(diary: PageState.Diary, link: PhoneLink, modifier: Modifier) {
             // призраком поверх новых строк, когда лента становилась короче экрана.
             Box(Modifier.animateItem(fadeOutSpec = null)) {
                 when (row) {
-                    is FeedRow.Separator -> CapsLabel(row.label, modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally))
+                    // Подпись дня — на своей плашке цвета страницы: читается и над миром прогулки без стекла.
+                    is FeedRow.Separator -> CapsLabel(
+                        row.label,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .wrapContentWidth(Alignment.CenterHorizontally)
+                            .clip(RoundedCornerShape(SEPARATOR_DP.dp))
+                            .background(KcalTheme.colors.bg.copy(alpha = PLATE_ALPHA))
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
                     is FeedRow.Meal -> MealBubble(
                         meal = row.meal,
                         entries = row.entries,
@@ -135,6 +162,11 @@ fun Feed(diary: PageState.Diary, link: PhoneLink, modifier: Modifier) {
                         onDelete = { id -> link.send(ToPhone.Delete(id)) },
                     )
                     is FeedRow.Said -> IncomingLine(row.line, links = row.links)
+                    is FeedRow.Walked -> IncomingLine(PageLine(row.said.mascot, row.said.text))
+                    FeedRow.Treadmill -> IncomingLine(
+                        PageLine(Mascot.GRAIN, "Дорожка рядом, а браузер подключается к ней только по касанию. Тапни — и погнали!"),
+                        action = "Подключить" to onPair,
+                    )
                 }
             }
         }

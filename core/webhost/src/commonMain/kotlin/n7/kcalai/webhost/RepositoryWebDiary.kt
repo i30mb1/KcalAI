@@ -25,6 +25,14 @@ import n7.kcalai.personal.defaultPastMeal
 import n7.kcalai.personal.mealForHour
 import n7.kcalai.personal.pastEntryTime
 import n7.kcalai.repositories.DiaryRepository
+import n7.kcalai.repositories.WalkRepository
+import n7.kcalai.model.TreadmillSample
+import n7.kcalai.model.Walk
+import n7.kcalai.model.totals
+import n7.kcalai.webapi.WebSaid
+import n7.kcalai.webapi.WebWalk
+import kotlin.math.roundToInt
+import kotlin.time.Instant
 import n7.kcalai.resolver.ResolvedItem
 import n7.kcalai.webapi.WebDaySummary
 import n7.kcalai.webapi.WebEntry
@@ -46,9 +54,13 @@ import kotlin.time.Clock
  * @param regram правка граммов записи — та же, что из шита: `(id, граммы, сейчас)`
  * @param rename новое имя — туда же, куда его кладёт ответ Яйцу
  * @param keepPage сколько держать страницу, когда телефон убран, — в профиль
+ * @param walks прогулки по дорожке: пакеты шлёт страница, к которой она подключена
+ * @param walkSaid что Зёрнышко сказало о прогулках в ленте дня
  */
 class RepositoryWebDiary(
     private val diary: DiaryRepository,
+    private val walks: WalkRepository,
+    private val walkSaid: (Long) -> Flow<List<WebSaid>>,
     private val suggestFood: suspend (String) -> List<ResolvedItem>,
     private val regram: suspend (entryId: Long, grams: Int, now: Long) -> Unit,
     private val rename: suspend (String) -> Unit,
@@ -65,8 +77,11 @@ class RepositoryWebDiary(
     override val today: Long get() = clock.todayIn(zone).toEpochDays()
 
     override fun day(date: Long): Flow<WebDayContent> =
-        combine(diary.observeDay(date), diary.observeGoal(date)) { totals, goal ->
+        combine(diary.observeDay(date), diary.observeGoal(date), walks.observeDay(date), walkSaid(date)) { totals, goal, walked, said ->
             WebDayContent(
+                walks = walked.map { it.toWeb(date) },
+                steps = walked.totals().steps,
+                said = said,
                 entries = totals.entries.map { it.toWeb(zone) },
                 goalKcal = goal?.kcal?.takeIf { it > 0 },
                 goalMacros = goal?.takeIf { it.prot > 0 && it.fat > 0 && it.carb > 0 }?.let { WebMacros(it.prot, it.fat, it.carb) },
@@ -77,9 +92,21 @@ class RepositoryWebDiary(
 
     override fun week(date: Long): Flow<List<WebDaySummary>> {
         val week = weekOf(date)
-        return diary.observeWeek(todayEpochDay = week.last, days = week.count()).map { days ->
-            days.map { WebDaySummary(date = it.dateEpochDay, kcal = it.kcal, goalKcal = it.goalKcal) }
+        return combine(diary.observeWeek(todayEpochDay = week.last, days = week.count()), walks.observeWeekSteps(week.last)) { days, steps ->
+            val stepsOf = steps.toMap()
+            days.map { WebDaySummary(date = it.dateEpochDay, kcal = it.kcal, goalKcal = it.goalKcal, steps = stepsOf[it.dateEpochDay] ?: 0) }
         }
+    }
+
+    override suspend fun treadmill(sample: TreadmillSample) = walks.record(sample, clock.now().toEpochMilliseconds())
+
+    /** Минуты от полуночи дня [date] по часам телефона; прогулка за полночь кончается в конце дня. */
+    private fun Walk.toWeb(date: Long): WebWalk {
+        fun minuteOf(ms: Long): Int {
+            val at = Instant.fromEpochMilliseconds(ms).toLocalDateTime(zone)
+            return if (at.date.toEpochDays() > date) DAY_MINUTES else at.hour * MINUTES_PER_HOUR + at.minute
+        }
+        return WebWalk(minuteOf(startedAt), minuteOf(seenAt), distanceM, elapsedS, steps.roundToInt(), topSpeedKmh)
     }
 
     override suspend fun suggest(query: String): List<WebSuggestion> = found(query).map { item ->
@@ -142,6 +169,8 @@ class RepositoryWebDiary(
 
     private companion object {
         const val REMEMBERED = 16
+        const val MINUTES_PER_HOUR = 60
+        const val DAY_MINUTES = 24 * MINUTES_PER_HOUR
     }
 }
 

@@ -52,6 +52,8 @@ object KcalApp {
         background.schedule()
         // «Приложение новое» — тот же общий код, что зовёт старт на Android.
         scope.launch { container.mascotRoutines.onLaunch() }
+        // Итоги прогулок по дорожке — так же, как на Android.
+        scope.launch { container.mascotRoutines.tellWalks() }
     }
 
     /** Человек открыл приложение: написанное теперь стоит в ленте, шторку пора освободить. */
