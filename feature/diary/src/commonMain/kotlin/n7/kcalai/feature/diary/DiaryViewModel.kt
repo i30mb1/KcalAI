@@ -773,9 +773,10 @@ class DiaryViewModel(
                     awaitsBrowser(loaded.browsers, lastEntryAt)
                 )
         val bubbles = groupIntoBubbles(dayTotals.entries, zone, now, activeMeal = pastMeal)
+        // Убранное корзинкой в переписку не встаёт; ждать ответа оно не может — убирается только отвеченное.
         val said = loaded.said.map { it.toFeedItem(address) } +
-            loaded.offers.map { it.toFeedItem() } +
-            loaded.browsers.map { it.toFeedItem() }
+            loaded.offers.filter { it.hiddenAt == null }.map { it.toFeedItem() } +
+            loaded.browsers.filter { it.hiddenAt == null }.map { it.toFeedItem() }
         val body = interleave(bubbles, said, zone).toMutableList()
         // Отвеченный «Обед был?» стоит там же, где был задан; новый — только когда слово свободно.
         val answered = replies.filterIsInstance<FeedItem.Gap>()
@@ -1688,6 +1689,18 @@ class DiaryViewModel(
     fun onAnswerBrowser(id: Long, yes: Boolean) {
         val dao = browsers?.requests ?: return
         viewModelScope.launch { dao.answer(id, if (yes) Choice.YES else Choice.NO) }
+    }
+
+    /** Корзинка у отвеченной просьбы браузера: из переписки, а доступ браузера — каким был. */
+    fun onHideBrowser(id: Long) {
+        val dao = browsers?.requests ?: return
+        viewModelScope.launch { dao.hide(id, clock.now().toEpochMilliseconds()) }
+    }
+
+    /** Корзинка у отвеченного предложения соседа. */
+    fun onHideOffer(id: Long) {
+        val dao = peerOffers ?: return
+        viewModelScope.launch { dao.hide(id, clock.now().toEpochMilliseconds()) }
     }
 
     /**

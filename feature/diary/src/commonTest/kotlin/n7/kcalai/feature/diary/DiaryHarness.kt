@@ -418,6 +418,10 @@ internal class FakePeerOfferDao : PeerOfferDao {
 
     override suspend fun findById(id: Long): PeerOfferEntity? = offers.value.find { it.id == id }
 
+    override suspend fun hide(id: Long, at: Long) {
+        offers.value = offers.value.map { if (it.id == id && it.choice != null) it.copy(hiddenAt = at) else it }
+    }
+
     override suspend fun answer(id: Long, choice: Choice): Int {
         val waiting = offers.value.count { it.id == id && it.choice == null }
         offers.value = offers.value.map { if (it.id == id && it.choice == null) it.copy(choice = choice) else it }

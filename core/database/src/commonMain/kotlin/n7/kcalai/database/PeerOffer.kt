@@ -42,6 +42,8 @@ data class PeerOfferEntity(
     val dateEpochDay: Long,
     val createdAt: Long,
     val choice: Choice? = null,
+    /** Когда отвеченное предложение убрали из переписки корзинкой. */
+    val hiddenAt: Long? = null,
 )
 
 @Dao
@@ -67,6 +69,10 @@ interface PeerOfferDao {
     suspend fun answer(id: Long, choice: Choice): Int
 
     /** Сколько предложений ждёт ответа — по ним считается предел на одного соседа. */
+    /** Убрать отвеченное предложение из переписки корзинкой. */
+    @Query("UPDATE peer_offer SET hiddenAt = :at WHERE id = :id AND choice IS NOT NULL")
+    suspend fun hide(id: Long, at: Long)
+
     @Query("SELECT count(*) FROM peer_offer WHERE choice IS NULL")
     suspend fun waitingCount(): Int
 }

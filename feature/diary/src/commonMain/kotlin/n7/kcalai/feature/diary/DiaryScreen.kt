@@ -124,6 +124,8 @@ fun DiaryRoute(viewModel: DiaryViewModel, labelDebug: Boolean = false) {
         onAnswerBrowser = viewModel::onAnswerBrowser,
         onSendToPeer = viewModel::onSendToPeer,
         onHideMessage = viewModel::onHideMessage,
+        onHideOffer = viewModel::onHideOffer,
+        onHideBrowser = viewModel::onHideBrowser,
     )
 
     // Пущенный браузер на связи — экрану гаснуть нельзя: страница живёт, пока открыт дневник.
@@ -246,6 +248,8 @@ fun DiaryScreen(
     onSendToPeer: (String) -> Unit,
     /** Корзинка у сообщения персонажа. */
     onHideMessage: (Long) -> Unit = {},
+    onHideOffer: (Long) -> Unit = {},
+    onHideBrowser: (Long) -> Unit = {},
     /** С персонажем что-то сделали: ткнули, взяли в руку, погладили, разбудили. */
     onMascotEvent: (MascotEvent) -> Unit,
 ) {
@@ -387,6 +391,8 @@ fun DiaryScreen(
             onAnswerBrowser = onAnswerBrowser,
             onSendToPeer = onSendToPeer,
             onHideMessage = onHideMessage,
+            onHideOffer = onHideOffer,
+            onHideBrowser = onHideBrowser,
             modifier = Modifier.fillMaxSize().nestedScroll(expandOnPull),
         )
         }
@@ -500,6 +506,8 @@ private fun Feed(
     onAnswerBrowser: (Long, Boolean) -> Unit,
     onSendToPeer: (String) -> Unit,
     onHideMessage: (Long) -> Unit = {},
+    onHideOffer: (Long) -> Unit = {},
+    onHideBrowser: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     /*
@@ -657,16 +665,23 @@ private fun Feed(
                         )
                     }
                     is FeedItem.Nearby -> NearbyBubble(item, onSendToPeer)
-                    is FeedItem.Offer -> OfferBubble(
-                        item = item,
-                        onYes = { onAnswerOffer(item.id, true) },
-                        onNo = { onAnswerOffer(item.id, false) },
-                    )
-                    is FeedItem.Browser -> BrowserBubble(
-                        item = item,
-                        onYes = { onAnswerBrowser(item.id, true) },
-                        onNo = { onAnswerBrowser(item.id, false) },
-                    )
+                    is FeedItem.Offer -> Crumbling(onHide = { onHideOffer(item.id) }.takeIf { item.choice != null }) { hide ->
+                        OfferBubble(
+                            item = item,
+                            onYes = { onAnswerOffer(item.id, true) },
+                            onNo = { onAnswerOffer(item.id, false) },
+                            onHide = hide,
+                        )
+                    }
+                    // Отвеченная просьба браузера — уже просто переписка: корзинка убирает её, доступ не трогая.
+                    is FeedItem.Browser -> Crumbling(onHide = { onHideBrowser(item.id) }.takeIf { item.choice != null }) { hide ->
+                        BrowserBubble(
+                            item = item,
+                            onYes = { onAnswerBrowser(item.id, true) },
+                            onNo = { onAnswerBrowser(item.id, false) },
+                            onHide = hide,
+                        )
+                    }
                 }
             }
         }

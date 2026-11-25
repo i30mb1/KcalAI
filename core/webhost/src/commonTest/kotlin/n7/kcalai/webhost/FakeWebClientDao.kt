@@ -29,6 +29,10 @@ internal class FakeWebClientDao : WebClientDao {
     override fun observeDay(dateEpochDay: Long): Flow<List<WebClientEntity>> =
         rows.map { list -> list.filter { it.dateEpochDay == dateEpochDay } }
 
+    override suspend fun hide(id: Long, at: Long) {
+        rows.update { list -> list.map { if (it.id == id && it.choice != null) it.copy(hiddenAt = at) else it } }
+    }
+
     override suspend fun answer(id: Long, choice: Choice): Int {
         val row = rows.value.find { it.id == id && it.choice == null } ?: return 0
         rows.update { list -> list.map { if (it.id == row.id) it.copy(choice = choice) else it } }

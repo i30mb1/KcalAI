@@ -93,6 +93,32 @@ class BrowserTest {
         assertEquals(Choice.YES, vm.browsers().single().choice, "просьба остаётся в переписке с отметкой ответа")
     }
 
+    /** Отвеченная просьба — уже просто переписка: корзинка убирает её из ленты, а доступ браузера не трогает. */
+    @Test
+    fun `отвеченную просьбу браузера убирает корзинка, доступ остаётся`() = runTest(dispatcher) {
+        val id = asks()
+        val vm = screen()
+        vm.onAnswerBrowser(id, yes = true)
+        advanceUntilIdle()
+
+        vm.onHideBrowser(id)
+        advanceUntilIdle()
+
+        assertTrue(vm.browsers().isEmpty())
+        assertEquals(Choice.YES, requests.find("t-4821")?.choice, "браузер по-прежнему пущен")
+    }
+
+    @Test
+    fun `просьбу без ответа корзинка не убирает`() = runTest(dispatcher) {
+        val id = asks()
+        val vm = screen()
+
+        vm.onHideBrowser(id)
+        advanceUntilIdle()
+
+        assertEquals(1, vm.browsers().size)
+    }
+
     /** Персонажи говорят по одному: пока просьба ждёт ответа, подсказки молчат. */
     @Test
     fun `пока просьба ждёт ответа перебор молчит`() = runTest(dispatcher) {

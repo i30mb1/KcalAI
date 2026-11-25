@@ -36,6 +36,8 @@ data class WebClientEntity(
     val createdAt: Long,
     val choice: Choice? = null,
     val leftAt: Long? = null,
+    /** Когда просьбу убрали из переписки корзинкой; доступ браузера это не меняет. */
+    val hiddenAt: Long? = null,
 )
 
 /** Пущен и не вышел — ему можно показывать дневник. */
@@ -63,6 +65,10 @@ interface WebClientDao {
 
     @Query("UPDATE web_client SET leftAt = :now WHERE token = :token AND leftAt IS NULL")
     suspend fun leave(token: String, now: Long)
+
+    /** Убрать отвеченную просьбу из переписки корзинкой — доступ браузера остаётся каким был. */
+    @Query("UPDATE web_client SET hiddenAt = :at WHERE id = :id AND choice IS NOT NULL")
+    suspend fun hide(id: Long, at: Long)
 
     /** Отозвать по id — из настроек страницы: и чужой браузер, и свой. */
     @Query("UPDATE web_client SET leftAt = :now WHERE id = :id AND leftAt IS NULL")

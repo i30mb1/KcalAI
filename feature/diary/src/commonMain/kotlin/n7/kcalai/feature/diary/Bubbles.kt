@@ -1,5 +1,7 @@
 package n7.kcalai.feature.diary
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
@@ -461,6 +464,10 @@ private val OUTLINE_ALPHA = floatArrayOf(0.85f, 0.6f, 0.4f, 0.25f)
 /** Корзинка тише текста: действие на случай, а не главное в пузырьке. */
 private const val HIDE_ALPHA = 0.7f
 
+/** Значок ответа — с палец; отвеченный — тише: решение принято. */
+private const val ANSWER_DP = 40
+private const val ANSWERED_ALPHA = 0.55f
+
 /**
  * Идея 4: приём пищи, который человек, похоже, забыл записать.
  *
@@ -748,18 +755,8 @@ fun AskBubble(item: FeedItem.Ask, onYes: () -> Unit, onNo: () -> Unit, onHide: (
         MascotQuestion.TREADMILL -> "Подключить" to "Не надо"
         MascotQuestion.STEPS -> "Считать" to "Не надо"
     }
-    val answered = item.choice
-
     IncomingBubble(item, onHide = onHide) {
-        BubbleText(item.text, time = item.time)
-        FlowRow(
-            modifier = Modifier.padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
-        ) {
-            AnswerChip(yes, chosen = answered?.let { it == Choice.YES }, primary = true, onClick = onYes)
-            AnswerChip(no, chosen = answered?.let { it == Choice.NO }, primary = false, onClick = onNo)
-        }
+        Answerable(item.choice, yes, no, onYes, onNo) { BubbleText(item.text, time = item.time) }
     }
 }
 
@@ -795,18 +792,10 @@ fun NearbyBubble(item: FeedItem.Nearby, onSend: (String) -> Unit) {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun OfferBubble(item: FeedItem.Offer, onYes: () -> Unit, onNo: () -> Unit) {
-    val answered = item.choice
-
-    IncomingBubble(item) {
-        BubbleText(peerOffer(item.fromName, item.food, item.grams), time = item.time)
-        FlowRow(
-            modifier = Modifier.padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
-        ) {
-            AnswerChip("Записать", chosen = answered?.let { it == Choice.YES }, primary = true, onClick = onYes)
-            AnswerChip("Не надо", chosen = answered?.let { it == Choice.NO }, primary = false, onClick = onNo)
+fun OfferBubble(item: FeedItem.Offer, onYes: () -> Unit, onNo: () -> Unit, onHide: (() -> Unit)? = null) {
+    IncomingBubble(item, onHide = onHide) {
+        Answerable(item.choice, "Записать", "Не надо", onYes, onNo) {
+            BubbleText(peerOffer(item.fromName, item.food, item.grams), time = item.time)
         }
     }
 }
@@ -817,19 +806,42 @@ fun OfferBubble(item: FeedItem.Offer, onYes: () -> Unit, onNo: () -> Unit) {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun BrowserBubble(item: FeedItem.Browser, onYes: () -> Unit, onNo: () -> Unit) {
-    val answered = item.choice
+fun BrowserBubble(item: FeedItem.Browser, onYes: () -> Unit, onNo: () -> Unit, onHide: (() -> Unit)? = null) {
+    IncomingBubble(item, onHide = onHide) {
+        Answerable(item.choice, "Пустить", "Нет", onYes, onNo) { BubbleText(browserAsks(item.label, item.code), time = item.time) }
+    }
+}
 
-    IncomingBubble(item) {
-        BubbleText(browserAsks(item.label, item.code), time = item.time)
-        FlowRow(
-            modifier = Modifier.padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
-        ) {
-            AnswerChip("Пустить", chosen = answered?.let { it == Choice.YES }, primary = true, onClick = onYes)
-            AnswerChip("Нет", chosen = answered?.let { it == Choice.NO }, primary = false, onClick = onNo)
+/**
+ * Реплика с ответом в два значка справа, где у пузырька есть место: зелёная галочка — да, красный крестик —
+ * нет. Компактнее кнопок со словами — пузырёк не растёт на строку; слова остаются подписью для экранного
+ * диктора. Ответили — остаётся выбранный значок, тише, и второй тап ничего не запускает.
+ */
+@Composable
+private fun Answerable(chosen: Choice?, yes: String, no: String, onYes: () -> Unit, onNo: () -> Unit, text: @Composable () -> Unit) {
+    val colors = KcalTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f, fill = false)) { text() }
+        Spacer(Modifier.width(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (chosen != Choice.NO) AnswerIcon(Icons.Default.Check, yes, colors.carb.fill, answered = chosen != null, onClick = onYes)
+            if (chosen != Choice.YES) AnswerIcon(Icons.Default.Close, no, colors.error, answered = chosen != null, onClick = onNo)
         }
+    }
+}
+
+@Composable
+private fun AnswerIcon(icon: ImageVector, description: String, tint: Color, answered: Boolean, onClick: () -> Unit) {
+    val ink = if (answered) tint.copy(alpha = ANSWERED_ALPHA) else tint
+    Box(
+        Modifier
+            .size(ANSWER_DP.dp)
+            .clip(CircleShape)
+            .background(ink.copy(alpha = if (answered) 0.08f else 0.16f))
+            .then(if (answered) Modifier else Modifier.clickable(onClick = onClick)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = description, tint = ink, modifier = Modifier.size(22.dp))
     }
 }
 
