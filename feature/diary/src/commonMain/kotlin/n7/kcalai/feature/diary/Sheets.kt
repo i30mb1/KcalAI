@@ -117,7 +117,8 @@ fun GoalSheet(
     // и закрыть шит — не повод что-то о человеке хранить.
     var helperSex by remember { mutableStateOf<Sex?>(null) }
     var focused by remember { mutableStateOf<Macro?>(null) }
-    var helperOpen by remember { mutableStateOf(false) }
+    // Цели ещё нет — новичок своих граммов обычно не знает: помощник открыт сразу, поля граммов — для тех, кто знает.
+    var helperOpen by remember { mutableStateOf(goal == null) }
 
     // Своя сцена в шите: он — отдельное окно, и персонажи главного экрана над ним
     // не рисуются. Здесь они перебегают с места на место так же, как там.
@@ -258,8 +259,8 @@ private fun GoalHelper(
         if (open) {
             Choices(Sex.entries, sex, Sex::title) { sex = it }
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                HelperField("возраст", age, { age = it }, "лет", Modifier.weight(1f))
-                HelperField("рост", height, { height = it }, "см", Modifier.weight(1f))
+                HelperField("возраст", age, { age = it }, "лет", Modifier.weight(1f), maxLength = 3)
+                HelperField("рост", height, { height = it }, "см", Modifier.weight(1f), maxLength = 3)
                 HelperField("вес", weight, { weight = it }, "кг", Modifier.weight(1f), decimal = true)
             }
             Choices(Activity.entries, activity, Activity::title) { activity = it }
@@ -340,6 +341,8 @@ private fun HelperField(
     unit: String,
     modifier: Modifier = Modifier,
     decimal: Boolean = false,
+    /** Сколько знаков помещается: возраст и рост — три, вес с запятой — пять («82,5»). */
+    maxLength: Int = HELPER_DIGITS,
 ) {
     val colors = KcalTheme.colors
 
@@ -355,7 +358,7 @@ private fun HelperField(
                     value = value,
                     onValueChange = { text ->
                         onValueChange(
-                            text.filter { it.isDigit() || (decimal && (it == ',' || it == '.')) }.take(HELPER_DIGITS)
+                            text.filter { it.isDigit() || (decimal && (it == ',' || it == '.')) }.take(maxLength)
                         )
                     },
                     textStyle = KcalTheme.type.number.copy(color = colors.text),
