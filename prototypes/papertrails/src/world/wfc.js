@@ -81,6 +81,10 @@ for (const id of ['meadow', 'meadow_flowers', 'blossom_garden', 'snow_drifts']) 
 for (const id of ['hills', 'rocks', 'deep_pines', 'desert_dunes', 'desert_dunes_b', 'desert_dunes_c']) if (T[id] !== undefined) IS_MASS[T[id]] = 1;
 // integrator (round 3): village, village_b and village_green are ONE hamlet family for the settlement factor, the
 // clustering bonus and the run limit in computeWeights() / pick(), so the variants gather into 3-4 cottage hamlets.
+// KcalAI: на самой дороге прогулки — только чистая дорога: прямая, перекрёстки улочек и мост. Улицы с домами, рынки,
+// хутора и фонарь у обочины встают по сторонам, а не на пути героя.
+const LANE_OK = new Uint8Array(NT);
+for (const id of ['path_straight', 'path_t', 'path_cross', 'bridge']) LANE_OK[T[id]] = 1;
 const IS_HAMLET = new Uint8Array(NT);
 for (const id of ['village', 'village_b', 'village_green']) if (T[id] !== undefined) IS_HAMLET[T[id]] = 1;
 const PINEWOOD = BIOMES.indexOf('pinewood');
@@ -281,7 +285,7 @@ function applyPath(mask) {
 // River: west border -> past the house -> under the bridge -> east border.
 const ORIGIN_ROAD = [[0, 3], [0, 2], [0, 1], [0, 0], [0, -1], [0, -2], [0, -3], [0, -4]]; // KcalAI: прямо по дороге прогулки
 const ORIGIN_RIVER = [[-3, -3], [-2, -3], [-2, -2], [-1, -2], [0, -2], [1, -2], [2, -2], [2, -3], [3, -3], [4, -3]];
-const ORIGIN_FIXED = [[0, 0, 'lantern_post:1010'], [-1, -1, 'house:0100'], [0, -1, 'path_t:1011']];
+const ORIGIN_FIXED = [[0, 0, 'path_straight:1010'], [-1, -1, 'house:0100'], [0, -1, 'path_t:1011']];
 
 function mulberry(a) {
   a >>>= 0;
@@ -769,6 +773,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
       for (let o = 0; o < NO; o++) {
         const t = OPT_T[o];
         let w = BW[t] * BMUL[bm + t];
+        if (laneChunk && x === JLX && !LANE_OK[t]) w = 0;
         if (IS_FILLER[t]) {
           const open = 1 - Math.max(F, H);
           if (t === T.meadow) w *= 0.3 + 0.95 * open * open;

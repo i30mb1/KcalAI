@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
@@ -93,9 +94,9 @@ import n7.kcalai.webapi.offlineLine
 
 /**
  * Ширина колонки. Дневник — переписка, и строки в ней не тянутся на весь монитор,
- * но и не жмутся: шапке с четырьмя плитками и неделей нужен воздух.
+ * но и не жмутся: шапке с четырьмя плитками и неделей нужен воздух. Стекло над миром
+ * прогулки — той же ширины, см. index.html.
  */
-/** Ширина колонки дневника; мир прогулки вырезан под неё же — см. index.html. */
 private val COLUMN_MAX = 760.dp
 
 /** Число калорий доезжает до нового — но быстро: это ответ на действие, а не заставка. */
@@ -146,10 +147,12 @@ fun DiaryPage(link: PhoneLink) {
     // Связь пропала — дневник остаётся как был, только приглушённый: видно, что он неживой.
     val offline = diary?.offline == true
     val blur by animateDpAsState(if (offline) OFFLINE_BLUR else 0.dp, tween(OFFLINE_MS, easing = EaseOutStrong))
-    // Прогулка: по бокам от колонки дневника оживает бумажный мир, по нему идёт Зёрнышко (см. Walk.kt).
-    rememberWalking()
+    // Прогулка: под дневником оживает бумажный мир, по нему идёт Зёрнышко (см. Walk.kt). Пока идём,
+    // фон страницы уходит — колонка становится матовым стеклом над миром (его рисует index.html).
+    val walking = rememberWalking(colors.bg)
+    val pageBg by animateColorAsState(if (walking) colors.bg.copy(alpha = 0f) else colors.bg, tween(WALK_FADE_MS))
 
-    Box(Modifier.fillMaxSize().background(colors.bg), contentAlignment = Alignment.TopCenter) {
+    Box(Modifier.fillMaxSize().background(pageBg), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = COLUMN_MAX).fillMaxSize().blur(blur)) {
             if (diary == null) {
                 // До пуска на странице только разговор: код, отказ или пропавшая связь.

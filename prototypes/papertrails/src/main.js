@@ -27,7 +27,8 @@ const hypot2 = (a, b) => Math.sqrt(a * a + b * b);
 
 const params = new URLSearchParams(location.search);
 const seedParam = parseInt(params.get('seed') ?? '', 10);
-const seed = Number.isFinite(seedParam) ? seedParam : CONFIG.DEFAULT_SEED;
+// KcalAI: на странице дневника каждая прогулка — новый мир (своя дорога, свои зоны и окружение); ?seed=N повторяет мир.
+const seed = Number.isFinite(seedParam) ? seedParam : window.KcalEmbedded ? (Math.random() * 2 ** 31) | 0 : CONFIG.DEFAULT_SEED;
 const quality = QUALITY[params.get('quality')] ? params.get('quality') : CONFIG.DEFAULT_QUALITY;
 const muted = params.get('mute') === '1';
 const showHint = params.get('hint') !== '0';
@@ -60,7 +61,7 @@ async function boot() {
   // living animals (cats, sheep, hens, ducks ...): cut-paper cards on risen tiles, 2 draw calls; ?animals=0 disables them
   const animals = params.get('animals') === '0' || CONFIG.animals.enabled === false ? null : createAnimals({ scene, renderer, world, wfc, traveller, daynight, assets, seed, quality });
   // Gameplay progress is saved independently for each world seed.
-  const game = createGame({ scene, renderer, world, wfc, traveller, follow, controls, lights, post, daynight, music, audio, life, assets, materials, seed, quality });
+  const game = createGame({ scene, renderer, world, wfc, traveller, follow, controls, lights, post, daynight, music, audio, life, assets, materials, seed, quality, persist: !window.KcalEmbedded });
   follow.setAssistGate(game.modal);
   // N: day / night, M: music on / off (keys only - no on-screen UI)
   window.addEventListener('keydown', (e) => {
@@ -96,6 +97,7 @@ async function boot() {
     state.listener.x = p.x; state.listener.z = p.z;
     state.listener.rightX = _right.x / rl; state.listener.rightZ = _right.z / rl;
     world.update(dt, p, traveller.moveDir);
+    if (window.__ptTick) window.__ptTick(dt); // KcalAI: свои предметы прогулки (walk/kcal/food.js) встают вместе с клетками
     views.update(dt);
     follow.update(dt, traveller);
     daynight.update(dt);
@@ -113,7 +115,7 @@ async function boot() {
   }
 
   const loop = createLoop({ update, render });
-  window.__pt = { traveller, controls, world, wfc, follow, daynight, life, state, bus, CONFIG }; // KcalAI: доступ для страницы дневника
+  window.__pt = { traveller, controls, world, wfc, follow, daynight, life, state, bus, CONFIG, scene, materials }; // KcalAI: доступ для страницы дневника
 
   // ---- resize -----------------------------------------------------------------------------------
   function resize() {

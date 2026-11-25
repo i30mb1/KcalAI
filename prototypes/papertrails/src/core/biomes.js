@@ -23,10 +23,21 @@ function h2(seed, x, y, k) {
 }
 
 // KcalAI: зоны — полосами поперёк пути на север: каждый ряд площадок (BIOME_SITE клеток) — следующая зона,
-// все пять по очереди, края остаются волнистыми. Прогулка проходит их равномерно.
-const JOURNEY = [0, 3, 4, 2, 1]; // осенние поля, цветущий сад, хвойный лес, снег, пустыня
+// все пять по кругу, края остаются волнистыми. Прогулка проходит их равномерно. Начинается всегда с полей
+// (у старта мост и домик), остальные четыре идут в своём порядке у каждого мира (seed).
+const ORDERS = new Map();
+function journey(seed) {
+  let order = ORDERS.get(seed);
+  if (!order) {
+    const rest = [1, 2, 3, 4];                    // пустыня, снег, цветущий сад, хвойный лес
+    for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(h2(seed, i, 0, 77) * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
+    ORDERS.set(seed, (order = [0, ...rest]));
+  }
+  return order;
+}
 function siteBiome(seed, gx, gy) {
-  return JOURNEY[((-gy % JOURNEY.length) + JOURNEY.length) % JOURNEY.length];
+  const order = journey(seed);
+  return order[((-gy % order.length) + order.length) % order.length];
 }
 // smooth value noise for the domain warp
 function vnoise(seed, x, y, k) {

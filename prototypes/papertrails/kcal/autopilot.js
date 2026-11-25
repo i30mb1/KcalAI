@@ -11,7 +11,11 @@ const out = { x: 0, z: 0 };
  */
 window.KcalTune = {
   pitch: 36, distance: 10, fov: 27, screenUp: 1.1, speed: null, reach: 0, radius: 0.2, heroScale: 1, heroLeft: 1,
+  glassTint: 0.62, glassBlur: 10,
   apply() {
+    const root = document.documentElement.style;                 // стекло колонки дневника над миром (index.html)
+    root.setProperty('--glass-tint', this.glassTint);
+    root.setProperty('--glass-blur', this.glassBlur + 'px');
     const pt = window.__pt;
     if (!pt) return;
     pt.follow.setPose({ pitchDeg: this.pitch, distance: this.distance, fov: this.fov, screenUp: this.screenUp, yawDeg: 0 });

@@ -43,3 +43,24 @@ artifacts {
         builtBy("wasmJsBrowserDistribution")
     }
 }
+
+/*
+ * Прогулка идёт под страницей (index.html), поэтому холст Compose прозрачен везде, где страница
+ * ничего не рисует. Skiko же в начале каждого кадра заливает его белым (CanvasRenderer:
+ * `canvas.clear(Color.WHITE)`) — эту заливку подменяем прозрачной. Наш UI `clear()` не зовёт,
+ * так что меняется только она. Не нашлась строка — новый Skiko: сборка падает, а не белеет молча.
+ */
+tasks.matching { it.name == "processSkikoRuntimeForKWasm" }.configureEach {
+    val skiko = layout.buildDirectory.file("compose/skiko-runtime-processed-wasmjs/skiko.mjs")
+    doLast {
+        val file = skiko.get().asFile
+        val clear = "org_jetbrains_skia_Canvas__1nClear"
+        val white = "export let $clear = (...a) => ($clear = loadedWasm._[\"$clear\"])(...a)"
+        val clean = "export let $clear = (canvas, color) => loadedWasm._[\"$clear\"](canvas, color === -1 ? 0 : color)"
+        val text = file.readText()
+        if (clean !in text) {
+            check(white in text) { "Skiko сменил $clear — холст страницы снова зальётся белым, поправь замену" }
+            file.writeText(text.replace(white, clean))
+        }
+    }
+}
