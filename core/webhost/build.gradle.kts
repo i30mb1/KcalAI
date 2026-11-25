@@ -57,9 +57,10 @@ val syncWebBundle by tasks.registering(Sync::class) {
     from(webBundle)
     // Карты исходников нужны только разработчику страницы, а весят полтора мегабайта.
     exclude("**/*.map")
-    // ПРОБА: прототип прогулки (papertrails) — рядом со страницей, по адресу /walk/kcal.html
+    // Мир прогулки (papertrails) — рядом со страницей, в /walk/; three.js — свой (vendor/), без интернета.
+    // Прототип kcal.html с симулятором дорожки — инструмент разработчика, на страницу не едет.
     from(rootProject.file("prototypes/papertrails")) {
-        include("kcal.html", "kcal/**", "src/**", "public/**", "LICENSE")
+        include("kcal/**", "src/**", "public/**", "vendor/**", "LICENSE")
         // Предпросмотр печати — инструмент разработчика, на страницу не едет.
         exclude("kcal/*-preview.html")
         into("walk")
