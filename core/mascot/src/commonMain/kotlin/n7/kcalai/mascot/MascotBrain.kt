@@ -8,6 +8,8 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -73,6 +75,9 @@ class MascotBrain(
      */
     private val asking: (dateEpochDay: Long) -> Flow<List<Long>> = { flowOf(emptyList()) },
 ) {
+
+    /** Слово берут по одному: пока один ждёт очереди и говорит, остальные ждут за ним, см. [inTurn]. */
+    private val floor = Mutex()
 
     /** Профиль; пока его строки нет — профиль по умолчанию: ничего не спрашивали, ничего не знаем. */
     val profile: Flow<MascotProfileEntity> = dao.observeProfile().map { it ?: MascotProfileEntity() }
@@ -220,7 +225,7 @@ class MascotBrain(
     }
 
     /**
-     * Спросить про беговую дорожку — один раз за всю жизнь, в свою очередь, см. [awaitTurn].
+     * Спросить про беговую дорожку — один раз за всю жизнь, в свою очередь, см. [inTurn].
      * Дальше подключение — по слову «дорожка».
      *
      * @return заданный вопрос; `null` — уже спрашивали
@@ -230,9 +235,9 @@ class MascotBrain(
     /** Задать вопрос один раз за всю жизнь — в свою очередь, как новости. */
     private suspend fun askOnce(question: MascotQuestion, clock: Clock): MascotMessageEntity? {
         if (dao.lastSaid(question.topic) != null) return null
-        awaitTurn(clock)
-        if (dao.lastSaid(question.topic) != null) return null
-        return insertQuestion(question, clock.now())
+        return inTurn(clock) {
+            if (dao.lastSaid(question.topic) != null) null else insertQuestion(question, clock.now())
+        }
     }
 
     /** Вопрос — в ленту, сообщением своего персонажа. */
@@ -298,7 +303,7 @@ class MascotBrain(
      * уже не новость. Это ответ в ленте, а не первое слово в шторке: ни дневного
      * бюджета, ни согласия писать первыми он не касается.
      *
-     * Персонажи говорят по одному, и новость ждёт своей очереди — см. [awaitTurn]. Ждать
+     * Персонажи говорят по одному, и новость ждёт своей очереди — см. [inTurn]. Ждать
      * бывает долго, поэтому статусы собирают через `collectLatest`: новый статус отменяет
      * ожидание старого, и «докачиваю» не прозвучит, когда уже докачалось.
      *
@@ -306,11 +311,11 @@ class MascotBrain(
      */
     suspend fun report(model: BackgroundModel, delivery: ModelDelivery, clock: Clock = Clock.System): MascotMessageEntity? {
         untold(model, delivery, clock.now()) ?: return null
-        awaitTurn(clock)
-        val now = clock.now()
-        // Пока ждали очереди, об этом могли рассказать — сверяемся заново.
-        val (topic, mascot) = untold(model, delivery, now) ?: return null
-        return answer(topic, mascot, now)
+        return inTurn(clock) {
+            val now = clock.now()
+            // Пока ждали очереди, об этом могли рассказать — сверяемся заново.
+            untold(model, delivery, now)?.let { (topic, mascot) -> answer(topic, mascot, now) }
+        }
     }
 
     /**
@@ -318,17 +323,17 @@ class MascotBrain(
      *
      * Один раз за всю жизнь и по немногу: не в первый день — там знакомство, имя и
      * вопрос про уведомления, и не в день, когда персонажи уже что-то сказали: тогда
-     * до другого дня. Очередь та же, что у новостей, — см. [awaitTurn].
+     * до другого дня. Очередь та же, что у новостей, — см. [inTurn].
      *
      * @return сказанное; `null` — не сегодня или уже говорили
      */
     suspend fun tellAppIsNew(clock: Clock = Clock.System): MascotMessageEntity? {
         if (!appIsNewDue(clock.now())) return null
-        awaitTurn(clock)
-        val now = clock.now()
-        // Пока ждали очереди, сегодня могли заговорить другие — сверяемся заново.
-        if (!appIsNewDue(now)) return null
-        return answer(Topic.APP_NEW, Mascot.BUTTER, now)
+        return inTurn(clock) {
+            val now = clock.now()
+            // Пока ждали очереди, сегодня могли заговорить другие — сверяемся заново.
+            if (appIsNewDue(now)) answer(Topic.APP_NEW, Mascot.BUTTER, now) else null
+        }
     }
 
     /**
@@ -341,10 +346,10 @@ class MascotBrain(
      */
     suspend fun offerWeb(used: suspend () -> Boolean, clock: Clock = Clock.System): MascotMessageEntity? {
         if (used() || !webOfferDue(clock.now())) return null
-        awaitTurn(clock)
-        // Пока ждали очереди, могли и спросить, и начать пользоваться — тогда не нужно.
-        if (used() || !webOfferDue(clock.now())) return null
-        return insertQuestion(MascotQuestion.WEB, clock.now())
+        return inTurn(clock) {
+            // Пока ждали очереди, могли и спросить, и начать пользоваться — тогда не нужно.
+            if (used() || !webOfferDue(clock.now())) null else insertQuestion(MascotQuestion.WEB, clock.now())
+        }
     }
 
     private suspend fun webOfferDue(now: Instant): Boolean =
@@ -369,21 +374,20 @@ class MascotBrain(
 
     /**
      * Прогулка по дорожке кончилась — Зёрнышко одной репликой говорит, сколько прошли и сколько
-     * осталось до цели шагов (или что цель дня есть). Очередь та же, что у новостей, — см. [awaitTurn];
+     * осталось до цели шагов (или что цель дня есть). Очередь та же, что у новостей, — см. [inTurn];
      * что о прогулке уже рассказали, помнит сама прогулка.
      *
      * @param day итог шагов дня вместе с этой прогулкой
      */
-    suspend fun tellWalk(walk: Walk, day: WalkTotals, goal: Int, clock: Clock = Clock.System): MascotMessageEntity? {
-        awaitTurn(clock)
+    suspend fun tellWalk(walk: Walk, day: WalkTotals, goal: Int, clock: Clock = Clock.System): MascotMessageEntity? = inTurn(clock) {
         val now = clock.now()
         val steps = walk.steps.roundToInt()
         val facts = lightFacts(now).copy(
             walk = WalkFacts(steps, walk.distanceM, walk.elapsedS, daySteps = day.steps, stepsLeft = goal - day.steps),
         )
         val topic = if (day.steps >= goal) Topic.WALK_GOAL else Topic.WALK_DONE
-        val said = Voices.of(Mascot.GRAIN).compose(topic, facts, dao.recent(MEMORY).memory(), random) ?: return null
-        return save(Mascot.GRAIN, topic, said, Delivery.FEED, facts.now.date.toEpochDays(), now)
+        val said = Voices.of(Mascot.GRAIN).compose(topic, facts, dao.recent(MEMORY).memory(), random)
+        said?.let { save(Mascot.GRAIN, topic, it, Delivery.FEED, facts.now.date.toEpochDays(), now) }
     }
 
     /** Человек спросил адрес страницы — отвечают сразу и сколько угодно раз. */
@@ -414,6 +418,16 @@ class MascotBrain(
         val repeats = delivery == ModelDelivery.FAILED && !sameDay
         if (last != null && !repeats) return null
         return news
+    }
+
+    /**
+     * Дождаться очереди и сказать — одним действием. Порознь двое дожидались бы одной и той же паузы
+     * и заговаривали разом: пустили браузер — и про дорожку, и про шаги спрашивали в одну секунду.
+     * Следующий берётся ждать, только когда предыдущий уже сказал, и видит его слова.
+     */
+    private suspend fun <T> inTurn(clock: Clock, speak: suspend () -> T): T = floor.withLock {
+        awaitTurn(clock)
+        speak()
     }
 
     /**

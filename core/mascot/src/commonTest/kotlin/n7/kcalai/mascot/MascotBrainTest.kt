@@ -852,6 +852,26 @@ class MascotBrainTest {
         assertNull(brain().askTreadmill(at(now + 3.days)))
     }
 
+    /** Браузер пустили — и про дорожку, и про шаги пора спросить в одну секунду: говорят всё равно по одному. */
+    @Test
+    fun `два вопроса разом не задаются — второй ждёт ответа на первый`() = runTest {
+        started()
+        val brain = brain()
+
+        val treadmill = async { brain.askTreadmill(at(now)) }
+        val steps = async { brain.askSteps(at(now)) }
+        advanceUntilIdle()
+
+        assertEquals(listOf<MascotQuestion?>(MascotQuestion.TREADMILL), mascots.messages.value.map { it.question })
+        assertFalse(steps.isCompleted)
+
+        brain.answerTreadmill(false, now + 1.minutes)
+        advanceUntilIdle()
+
+        assertEquals(MascotQuestion.STEPS, steps.await()?.question)
+        assertEquals(MascotQuestion.TREADMILL, treadmill.await()?.question)
+    }
+
     /** Повторный тап по «Подключить» не открывает выбор дорожки второй раз. */
     @Test
     fun `на отвеченный вопрос про дорожку второй ответ не принимается`() = runTest {
