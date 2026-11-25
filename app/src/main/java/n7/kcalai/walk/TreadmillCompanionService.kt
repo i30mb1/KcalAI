@@ -3,64 +3,49 @@ package n7.kcalai.walk
 import android.companion.AssociationInfo
 import android.companion.CompanionDeviceService
 import android.companion.DevicePresenceEvent
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import n7.kcalai.KcalApp
 
 /**
- * Система будит этот сервис, когда выбранная беговая дорожка включилась рядом, и держит приложение
- * живым, пока она рядом, — даже закрытое. Здесь только Bluetooth: подключиться и отдавать пакеты в
- * общий `TreadmillFeed`, где из них получаются прогулки. Ушла дорожка — отключаемся.
+ * Система будит этот сервис, когда выбранная беговая дорожка включилась рядом, — даже закрытое приложение.
+ * Сам он только сигнал: связь держит [TreadmillLink] процесса, потому что сервис система отвязывает
+ * через несколько секунд, а связь должна жить, пока по дорожке идут.
  */
 class TreadmillCompanionService : CompanionDeviceService() {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var gatt: TreadmillGatt? = null
+    private val link get() = (application as KcalApp).container.treadmillLink
 
-    private val feed get() = (application as KcalApp).container.treadmillFeed
+    /** Система привязывает сервис, только когда дорожка рядом, — а об уже замеченной второй раз не сообщает. */
+    override fun onCreate() {
+        super.onCreate()
+        link.appeared()
+    }
 
+    /*
+     * Подключённая дорожка не показывается в эфире, и система через десяток секунд зовёт её «потерянной»
+     * по эфиру — хотя связь жива. Поэтому «пропала из эфира» при живой связи ничего не значит: связь
+     * забывается, только когда она и правда оборвалась.
+     */
     override fun onDevicePresenceEvent(event: DevicePresenceEvent) {
         when (event.event) {
-            DevicePresenceEvent.EVENT_BLE_APPEARED, DevicePresenceEvent.EVENT_BT_CONNECTED -> appeared()
-            DevicePresenceEvent.EVENT_BLE_DISAPPEARED, DevicePresenceEvent.EVENT_BT_DISCONNECTED -> disappeared()
+            DevicePresenceEvent.EVENT_BLE_APPEARED, DevicePresenceEvent.EVENT_BT_CONNECTED -> link.appeared()
+            DevicePresenceEvent.EVENT_BLE_DISAPPEARED -> if (!link.connected) link.lost()
+            DevicePresenceEvent.EVENT_BT_DISCONNECTED -> link.lost()
         }
     }
 
     @Deprecated("Android 13–15; с Android 16 — onDevicePresenceEvent")
-    override fun onDeviceAppeared(associationInfo: AssociationInfo) = appeared()
+    override fun onDeviceAppeared(associationInfo: AssociationInfo) = link.appeared()
 
     @Deprecated("Android 13–15; с Android 16 — onDevicePresenceEvent")
-    override fun onDeviceDisappeared(associationInfo: AssociationInfo) = disappeared()
-
-    @Deprecated("Android 12")
-    override fun onDeviceAppeared(address: String) = appeared()
-
-    @Deprecated("Android 12")
-    override fun onDeviceDisappeared(address: String) = disappeared()
-
-    private fun appeared() {
-        if (gatt != null) return
-        val address = TreadmillCompanion(this).address ?: return
-        gatt = TreadmillGatt(
-            context = this,
-            address = address,
-            onPacket = { bytes -> scope.launch { feed.packet(bytes) } },
-            onGone = feed::gone,
-        ).takeIf { it.connect(autoConnect = false) }
+    override fun onDeviceDisappeared(associationInfo: AssociationInfo) {
+        if (!link.connected) link.lost()
     }
 
-    private fun disappeared() {
-        gatt?.close()
-        gatt = null
-        feed.gone()
-    }
+    @Deprecated("Android 12")
+    override fun onDeviceAppeared(address: String) = link.appeared()
 
-    override fun onDestroy() {
-        disappeared()
-        scope.cancel()
-        super.onDestroy()
+    @Deprecated("Android 12")
+    override fun onDeviceDisappeared(address: String) {
+        if (!link.connected) link.lost()
     }
 }

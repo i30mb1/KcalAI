@@ -29,6 +29,11 @@ class TreadmillGatt(
 ) {
     private var gatt: BluetoothGatt? = null
 
+    /** Подключена ли дорожка сейчас. Подключённая не показывается в эфире — система зовёт её «потерянной». */
+    @Volatile
+    var connected: Boolean = false
+        private set
+
     /**
      * @param autoConnect ждать, пока дорожка появится: так Android держит подключение сам, пока жив
      *        процесс, — там, где система не будит приложение по дорожке (ниже Android 12)
@@ -54,8 +59,14 @@ class TreadmillGatt(
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             when (newState) {
-                BluetoothProfile.STATE_CONNECTED -> gatt.discoverServices()
-                BluetoothProfile.STATE_DISCONNECTED -> onGone()
+                BluetoothProfile.STATE_CONNECTED -> {
+                    connected = true
+                    gatt.discoverServices()
+                }
+                BluetoothProfile.STATE_DISCONNECTED -> {
+                    connected = false
+                    onGone()
+                }
             }
         }
 

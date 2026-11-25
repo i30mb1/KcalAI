@@ -1,5 +1,8 @@
 package n7.kcalai
 
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothAdapter
+import android.annotation.SuppressLint
 import n7.kcalai.walk.TreadmillGatt
 import n7.kcalai.walk.TreadmillCompanion
 import androidx.activity.result.IntentSenderRequest
@@ -65,11 +68,17 @@ class MainActivity : ComponentActivity() {
     /** Выбор дорожки идёт — ответ Зёрнышку даётся один раз, даже если система сообщит о нём дважды. */
     private var choosingTreadmill = false
 
-    private val chooseTreadmill = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+    private val treadmillChooser = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         treadmill.chosen(result.resultCode == RESULT_OK, result.data)?.let(::treadmillChosen)
     }
 
-    private val askBluetooth = registerForActivityResult(ActivityResultContracts.RequestPermission(), ::treadmillReady)
+    private val askBluetooth = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) bluetoothOn() else treadmillReady(false)
+    }
+
+    private val turnOnBluetooth = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (bluetoothEnabled()) chooseTreadmill() else treadmillReady(false)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -142,20 +151,29 @@ class MainActivity : ComponentActivity() {
         intent.removeExtra(MascotNotifier.EXTRA_MESSAGE_ID)
     }
 
-    /** «Подключить» Зёрнышку или слово «дорожка»: системный выбор дорожки, затем разрешение на Bluetooth. */
+    /**
+     * «Подключить» Зёрнышку или слово «дорожка»: разрешение на Bluetooth, включить его, если выключен, —
+     * и системный выбор дорожки. Каждый шаг спрашивает система, приложение только ведёт по ним.
+     */
     private fun requestTreadmill() {
         if (!treadmill.supported) return diary.onTreadmillResult(false)
         choosingTreadmill = true
-        treadmill.choose(
-            onChooser = { sender -> chooseTreadmill.launch(IntentSenderRequest.Builder(sender).build()) },
-            onChosen = ::treadmillChosen,
-        )
+        if (TreadmillGatt.allowed(this)) bluetoothOn() else askBluetooth.launch(Manifest.permission.BLUETOOTH_CONNECT)
     }
 
-    private fun treadmillChosen(chosen: Boolean) {
-        if (!chosen) return treadmillReady(false)
-        if (TreadmillGatt.allowed(this)) treadmillReady(true) else askBluetooth.launch(Manifest.permission.BLUETOOTH_CONNECT)
+    @SuppressLint("MissingPermission")
+    private fun bluetoothOn() {
+        if (bluetoothEnabled()) chooseTreadmill() else turnOnBluetooth.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
     }
+
+    private fun bluetoothEnabled(): Boolean = getSystemService(BluetoothManager::class.java)?.adapter?.isEnabled == true
+
+    private fun chooseTreadmill() = treadmill.choose(
+        onChooser = { sender -> treadmillChooser.launch(IntentSenderRequest.Builder(sender).build()) },
+        onChosen = ::treadmillChosen,
+    )
+
+    private fun treadmillChosen(chosen: Boolean) = treadmillReady(chosen)
 
     private fun treadmillReady(ready: Boolean) {
         if (!choosingTreadmill) return

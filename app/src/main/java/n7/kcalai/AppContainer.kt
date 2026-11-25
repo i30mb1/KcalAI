@@ -26,7 +26,7 @@ import n7.kcalai.semantic.LiteRtQueryEmbedder
 import n7.kcalai.work.PrefsOutboxMemory
 import n7.kcalai.work.ScanUploads
 import n7.kcalai.walk.TreadmillCompanion
-import n7.kcalai.walk.TreadmillGatt
+import n7.kcalai.walk.TreadmillLink
 
 /**
  * Граф приложения на Android. Что с чем соединено — общий с iOS [AppGraph]; здесь
@@ -87,25 +87,22 @@ class AppContainer(context: Context) : AppGraph() {
         startTreadmill()
     }
 
-    /** Подключение к дорожке там, где система не будит приложение сама, — живёт, пока жив процесс. */
-    private var processGatt: TreadmillGatt? = null
+    /** Связь с беговой дорожкой — одна на процесс, см. [TreadmillLink]. */
+    val treadmillLink: TreadmillLink by lazy { TreadmillLink(appContext, treadmillFeed, appScope) }
 
     /**
      * Беговая дорожка, выбранная в ленте: с Android 12 система будит приложение, когда она рядом
-     * ([TreadmillCompanionService]); ниже — подключение ждёт её, пока жив процесс.
+     * ([n7.kcalai.walk.TreadmillCompanionService]); ниже — связь ждёт её, пока жив процесс.
      */
     fun startTreadmill() {
         val companion = TreadmillCompanion(appContext)
-        val address = companion.address ?: return
+        if (companion.address == null) return
         if (companion.wakes) {
             companion.observe()
-        } else if (processGatt == null) {
-            processGatt = TreadmillGatt(
-                context = appContext,
-                address = address,
-                onPacket = { bytes -> appScope.launch { treadmillFeed.packet(bytes) } },
-                onGone = treadmillFeed::gone,
-            ).takeIf { it.connect(autoConnect = true) }
+            // Дорожка могла включиться раньше приложения: о замеченной система второй раз не скажет.
+            treadmillLink.appeared()
+        } else {
+            treadmillLink.appeared(waiting = true)
         }
     }
 }
