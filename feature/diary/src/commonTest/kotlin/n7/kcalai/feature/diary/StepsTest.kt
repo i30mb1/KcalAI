@@ -3,7 +3,10 @@ package n7.kcalai.feature.diary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -31,6 +34,8 @@ import kotlin.test.assertTrue
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class StepsTest {
+
+    private val SLOW_MS = 5_000L
 
     private val dispatcher = StandardTestDispatcher()
     private val harness = DiaryHarness()
@@ -82,6 +87,41 @@ class StepsTest {
         assertEquals(9_000, state.weekSteps[harness.today - 2])
         assertEquals(5_242, state.weekSteps[harness.today])
         assertEquals(DEFAULT_STEPS_GOAL, state.stepsGoal)
+    }
+
+    /** Health Connect и запись шагов отвечают не сразу: ни экран, ни переключение дня их не ждут. */
+    @Test
+    fun `переключение дня не ждёт шагомер и не опрашивает его заново`() = runTest(dispatcher) {
+        var weekAsked = 0
+        val vm = harness.viewModel(
+            dispatcher,
+            daySteps = { flow { delay(SLOW_MS); emit(DaySteps(phone = 100, treadmill = 0)) } },
+            weekSteps = { today -> flow { weekAsked++; delay(SLOW_MS); emit((today - 6..today).map { it to 100 }) } },
+        )
+        backgroundScope.launch { vm.state.collect {} }
+        advanceTimeBy(100)
+        assertTrue(vm.state.value.loaded, "первый экран шагов не ждёт")
+        advanceUntilIdle()
+
+        vm.onSelectDay(harness.today - 1)
+        advanceTimeBy(100)
+
+        assertEquals(harness.today - 1, vm.state.value.date.toEpochDays(), "день сменился сразу")
+        advanceUntilIdle()
+        assertEquals(1, weekAsked, "шаги недели от выбранного дня не зависят")
+    }
+
+    @Test
+    fun `плашка прошлого дня — из шагов недели`() = runTest(dispatcher) {
+        val vm = screen()
+
+        vm.onSelectDay(harness.today - 2)
+        advanceUntilIdle()
+        assertEquals(9_000, vm.steps()?.steps)
+
+        vm.onSelectDay(harness.today - 1)
+        advanceUntilIdle()
+        assertNull(vm.steps(), "вчера не ходили — плашки нет")
     }
 
     @Test

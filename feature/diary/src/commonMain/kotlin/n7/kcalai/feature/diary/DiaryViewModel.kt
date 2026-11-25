@@ -355,6 +355,18 @@ class DiaryViewModel(
     private val isPast: Boolean get() = shownDay < today
 
     /**
+     * Шаги зависят только от сегодняшней даты, а не от открытого дня: чтение из Health Connect и записи
+     * шагов небыстрое, и переключение дня, ждавшее его, подтормаживало. Пока шаги не прочитаны, экран
+     * их не ждёт.
+     */
+    private fun walking(): Flow<Walked> = date.flatMapLatest { now ->
+        val day = now.toEpochDays()
+        val steps = daySteps?.invoke(day)?.map<DaySteps, DaySteps?> { it }?.onStart { emit(null) } ?: flowOf(null)
+        val week = weekSteps?.invoke(day)?.map { it.toMap() }?.onStart { emit(emptyMap()) } ?: flowOf(emptyMap())
+        combine(steps, week, brain.profile.map { it.stepsGoalOrDefault }.distinctUntilChanged(), ::Walked)
+    }.distinctUntilChanged()
+
+    /**
      * День, цель и неделя — одним потоком и без выдуманного начального значения.
      *
      * `null` — база ещё не ответила. Раньше у каждого потока было своё начальное
@@ -375,8 +387,6 @@ class DiaryViewModel(
                 peerOffers?.observeDay(day.toEpochDays()) ?: flowOf(emptyList()),
                 // Какие браузеры просились в дневник; без страницы их не бывает.
                 browsers?.requests?.observeDay(day.toEpochDays()) ?: flowOf(emptyList()),
-                walkOf(day.toEpochDays()),
-                weekSteps?.invoke(now.toEpochDays())?.map { it.toMap() } ?: flowOf(emptyMap()),
                 ::Said,
             )
             combine(
@@ -386,10 +396,12 @@ class DiaryViewModel(
                 diary.observeWeek(now.toEpochDays()),
                 diary.observeGoal(now.toEpochDays()),
                 saidAndOffered,
-            ) { dayTotals, goal, week, todayGoal, (said, offers, asked, walked, stepsByDay) ->
-                DayData(day, now, dayTotals, goal, week, todayGoal, said, offers, asked, walked, stepsByDay)
+            ) { dayTotals, goal, week, todayGoal, (said, offers, asked) ->
+                DayData(day, now, dayTotals, goal, week, todayGoal, said, offers, asked)
             }
         }
+        // Шаги — отдельным потоком поверх дня: переключение дня их не ждёт и не перечитывает.
+        .combine(walking()) { day, walked -> day.withSteps(walked) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
@@ -476,7 +488,7 @@ class DiaryViewModel(
             totals = loaded.day.totals,
             fiber = loaded.day.entries.fiber(),
             week = loaded.week,
-            weekSteps = loaded.weekSteps.filterValues { it > 0 },
+            weekSteps = loaded.walked?.week.orEmpty().filterValues { it > 0 },
             stepsGoal = loaded.walked?.goal ?: DEFAULT_STEPS_GOAL,
             date = loaded.date,
             today = loaded.today,
@@ -598,18 +610,14 @@ class DiaryViewModel(
         val said: List<MascotMessageEntity>,
         val offers: List<PeerOfferEntity> = emptyList(),
         val browsers: List<WebClientEntity> = emptyList(),
-        val walked: DayWalk? = null,
-        val weekSteps: Map<Long, Int> = emptyMap(),
-    )
-
-    /** Шаги дня и цель к ним. */
-    private data class DayWalk(val steps: DaySteps, val goal: Int)
-
-    /** Шаги дня с целью из профиля; без шагомера и дорожки — `null` сразу, ждать нечего. */
-    private fun walkOf(day: Long): Flow<DayWalk?> {
-        val steps = daySteps ?: return flowOf(null)
-        return combine(steps(day).distinctUntilChanged(), brain.profile.map { it.stepsGoalOrDefault }.distinctUntilChanged(), ::DayWalk)
+        val walked: Walked? = null,
+    ) {
+        fun withSteps(steps: Walked) = DayData(date, today, day, goal, week, todayGoal, said, offers, browsers, steps)
     }
+
+    /** Шаги сегодняшнего дня (`null` — ещё не прочитаны или их нет), шаги недели по дням и цель. */
+    private data class Walked(val today: DaySteps?, val week: Map<Long, Int>, val goal: Int)
+
 
     /** Рост из профиля — помощник цели подставляет его сам. */
     val heightCm: StateFlow<Int?> = brain.profile.map { it.heightCm }
@@ -620,8 +628,6 @@ class DiaryViewModel(
         val said: List<MascotMessageEntity>,
         val offers: List<PeerOfferEntity>,
         val browsers: List<WebClientEntity>,
-        val walked: DayWalk?,
-        val weekSteps: Map<Long, Int>,
     )
 
     /** Реплика сессии и день, в переписке которого она стоит. */
@@ -862,9 +868,13 @@ class DiaryViewModel(
      * утром ей есть куда расти. Прошлый день без шагов — без плашки: там уже ничего не прибавится.
      */
     private fun stepsOf(loaded: DayData): FeedItem.Steps? {
-        val (steps, goal) = loaded.walked ?: return null
-        val shown = if (loaded.date == loaded.today) steps.phone != null || steps.treadmill > 0 else steps.total > 0
-        return if (shown) FeedItem.Steps(steps = steps.total, goal = goal) else null
+        val walked = loaded.walked ?: return null
+        if (loaded.date != loaded.today) {
+            val total = walked.week[loaded.date.toEpochDays()] ?: 0
+            return if (total > 0) FeedItem.Steps(steps = total, goal = walked.goal) else null
+        }
+        val steps = walked.today ?: return null
+        return if (steps.phone != null || steps.treadmill > 0) FeedItem.Steps(steps = steps.total, goal = walked.goal) else null
     }
 
     /**

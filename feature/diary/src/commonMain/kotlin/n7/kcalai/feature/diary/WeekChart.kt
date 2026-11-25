@@ -1,5 +1,8 @@
 package n7.kcalai.feature.diary
 
+import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -167,6 +170,7 @@ private fun StepsRow(days: List<DaySummary>, steps: Map<Long, Int>, goal: Int, m
     }
 }
 
+private const val SELECT_MS = 260
 private const val STEP_BAR_SHARE = 0.7f
 private val STEP_BAR_HEIGHT = 3.dp
 
@@ -204,6 +208,8 @@ private fun WeekdayRow(days: List<DaySummary>, selected: Long, modifier: Modifie
 private fun Bar(kcal: Int, scale: Int, isSelected: Boolean, modifier: Modifier = Modifier) {
     val colors = KcalTheme.colors
     val fraction = if (scale > 0) (kcal.toFloat() / scale).coerceIn(0f, 1f) else 0f
+    // Выделение переходит с дня на день плавно, вместе с перепиской.
+    val color by animateColorAsState(if (isSelected) colors.bubble else colors.line, tween(SELECT_MS))
 
     Box(modifier.fillMaxHeight(), contentAlignment = Alignment.BottomCenter) {
         Box(
@@ -213,7 +219,7 @@ private fun Bar(kcal: Int, scale: Int, isSelected: Boolean, modifier: Modifier =
                 // должны выглядеть по-разному.
                 .height((PLOT_HEIGHT * fraction).coerceAtLeast(MIN_BAR_HEIGHT))
                 .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                .background(if (isSelected) colors.bubble else colors.line)
+                .background(color)
         )
     }
 }

@@ -1,5 +1,8 @@
 package n7.kcalai.feature.diary
 
+import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -146,6 +149,7 @@ private fun RemainingRow(
     val colors = KcalTheme.colors
     val type = KcalTheme.type
     val head = headline(totals.kcal, goal?.kcal?.takeIf { it > 0 }, past)
+    val counting by animateIntAsState(head.number, tween(NUMBERS_MS))
 
     Row(Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f).alignByBaseline(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -173,7 +177,7 @@ private fun RemainingRow(
         ) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    text = head.number.toString(),
+                    text = counting.toString(),
                     style = type.hero,
                     // Перебор выделяется цветом, но остаётся числом, а не упрёком:
                     // подпись рядом уже сказала, что произошло.
@@ -243,6 +247,8 @@ private fun MacroTile(
     val palette = macro.colors()
     val target = goalGrams?.takeIf { it > 0 }
     val eaten = eatenCg / CENTIGRAMS_PER_GRAM
+    // Другой день — другие числа: они перетекают, а не подменяются.
+    val counting by animateIntAsState(eaten, tween(NUMBERS_MS))
 
     Column(
         modifier = modifier
@@ -267,7 +273,7 @@ private fun MacroTile(
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-                Text("$eaten", style = type.number, color = KcalTheme.colors.text)
+                Text("$counting", style = type.number, color = KcalTheme.colors.text)
                 // Без цели знаменателя нет вовсе: «96/0» читалось бы как перебор,
                 // а «96» — как то, что и есть, съеденные граммы.
                 if (target != null) {
@@ -438,3 +444,6 @@ private val MINI_BAR_HEIGHT = 4.dp
 
 /** Полоса клетчатки под датой: заметная, но короче строки даты. */
 private val FIBER_BAR_WIDTH = 72.dp
+
+/** За сколько числа и полосы шапки перетекают к значениям другого дня. */
+private const val NUMBERS_MS = 260

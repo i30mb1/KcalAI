@@ -278,8 +278,9 @@ fun DiaryScreen(
     }
 
     // У каждого дня своя переписка — и своя прокрутка: вчерашняя лента
-    // открывается у своего конца, а не там, где остановилась сегодняшняя.
-    val listState = key(state.date) { rememberLazyListState() }
+    // открывается у своего конца, а не там, где остановилась сегодняшняя. Сразу у конца:
+    // открытая сверху и доведённая следом, она прыгала на глазах при переключении дня.
+    val listState = key(state.date) { rememberLazyListState(initialFirstVisibleItemIndex = state.feed.lastIndex.coerceAtLeast(0)) }
 
     /*
      * Шапка сжимается ровно тогда, когда лента сдвинулась с начала: любой порог
@@ -385,7 +386,8 @@ fun DiaryScreen(
     var composerHeight by remember { mutableIntStateOf(0) }
     Box(Modifier.fillMaxSize().background(KcalTheme.colors.bg)) {
         // Новый день — новая лента целиком: его записи не «приходят» в переписку,
-        // они в ней были, и выпрыгивать с анимацией им незачем.
+        // они в ней были, и выпрыгивать с анимацией им незачем. Дни листаются пальцем.
+        DayPages(date = state.date.toEpochDays(), today = state.today.toEpochDays(), onSelectDay = onSelectDay) {
         key(state.date) {
         Feed(
             feed = state.feed,
@@ -412,6 +414,7 @@ fun DiaryScreen(
             onHideBrowser = onHideBrowser,
             modifier = Modifier.fillMaxSize().nestedScroll(expandOnPull),
         )
+        }
         }
 
         Header(

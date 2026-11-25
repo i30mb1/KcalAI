@@ -1,5 +1,8 @@
 package n7.kcalai.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -77,6 +80,8 @@ fun MiniBar(
     trackAlpha: Float = 0.12f,
 ) {
     val radius = RoundedCornerShape(height / 2)
+    // Сменилось значение — полоса дорастает до него, а не прыгает.
+    val filled by animateFloatAsState(fraction.coerceIn(0f, 1f), tween(BAR_MS))
     Box(
         modifier
             .fillMaxWidth()
@@ -86,13 +91,15 @@ fun MiniBar(
     ) {
         Box(
             Modifier
-                .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                .fillMaxWidth(filled)
                 .fillMaxHeight()
                 .clip(radius)
                 .background(fill)
         )
     }
 }
+
+private const val BAR_MS = 260
 
 /** Подпись капсом: дата, «сегодня», «обычно в это время», «сканирование». */
 @Composable
