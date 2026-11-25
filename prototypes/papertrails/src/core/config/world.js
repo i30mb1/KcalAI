@@ -54,6 +54,9 @@ export const world = {
   /** A risen tile may hang this far (world units) into the page margin before it is folded flat. */
   pageHysteresis: 0.5,
   /** Tiles more than this many rows BEHIND the (smoothed) heading fold flat, inside the frame's readable band. */
+  /** KcalAI: добавка к кругу оживания (панель прогулки, state.viewReach) — до 6 клеток, подстраивается ~4 клетки/с. */
+  viewReachMax: 6,
+  viewReachRate: 4,
   foldBehind: 2.6,
   /** ... and only rise again when closer than foldBehind - this (rows), so a row does not flicker. */
   foldBehindHysteresis: 0.5,

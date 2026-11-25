@@ -8,7 +8,7 @@ export const REVEAL_RADIUS = 5.0; // KcalAI: шире круг, где вста�
 /** Tiles beyond this distance (behind the traveller) fold back flat. Between the two radii: keep state (hysteresis). */
 export const FOLD_BACK_RADIUS = 6.5; // KcalAI: было 4.25
 /** Tiles beyond this distance may be despawned/pooled once folded flat and settled. */
-export const DESPAWN_RADIUS = 6.0;
+export const DESPAWN_RADIUS = 13.5; // KcalAI: дальше самого большого круга (FOLD_BACK 6,5 + добавка 6 + запас); было 6
 
 /** Width (world units) of a path / river where it crosses a tile edge, centred on the edge midpoint. */
 export const PATH_WIDTH = 0.5;
