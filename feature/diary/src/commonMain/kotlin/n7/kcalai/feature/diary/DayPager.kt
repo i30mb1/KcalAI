@@ -7,10 +7,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -19,7 +17,8 @@ import kotlinx.coroutines.flow.drop
 
 /**
  * Дни — страницами: соседняя переписка тянется следом за пальцем и сама защёлкивается на место.
- * Перевели пальцем на другой день — короткий щелчок вибрацией. День, выбранный тапом по неделе или
+ * Страница перевалила пальцем за середину — щелчок вибрацией, и неделя наверху сразу переключается,
+ * не дожидаясь защёлкивания. День, выбранный тапом по неделе или
  * «назад», страницы доезжают сами. Дни — те же семь, что на графике недели; вертикальная прокрутка
  * ленты листанию не мешает.
  */
@@ -37,36 +36,22 @@ internal fun DayPager(
     val shown by rememberUpdatedState(date)
     val select by rememberUpdatedState(onSelectDay)
     val haptics = LocalHapticFeedback.current
-    // Листают пальцем — тогда щелчок и новый день; доезжают сами после тапа — молча.
-    var byHand by remember { mutableStateOf(false) }
-    // День, на который перелистнули и ещё не получили: пока он в пути, прежний пейджер назад не тянет.
-    var asked by remember { mutableStateOf<Long?>(null) }
+    val turn = remember { DayTurn() }
 
     LaunchedEffect(pager) {
-        pager.interactionSource.interactions.collect { if (it is DragInteraction.Start) byHand = true }
-    }
-    LaunchedEffect(pager) {
-        snapshotFlow { pager.currentPage }.drop(1).collect {
-            if (byHand) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-        }
+        pager.interactionSource.interactions.collect { if (it is DragInteraction.Start) turn.grabbed() }
     }
     LaunchedEffect(pager, first) {
-        snapshotFlow { pager.settledPage }.drop(1).collect { settled ->
-            val day = first + settled
-            if (byHand && day != shown) {
-                asked = day
+        snapshotFlow { pager.currentPage }.drop(1).collect { index ->
+            val day = first + index
+            if (turn.crossed(day, shown)) {
+                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                 select(day)
             }
-            byHand = false
         }
     }
     LaunchedEffect(date, first) {
-        if (asked != null) {
-            if (date == asked) asked = null
-            return@LaunchedEffect
-        }
-        if (pageOf(date) != pager.currentPage) {
-            byHand = false
+        if (turn.opened(date, pager.isScrollInProgress) && pageOf(date) != pager.currentPage) {
             pager.animateScrollToPage(pageOf(date))
         }
     }
@@ -80,6 +65,49 @@ internal fun DayPager(
         flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = SNAP_SHARE),
         key = { first + it },
     ) { index -> page(first + index) }
+}
+
+/**
+ * Кто листает дни. Пальцем — открытый день меняется вслед за страницей; тапом по неделе или «назад» —
+ * наоборот, страницы едут за днём.
+ */
+internal class DayTurn {
+    private var byHand = false
+
+    /** День, на который перелистнули и ещё не получили: пока он в пути, страницы назад не тянет. */
+    private var asked: Long? = null
+
+    /** Палец взялся за страницы. */
+    fun grabbed() {
+        byHand = true
+    }
+
+    /**
+     * Страница дня [day] перевалила за середину, открыт пока [shown].
+     *
+     * @return листают пальцем — щёлкнуть и открыть [day]
+     */
+    fun crossed(day: Long, shown: Long): Boolean {
+        if (!byHand) return false
+        asked = day.takeIf { it != shown }
+        return true
+    }
+
+    /**
+     * Открытым стал день [date].
+     *
+     * @param scrolling страницы сейчас едут
+     * @return везти ли страницы к нему самим
+     */
+    fun opened(date: Long, scrolling: Boolean): Boolean {
+        if (asked != null) {
+            if (date == asked) asked = null
+            return false
+        }
+        if (byHand && scrolling) return false
+        byHand = false
+        return true
+    }
 }
 
 private const val PAGES = 7
