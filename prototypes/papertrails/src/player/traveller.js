@@ -387,13 +387,15 @@ export function createTraveller({ scene, assets, world, materials }) {
       let iz = (input && input.z) || 0;
       const il = hypot2(ix, iz);
       if (il > 1) { ix /= il; iz /= il; }
+      // KcalAI: герой на автопилоте (kcal/autopilot.js) идёт по тропе сквозь всё — застревать ему нельзя: за него никто не обойдёт.
+      const ghost = Boolean(input && input.ghost);
 
       // -- shortfall pass: rounding an obstacle. Held against a wall, a corner or a bank for roundAfter seconds, he follows
       // its outline (the contour of the clearance field, one hand kept) until he is past the point where he was held and
       // the way on is free, then walks on. Gives up after roundMax units; a new input direction starts afresh.
       const SPD = C.speed * (state.speedMul || 1); // Shift = run, Ctrl toggle = stroll (controls.js)
       let wx = ix; let wz = iz; let wsp = SPD;
-      if (C.round !== false) {
+      if (C.round !== false && !ghost) {
         const q = group.position;
         const iN = il > 1 ? 1 : il;
         if (iN < 0.5 || ((fol.on || fol.done) && ix * fol.ux + iz * fol.uz < 0.92 * iN)) { fol.on = false; fol.done = false; fol.t = 0; }
@@ -478,7 +480,7 @@ export function createTraveller({ scene, assets, world, materials }) {
         const sz = (mvz * dt) / n;
         let free = true;
         curC = NaN; // the world may have changed under us (tiles, biome fields): re-read where we stand
-        for (let i = 0; i < n; i++) if (!moveSlide(sx, sz)) free = false;
+        if (ghost) { p.x += sx * n; p.z += sz * n; } else for (let i = 0; i < n; i++) if (!moveSlide(sx, sz)) free = false;
         const mx = p.x - ox;
         const mz = p.z - oz;
         moved = hypot2(mx, mz);
