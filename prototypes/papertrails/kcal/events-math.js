@@ -23,3 +23,13 @@ export function milestone(before, now, goal) {
   const passed = Math.floor(now / 1000);
   return passed > Math.floor(before / 1000) ? passed * 1000 : null;
 }
+
+/**
+ * Насколько отойти вбок от героя, чтобы оказаться за кадром: [screenX] — где на экране (−1..1) точка в d шагах от
+ * него. С запасом на размер самой вещи.
+ */
+export function offscreen(screenX, margin = 1.2) {
+  let d = 1;
+  while (d < 30 && Math.abs(screenX(d)) <= margin) d += 0.5;
+  return d;
+}

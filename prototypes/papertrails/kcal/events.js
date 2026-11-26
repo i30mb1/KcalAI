@@ -2,7 +2,7 @@
 // как это выглядит: посылка на тропе, ягоды, стая птиц, воздушный шар, танец друзей. Каждое — с короткой
 // табличкой слева внизу. Ничего не копится и в дневник не пишется: это только мир.
 import * as THREE from 'three';
-import { milestone, pause, pickEvent } from './events-math.js';
+import { milestone, offscreen, pause, pickEvent } from './events-math.js';
 import { laneX } from './lane.js';
 import { goalArt, milestoneArt } from './signs.js';
 
@@ -49,6 +49,12 @@ function start(pt, materials) {
     live.push({ object, step, t: 0 });
   };
   const at = new THREE.Vector3();
+  const eye = new THREE.Vector3();
+  /** Сколько вбок от героя до края кадра (side: −1 влево, 1 вправо) на высоте [y] и глубине [z]. */
+  const edge = (side, y, z) => {
+    pt.traveller.model.getWorldPosition(at);
+    return offscreen((d) => eye.set(at.x + side * d, at.y + y, at.z + z).project(pt.follow.camera).x);
+  };
 
   /** Разлетающиеся бумажки. */
   const confetti = (x, y, z) => {
@@ -136,16 +142,20 @@ function start(pt, materials) {
         flock.add(bird);
         return wings;
       });
-      flock.position.set(at.x - 7, at.y + 1.9, at.z - 1.2);
+      const from = -edge(-1, 1.9, -1.2) - 1;
+      const to = edge(1, 1.9, -1.2) + 1;
+      flock.position.set(at.x + from, at.y + 1.9, at.z - 1.2);
       banner('Стая птиц над дорогой');
       run(flock, (dt, t) => {
-        flock.position.x += 2.1 * dt;
+        pt.traveller.model.getWorldPosition(at);
+        const x = from + 3 * t;
+        flock.position.set(at.x + x, at.y + 1.9, at.z - 1.2);
         birds.forEach((wings, i) => {
           const flap = Math.sin(t * 11 + i) * 0.8;
           wings[0].rotation.x = flap;
           wings[1].rotation.x = -flap;
         });
-        return t < 7;
+        return x < to;
       });
     },
     balloon() {
@@ -156,13 +166,16 @@ function start(pt, materials) {
       ball.add(mesh(new THREE.TorusGeometry(0.55, 0.045, 6, 18).rotateX(Math.PI / 2), '#fdf8ea', 0, 0.9, 0));
       ball.add(mesh(new THREE.BoxGeometry(0.24, 0.2, 0.24), '#8a5a33', 0, 0.02, 0));
       for (const sx of [-1, 1]) ball.add(mesh(new THREE.BoxGeometry(0.012, 0.36, 0.012), '#6b4a2a', sx * 0.11, 0.28, 0));
-      ball.position.set(at.x + 4.5, at.y + 0.9, at.z - 3);
+      const from = edge(1, 1.8, -2.4) + 0.7;
+      const to = -edge(-1, 1.8, -2.4) - 0.7;
+      ball.position.set(at.x + from, at.y + 0.9, at.z - 2.4);
       banner('Кто-то летит на воздушном шаре!');
       run(ball, (dt, t) => {
-        ball.position.x -= 0.6 * dt;
-        ball.position.y = at.y + 0.9 + Math.sin(t * 1.3) * 0.18;
+        pt.traveller.model.getWorldPosition(at);
+        const x = from - 0.9 * t;
+        ball.position.set(at.x + x, at.y + 0.9 + Math.sin(t * 1.3) * 0.18, at.z - 2.4);
         ball.rotation.y += dt * 0.25;
-        return t < 15;
+        return x > to;
       });
     },
     rainbow() {
@@ -194,20 +207,22 @@ function start(pt, materials) {
         swarm.add(fly);
         return { fly, wings, a: Math.random() * 6.3, r: 0.4 + Math.random() * 0.9, h: 0.5 + Math.random() * 0.8 };
       });
+      const away = edge(1, 1, 0);
       banner('Бабочки налетели!');
       run(swarm, (dt, t) => {
         pt.traveller.model.getWorldPosition(at);
         for (const [i, b] of flies.entries()) {
           const a = b.a + t * (0.9 + (i % 3) * 0.35);
-          // Под конец разлетаются кто куда.
-          const far = b.r + Math.max(0, t - 8) * 1.6;
+          // Слетаются из-за края кадра, под конец разлетаются обратно.
+          const out = Math.max(0, 1 - t / 3, (t - 11) / 3);
+          const far = b.r + out * out * away;
           b.fly.position.set(at.x + Math.cos(a) * far, at.y + b.h + Math.sin(t * 4 + i) * 0.14, at.z + Math.sin(a) * far * 0.7);
           b.fly.rotation.y = -a;
           const flap = Math.sin(t * 16 + i) * 1.1;
           b.wings[0].rotation.z = -flap;
           b.wings[1].rotation.z = flap;
         }
-        return t < 10;
+        return t < 14;
       });
     },
     ducks() {
@@ -226,15 +241,18 @@ function start(pt, materials) {
         family.add(duck);
         return duck;
       });
-      family.position.set(laneX(z, pt.wfc.seed) - 2.4, at.y, z);
+      const to = at.x + edge(1, 0, -2.6) + 2;
+      family.position.set(at.x - edge(-1, 0, -2.6) - 0.5, at.y, z);
       banner('Утиное семейство переходит дорогу');
       run(family, (dt, t) => {
-        family.position.x += 0.55 * dt;
+        // Далеко от дороги торопятся, у самой дороги идут степенно.
+        const near = Math.abs(family.position.x - laneX(z, pt.wfc.seed)) < 3;
+        family.position.x += (near ? 0.55 : 2.2) * dt;
         line.forEach((duck, i) => {
           duck.rotation.z = Math.sin(t * 9 - i) * 0.14;
           duck.position.y = Math.abs(Math.sin(t * 9 - i)) * 0.025;
         });
-        return t < 11;
+        return family.position.x < to && t < 40;
       });
     },
     kite() {
@@ -276,17 +294,20 @@ function start(pt, materials) {
         cloud.add(drop);
         return drop;
       });
+      const from = edge(1, 2, 0.2) + 1;
+      const to = edge(-1, 2, 0.2) + 1;
+      cloud.position.set(at.x + from, at.y + 2, at.z + 0.2);
       banner('Тучка увязалась следом');
       run(cloud, (dt, t) => {
         pt.traveller.model.getWorldPosition(at);
-        // Приплывает сбоку, поливает и уплывает.
-        const away = Math.max(0, 2 - t) * 2.5 - Math.max(0, t - 9) * 2.5;
+        // Приплывает из-за края, поливает и уплывает за другой.
+        const away = from * Math.max(0, 1 - t / 3) ** 2 - to * Math.max(0, (t - 10) / 3) ** 2;
         cloud.position.set(at.x + away, at.y + 2, at.z + 0.2);
         for (const drop of drops) {
           drop.position.y -= 2.6 * dt;
           if (drop.position.y < -1.9) drop.position.y = -0.2;
         }
-        return t < 11;
+        return t < 13;
       });
     },
     dance() {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { EVENTS, pickEvent, pause, milestone } from './events-math.js';
+import { EVENTS, pickEvent, pause, milestone, offscreen } from './events-math.js';
 
 test('одно и то же событие дважды подряд не случается', () => {
   for (const last of EVENTS) for (const r of [0, 0.3, 0.7, 0.999]) assert.notEqual(pickEvent(last, () => r), last);
@@ -29,4 +29,14 @@ test('тысяча взята на ходу — веха; открыли стр�
 test('цель — своя веха, даже не круглая', () => {
   assert.equal(milestone(7490, 7502, 7500), 'goal');
   assert.equal(milestone(7990, 8001, 8000), 'goal');
+});
+
+test('летающее появляется из-за края экрана, а не посреди него', () => {
+  // Край кадра (|x| = 1) — в восьми шагах от героя: взять надо чуть дальше него.
+  assert.equal(offscreen((d) => d / 8), 10);
+  assert.equal(offscreen((d) => -d / 8), 10);
+});
+
+test('край не нашёлся — всё равно далеко, а не бесконечно', () => {
+  assert.equal(offscreen(() => 0), 30);
 });
