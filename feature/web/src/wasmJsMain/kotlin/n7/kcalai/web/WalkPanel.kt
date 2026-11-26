@@ -1,5 +1,8 @@
 package n7.kcalai.web
 
+import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.delay
+import n7.kcalai.model.routeSpot
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -210,6 +213,7 @@ private fun Card(
             }
         }
         SplitBar(treadmillPart, phonePart)
+        RouteRow(steps)
         // Откуда шаги: телефон — если он их отдаёт, дорожка — если по ней ходили. Цвет точки — цвет отрезка полосы.
         if (phone != null) Source("телефон", phone, colors.steps.fill.copy(alpha = PHONE_ALPHA))
         if (treadmill > 0 || day.walks.isNotEmpty()) Source("дорожка", treadmill, colors.steps.fill)
@@ -232,6 +236,47 @@ private fun Card(
         }
     }
 }
+
+/**
+ * Дорога дня под полосой шагов: земли по порядку, та, где мы сейчас, — цветом, и что дальше.
+ * Дорогу называет построенный мир; пока его нет, показывать нечего.
+ */
+@Composable
+private fun RouteRow(steps: Int) {
+    var route by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        while (true) {
+            route = walkRoute()
+            delay(ROUTE_POLL_MS)
+        }
+    }
+    val parts = route.split('|')
+    val goal = parts.first().toIntOrNull() ?: return
+    val lands = parts.drop(1)
+    val spot = routeSpot(lands.size, goal, steps) ?: return
+    val colors = KcalTheme.colors
+    val type = KcalTheme.type
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth()) {
+            lands.forEachIndexed { index, land ->
+                Text(
+                    land,
+                    style = type.label,
+                    color = if (index == spot.land) colors.steps.text else colors.text3,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        Text("Дальше: ${lands[spot.next]} — ${stepsLabel(spot.stepsToNext)} шагов", style = type.label, color = colors.text2)
+    }
+}
+
+/** «цель|земля|земля…» построенного мира (walk/src/main.js); пусто — мира ещё нет. */
+private fun walkRoute(): String =
+    js("(window.KcalRoute ? window.KcalRoute.goal + '|' + window.KcalRoute.lands.join('|') : '')")
 
 /**
  * Шаги дня, бегущие по одному: между итогами с телефона — в темпе ходьбы, свежий итог догоняется
@@ -386,6 +431,8 @@ private fun WalkRow(walk: WebWalk, live: Boolean) {
     }
 }
 
+/** Мир строится не сразу — дорогу спрашиваем, пока не назовёт. */
+private const val ROUTE_POLL_MS = 2_000L
 private const val PANEL_MS = 240
 
 /** Готовые цели шагов — те же, что в шите шагов на телефоне. */

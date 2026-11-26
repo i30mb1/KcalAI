@@ -23,7 +23,7 @@ import { createAnimals } from './life/animals.js';
 import { createGame } from './game/index.js';
 import { createViews } from './camera/views.js';
 import { buildSkins } from '../kcal/skins.js';
-import { chosenScenes } from '../kcal/scenes.js';
+import { dayGoal, todayScenes } from '../kcal/scenes.js';
 import { setScenes } from './core/biomes.js';
 // Allocation-free two-dimensional length.
 const hypot2 = (a, b) => Math.sqrt(a * a + b * b);
@@ -49,8 +49,10 @@ async function boot() {
   const assets = await loadAssets({ materials, renderer, quality });
   materials.setTextures(assets.textures);
   // KcalAI: сцены прогулки, отмеченные в панели вида (kcal/scenes.js), и лист перепечатанных мест их видов (kcal/skins.js).
-  const scenes = chosenScenes();
-  setScenes(scenes.map((sc) => ({ biome: sc.biomeIndex, skin: sc.skin })));
+  const scenes = todayScenes();
+  const goal = dayGoal();
+  setScenes(scenes.map((sc) => ({ biome: sc.biomeIndex, skin: sc.skin })), goal);
+  window.KcalRoute = { lands: scenes.map((sc) => sc.short), goal }; // KcalAI: панель шагов показывает эту дорогу
   const skins = await buildSkins([...new Set(scenes.map((sc) => sc.skin).filter(Boolean))], THREE, assets.textures && assets.textures.art);
   if (skins) {
     paperUniforms.uPaperArtSkin.value = skins.sheet;

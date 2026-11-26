@@ -2,7 +2,7 @@
 // lookups shared by the WFC (tile choice), the world, weather / ambient life and the grade.
 //
 // Layout (KcalAI): bands across the walk to the north, BIOME_BAND tiles each, with a gently wobbling border.
-// The start is always 'heartland'; see journey() below.
+// Which band comes first is decided by the day (kcal/scenes.js); see setScenes() below.
 //
 //   heartland  the original warm autumn farmland            (leaves drifting, clear)
 //   desert     sand, dunes, cacti, tents, oasis              (heat haze, dust motes, hard sun)
@@ -20,36 +20,25 @@ function h2(seed, x, y, k) {
 }
 
 // KcalAI: сцены прогулки — полосами поперёк пути на север. Сцена — зона (BIOMES) и вид её печати (skin: 0 — исходный
-// атлас, 1 — Поле Зёрнышка, kcal/field-prints.js). Какие сцены идут, выбирает человек (kcal/scenes.js): дневная
-// дистанция делится между выбранными поровну. Первая выбранная — всегда у старта, остальные — в своём порядке у
-// каждого мира (seed). Граница волнистая, но всегда поперёк дороги: идти вдоль шва двух сцен нельзя.
-/** Дневная дистанция, клеток: 8 000 шагов по 0,7 при клетке 2. */
-const DAY_TILES = 2800;
+// атлас, 1 — Поле Зёрнышка, kcal/field-prints.js). Какие сцены идут, выбирает человек, с какой начинается день —
+// календарь (kcal/scenes.js): цель шагов делится между ними поровну, дальше они идут по кругу. Та же раскладка —
+// в панели шагов (core/model, routeSpot). Граница волнистая, но всегда поперёк дороги: идти вдоль шва нельзя.
+/** Клеток дороги на шаг: шаг — 0,7 единицы мира, клетка — 2. */
+const TILES_PER_STEP = 0.35;
+const DEFAULT_GOAL = 8000;
 /** Старт — чуть внутри первой сцены, чтобы позади героя была она же. */
 const BAND_START = 10;
 let SCENES = [{ biome: 0, skin: 0 }, { biome: 1, skin: 0 }, { biome: 2, skin: 0 }, { biome: 3, skin: 0 }, { biome: 4, skin: 0 }];
 /** Длина сцены вдоль пути, клеток. */
-export let BIOME_BAND = DAY_TILES / SCENES.length;
-const ORDERS = new Map();
-/** Выбрать сцены прогулки — до создания мира. [list] — { biome: индекс в BIOMES, skin }; пустой — все зоны. */
-export function setScenes(list) {
+export let BIOME_BAND = (DEFAULT_GOAL * TILES_PER_STEP) / SCENES.length;
+/** Задать дорогу дня — до создания мира. [list] — { biome: индекс в BIOMES, skin } по порядку; пустой — все зоны. */
+export function setScenes(list, goal = DEFAULT_GOAL) {
   if (list && list.length) SCENES = list.map((sc) => ({ biome: sc.biome | 0, skin: sc.skin | 0 }));
-  BIOME_BAND = DAY_TILES / SCENES.length;
-  ORDERS.clear();
+  BIOME_BAND = (goal * TILES_PER_STEP) / SCENES.length;
 }
-function journey(seed) {
-  let order = ORDERS.get(seed);
-  if (!order) {
-    const rest = SCENES.map((_, i) => i).slice(1);
-    for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(h2(seed, i, 0, 77) * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
-    ORDERS.set(seed, (order = [0, ...rest]));
-  }
-  return order;
-}
-/** Сцена полосы k (0 — у старта, дальше на север — следующие): индекс в выбранных. */
-function bandScene(seed, k) {
-  const order = journey(seed);
-  return order[((k % order.length) + order.length) % order.length];
+/** Сцена полосы k (0 — у старта, дальше на север — следующие): индекс в SCENES. */
+function bandScene(k) {
+  return ((k % SCENES.length) + SCENES.length) % SCENES.length;
 }
 // smooth value noise for the domain warp
 function vnoise(seed, x, y, k) {
@@ -75,13 +64,13 @@ function distances(seed, x, z) {
   for (let i = 0; i < _d.length; i++) _d[i] = 1e9;
   for (let k = k0 - 2; k <= k0 + 2; k++) {
     const d = Math.abs(wz - (BAND_START - (k + 0.5) * BIOME_BAND));
-    const b = SCENES[bandScene(seed, k)].biome;
+    const b = SCENES[bandScene(k)].biome;
     if (d < _d[b]) _d[b] = d;
   }
 }
 
 /** Сцена клетки: индекс в выбранных (kcal/scenes.js). */
-export function sceneIndexAt(seed, cx, cz) { return bandScene(seed, bandAt(seed, cx, cz).k); }
+export function sceneIndexAt(seed, cx, cz) { return bandScene(bandAt(seed, cx, cz).k); }
 
 /** Вид печати клетки: 0 — исходный атлас, 1 — Поле Зёрнышка. */
 export function skinAt(seed, cx, cz) { return SCENES[sceneIndexAt(seed, cx, cz)].skin; }
