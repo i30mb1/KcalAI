@@ -164,6 +164,130 @@ function start(pt, materials) {
         return t < 15;
       });
     },
+    rainbow() {
+      pt.traveller.model.getWorldPosition(at);
+      const bow = new THREE.Group();
+      ['#d95b4a', '#f0933b', '#f4c95a', '#5fb874', '#3b9bd0', '#8a6fd0'].forEach((color, i) => {
+        bow.add(mesh(new THREE.TorusGeometry(2.4 - i * 0.12, 0.062, 5, 40, Math.PI), color));
+      });
+      bow.position.set(at.x, at.y, at.z - 3.4);
+      banner('Радуга над дорогой!');
+      run(bow, (dt, t) => {
+        // Встаёт из земли, стоит и прячется обратно.
+        const up = Math.min(1, t / 1.2) * Math.min(1, Math.max(0, (11 - t) / 1.2));
+        bow.scale.set(1, up, 1);
+        return t < 11;
+      });
+    },
+    butterflies() {
+      const swarm = new THREE.Group();
+      const flies = Array.from({ length: 9 }, () => {
+        const fly = new THREE.Group();
+        const color = pick(PAPER);
+        const wings = [-1, 1].map((side) => {
+          const wing = new THREE.Group();
+          wing.add(mesh(new THREE.CircleGeometry(0.07, 5).rotateX(-Math.PI / 2), color, side * 0.065, 0, 0));
+          fly.add(wing);
+          return wing;
+        });
+        swarm.add(fly);
+        return { fly, wings, a: Math.random() * 6.3, r: 0.4 + Math.random() * 0.9, h: 0.5 + Math.random() * 0.8 };
+      });
+      banner('Бабочки налетели!');
+      run(swarm, (dt, t) => {
+        pt.traveller.model.getWorldPosition(at);
+        for (const [i, b] of flies.entries()) {
+          const a = b.a + t * (0.9 + (i % 3) * 0.35);
+          // Под конец разлетаются кто куда.
+          const far = b.r + Math.max(0, t - 8) * 1.6;
+          b.fly.position.set(at.x + Math.cos(a) * far, at.y + b.h + Math.sin(t * 4 + i) * 0.14, at.z + Math.sin(a) * far * 0.7);
+          b.fly.rotation.y = -a;
+          const flap = Math.sin(t * 16 + i) * 1.1;
+          b.wings[0].rotation.z = -flap;
+          b.wings[1].rotation.z = flap;
+        }
+        return t < 10;
+      });
+    },
+    ducks() {
+      pt.traveller.model.getWorldPosition(at);
+      const z = at.z - 2.6;
+      const family = new THREE.Group();
+      const line = [1, 0.62, 0.62, 0.62, 0.62].map((size, i) => {
+        const duck = new THREE.Group();
+        const body = i ? '#f4d35a' : '#fdf8ea';
+        duck.add(mesh(new THREE.IcosahedronGeometry(0.13, 0), body, 0, 0.14, 0));
+        duck.add(mesh(new THREE.IcosahedronGeometry(0.075, 0), body, 0.1, 0.28, 0));
+        duck.add(mesh(new THREE.ConeGeometry(0.035, 0.09, 4).rotateZ(-Math.PI / 2), '#e8832f', 0.19, 0.27, 0));
+        duck.add(mesh(new THREE.SphereGeometry(0.012, 6, 4), '#2c2618', 0.13, 0.3, 0.06));
+        duck.scale.setScalar(size);
+        duck.position.x = -i * 0.34 - (i ? 0.1 : 0);
+        family.add(duck);
+        return duck;
+      });
+      family.position.set(laneX(z, pt.wfc.seed) - 2.4, at.y, z);
+      banner('Утиное семейство переходит дорогу');
+      run(family, (dt, t) => {
+        family.position.x += 0.55 * dt;
+        line.forEach((duck, i) => {
+          duck.rotation.z = Math.sin(t * 9 - i) * 0.14;
+          duck.position.y = Math.abs(Math.sin(t * 9 - i)) * 0.025;
+        });
+        return t < 11;
+      });
+    },
+    kite() {
+      const kite = new THREE.Group();
+      const color = pick(['#d95b4a', '#3b7bb8', '#e8759c', '#4c8f5a']);
+      const sail = mesh(new THREE.CircleGeometry(0.3, 4), color);
+      sail.scale.set(0.75, 1, 1);
+      kite.add(sail, mesh(new THREE.BoxGeometry(0.012, 0.6, 0.012), '#fdf8ea', 0, 0, 0.01), mesh(new THREE.BoxGeometry(0.44, 0.012, 0.012), '#fdf8ea', 0, 0, 0.01));
+      const tail = Array.from({ length: 5 }, (_, i) => {
+        const bow = mesh(new THREE.BoxGeometry(0.09, 0.04, 0.008), PAPER[i % PAPER.length]);
+        kite.add(bow);
+        return bow;
+      });
+      const string = mesh(new THREE.BoxGeometry(0.006, 1, 0.006), '#fdf8ea');
+      const group = new THREE.Group();
+      group.add(kite, string);
+      const to = new THREE.Vector3();
+      const UP = new THREE.Vector3(0, 1, 0);
+      banner('Запустили воздушного змея!');
+      run(group, (dt, t) => {
+        pt.traveller.model.getWorldPosition(at);
+        const rise = Math.min(1, t / 2);
+        kite.position.set(at.x + 1.1 + Math.sin(t * 1.4) * 0.35, at.y + 0.5 + rise * 1.5 + Math.sin(t * 2.3) * 0.12, at.z - 0.6);
+        kite.rotation.z = Math.sin(t * 1.9) * 0.28;
+        tail.forEach((bow, i) => bow.position.set(Math.sin(t * 4 - i * 0.9) * 0.08, -0.38 - i * 0.13, 0));
+        to.set(at.x + 0.2, at.y + 0.35, at.z).sub(kite.position);
+        string.scale.y = to.length();
+        string.position.copy(kite.position).addScaledVector(to, 0.5);
+        string.quaternion.setFromUnitVectors(UP, to.normalize());
+        return t < 12;
+      });
+    },
+    rain() {
+      const cloud = new THREE.Group();
+      for (const [x, y, r] of [[-0.45, 0, 0.3], [0, 0.12, 0.42], [0.45, 0, 0.32], [0.1, -0.05, 0.34]]) cloud.add(mesh(new THREE.IcosahedronGeometry(r, 1), '#b9c6d6', x, y, 0));
+      const drops = Array.from({ length: 36 }, () => {
+        const drop = mesh(new THREE.BoxGeometry(0.014, 0.1, 0.014), '#5b9bd0', (Math.random() - 0.5) * 1.4, -Math.random() * 1.6, (Math.random() - 0.5) * 0.8);
+        drop.castShadow = false;
+        cloud.add(drop);
+        return drop;
+      });
+      banner('Тучка увязалась следом');
+      run(cloud, (dt, t) => {
+        pt.traveller.model.getWorldPosition(at);
+        // Приплывает сбоку, поливает и уплывает.
+        const away = Math.max(0, 2 - t) * 2.5 - Math.max(0, t - 9) * 2.5;
+        cloud.position.set(at.x + away, at.y + 2, at.z + 0.2);
+        for (const drop of drops) {
+          drop.position.y -= 2.6 * dt;
+          if (drop.position.y < -1.9) drop.position.y = -0.2;
+        }
+        return t < 11;
+      });
+    },
     dance() {
       window.KcalFriends && window.KcalFriends.dance(3.5);
       banner(pick(['Масло пустилось в пляс!', 'Яйцо пританцовывает!', 'Друзья устроили танцы!']));

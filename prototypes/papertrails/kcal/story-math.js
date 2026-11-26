@@ -49,3 +49,8 @@ export function pickStory(stories, last, rand = Math.random) {
   const pool = fresh.length ? fresh : stories;
   return pool.length ? pool[Math.min(pool.length - 1, Math.floor(rand() * pool.length))] : null;
 }
+
+/** На привале друзья сидят у костра: отлучиться по делу можно по одному, а сценки на двоих — нет. */
+export function campStories(stories) {
+  return stories.filter((s) => s === 'visit' || s === 'fishing');
+}

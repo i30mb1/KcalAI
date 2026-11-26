@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stage, nearestHouse, placeStories, pickStory, walkStories } from './story-math.js';
+import { stage, nearestHouse, placeStories, pickStory, walkStories, campStories } from './story-math.js';
 
 // Что делают друзья, решает дорожка: идут — шагают, постояли — привал, стоят долго — дремлют.
 test('привал и дрёма — по тому, сколько стоят', () => {
@@ -38,4 +38,8 @@ test('на ходу в любой земле есть чем заняться', 
   for (const biome of ['snow', 'desert', 'heartland', 'blossom', 'pinewood']) {
     assert.ok(walkStories({ biome }).includes('race') && walkStories({ biome }).includes('leapfrog'), biome);
   }
+});
+
+test('на привале — только то, что не ломает стоянку', () => {
+  assert.deepEqual(campStories(['visit', 'fishing', 'snowball', 'picnic', 'race', 'leapfrog', 'scare']), ['visit', 'fishing']);
 });

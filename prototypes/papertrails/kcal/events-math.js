@@ -1,5 +1,5 @@
-/** Что случается по дороге (kcal/events.js): посылка, ягоды на тропе, стая птиц, воздушный шар, танец друзей. */
-export const EVENTS = ['gift', 'berries', 'birds', 'balloon', 'dance'];
+/** Что случается по дороге (kcal/events.js): посылка, ягоды, птицы, шар, танцы, радуга, бабочки, утята, змей, дождик. */
+export const EVENTS = ['gift', 'berries', 'birds', 'balloon', 'dance', 'rainbow', 'butterflies', 'ducks', 'kite', 'rain'];
 
 /** Следующее событие — любое, кроме только что бывшего. */
 export function pickEvent(last, rand = Math.random) {

@@ -3,7 +3,7 @@
 // кто-то прыжками забегает в гости и возвращается с гостинцем. И по месту: у пруда рыбачат, в снегу играют в
 // снежки, в поле устраивают пикник, в лесу пугаются. Только мир: в дневник ничего не пишется.
 import * as THREE from 'three';
-import { nearestHouse, pickStory, placeStories, stage, walkStories } from './story-math.js';
+import { campStories, nearestHouse, pickStory, placeStories, stage, walkStories } from './story-math.js';
 import { biomeAt } from '../src/core/biomes.js';
 import { banner } from './events.js';
 import { laneX } from './lane.js';
@@ -51,9 +51,9 @@ function start(pt, materials, friends) {
   });
   const steam = [];
   for (const sx of [-1, 1]) {
-    camp.add(mesh(new THREE.CylinderGeometry(0.045, 0.035, 0.07, 8), '#fdf8ea', sx * 0.28, 0.035, 0.12));
-    camp.add(mesh(new THREE.TorusGeometry(0.022, 0.007, 5, 8), '#fdf8ea', sx * 0.335, 0.04, 0.12));
-    const puff = mesh(new THREE.IcosahedronGeometry(0.022, 0), '#ffffff', sx * 0.28, 0.12, 0.12);
+    camp.add(mesh(new THREE.CylinderGeometry(0.045, 0.035, 0.07, 8), '#fdf8ea', sx * 0.37, 0.035, 0.16));
+    camp.add(mesh(new THREE.TorusGeometry(0.022, 0.007, 5, 8), '#fdf8ea', sx * 0.425, 0.04, 0.16));
+    const puff = mesh(new THREE.IcosahedronGeometry(0.022, 0), '#ffffff', sx * 0.37, 0.12, 0.16);
     camp.add(puff);
     steam.push(puff);
   }
@@ -61,6 +61,44 @@ function start(pt, materials, friends) {
   camp.add(mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.055, 3), '#f4c95a', 0.11, 0.03, 0.28));
   camp.visible = false;
   scene.add(camp);
+
+  // ---- убранство вокруг: коврик, чурбачки, фонарики на нитке и палатка там, где ей есть место ----
+  const rug = mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.006, 24), '#d95b4a', 0, 0.004, 0.05);
+  const rugIn = mesh(new THREE.CylinderGeometry(0.78, 0.78, 0.007, 24), '#fdf8ea', 0, 0.006, 0.05);
+  rug.scale.set(1, 1, 0.62);
+  rugIn.scale.set(1, 1, 0.6);
+  rug.castShadow = false;
+  rugIn.castShadow = false;
+  camp.add(rug, rugIn);
+  for (const sx of [-1, 1]) {
+    camp.add(mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.07, 9), '#a8743f', sx * 0.62, 0.035, 0.08));
+    camp.add(mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.8, 5), '#8a5a33', sx * 1.0, 0.4, -0.28));
+  }
+  const bulbs = [];
+  for (let i = 0; i <= 8; i++) {
+    const k = i / 8;
+    const color = ['#ffd76a', '#ff8d6a', '#9ad9ff'][i % 3];
+    const bulb = mesh(new THREE.IcosahedronGeometry(0.035, 0), color, -1 + 2 * k, 0.8 - Math.sin(k * Math.PI) * 0.16, -0.28, glow(color, 1.2));
+    camp.add(bulb);
+    bulbs.push(bulb);
+  }
+  const tent = new THREE.Group();
+  const canvasRoof = mesh(new THREE.ConeGeometry(0.46, 0.6, 4), '#e8894a', 0, 0.3, 0);
+  canvasRoof.rotation.y = Math.PI / 4;
+  const door = mesh(new THREE.ConeGeometry(0.15, 0.32, 3), '#5a3a22', 0, 0.16, 0.3);
+  door.scale.z = 0.25;
+  const pennant = mesh(new THREE.BoxGeometry(0.16, 0.08, 0.008), '#4c8f5a', 0.09, 0.68, 0);
+  tent.add(canvasRoof, door, pennant, mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.16, 4), '#8a5a33', 0, 0.66, 0));
+  camp.add(tent);
+  const TENT_PAINT = ['#e8894a', '#4c8f5a', '#3b7bb8', '#d95b4a', '#e8759c'];
+  /** Каждая стоянка чуть другая; палатка — с той стороны, где свободно, а негде — без неё. */
+  const decorate = () => {
+    canvasRoof.material = materials.paper({ color: pick(TENT_PAINT), side: THREE.DoubleSide, variant: 'traveller' });
+    const free = (x) => pt.world.clearance(camp.position.x + x, camp.position.z - 0.5) > 0.25;
+    const side = [-1.55, 1.55].filter(free);
+    tent.visible = side.length > 0;
+    if (tent.visible) tent.position.set(pick(side), 0, -0.5);
+  };
 
   // ---- «z-z-z» над дремлющими ----
   const letterZ = () => {
@@ -109,6 +147,8 @@ function start(pt, materials, friends) {
       f.script = null;
       stand(f);
     });
+    // Сюжет кончился посреди привала — все снова у костра, а не кучей на нём.
+    if (now !== 'walk') friends.forEach((f, i) => { f.script = sit(i, now === 'doze'); });
   };
 
   /** Сидя ножки подбирают под себя: торчащие вперёд выглядели некрасиво. Фигурка садится на землю. */
@@ -139,8 +179,8 @@ function start(pt, materials, friends) {
     const side = index ? 1 : -1;
     const p = f.root.position;
     const k = 1 - Math.exp(-3 * dt);
-    p.x += (camp.position.x + side * 0.38 - p.x) * k;
-    p.z += (camp.position.z + 0.02 - p.z) * k;
+    p.x += (camp.position.x + side * 0.62 - p.x) * k;
+    p.z += (camp.position.z + 0.08 - p.z) * k;
     p.y = camp.position.y;
     f.root.rotation.y += (-side * 0.55 - f.root.rotation.y) * k;
     f.body.position.y = SEAT + Math.sin(clock * (asleep ? 1.2 : 2.4) + index * 2) * 0.006;
@@ -151,8 +191,9 @@ function start(pt, materials, friends) {
   const enter = (next) => {
     if (next === now) return;
     const was = now;
-    now = next;
+    now = 'walk';
     stop();
+    now = next;
     if (next === 'walk') {
       camp.visible = false;
       sleeps.forEach((z) => { z.visible = false; });
@@ -161,7 +202,8 @@ function start(pt, materials, friends) {
     }
     if (was === 'walk') {
       pt.traveller.model.getWorldPosition(at);
-      camp.position.set(laneX(at.z + 0.62, pt.wfc.seed), at.y, at.z + 0.62);
+      camp.position.set(laneX(at.z + 0.85, pt.wfc.seed), at.y, at.z + 0.85);
+      decorate();
       camp.visible = true;
     }
     friends.forEach((f, i) => { f.script = sit(i, next === 'doze'); });
@@ -359,7 +401,8 @@ function start(pt, materials, friends) {
     const house = Boolean(nearestHouse(at, isHouse));
     const all = placeStories({ biome, house, pond: Boolean(nearestHouse(at, isPond)) });
     // Стоя годятся и догонялки: в пустом месте иначе нечего делать.
-    return [...all.filter((name) => !(now === 'camp' && name === 'picnic')), 'race', 'leapfrog'];
+    const standing = [...all, 'race', 'leapfrog'];
+    return now === 'camp' ? campStories(standing) : standing;
   };
   const play = (name) => {
     if (!name || !STORIES[name]()) return false;
@@ -456,6 +499,7 @@ function start(pt, materials, friends) {
       flame.position.y = 0.06 + (h * s) / 2;
       flame.rotation.y += dt * 2;
     });
+    bulbs.forEach((bulb, i) => bulb.scale.setScalar(1 + Math.sin(clock * 3 + i * 1.7) * 0.18));
     steam.forEach((puff, i) => {
       const t = (clock * 0.6 + i * 0.5) % 1;
       puff.position.y = 0.1 + t * 0.22;
