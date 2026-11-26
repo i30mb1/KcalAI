@@ -2,7 +2,7 @@
 // как это выглядит: посылка на тропе, ягоды, стая птиц, воздушный шар, танец друзей. Каждое — с короткой
 // табличкой слева внизу. Ничего не копится и в дневник не пишется: это только мир.
 import * as THREE from 'three';
-import { milestone, offscreen, pause, pickEvent } from './events-math.js';
+import { milestone, offscreen, pause, pickEvent, upcoming } from './events-math.js';
 import { laneX } from './lane.js';
 import { goalArt, milestoneArt } from './signs.js';
 
@@ -331,27 +331,33 @@ function start(pt, materials) {
     const stand = new THREE.Group();
     stand.add(card);
     stand.position.set(x, at.y, z);
-    run(stand, (dt, t) => {
-      // Раскладывается, как в книжке, с отскоком, и стоит, пока не пройдут.
-      const pop = Math.min(1, t * 2.2);
-      stand.scale.set(1, pop + Math.sin(pop * Math.PI) * 0.18, 1);
-      return t < 40;
+    // Стоит, пока рядом: пройденное и оставшееся после переноса по миру убирается.
+    run(stand, () => {
+      pt.traveller.model.getWorldPosition(at);
+      return at.z - z > -9 && at.z - z < 60;
     });
-    confetti(x, at.y + height, z);
+    return { top: stand.position.clone().setY(at.y + height), z };
   };
 
-  /** Указатель с числом — сбоку тропы. */
-  const post = (label) => {
+  /** Веха [what] на дороге в [ahead] единицах впереди: указатель сбоку тропы, цель дня — арка через всю тропу. */
+  const raise = (what, ahead) => {
     pt.traveller.model.getWorldPosition(at);
-    const z = at.z - 1.2;
-    standee(milestoneArt(label), 0.95, laneX(z, pt.wfc.seed) - 0.95, z);
+    const z = at.z - ahead;
+    const lane = laneX(z, pt.wfc.seed);
+    if (what === 'goal') return standee(goalArt(), 2.3, lane, z);
+    return standee(milestoneArt(label(what)), 0.95, lane - 0.95, z);
   };
+  const label = (steps) => String(steps).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
-  /** Финиш — арка через всю тропу. */
-  const arch = () => {
+  /** Уже стоящие впереди вехи — по тому, что на них. */
+  const raised = new Map();
+  const lookAhead = (walk) => {
+    const next = upcoming(walk.steps, walk.goal);
+    if (!next) return;
+    const there = raised.get(next.what);
     pt.traveller.model.getWorldPosition(at);
-    const z = at.z - 1.25;
-    standee(goalArt(), 2.3, laneX(z, pt.wfc.seed), z);
+    // Шаг — 0,7 единицы дороги (kcal/autopilot.js).
+    if (!there || Math.abs(at.z - there.z) > 60) raised.set(next.what, raise(next.what, next.left * 0.7));
   };
 
   /** Салют за цель дня: залп за залпом вокруг героя. */
@@ -366,15 +372,16 @@ function start(pt, materials) {
   };
 
   const cheer = (what) => {
+    // Веха обычно уже стоит впереди; нет — страницу открыли у самой отметки, ставим рядом.
+    const there = raised.get(what) || raise(what, 1.2);
+    raised.delete(what);
+    confetti(there.top.x, there.top.y, there.top.z);
     if (what === 'goal') {
       banner('Цель шагов взята! Салют!');
-      arch();
       salute();
       return;
     }
-    const label = String(what).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-    banner(`Веха: ${label} шагов!`);
-    post(label);
+    banner(`Веха: ${label(what)} шагов!`);
   };
 
   /** Быстрый шаг — из-под ног летит пыль (или снег). */
@@ -416,6 +423,7 @@ function start(pt, materials) {
       const what = milestone(steps, walk.steps, walk.goal);
       steps = walk.steps;
       if (what) cheer(what);
+      lookAhead(walk);
     }
     dust(dt, (window.KcalTune && window.KcalTune.speed) ?? (walk && walk.vis) ?? 0);
     wait -= dt;

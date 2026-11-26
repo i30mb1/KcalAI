@@ -33,3 +33,15 @@ export function offscreen(screenX, margin = 1.2) {
   while (d < 30 && Math.abs(screenX(d)) <= margin) d += 0.5;
   return d;
 }
+
+/** За сколько шагов веха встаёт на дороге: около сорока клеток вперёд — далеко за краем экрана. */
+const HORIZON = 60;
+
+/** Что пора поставить впереди: { what: 'goal' | круглая тысяча, left: сколько до неё шагов } или `null`. */
+export function upcoming(steps, goal) {
+  if (steps < 0) return null;
+  const round = (Math.floor(steps / 1000) + 1) * 1000;
+  const goalFirst = goal > steps && goal <= round;
+  const left = (goalFirst ? goal : round) - steps;
+  return left <= HORIZON ? { what: goalFirst ? 'goal' : round, left } : null;
+}
