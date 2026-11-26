@@ -46,6 +46,7 @@ class DiaryWebHostTest {
             "web.js" -> "start()".encodeToByteArray()
             "walk/tiles.glb" -> RAW_GLB
             "walk/tiles.glb.gzip" -> GZ_GLB
+            "walk/world.js.gzip" -> GZ_GLB
             else -> null
         }
     }
@@ -138,6 +139,18 @@ class DiaryWebHostTest {
             val glb = HttpClient(CIO).get("http://127.0.0.1:$port/walk/tiles.glb")
             assertNull(glb.headers[HttpHeaders.ContentEncoding])
             assertContentEquals(RAW_GLB, glb.bodyAsBytes())
+        }
+    }
+
+    /** Крупные файлы лежат в приложении только сжатыми — оригинал занимал бы место зря: gzip понимает любой браузер. */
+    @Test
+    fun `файл, лежащий только сжатым, отдаётся сжатым`() = runTest(timeout = 20.seconds) {
+        served { port ->
+            val world = HttpClient(CIO).get("http://127.0.0.1:$port/walk/world.js")
+
+            assertEquals(200, world.status.value)
+            assertEquals("gzip", world.headers[HttpHeaders.ContentEncoding])
+            assertContentEquals(GZ_GLB, world.bodyAsBytes())
         }
     }
 

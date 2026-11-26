@@ -66,14 +66,15 @@ val syncWebBundle by tasks.registering(Sync::class) {
         into("walk")
     }
     into(layout.buildDirectory.dir("webBundle/files/web"))
-    // Рядом с крупными сжимаемыми файлами — сжатая копия `.gzip`: телефон отдаёт её браузеру, который понимает
-    // gzip (DiaryWebHost), — по Wi‑Fi едет в 3–4 раза меньше. Картинки (webp, jpg, png) уже сжаты — без копий.
+    // Крупные сжимаемые файлы лежат только сжатыми (`.gzip`): телефон так их и отдаёт (DiaryWebHost) — по Wi‑Fi
+    // едет в 3–4 раза меньше, а приложение не носит оригинал вторым экземпляром. Картинки (webp, jpg, png) уже сжаты.
     val packable = setOf("wasm", "js", "mjs", "glb", "json", "html", "css", "ttf", "svg")
     doLast {
         destinationDir.walkTopDown()
             .filter { it.isFile && it.extension in packable && it.length() > 4096 }
             .forEach { file ->
                 GZIPOutputStream(file.resolveSibling(file.name + ".gzip").outputStream()).use { out -> file.inputStream().use { it.copyTo(out) } }
+                check(file.delete()) { "не удалился оригинал ${file.name}" }
             }
     }
 }

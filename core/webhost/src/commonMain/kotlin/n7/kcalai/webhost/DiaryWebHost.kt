@@ -81,8 +81,12 @@ class DiaryWebHost(
             return
         }
         // Сжатая копия, если сборка её положила и браузер понимает gzip: мир прогулки весит мегабайты.
-        val packed = if (request.headers[HttpHeaders.AcceptEncoding].orEmpty().contains("gzip")) bundle.read(path + GZIP) else null
-        val bytes = packed ?: bundle.read(path)
+        val accepts = request.headers[HttpHeaders.AcceptEncoding].orEmpty().contains("gzip")
+        var packed = if (accepts) bundle.read(path + GZIP) else null
+        val raw = if (packed == null) bundle.read(path) else null
+        // Крупные файлы лежат только сжатыми — их получает любой: gzip понимает каждый браузер.
+        if (packed == null && raw == null && !accepts) packed = bundle.read(path + GZIP)
+        val bytes = packed ?: raw
         if (bytes == null) {
             respondBytes(ByteArray(0), status = HttpStatusCode.NotFound)
             return
