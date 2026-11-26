@@ -47,7 +47,7 @@ function goTo(index) {
 function start() {
   const panel = document.createElement('div');
   panel.id = 'walk-demo';
-  panel.style.cssText = 'position:fixed;left:8px;top:320px;bottom:64px;width:230px;z-index:4;overflow:auto;padding:10px;border-radius:14px;'
+  panel.style.cssText = 'position:fixed;left:8px;top:320px;bottom:124px;width:230px;z-index:4;overflow:auto;padding:10px;border-radius:14px;'
     + 'background:#fdf8eaf2;color:#2c2618;border:2px solid #d9c9a3;box-shadow:0 8px 18px #3d300c55;font:700 12px/1.3 system-ui,sans-serif';
   const note = document.createElement('div');
   note.style.cssText = 'min-height:16px;margin:4px 0;color:#9c3b2b';
