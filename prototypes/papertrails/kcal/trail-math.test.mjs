@@ -12,8 +12,12 @@ test('на последней земле впереди финиш', () => {
   assert.deepEqual(routeSpot(5, 8000, 7900), { next: null, left: 100 });
 });
 
+test('одна земля на весь день — впереди сразу финиш', () => {
+  assert.deepEqual(routeSpot(1, 8000, 100), { next: null, left: 7900 });
+});
+
 test('дошли до цели или показывать нечего', () => {
   assert.equal(routeSpot(5, 8000, 8000), null);
-  assert.equal(routeSpot(1, 8000, 100), null);
+  assert.equal(routeSpot(0, 8000, 100), null);
   assert.equal(routeSpot(5, 0, 100), null);
 });

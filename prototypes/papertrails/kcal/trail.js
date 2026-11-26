@@ -172,7 +172,7 @@ function frame(time) {
   last = time;
   const route = window.KcalRoute;
   const walk = window.KcalWalk;
-  const visible = document.body.classList.contains('walking') && route && route.lands.length > 1 && walk && walk.steps >= 0 && place();
+  const visible = document.body.classList.contains('walking') && route && route.lands.length > 0 && walk && walk.steps >= 0 && place();
   svg.style.display = visible ? 'block' : 'none';
   if (!visible) return;
 
