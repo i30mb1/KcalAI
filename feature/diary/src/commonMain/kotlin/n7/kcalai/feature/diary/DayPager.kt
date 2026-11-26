@@ -39,7 +39,12 @@ internal fun DayPager(
     val turn = remember { DayTurn() }
 
     LaunchedEffect(pager) {
-        pager.interactionSource.interactions.collect { if (it is DragInteraction.Start) turn.grabbed() }
+        pager.interactionSource.interactions.collect {
+            when (it) {
+                is DragInteraction.Start -> turn.grabbed()
+                is DragInteraction.Stop, is DragInteraction.Cancel -> turn.released()
+            }
+        }
     }
     LaunchedEffect(pager, first) {
         snapshotFlow { pager.currentPage }.drop(1).collect { index ->
@@ -51,7 +56,7 @@ internal fun DayPager(
         }
     }
     LaunchedEffect(date, first) {
-        if (turn.opened(date, pager.isScrollInProgress) && pageOf(date) != pager.currentPage) {
+        if (turn.opened(date) && pageOf(date) != pager.currentPage) {
             pager.animateScrollToPage(pageOf(date))
         }
     }
@@ -73,6 +78,7 @@ internal fun DayPager(
  */
 internal class DayTurn {
     private var byHand = false
+    private var held = false
 
     /** День, на который перелистнули и ещё не получили: пока он в пути, страницы назад не тянет. */
     private var asked: Long? = null
@@ -80,6 +86,12 @@ internal class DayTurn {
     /** Палец взялся за страницы. */
     fun grabbed() {
         byHand = true
+        held = true
+    }
+
+    /** Палец отпустил: страница дальше доезжает сама. */
+    fun released() {
+        held = false
     }
 
     /**
@@ -96,15 +108,14 @@ internal class DayTurn {
     /**
      * Открытым стал день [date].
      *
-     * @param scrolling страницы сейчас едут
-     * @return везти ли страницы к нему самим
+     * @return везти ли страницы к нему самим; пока палец на экране — нет
      */
-    fun opened(date: Long, scrolling: Boolean): Boolean {
+    fun opened(date: Long): Boolean {
         if (asked != null) {
             if (date == asked) asked = null
             return false
         }
-        if (byHand && scrolling) return false
+        if (held) return false
         byHand = false
         return true
     }
