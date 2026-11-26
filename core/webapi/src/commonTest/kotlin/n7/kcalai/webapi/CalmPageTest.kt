@@ -4,27 +4,23 @@ import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** Мир прогулки главный: дневник поверх него уступает место, пока им не пользуются. */
+/** Мир прогулки главный: клик по миру убирает дневник, ещё клик — возвращает. */
 class CalmPageTest {
 
     @Test
-    fun `мира нет — дневник на месте всегда`() {
-        assertTrue(diaryShown(world = false, overPanels = false, sinceMoveMs = 60_000, sinceTypingMs = 60_000))
+    fun `клик по миру убирает дневник, а клик по дневнику — нет`() {
+        assertFalse(diaryAfterClick(world = true, shown = true, onDiary = false))
+        assertTrue(diaryAfterClick(world = true, shown = true, onDiary = true))
     }
 
     @Test
-    fun `курсор на дневнике и им двигают — на месте`() {
-        assertTrue(diaryShown(world = true, overPanels = true, sinceMoveMs = 1_000, sinceTypingMs = 60_000))
+    fun `задвинутый возвращается любым кликом`() {
+        assertTrue(diaryAfterClick(world = true, shown = false, onDiary = false))
+        assertTrue(diaryAfterClick(world = true, shown = false, onDiary = true))
     }
 
     @Test
-    fun `курсор ушёл с дневника или замер — задвигается`() {
-        assertFalse(diaryShown(world = true, overPanels = false, sinceMoveMs = 500, sinceTypingMs = 60_000))
-        assertFalse(diaryShown(world = true, overPanels = true, sinceMoveMs = 7_000, sinceTypingMs = 60_000))
-    }
-
-    @Test
-    fun `печатают — на месте, где бы ни был курсор`() {
-        assertTrue(diaryShown(world = true, overPanels = false, sinceMoveMs = 60_000, sinceTypingMs = 3_000))
+    fun `мира нет — прятать не от чего`() {
+        assertTrue(diaryAfterClick(world = false, shown = true, onDiary = false))
     }
 }
