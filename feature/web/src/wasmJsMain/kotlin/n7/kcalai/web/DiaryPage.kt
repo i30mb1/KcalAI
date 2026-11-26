@@ -1,5 +1,8 @@
 package n7.kcalai.web
 
+import androidx.compose.runtime.SideEffect
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.EnterTransition
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
@@ -167,7 +170,11 @@ fun DiaryPage(link: PhoneLink) {
     val live = rememberDemoWalk() ?: diary?.day?.live
     var worldAlways by remember { mutableStateOf(walkAlways()) }
     // Мир виден на ходу — или всегда, если так выбрано в настройках: тогда герой стоит там, докуда дошёл за день.
-    val worldShown = rememberWalking(colors.bg, live?.speedKmh ?: 0.0, diary?.day?.steps ?: STEPS_UNKNOWN, diary?.day?.stepsGoal ?: 0, worldAlways)
+    // Мир живёт сегодняшним днём, какой бы ни листали: шаги и цель — последние сегодняшние.
+    var todaySeen by remember { mutableStateOf<WebDay?>(null) }
+    val worldDay = diary?.day?.takeIf { it.date == it.today } ?: todaySeen
+    SideEffect { todaySeen = worldDay }
+    val worldShown = rememberWalking(colors.bg, live?.speedKmh ?: 0.0, worldDay?.steps ?: STEPS_UNKNOWN, worldDay?.stepsGoal ?: 0, worldAlways)
     val walking = (live?.speedKmh ?: 0.0) > MOVING_KMH
     val pageBg by animateColorAsState(if (worldShown) colors.bg.copy(alpha = 0f) else colors.bg, tween(WALK_FADE_MS))
 
@@ -202,6 +209,9 @@ fun DiaryPage(link: PhoneLink) {
                         targetState = diary,
                         contentKey = { it.day.date },
                         transitionSpec = {
+                            // Над миром дни сменяются без скольжения: дневник и 3D рисует одна видеокарта, и кадры
+                            // анимации отнимали бы их у прогулки.
+                            if (worldShown) return@AnimatedContent EnterTransition.None togetherWith ExitTransition.None
                             val forward = targetState.day.date > initialState.day.date
                             val enterFrom: (Int) -> Int = { width -> if (forward) width / DAY_SLIDE else -width / DAY_SLIDE }
                             val exitTo: (Int) -> Int = { width -> if (forward) -width / DAY_SLIDE else width / DAY_SLIDE }

@@ -215,7 +215,8 @@ class WebSession(
         try {
             val day = shown.flatMapLatest { date ->
                 combine(diary.day(date), diary.week(date), diary.live) { content, week, live ->
-                    Triple(date, content.copy(live = live.takeIf { date == diary.today }), week)
+                    // Скорость дорожки — не от открытого дня: мир прогулки не замирает, пока листают дневник.
+                    Triple(date, content.copy(live = live), week)
                 }
             }
             val browsers = clients.observeAdmitted().map { list -> list.map { WebBrowser(it.id, it.label, here = it.id == me) } }

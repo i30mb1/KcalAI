@@ -225,9 +225,9 @@ class WebSessionTest {
         assertEquals(listOf(Added("гречка", 0, 200, diary.today - 1, MealType.DINNER)), diary.added)
     }
 
-    /** Дорожка подключена к телефону — её живые числа видны на странице, но только у сегодняшнего дня. */
+    /** Дорожка подключена к телефону — её живые числа идут на страницу, какой бы день ни листали: мир прогулки живёт ими. */
     @Test
-    fun `живые числа дорожки — в сегодняшнем дне`() = runTest {
+    fun `живые числа дорожки — при любом открытом дне`() = runTest {
         val browser = admitted()
 
         diary.live.value = TreadmillSample(speedKmh = 4.0, distanceM = 120, kcal = 6, elapsedS = 110)
@@ -236,7 +236,7 @@ class WebSessionTest {
 
         browser.say(ToPhone.Open(day = 20_780))
         runCurrent()
-        assertEquals(null, browser.last<ToPage.Day>()?.day?.live)
+        assertEquals(TreadmillSample(4.0, 120, 6, 110), browser.last<ToPage.Day>()?.day?.live)
     }
 
     @Test
