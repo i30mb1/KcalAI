@@ -1,7 +1,8 @@
-// KcalAI: Масло и Яйцо — бумажные фигурки, что идут за Зёрнышком по его следам, переваливаясь на коротких ножках.
+// KcalAI: Масло и Яйцо — бумажные фигурки, что идут за Зёрнышком гуськом по его следам, переваливаясь на коротких ножках.
 // Рисунок — как в приложении (core/ui: ButterArt, EggArt): брусок с завитком и яйцо в розовой скорлупке.
 // Мир их не знает: они сами берут героя из window.__pt и встают в ту же сцену тем же бумажным материалом.
 import * as THREE from 'three';
+import { followPoint } from './friends-math.js';
 
 const INK = '#2c2618';
 const BLUSH = '#f3b5c8';
@@ -76,8 +77,11 @@ function egg(kit) {
   return { root, body, legs: legs(kit, root, '#d8c8ae') };
 }
 
-/** Насколько каждый отстаёт: позади героя и в стороне от тропы. */
-const PLACES = [{ side: -0.62, back: 0.55 }, { side: 0.66, back: 1.05 }];
+/** Насколько каждый отстаёт по следам героя; side — куда чуть смотрит, стоя. */
+const PLACES = [{ side: -1, back: 0.75 }, { side: 1, back: 1.45 }];
+/** Сколько следов помнить и как часто их оставлять. */
+const TRAIL_LENGTH = 60;
+const TRAIL_STEP = 0.08;
 
 function start(pt, materials) {
   const hero = pt.traveller.model;
@@ -93,19 +97,24 @@ function start(pt, materials) {
   window.KcalFriends = { dance: (seconds) => friends.forEach((f) => { f.dance = seconds; }) };
 
   const at = new THREE.Vector3();
+  let trail = [];
   let last = performance.now();
   const frame = (now) => {
     requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     pt.traveller.model.getWorldPosition(at);
+    const head = trail[trail.length - 1];
+    const moved = head ? Math.hypot(at.x - head.x, at.z - head.z) : Infinity;
+    // Героя переставили на место по шагам дня — старые следы остались в другом конце мира.
+    if (moved > 3) trail = [];
+    if (moved > TRAIL_STEP) trail = [...trail.slice(1 - TRAIL_LENGTH), { x: at.x, z: at.z }];
     for (const f of friends) {
-      const tx = at.x + f.side;
-      const tz = at.z + f.back;
+      const { x: tx, z: tz } = followPoint(trail, at, f.back);
       const p = f.root.position;
       let dx = tx - p.x;
       let dz = tz - p.z;
-      // Героя переставили на место по шагам дня — друзья оказываются рядом, а не бегут через весь мир.
+      // Переставленный герой — друзья сразу за ним, а не бегут через весь мир.
       if (!f.placed || Math.hypot(dx, dz) > 4) {
         p.set(tx, at.y, tz);
         f.root.rotation.y = Math.PI;
@@ -123,7 +132,7 @@ function start(pt, materials) {
       const step = Math.sin(f.phase);
       let hop = Math.abs(step) * 0.05 * going + Math.abs(Math.sin(f.phase * 0.5)) * 0.008;
       // Стоят — лицом к камере (она на юге), идут — по ходу.
-      let turn = going > 0.1 ? Math.atan2(dx, dz) : -f.side * 0.4;
+      let turn = going > 0.1 ? Math.atan2(dx, dz) : -f.side * 0.35;
       if (f.dance > 0) {
         f.dance -= dt;
         hop = Math.abs(Math.sin(f.phase * 1.4)) * 0.28;
