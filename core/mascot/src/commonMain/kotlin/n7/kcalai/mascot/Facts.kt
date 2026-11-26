@@ -76,8 +76,6 @@ data class Facts(
     val address: String? = null,
     /** Только что кончившаяся прогулка по дорожке. */
     val walk: WalkFacts? = null,
-    /** Шаги за сегодня, когда говорят не об итоге прогулки. */
-    val daySteps: Int? = null,
     /** Прошлая неделя — для её итога. */
     val week: WeekFacts? = null,
 ) {
@@ -131,7 +129,7 @@ internal fun Facts.value(key: String): String? = when (key) {
     "walkSteps" -> walk?.steps?.let(::stepsPhrase)
     "walkKm" -> walk?.distanceM?.let(::distancePhrase)
     "walkTime" -> walk?.elapsedS?.let(::walkTimePhrase)
-    "daySteps" -> (daySteps ?: walk?.daySteps)?.let(::stepsPhrase)
+    "daySteps" -> walk?.daySteps?.let(::stepsPhrase)
     "stepsLeft" -> walk?.stepsLeft?.takeIf { it > 0 }?.let(::stepsPhrase)
     "weekDays" -> week?.days?.takeIf { it >= 1 }?.let { countPhrase(it, "день", "дня", "дней") }
     "weekGoal" -> week?.goalDays?.takeIf { it >= 1 }?.let { countPhrase(it, "раз", "раза", "раз") }

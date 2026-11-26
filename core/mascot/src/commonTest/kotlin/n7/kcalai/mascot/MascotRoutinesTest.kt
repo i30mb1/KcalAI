@@ -14,7 +14,6 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.TimeZone
@@ -136,44 +135,6 @@ class MascotRoutinesTest {
 
         routines().offerSteps(available = false)
         routines(PhoneSteps { _, _ -> 1_200 }).offerSteps(available = true)
-
-        assertTrue(mascots.messages.value.isEmpty())
-    }
-
-    /** Цель шагов взята — Зёрнышко радуется, и только раз за день. */
-    @Test
-    fun `цель шагов взята — радуются один раз`() = runTest {
-        eat(now - 1.days)
-        val walking = routines(PhoneSteps { _, _ -> 8_400 })
-
-        walking.cheerSteps()
-        walking.cheerSteps()
-
-        val said = mascots.messages.value.single()
-        assertEquals(Topic.STEPS_GOAL.name, said.topic)
-        assertTrue("8 400" in said.text.replace(' ', ' ').replace(' ', ' '), said.text)
-    }
-
-    @Test
-    fun `до цели не дошли — молчат и ждут`() = runTest {
-        eat(now - 1.days)
-
-        val waiting = launch { routines(PhoneSteps { _, _ -> 3_000 }).cheerSteps() }
-        advanceTimeBy(5.minutes)
-
-        assertTrue(mascots.messages.value.isEmpty())
-        assertTrue(waiting.isActive)
-        waiting.cancel()
-    }
-
-    /** Идущую прогулку по дорожке подытожат сами — тем же «цель есть»: дважды не поздравляют. */
-    @Test
-    fun `идёт прогулка по дорожке — радость за её итогом`() = runTest {
-        eat(now - 1.days)
-        walks.record(TreadmillSample(speedKmh = 4.0, distanceM = 2_000, kcal = 80, elapsedS = 1_800), now.toEpochMilliseconds())
-
-        // За получас прогулки телефон в кармане «нашагал» своё — в сумму дня это не идёт.
-        routines(PhoneSteps { from, to -> if (to - from > 3_600_000) 9_000 else 100 }).cheerSteps()
 
         assertTrue(mascots.messages.value.isEmpty())
     }

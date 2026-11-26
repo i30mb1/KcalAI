@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -375,7 +376,10 @@ class DiaryViewModel(
             week = week.onStart { emit(emptyMap()) }
         }
         combine(steps, week, brain.profile.map { it.stepsGoalOrDefault }.distinctUntilChanged(), ::Walked)
-    }.distinctUntilChanged()
+    }.distinctUntilChanged().onEach { walked ->
+        // Дошли до цели — персонажи подпрыгнут; что это раз в день, помнит мозг.
+        if ((walked.today?.total ?: 0) >= walked.goal) show(brain.react(MascotEvent.StepsGoal, clock.now()))
+    }
 
     /**
      * День, цель и неделя — одним потоком и без выдуманного начального значения.

@@ -113,11 +113,6 @@ class MainActivity : ComponentActivity() {
             }
         }
         lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                container.mascotRoutines.cheerSteps()
-            }
-        }
-        lifecycleScope.launch {
             // Тряску ловим, только пока дневник на экране: в кармане она — не игра.
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 phoneShakes(this@MainActivity).collect { diary.onPhoneShaken() }

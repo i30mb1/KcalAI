@@ -388,29 +388,6 @@ class MascotBrain(
     }
 
     /**
-     * Цель шагов взята — Зёрнышко радуется: раз в день, в свою очередь, и не после того, как о цели уже
-     * сказал итог прогулки.
-     *
-     * @return сказанное; `null` — цель не взята или сегодня о ней уже говорили
-     */
-    suspend fun tellStepsGoal(steps: Int, goal: Int, clock: Clock = Clock.System): MascotMessageEntity? {
-        if (steps < goal) return null
-        val day = clock.now().toLocalDateTime(zone).date
-        suspend fun told() = listOf(Topic.STEPS_GOAL, Topic.WALK_GOAL).any { topic ->
-            dao.lastSaid(topic.name)?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(zone).date } == day
-        }
-        if (told()) return null
-        return inTurn(clock) {
-            val now = clock.now()
-            // Пока ждали очереди, могли сказать — или наступил новый день, и эти шаги уже вчерашние.
-            if (now.toLocalDateTime(zone).date != day || told()) return@inTurn null
-            val facts = lightFacts(now).copy(daySteps = steps)
-            val said = Voices.of(Mascot.GRAIN).compose(Topic.STEPS_GOAL, facts, dao.recent(MEMORY).memory(), random)
-            said?.let { save(Mascot.GRAIN, Topic.STEPS_GOAL, it, Delivery.FEED, facts.now.date.toEpochDays(), now) }
-        }
-    }
-
-    /**
      * Прогулка по дорожке кончилась — Зёрнышко одной репликой говорит, сколько прошли и сколько
      * осталось до цели шагов (или что цель дня есть). Очередь та же, что у новостей, — см. [inTurn];
      * что о прогулке уже рассказали, помнит сама прогулка.
@@ -555,8 +532,34 @@ class MascotBrain(
             val mascot = if (random.nextBoolean()) Mascot.EGG else Mascot.BUTTER
             Reaction(Cue(CueKind.CELEBRATE, null), speak(mascot, Topic.GOAL_REACHED, now))
         }
+        MascotEvent.StepsGoal -> stepsCheer(now)
         is MascotEvent.Opened -> opened(event.messageId, now)
         MascotEvent.Shaken -> shaken(now)
+    }
+
+    /**
+     * Цель шагов — раз в день и без сообщения: персонажи подпрыгивают, лента не растёт. Память о празднике —
+     * скрытая отметка среди сказанного: в переписке и шторке её нет.
+     */
+    private suspend fun stepsCheer(now: Instant): Reaction? {
+        val day = now.toLocalDateTime(zone).date
+        val last = dao.lastSaid(STEPS_CHEER_MARK)?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(zone).date }
+        if (last == day) return null
+        val at = now.toEpochMilliseconds()
+        dao.insert(
+            MascotMessageEntity(
+                mascot = Mascot.GRAIN,
+                topic = STEPS_CHEER_MARK,
+                text = "",
+                lineIds = "",
+                delivery = Delivery.FEED,
+                dateEpochDay = day.toEpochDays(),
+                createdAt = at,
+                openedAt = at,
+                hiddenAt = at,
+            ),
+        )
+        return Reaction(Cue(CueKind.CELEBRATE, null), null)
     }
 
     /**
@@ -804,6 +807,9 @@ private val STREAK_MILESTONES = setOf(3, 7, 14, 21, 30, 50, 100)
 
 /** Функцией не пользуются — предложение повторяется не чаще этого. */
 private val OFFER_EVERY = 30.days
+
+/** Тема скрытой отметки «за цель шагов сегодня уже прыгали». */
+private const val STEPS_CHEER_MARK = "STEPS_CHEER"
 
 /** Дней от понедельника до среды: позже прошлая неделя шагов видна уже не вся. */
 private const val LAST_WEEKDAY_WITH_STEPS = 2

@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import n7.kcalai.database.MascotProfileEntity
+import n7.kcalai.mascot.CueKind
 import n7.kcalai.model.DEFAULT_STEPS_GOAL
 import n7.kcalai.model.MealType
 import n7.kcalai.model.heightInput
@@ -130,6 +131,17 @@ class StepsTest {
         advanceUntilIdle()
 
         assertEquals(40, vm.steps()?.steps)
+    }
+
+    @Test
+    fun `цель шагов взята — персонажи подпрыгивают`() = runTest(dispatcher) {
+        val vm = screen()
+        assertNull(vm.state.value.cue, "до цели ещё идти")
+
+        counted.value = DaySteps(phone = 8_000, treadmill = 100)
+        advanceUntilIdle()
+
+        assertEquals(CueKind.CELEBRATE, vm.state.value.cue?.kind)
     }
 
     @Test

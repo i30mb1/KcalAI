@@ -5,7 +5,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.window.ComposeUIViewController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import n7.kcalai.assistant.AppleModelBridge
@@ -64,15 +63,10 @@ object KcalApp {
     private val treadmill by lazy { IosTreadmill(container.treadmillFeed, scope) }
 
     /** Человек открыл приложение: написанное теперь стоит в ленте, шторку пора освободить. */
-    /** Ждёт цель шагов, пока приложение открыто: одна на все возвращения. */
-    private var cheering: Job? = null
-
     fun onForeground() {
         container.notifier.cancelAll()
         // Шаги предлагают на глазах у человека — тот же общий код, что на Android.
         scope.launch { container.mascotRoutines.offerSteps(container.iosSteps.available) }
-        cheering?.cancel()
-        cheering = scope.launch { container.mascotRoutines.cheerSteps() }
     }
 
     /**

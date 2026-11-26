@@ -137,20 +137,6 @@ class MascotRoutines(
     }
 
     /**
-     * Дождаться, пока шаги за сегодня дойдут до цели, и порадоваться, см. [MascotBrain.tellStepsGoal].
-     * Зовётся, пока дневник на экране. Идёт прогулка по дорожке — о цели скажет её итог, см. [tellWalks].
-     */
-    suspend fun cheerSteps() {
-        guarded("не удалось порадоваться шагам") {
-            val today = clock.now().toLocalDateTime(zone).date.toEpochDays()
-            val goal = brain.profile.first().stepsGoalOrDefault
-            val total = steps.observeDay(today).first { it.total >= goal }.total
-            val walking = walks.observeLast().first()?.let { it.dateEpochDay == today && it.toldAt == null } == true
-            if (!walking) brain.tellStepsGoal(total, goal, clock)
-        }
-    }
-
-    /**
      * «Записать: гречка» прямо из шторки, не открывая приложение: еда ложится обычной
      * порцией, а персонаж отвечает в той же переписке — как друг, которому написали «ага, поел».
      *

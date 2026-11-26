@@ -182,6 +182,21 @@ class MascotBrainTest {
         assertFalse("шаг" in said.text.lowercase(), said.text)
     }
 
+    /** Цель шагов — праздник без сообщения: персонажи подпрыгивают, раз в день, а лента не растёт. */
+    @Test
+    fun `за цель шагов подпрыгивают раз в день, без сообщения`() = runTest {
+        started()
+        val brain = brain()
+
+        val first = brain.react(MascotEvent.StepsGoal, now)
+        assertEquals(CueKind.CELEBRATE, first?.cue?.kind)
+        assertNull(first?.speech)
+        assertNull(brain.react(MascotEvent.StepsGoal, now + 2.hours))
+        assertTrue(brain.messages(today).first().isEmpty())
+
+        assertEquals(CueKind.CELEBRATE, brain.react(MascotEvent.StepsGoal, now + 1.days)?.cue?.kind)
+    }
+
     @Test
     fun `за прошлую неделю меньше двух дней — итога нет`() = runTest {
         known()

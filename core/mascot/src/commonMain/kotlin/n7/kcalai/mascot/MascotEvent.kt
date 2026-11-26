@@ -29,6 +29,9 @@ sealed interface MascotEvent {
     /** Калории дня легли точно в цель. */
     data object GoalReached : MascotEvent
 
+    /** Шаги за сегодня дошли до цели. Сообщают об этом сколько угодно раз — празднуют раз в день. */
+    data object StepsGoal : MascotEvent
+
     /** Открыл приложение из уведомления. */
     data class Opened(val messageId: Long) : MascotEvent
 
