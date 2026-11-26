@@ -26,7 +26,7 @@
             var atlas = document.createElement('canvas'); atlas.id = 'atlas'; atlas.tabIndex = -1; document.body.prepend(atlas);
             var glass = document.createElement('div'); glass.id = 'walk-glass'; atlas.after(glass);
             var hint = document.createElement('div'); hint.id = 'hint'; hint.hidden = true; document.body.appendChild(hint);
-            import('./walk/kcal/autopilot.js').then(function () { return import('./walk/kcal/hero.js'); }).then(function () { return import('./walk/kcal/tune.js'); }).then(function () { return import('./walk/src/main.js'); });
+            import('./walk/kcal/autopilot.js').then(function () { return import('./walk/kcal/hero.js'); }).then(function () { return import('./walk/kcal/tune.js'); }).then(function () { return import('./walk/kcal/trail.js'); }).then(function () { return import('./walk/src/main.js'); });
         };
 
     </script>

@@ -52,7 +52,7 @@ async function boot() {
   const scenes = todayScenes();
   const goal = dayGoal();
   setScenes(scenes.map((sc) => ({ biome: sc.biomeIndex, skin: sc.skin })), goal);
-  window.KcalRoute = { lands: scenes.map((sc) => sc.short), goal }; // KcalAI: панель шагов показывает эту дорогу
+  window.KcalRoute = { lands: scenes.map((sc) => sc.short), goal }; // KcalAI: тропа слева от дневника (kcal/trail.js)
   const skins = await buildSkins([...new Set(scenes.map((sc) => sc.skin).filter(Boolean))], THREE, assets.textures && assets.textures.art);
   if (skins) {
     paperUniforms.uPaperArtSkin.value = skins.sheet;

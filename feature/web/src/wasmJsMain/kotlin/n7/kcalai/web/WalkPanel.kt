@@ -1,6 +1,5 @@
 package n7.kcalai.web
 
-import n7.kcalai.model.routeSpot
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -210,19 +209,7 @@ private fun Card(
                 PageChip("Сохранить", primary = canSave, onClick = save)
             }
         }
-        // Есть дорога дня — прогресс на треке; пока мира нет — тонкая полоса.
-        val road = rememberDayRoad()
-        if (road == null) {
-            SplitBar(treadmillPart, phonePart)
-        } else {
-            DayTrail(road, steps, walking)
-            val spot = routeSpot(road.lands.size, road.goal, steps)
-            Text(
-                if (steps >= road.goal || spot == null) "Дошли до флажка!" else "Дальше: ${road.lands[spot.next]} — ${stepsLabel(spot.stepsToNext)} шагов",
-                style = type.label,
-                color = colors.text2,
-            )
-        }
+        SplitBar(treadmillPart, phonePart)
         // Откуда шаги: телефон — если он их отдаёт, дорожка — если по ней ходили. Цвет точки — цвет отрезка полосы.
         if (phone != null) Source("телефон", phone, colors.steps.fill.copy(alpha = PHONE_ALPHA))
         if (treadmill > 0 || day.walks.isNotEmpty()) Source("дорожка", treadmill, colors.steps.fill)
