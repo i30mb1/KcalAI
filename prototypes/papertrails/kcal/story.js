@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { campStories, nearestHouse, pickStory, placeStories, stage, walkStories } from './story-math.js';
 import { biomeAt } from '../src/core/biomes.js';
 import { banner } from './events.js';
+import { gait } from './friends.js';
 import { laneX } from './lane.js';
 
 const TREATS = ['с пирожком', 'с баранками', 'с банкой мёда', 'с горстью орехов', 'с куском пирога', 'с яблоком'];
@@ -144,6 +145,7 @@ function start(pt, materials, friends) {
     visit = null;
     friends.forEach((f) => {
       f.root.visible = true;
+      f.body.rotation.x = 0;
       f.script = null;
       stand(f);
     });
@@ -160,6 +162,7 @@ function start(pt, materials, friends) {
     for (const leg of f.legs) {
       leg.visible = true;
       leg.rotation.x = 0;
+      leg.position.y = 0.1;
     }
   };
   /** Точка рядом с героем, на тропе позади: туда ставят сценки на двоих. */
@@ -253,11 +256,14 @@ function start(pt, materials, friends) {
       const was = f.root.position.clone();
       f.root.position.lerpVectors(a, b, done);
       f.root.rotation.y = Math.atan2(f.root.position.x - was.x, f.root.position.z - was.z) || f.root.rotation.y;
-      f.body.position.y = Math.abs(Math.sin(done * Math.PI * Math.max(2, Math.round(duration * 2)))) * 0.17;
-      stand(f);
-      f.legs[0].rotation.x = -0.2;
-      f.legs[1].rotation.x = 0.2;
+      // Бежит трусцой: чуть клонится вперёд и переваливается.
+      const step = t * 15;
+      gait(f, step, 1);
+      f.body.position.y = Math.abs(Math.sin(step)) * 0.035;
+      f.body.rotation.x = 0.16;
+      f.body.rotation.z = Math.sin(step) * 0.1;
       if (returning && done >= 1) stop();
+      if (done >= 1) f.body.rotation.x = 0;
     };
   };
 
@@ -288,8 +294,8 @@ function start(pt, materials, friends) {
         const side = i ? 1 : -1;
         const run = Math.sin(Math.min(1, t / 7) * Math.PI);
         ease(f, behind(side * 0.4, 0.7 - run * (i ? 2.6 : 3.2)), dt, t < 3.5 ? Math.PI : 0);
-        f.body.position.y = Math.abs(Math.sin(t * 11 + i)) * 0.045;
-        for (const [n, leg] of f.legs.entries()) leg.rotation.x = Math.sin(t * 11 + n * Math.PI) * 0.4;
+        f.body.position.y = Math.abs(Math.sin(t * 15 + i)) * 0.035;
+        gait(f, t * 15 + i, 1);
       }, `${pick(NAMES)} победило!`);
       return true;
     },

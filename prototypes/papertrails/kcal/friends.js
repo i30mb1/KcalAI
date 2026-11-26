@@ -36,13 +36,29 @@ function face(kit, parent, y, z) {
 function legs(kit, root, color) {
   return [-1, 1].map((sx) => {
     const leg = new THREE.Group();
-    leg.position.set(sx * 0.055, 0.1, 0);
+    leg.position.set(sx * 0.055, HIP, 0);
     leg.add(kit.mesh(new THREE.CylinderGeometry(0.018, 0.02, 0.09, 6), color, 0, -0.045, 0));
     const foot = kit.mesh(new THREE.IcosahedronGeometry(0.03, 0), color, 0, -0.088, 0.012);
     foot.scale.set(1, 0.55, 1.4);
     leg.add(foot);
     root.add(leg);
     return leg;
+  });
+}
+
+/** Где ножка крепится к тельцу. */
+const HIP = 0.1;
+
+/**
+ * Шаг: ножки по очереди поднимаются и уходят вперёд-назад. [phase] — где в шаге, [amount] — насколько бойко (0 — стоят).
+ * Один размах качал их растопыренными, поэтому нога ещё и отрывается от земли.
+ */
+export function gait(f, phase, amount) {
+  f.legs.forEach((leg, i) => {
+    const at = phase + i * Math.PI;
+    leg.visible = true;
+    leg.rotation.x = Math.sin(at) * 0.4 * amount;
+    leg.position.y = HIP + Math.max(0, Math.cos(at)) * 0.045 * amount;
   });
 }
 
@@ -150,9 +166,7 @@ function start(pt, materials) {
       f.root.rotation.y += f.dance > 0 ? turn - f.root.rotation.y : diff * k * 2;
       f.body.position.y = hop;
       f.body.rotation.z = step * 0.14 * Math.max(0.25, going);
-      f.legs[0].rotation.x = step * 0.35 * going;
-      f.legs[1].rotation.x = -step * 0.35 * going;
-      for (const leg of f.legs) leg.visible = true;
+      gait(f, f.phase, going);
     }
   };
   requestAnimationFrame(frame);
