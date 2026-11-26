@@ -385,6 +385,29 @@ class MascotBrain(
     }
 
     /**
+     * Цель шагов взята — Зёрнышко радуется: раз в день, в свою очередь, и не после того, как о цели уже
+     * сказал итог прогулки.
+     *
+     * @return сказанное; `null` — цель не взята или сегодня о ней уже говорили
+     */
+    suspend fun tellStepsGoal(steps: Int, goal: Int, clock: Clock = Clock.System): MascotMessageEntity? {
+        if (steps < goal) return null
+        val day = clock.now().toLocalDateTime(zone).date
+        suspend fun told() = listOf(Topic.STEPS_GOAL, Topic.WALK_GOAL).any { topic ->
+            dao.lastSaid(topic.name)?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(zone).date } == day
+        }
+        if (told()) return null
+        return inTurn(clock) {
+            val now = clock.now()
+            // Пока ждали очереди, могли сказать — или наступил новый день, и эти шаги уже вчерашние.
+            if (now.toLocalDateTime(zone).date != day || told()) return@inTurn null
+            val facts = lightFacts(now).copy(daySteps = steps)
+            val said = Voices.of(Mascot.GRAIN).compose(Topic.STEPS_GOAL, facts, dao.recent(MEMORY).memory(), random)
+            said?.let { save(Mascot.GRAIN, Topic.STEPS_GOAL, it, Delivery.FEED, facts.now.date.toEpochDays(), now) }
+        }
+    }
+
+    /**
      * Прогулка по дорожке кончилась — Зёрнышко одной репликой говорит, сколько прошли и сколько
      * осталось до цели шагов (или что цель дня есть). Очередь та же, что у новостей, — см. [inTurn];
      * что о прогулке уже рассказали, помнит сама прогулка.
