@@ -4,6 +4,7 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -394,7 +395,28 @@ class MascotBrain(
      *
      * @param day итог шагов дня вместе с этой прогулкой
      */
-    suspend fun tellWalk(walk: Walk, day: WalkTotals, goal: Int, clock: Clock = Clock.System): MascotMessageEntity? = inTurn(clock) {
+    suspend fun tellWalk(walk: Walk, day: WalkTotals, goal: Int, clock: Clock = Clock.System): MascotMessageEntity? {
+        // Решаем до очереди: о чём молчим, ради того слово не берут.
+        if (!worthTelling(walk, day, goal, clock.now())) return null
+        return inTurn(clock) { sayWalk(walk, day, goal, clock) }
+    }
+
+    /**
+     * Стоит ли писать о прогулке — переписка не должна зарастать итогами. Взятая цель — раз в день, и после неё
+     * о прогулках в этот день молчат. Иначе — только о настоящей прогулке (от десяти минут или тысячи шагов)
+     * и не чаще раза в три часа.
+     */
+    private suspend fun worthTelling(walk: Walk, day: WalkTotals, goal: Int, now: Instant): Boolean {
+        val today = now.toLocalDateTime(zone).date
+        val goalSaid = dao.lastSaid(Topic.WALK_GOAL.name)?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(zone).date } == today
+        if (goalSaid) return false
+        if (day.steps >= goal) return true
+        if (walk.elapsedS < WALK_WORTH_S && walk.steps < WALK_WORTH_STEPS) return false
+        val last = dao.lastSaid(Topic.WALK_DONE.name) ?: return true
+        return now.toEpochMilliseconds() - last >= WALK_PAUSE.inWholeMilliseconds
+    }
+
+    private suspend fun sayWalk(walk: Walk, day: WalkTotals, goal: Int, clock: Clock): MascotMessageEntity? {
         val now = clock.now()
         val steps = walk.steps.roundToInt()
         val facts = lightFacts(now).copy(
@@ -402,7 +424,7 @@ class MascotBrain(
         )
         val topic = if (day.steps >= goal) Topic.WALK_GOAL else Topic.WALK_DONE
         val said = Voices.of(Mascot.GRAIN).compose(topic, facts, dao.recent(MEMORY).memory(), random)
-        said?.let { save(Mascot.GRAIN, topic, it, Delivery.FEED, facts.now.date.toEpochDays(), now) }
+        return said?.let { save(Mascot.GRAIN, topic, it, Delivery.FEED, facts.now.date.toEpochDays(), now) }
     }
 
     /** Человек спросил адрес страницы — отвечают сразу и сколько угодно раз. */
@@ -807,6 +829,13 @@ private val STREAK_MILESTONES = setOf(3, 7, 14, 21, 30, 50, 100)
 
 /** Функцией не пользуются — предложение повторяется не чаще этого. */
 private val OFFER_EVERY = 30.days
+
+/** Меньше этого — не прогулка для переписки: десять минут или тысяча шагов. */
+private const val WALK_WORTH_S = 600
+private const val WALK_WORTH_STEPS = 1_000
+
+/** Итоги прогулок — не чаще этого. */
+private val WALK_PAUSE = 3.hours
 
 /** Тема скрытой отметки «за цель шагов сегодня уже прыгали». */
 private const val STEPS_CHEER_MARK = "STEPS_CHEER"

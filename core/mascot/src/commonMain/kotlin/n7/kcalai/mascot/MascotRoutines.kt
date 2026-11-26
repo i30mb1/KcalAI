@@ -108,8 +108,9 @@ class MascotRoutines(
                 // «до цели» — по шагам дня вместе: телефона и дорожки
                 val day = walks.day(last.dateEpochDay).totals().copy(steps = steps.day(last.dateEpochDay).total)
                 val goal = brain.profile.first().stepsGoalOrDefault
-                val told = last.dateEpochDay != today || brain.tellWalk(last.toWalk(), day, goal, clock) != null
-                if (told) walks.markTold(last, clock.now().toEpochMilliseconds())
+                if (last.dateEpochDay == today) brain.tellWalk(last.toWalk(), day, goal, clock)
+                // Рассказали или решили молчать — к этой прогулке больше не возвращаются.
+                walks.markTold(last, clock.now().toEpochMilliseconds())
             }
         }
     }

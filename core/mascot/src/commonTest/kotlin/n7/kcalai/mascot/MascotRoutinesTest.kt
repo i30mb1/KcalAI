@@ -187,6 +187,57 @@ class MascotRoutinesTest {
         assertEquals(Topic.WALK_GOAL.name, mascots.messages.value.single().topic)
     }
 
+    private suspend fun walked(seconds: Int, metres: Int, ago: kotlin.time.Duration) =
+        walks.record(TreadmillSample(speedKmh = 4.0, distanceM = metres, kcal = 5, elapsedS = seconds), (now - ago).toEpochMilliseconds())
+
+    /** Пара шагов по дорожке — не повод писать: переписка не должна зарастать итогами. */
+    @Test
+    fun `о короткой прогулке молчат и больше к ней не возвращаются`() = runTest {
+        eat(now - 1.days)
+        walked(seconds = 240, metres = 60, ago = 10.minutes)
+
+        backgroundScope.launch { routines().tellWalks() }
+        runCurrent()
+
+        assertTrue(mascots.messages.value.isEmpty())
+        assertNotNull(walkDao.last()?.toldAt)
+    }
+
+    @Test
+    fun `об итогах — не чаще раза в три часа`() = runTest {
+        eat(now - 1.days)
+        mascots.insert(
+            MascotMessageEntity(
+                mascot = Mascot.GRAIN, topic = Topic.WALK_DONE.name, text = "Итог", lineIds = "", delivery = Delivery.FEED,
+                dateEpochDay = now.toEpochMilliseconds() / DAY_MS, createdAt = (now - 2.hours).toEpochMilliseconds(),
+            ),
+        )
+        walked(seconds = 1_920, metres = 2_140, ago = 10.minutes)
+
+        backgroundScope.launch { routines().tellWalks() }
+        runCurrent()
+
+        assertEquals(1, mascots.messages.value.size)
+    }
+
+    @Test
+    fun `о взятой цели — раз в день, дальше про прогулки молчат`() = runTest {
+        eat(now - 1.days)
+        mascots.upsertProfile(MascotProfileEntity(stepsGoal = 1_000))
+        mascots.insert(
+            MascotMessageEntity(
+                mascot = Mascot.GRAIN, topic = Topic.WALK_GOAL.name, text = "Цель", lineIds = "", delivery = Delivery.FEED,
+                dateEpochDay = now.toEpochMilliseconds() / DAY_MS, createdAt = (now - 5.hours).toEpochMilliseconds(),
+            ),
+        )
+        walked(seconds = 1_920, metres = 2_140, ago = 10.minutes)
+
+        backgroundScope.launch { routines().tellWalks() }
+        runCurrent()
+
+        assertEquals(1, mascots.messages.value.size)
+    }
+
     @Test
     fun `пока прогулка идёт, о ней молчат`() = runTest {
         eat(now - 1.days)
