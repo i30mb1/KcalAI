@@ -127,8 +127,7 @@ class MascotRoutines(
 
     /**
      * Предложить считать шаги телефона — всем, у кого есть шагомер ([available]), пока телефон их не отдаёт,
-     * см. [MascotBrain.offerSteps]. Зовётся, пока дневник на экране: вопрос задаётся на глазах, а Health Connect
-     * только на переднем плане и отвечает.
+     * см. [MascotBrain.offerSteps]. Зовётся, пока дневник на экране: вопрос задаётся на глазах.
      */
     suspend fun offerSteps(available: Boolean) {
         if (!available) return

@@ -5,7 +5,7 @@
 после сборки там остаётся закоммитить и отправить (git push), GitHub Pages опубликует сам.
 
 Запуск из корня KcalAI:  python tools/play/render_policy.py [путь к i30mb1.github.io]
-Адрес страницы: https://i30mb1.github.io/kcalai/policy/ — его же открывает экран Health Connect (HealthPolicyActivity).
+Адрес страницы: https://i30mb1.github.io/kcalai/policy/ — он указан в карточке приложения в Google Play.
 """
 import html
 import pathlib

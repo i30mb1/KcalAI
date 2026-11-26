@@ -26,10 +26,7 @@ import n7.kcalai.semantic.LiteRtQueryEmbedder
 import n7.kcalai.work.PrefsOutboxMemory
 import n7.kcalai.work.ScanUploads
 import n7.kcalai.repositories.PhoneSteps
-import n7.kcalai.repositories.WrittenSteps
-import n7.kcalai.walk.HealthConnectSteps
 import n7.kcalai.walk.RecordedSteps
-import n7.kcalai.repositories.BestPhoneSteps
 import n7.kcalai.walk.TreadmillCompanion
 import n7.kcalai.walk.TreadmillLink
 
@@ -52,17 +49,10 @@ class AppContainer(context: Context) : AppGraph() {
 
     override fun discovery(): NearbyDiscovery = NsdDiscovery(appContext)
 
-    /** Шагомер телефона — Health Connect; без него или без разрешения шагов телефона нет. */
-    private val healthSteps by lazy { HealthConnectSteps(appContext) }
-
-    /** Своя запись шагов: на телефонах, где в Health Connect шаги никто не пишет. */
+    /** Шагомер телефона — своя запись шагов; без сервисов Google или разрешения шагов телефона нет. */
     val recordedSteps by lazy { RecordedSteps(appContext) }
 
-    /** Шаги телефона — из того шагомера, что насчитал больше; Health Connect, куда никто не пишет, молчит. */
-    override fun phoneSteps(): PhoneSteps = BestPhoneSteps(listOf(WrittenSteps(healthSteps), recordedSteps))
-
-    /** Есть ли чем считать шаги — иначе и предлагать нечего. */
-    val stepsAvailable: Boolean get() = healthSteps.available || recordedSteps.available
+    override fun phoneSteps(): PhoneSteps = recordedSteps
     override fun shade(): MascotShade = MascotNotifier(appContext)
     override fun outboxMemory(): OutboxMemory = PrefsOutboxMemory(appContext)
 

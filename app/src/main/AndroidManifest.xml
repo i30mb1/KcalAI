@@ -37,17 +37,8 @@
     <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
     <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
 
-    <!--
-        Шагомер телефона — Health Connect, только чтение шагов: они складываются с дорожкой в одну цель.
-        Без чтения в фоне: с погасшим экраном страница показывает последние известные шаги дня.
-        Спрашивается вопросом Зёрнышка в ленте, не на старте.
-    -->
-    <uses-permission android:name="android.permission.health.READ_STEPS" />
-    <!-- Своя запись шагов телефона (Recording API), когда в Health Connect их никто не пишет. -->
+    <!-- Шагомер телефона (Recording API сервисов Google Play). Спрашивается вопросом Зёрнышка в ленте, не на старте. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
-    <queries>
-        <package android:name="com.google.android.apps.healthdata" />
-    </queries>
 
     <!--
         WorkManager и Play Asset Delivery объявляют foreground-сервисы «на всякий случай»,
@@ -86,31 +77,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <!--
-            Health Connect спрашивает, зачем приложению шаги, — Google требует показать политику
-            конфиденциальности. До Android 14 — этим входом, с Android 14 — псевдонимом ниже.
-        -->
-        <activity
-            android:name=".walk.HealthPolicyActivity"
-            android:exported="true"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
-            <intent-filter>
-                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
-            </intent-filter>
-        </activity>
-
-        <!-- То же для Health Connect с Android 14: без этого входа система не покажет запрос шагов. -->
-        <activity-alias
-            android:name="ViewPermissionUsageActivity"
-            android:exported="true"
-            android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
-            android:targetActivity=".walk.HealthPolicyActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
-                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
-            </intent-filter>
-        </activity-alias>
 
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"

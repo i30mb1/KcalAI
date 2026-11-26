@@ -35,36 +35,6 @@ class StepsRepositoryTest {
         }
     }
 
-    /**
-     * Шагомеров у телефона бывает два: Health Connect (туда пишут другие приложения) и своя запись шагов.
-     * Пустой Health Connect отвечает нулём — верим тому, кто насчитал больше; молчат оба — шагов нет.
-     */
-    @Test
-    fun `из двух шагомеров — тот, что насчитал больше`() = runBlocking {
-        val empty = PhoneSteps { _, _ -> 0 }
-        val recorded = PhoneSteps { _, _ -> 4_200 }
-        val silent = PhoneSteps { _, _ -> null }
-
-        assertEquals(4_200, BestPhoneSteps(listOf(empty, recorded)).between(0, 1))
-        assertEquals(0, BestPhoneSteps(listOf(empty, silent)).between(0, 1))
-        assertNull(BestPhoneSteps(listOf(silent, silent)).between(0, 1))
-    }
-
-    /** Health Connect, куда никто не пишет, отвечает нулём. Это не «не ходил», а «шагов нет»: плашке с нулём неоткуда взяться. */
-    @Test
-    fun `копилка пуста всю неделю — шагов нет, а не ноль`() = runBlocking {
-        assertNull(WrittenSteps(PhoneSteps { _, _ -> 0 }).between(at(0), at(20)))
-        assertNull(WrittenSteps(PhoneSteps { _, _ -> null }).between(at(0), at(20)))
-    }
-
-    @Test
-    fun `в копилку пишут — утренний ноль остаётся нулём`() = runBlocking {
-        val onlyBeforeToday = PhoneSteps { from, _ -> if (from < at(0)) 3_000 else 0 }
-
-        assertEquals(0, WrittenSteps(onlyBeforeToday).between(at(0), at(8)))
-        assertEquals(3_000, WrittenSteps(onlyBeforeToday).between(at(0) - 3_600_000, at(8)))
-    }
-
     private suspend fun walk() = walks.record(TreadmillSample(speedKmh = 4.0, distanceM = 2_000, kcal = 80, elapsedS = 1_800), at(18, 30))
 
     @Test
@@ -91,8 +61,8 @@ class StepsRepositoryTest {
     }
 
     /**
-     * Health Connect отвечает приложению только на переднем плане: погас экран — шаги телефона на время пропадают.
-     * Шаги дня не убывают, поэтому остаются последние известные, и счётчик на странице не прыгает вниз.
+     * Шагомер на время замолчал — шаги дня не убывают: остаются последние известные, и счётчик на странице
+     * не прыгает вниз.
      */
     @Test
     fun `телефон замолчал — остаются последние известные шаги дня`() = runBlocking {

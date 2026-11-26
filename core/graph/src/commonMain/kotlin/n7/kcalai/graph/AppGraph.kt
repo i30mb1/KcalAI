@@ -198,7 +198,7 @@ abstract class AppGraph {
         WalkRepository(database.walkDao(), TimeZone.currentSystemDefault(), height = { mascotBrain.profile.first().heightOrDefault })
     }
 
-    /** Шагомер самого телефона: Health Connect / Core Motion. Без доступа — шагов телефона нет. */
+    /** Шагомер самого телефона: Recording API / Core Motion. Без доступа — шагов телефона нет. */
     open fun phoneSteps(): PhoneSteps = NoPhoneSteps
 
     /** Шаги дня вместе — телефона и дорожки, без двойного счёта. */

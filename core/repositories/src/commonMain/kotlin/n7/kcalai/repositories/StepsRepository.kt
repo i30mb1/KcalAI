@@ -17,37 +17,12 @@ import kotlinx.datetime.atStartOfDayIn
 import n7.kcalai.model.Walk
 
 /**
- * Шаги, которые насчитал сам телефон: Health Connect на Android, Core Motion на iOS. Платформа — только
+ * Шаги, которые насчитал сам телефон: Recording API на Android, Core Motion на iOS. Платформа — только
  * чтение за промежуток; что с этим делать, решает общий код.
  */
 fun interface PhoneSteps {
     /** Шаги за промежуток [from, to), мс; `null` — телефон их не отдаёт (нет счётчика или доступа). */
     suspend fun between(from: Long, to: Long): Int?
-}
-
-/**
- * Шагомеров у телефона бывает несколько: Health Connect, куда пишут другие приложения, и своя запись шагов
- * телефона. Пустой Health Connect отвечает нулём, поэтому верим тому, кто насчитал больше; молчат все — `null`.
- */
-class BestPhoneSteps(private val sources: List<PhoneSteps>) : PhoneSteps {
-    override suspend fun between(from: Long, to: Long): Int? = sources.mapNotNull { it.between(from, to) }.maxOrNull()
-}
-
-/**
- * Шагомер-копилка вроде Health Connect: сам не считает, а хранит то, что пишут другие приложения. Не пишет
- * никто — он отвечает нулём, и это не «не ходил», а «шагов нет»: пустой за неделю молчит.
- */
-class WrittenSteps(private val source: PhoneSteps) : PhoneSteps {
-    override suspend fun between(from: Long, to: Long): Int? {
-        val steps = source.between(from, to) ?: return null
-        if (steps > 0) return steps
-        val week = source.between(to - WEEK_MS, to) ?: return null
-        return if (week > 0) 0 else null
-    }
-
-    private companion object {
-        const val WEEK_MS = 7 * 24 * 60 * 60 * 1000L
-    }
 }
 
 /** Телефон без шагомера — или пока человек не разрешил его читать. */
@@ -74,8 +49,8 @@ class StepsRepository(
 ) {
 
     /**
-     * Последние известные шаги телефона по дням. Health Connect отвечает только на переднем плане: погас экран —
-     * телефон на время молчит, а шаги дня не убывают, поэтому остаются последние известные.
+     * Последние известные шаги телефона по дням. Шагомер может на время не ответить, а шаги дня не убывают,
+     * поэтому остаются последние известные.
      */
     private val known = MutableStateFlow<Map<Long, Int>>(emptyMap())
 

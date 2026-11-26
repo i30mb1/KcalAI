@@ -2,6 +2,7 @@ package n7.kcalai.feature.diary
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -89,7 +90,7 @@ class StepsTest {
         assertEquals(DEFAULT_STEPS_GOAL, state.stepsGoal)
     }
 
-    /** Health Connect и запись шагов отвечают не сразу: ни экран, ни переключение дня их не ждут. */
+    /** Шагомер отвечает не сразу: ни экран, ни переключение дня их не ждут. */
     @Test
     fun `переключение дня не ждёт шагомер и не опрашивает его заново`() = runTest(dispatcher) {
         var weekAsked = 0
@@ -109,6 +110,26 @@ class StepsTest {
         assertEquals(harness.today - 1, vm.state.value.date.toEpochDays(), "день сменился сразу")
         advanceUntilIdle()
         assertEquals(1, weekAsked, "шаги недели от выбранного дня не зависят")
+    }
+
+    /** Разрешили шаги — плашка встаёт сразу, а не со следующим ежеминутным опросом. */
+    @Test
+    fun `разрешили шаги — перечитываются сразу`() = runTest(dispatcher) {
+        var allowed = false
+        // Как шагомер: ответил и молчит до следующего опроса.
+        val vm = harness.viewModel(
+            dispatcher,
+            daySteps = { flow { emit(DaySteps(phone = if (allowed) 40 else null, treadmill = 0)); awaitCancellation() } },
+        )
+        backgroundScope.launch { vm.state.collect {} }
+        advanceUntilIdle()
+        assertNull(vm.steps())
+
+        allowed = true
+        vm.onStepsResult(true)
+        advanceUntilIdle()
+
+        assertEquals(40, vm.steps()?.steps)
     }
 
     @Test

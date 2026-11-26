@@ -1,5 +1,6 @@
 package n7.kcalai.feature.diary
 
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.StateFlow
 import n7.kcalai.database.stepsGoalOrDefault
 import n7.kcalai.repositories.DaySteps
@@ -356,15 +357,23 @@ class DiaryViewModel(
     /** Открыт прошлый день: пишем в него задним числом, о «сейчас» не спрашиваем. */
     private val isPast: Boolean get() = shownDay < today
 
+    /** Сколько раз разрешили читать шаги: на каждый раз шагомер перечитывается. */
+    private val stepsGranted = MutableStateFlow(0)
+
     /**
-     * Шаги зависят только от сегодняшней даты, а не от открытого дня: чтение из Health Connect и записи
+     * Шаги зависят только от сегодняшней даты, а не от открытого дня: чтение шагомера и записи
      * шагов небыстрое, и переключение дня, ждавшее его, подтормаживало. Пока шаги не прочитаны, экран
      * их не ждёт.
      */
-    private fun walking(): Flow<Walked> = date.flatMapLatest { now ->
+    private fun walking(): Flow<Walked> = combine(date, stepsGranted, ::Pair).flatMapLatest { (now, granted) ->
         val day = now.toEpochDays()
-        val steps = daySteps?.invoke(day)?.map<DaySteps, DaySteps?> { it }?.onStart { emit(null) } ?: flowOf(null)
-        val week = weekSteps?.invoke(day)?.map { it.toMap() }?.onStart { emit(emptyMap()) } ?: flowOf(emptyMap())
+        var steps = daySteps?.invoke(day)?.map<DaySteps, DaySteps?> { it } ?: flowOf(null)
+        var week = weekSteps?.invoke(day)?.map { it.toMap() } ?: flowOf(emptyMap())
+        // Пустышка — только для самого первого чтения: перечитывая, показанное не гасят.
+        if (granted == 0) {
+            steps = steps.onStart { emit(null) }
+            week = week.onStart { emit(emptyMap()) }
+        }
         combine(steps, week, brain.profile.map { it.stepsGoalOrDefault }.distinctUntilChanged(), ::Walked)
     }.distinctUntilChanged()
 
@@ -1946,6 +1955,8 @@ class DiaryViewModel(
 
     /** Телефон дал читать шаги — или нет. */
     fun onStepsResult(granted: Boolean) {
+        // Разрешили — шагомер перечитывается сразу, а не со следующим ежеминутным опросом.
+        if (granted) stepsGranted.update { it + 1 }
         viewModelScope.launch { brain.stepsResult(granted, clock.now()) }
     }
 
