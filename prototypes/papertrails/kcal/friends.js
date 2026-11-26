@@ -94,7 +94,8 @@ function start(pt, materials) {
     return Object.assign(f, PLACES[i], { phase: i * 2, dance: 0, placed: false });
   });
   // События (kcal/events.js) просят друзей сплясать.
-  window.KcalFriends = { dance: (seconds) => friends.forEach((f) => { f.dance = seconds; }) };
+  // Сюжеты (kcal/story.js) на время берут друга себе — через f.script.
+  window.KcalFriends = { list: friends, dance: (seconds) => friends.forEach((f) => { f.dance = seconds; }) };
 
   const at = new THREE.Vector3();
   let trail = [];
@@ -110,6 +111,10 @@ function start(pt, materials) {
     if (moved > 3) trail = [];
     if (moved > TRAIL_STEP) trail = [...trail.slice(1 - TRAIL_LENGTH), { x: at.x, z: at.z }];
     for (const f of friends) {
+      if (f.script) {
+        f.script(dt);
+        continue;
+      }
       const { x: tx, z: tz } = followPoint(trail, at, f.back);
       const p = f.root.position;
       let dx = tx - p.x;

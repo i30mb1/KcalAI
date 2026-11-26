@@ -10,7 +10,7 @@ const PAPER = ['#d95b4a', '#f4c95a', '#4c8f5a', '#86bfe0', '#e8759c', '#fdf8ea']
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
 /** Табличка о событии — поверх мира, мимо кликов, сама гаснет. */
-function banner(text) {
+export function banner(text) {
   const note = document.createElement('div');
   note.textContent = text;
   note.setAttribute('role', 'status');
