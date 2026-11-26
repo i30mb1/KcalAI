@@ -28,6 +28,7 @@ const smileShape = (cx, cy, r, th) => {
 const faceted = (g) => { const n = g.index ? g.toNonIndexed() : g; n.computeVertexNormals(); return n; };
 
 export function buildGrainHero({ materials, height = 0.6 }) {
+  window.__ptPaper = materials; // друзья и события (friends.js, events.js) режутся из той же бумаги
   const mat = (color, extra = {}) => materials.paper({ color, side: THREE.DoubleSide, variant: 'traveller', ...extra });
   const mesh = (geo, color, extra) => { const m = new THREE.Mesh(geo, mat(color, extra)); m.castShadow = true; m.receiveShadow = true; return m; };
   const sticker = (shape, color, z, extra) => {
