@@ -2,7 +2,7 @@
 // как это выглядит: посылка на тропе, ягоды, стая птиц, воздушный шар, танец друзей. Каждое — с короткой
 // табличкой слева внизу. Ничего не копится и в дневник не пишется: это только мир.
 import * as THREE from 'three';
-import { pause, pickEvent } from './events-math.js';
+import { milestone, pause, pickEvent } from './events-math.js';
 import { laneX } from './lane.js';
 
 const FINDS = ['баранка', 'горсть семечек', 'кусочек сыра', 'яблоко', 'пирожок', 'орешек', 'ложка мёда', 'сушка', 'морковка', 'ягодный пряник'];
@@ -170,6 +170,81 @@ function start(pt, materials) {
     },
   };
 
+  /** Верстовой столб с числом у тропы. */
+  const post = (text) => {
+    pt.traveller.model.getWorldPosition(at);
+    const z = at.z - 2.4;
+    const board = document.createElement('canvas');
+    board.width = 256;
+    board.height = 128;
+    const g = board.getContext('2d');
+    g.fillStyle = '#fdf8ea';
+    g.fillRect(0, 0, 256, 128);
+    g.strokeStyle = '#b78d4d';
+    g.lineWidth = 12;
+    g.strokeRect(6, 6, 244, 116);
+    g.fillStyle = '#2c2618';
+    g.font = '800 62px system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(text, 128, 66);
+    const face = new THREE.CanvasTexture(board);
+    face.colorSpace = THREE.SRGBColorSpace;
+    const sign = new THREE.Group();
+    sign.add(mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.75, 6), '#8a5a33', 0, 0.37, 0));
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.74, 0.37), new THREE.MeshBasicMaterial({ map: face, side: THREE.DoubleSide }));
+    plate.position.set(0, 0.86, 0.01);
+    sign.add(plate);
+    sign.position.set(laneX(z, pt.wfc.seed) - 0.85, at.y, z);
+    run(sign, (dt, t) => {
+      // Выскакивает из земли с отскоком и стоит, пока не пройдут.
+      const pop = Math.min(1, t * 2.5);
+      sign.scale.setScalar(pop + Math.sin(pop * Math.PI) * 0.25);
+      return t < 40;
+    });
+    confetti(sign.position.x, at.y + 1, z);
+  };
+
+  /** Салют за цель дня: залп за залпом вокруг героя. */
+  const salute = () => {
+    for (let i = 0; i < 9; i++) {
+      setTimeout(() => {
+        pt.traveller.model.getWorldPosition(at);
+        confetti(at.x + (Math.random() - 0.5) * 4, at.y + 1.2 + Math.random(), at.z - Math.random() * 2.5);
+      }, i * 420);
+    }
+    window.KcalFriends && window.KcalFriends.dance(4);
+  };
+
+  const cheer = (what) => {
+    if (what === 'goal') {
+      banner('Цель шагов взята! Салют!');
+      post('ЦЕЛЬ ⚑');
+      salute();
+      return;
+    }
+    const label = String(what).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    banner(`Веха: ${label} шагов!`);
+    post(label);
+  };
+
+  /** Быстрый шаг — из-под ног летит пыль (или снег). */
+  let puffIn = 0;
+  const dust = (dt, speed) => {
+    puffIn -= dt;
+    if (speed < 3.5 || puffIn > 0) return;
+    puffIn = Math.max(0.09, 0.5 - speed * 0.06);
+    pt.traveller.model.getWorldPosition(at);
+    const puff = mesh(new THREE.IcosahedronGeometry(0.05, 0), '#efe9dc', at.x + (Math.random() - 0.5) * 0.3, at.y + 0.04, at.z + 0.2);
+    run(puff, (d, t) => {
+      puff.position.y += d * 0.18;
+      puff.position.z += d * 0.3;
+      puff.scale.setScalar(1 + t * 1.6 - t * t * 2.2);
+      return t < 0.8;
+    });
+  };
+
+  let steps = -1;
   let previous = null;
   let wait = 6; // первое — вскоре после открытия, чтобы не ждать
   let last = performance.now();
@@ -187,6 +262,13 @@ function start(pt, materials) {
     }
     // Мир не виден — события не копятся.
     if (document.hidden || !document.body.classList.contains('walking')) return;
+    const walk = window.KcalWalk;
+    if (walk && walk.steps >= 0) {
+      const what = milestone(steps, walk.steps, walk.goal);
+      steps = walk.steps;
+      if (what) cheer(what);
+    }
+    dust(dt, (window.KcalTune && window.KcalTune.speed) ?? (walk && walk.vis) ?? 0);
     wait -= dt;
     if (wait > 0) return;
     const walking = (window.KcalWalk && window.KcalWalk.vis > 0.3) || false;
@@ -196,7 +278,7 @@ function start(pt, materials) {
   };
   requestAnimationFrame(frame);
   /** Для проверки: вызвать событие сразу. */
-  window.KcalEvents = { happen: (name) => happenings[name](window.KcalWalk && window.KcalWalk.vis > 0.3) };
+  window.KcalEvents = { cheer, happen: (name) => happenings[name](window.KcalWalk && window.KcalWalk.vis > 0.3) };
 }
 
 const wait = setInterval(() => {

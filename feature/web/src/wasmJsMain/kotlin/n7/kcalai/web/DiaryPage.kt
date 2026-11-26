@@ -100,7 +100,7 @@ import n7.kcalai.webapi.offlineLine
  */
 private val COLUMN_MAX = 760.dp
 
-/** Сколько остаётся на экране от задвинутой шапки, строки ввода и панели шагов. */
+/** Сколько остаётся на экране от задвинутой шапки и строки ввода. */
 private val CALM_PEEK = 14.dp
 private const val CALM_MS = 420
 
@@ -228,10 +228,9 @@ fun DiaryPage(link: PhoneLink) {
                 live,
                 walking,
                 onSetSteps = setSteps,
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = DOCK_MARGIN, end = DOCK_MARGIN).graphicsLayer {
-                    translationX = (1f - shownPart) * (size.width + DOCK_MARGIN.toPx() - CALM_PEEK.toPx())
-                },
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = DOCK_MARGIN, end = DOCK_MARGIN),
                 docked = true,
+                ribbon = worldShown,
                 width = minOf(DOCK_PANEL_MAX, gutter - DOCK_MARGIN * 2),
             )
         }

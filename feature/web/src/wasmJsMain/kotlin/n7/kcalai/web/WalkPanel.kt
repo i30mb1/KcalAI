@@ -1,5 +1,9 @@
 package n7.kcalai.web
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.foundation.border
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -81,6 +85,7 @@ import n7.kcalai.webapi.timerLabel
  * Цель шагов и рост правятся здесь же: тап по «/ 8 000» — число цели становится полем, под ним готовые
  * цели чипсами и рост, по которому меряется шаг дорожки.
  *
+ * @param ribbon идёт мир прогулки: вместо панели — маленькая бумажная ленточка, подробности по тапу на неё
  * @param width ширина раскрытой панели
  * @param onSetSteps цель шагов и рост — телефону; рост `null` — не трогать
  */
@@ -92,13 +97,15 @@ fun WalkPanel(
     onSetSteps: (goal: Int, heightCm: Int?) -> Unit,
     modifier: Modifier = Modifier,
     docked: Boolean = false,
+    ribbon: Boolean = false,
     width: Dp = CARD_DP.dp,
 ) {
     val colors = KcalTheme.colors
     var opened by remember { mutableStateOf(false) }
     val any = day.steps > 0 || day.walks.isNotEmpty() || walking
     if (!any) return
-    val open = docked || walking || opened
+    // С ленточкой раскрывают только тапом: мир не закрывают сами.
+    val open = if (ribbon) opened else docked || walking || opened
 
     Box(modifier, contentAlignment = Alignment.TopEnd) {
         // Плашка и окошко — в одном углу: раскрытие растёт из плашки, а не из ниоткуда.
@@ -107,7 +114,7 @@ fun WalkPanel(
             enter = fadeIn(tween(PANEL_MS)),
             exit = fadeOut(tween(PANEL_MS / 2)),
         ) {
-            Text(
+            if (ribbon) Ribbon(day, live, walking) { opened = true } else Text(
                 "${stepsLabel(day.steps)} шагов",
                 style = KcalTheme.type.number,
                 color = colors.steps.text,
@@ -124,7 +131,7 @@ fun WalkPanel(
             enter = fadeIn(tween(PANEL_MS, easing = EaseOutStrong)) + scaleIn(tween(PANEL_MS, easing = EaseOutStrong), initialScale = 0.96f, transformOrigin = TransformOrigin(1f, 0f)),
             exit = fadeOut(tween(PANEL_MS / 2)) + scaleOut(tween(PANEL_MS / 2), targetScale = 0.96f, transformOrigin = TransformOrigin(1f, 0f)),
         ) {
-            Card(day, live, walking, width, onSetSteps, onClose = { opened = false }.takeUnless { docked })
+            Card(day, live, walking, width, onSetSteps, closeOnWalk = ribbon, onClose = { opened = false }.takeUnless { docked && !ribbon })
         }
     }
 }
@@ -136,6 +143,7 @@ private fun Card(
     walking: Boolean,
     width: Dp,
     onSetSteps: (goal: Int, heightCm: Int?) -> Unit,
+    closeOnWalk: Boolean,
     onClose: (() -> Unit)?,
 ) {
     val colors = KcalTheme.colors
@@ -167,7 +175,7 @@ private fun Card(
             .shadow(12.dp, RoundedCornerShape(18.dp))
             .clip(RoundedCornerShape(18.dp))
             .background(colors.surface)
-            .then(if (walking || onClose == null || editing) Modifier else Modifier.press(RoundedCornerShape(18.dp), colors.text.copy(alpha = HOVER_ALPHA / 2), onClose))
+            .then(if ((walking && !closeOnWalk) || onClose == null || editing) Modifier else Modifier.press(RoundedCornerShape(18.dp), colors.text.copy(alpha = HOVER_ALPHA / 2), onClose))
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -232,6 +240,56 @@ private fun Card(
         }
     }
 }
+
+/**
+ * Бумажная ленточка прогулки — в стиле мира: кольцо до цели, шаги, скорость и путь в одну строку. Мир она почти
+ * не закрывает; тап раскрывает панель с подробностями и целью.
+ */
+@Composable
+private fun Ribbon(day: WebDay, live: TreadmillSample?, walking: Boolean, onOpen: () -> Unit) {
+    val steps = rememberTickingSteps(day.steps, live?.speedKmh ?: 0.0, walking)
+    val part by animateFloatAsState((steps.toFloat() / day.stepsGoal.coerceAtLeast(1)).coerceIn(0f, 1f), tween(NUMBER_MS, easing = EaseOutStrong))
+    val now = live?.takeIf { walking }
+    val distance = now?.distanceM ?: day.walks.sumOf { it.distanceM }
+    val seconds = day.walks.sumOf { it.elapsedS }
+    val pace = now?.speedKmh ?: if (seconds > 0) day.walks.sumOf { it.distanceM } * KMH_PER_MPS / seconds else 0.0
+    val shape = RoundedCornerShape(PILL_DP.dp)
+    Row(
+        Modifier
+            .shadow(8.dp, shape)
+            .clip(shape)
+            .background(PAPER)
+            .border(3.dp, PAPER_EDGE, shape)
+            .press(shape, PAPER_INK.copy(alpha = HOVER_ALPHA), onOpen)
+            .padding(start = 9.dp, top = 8.dp, end = 18.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(46.dp), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize().padding(4.dp)) {
+                val ring = Stroke(7.dp.toPx(), cap = StrokeCap.Round)
+                drawArc(PAPER_TRACK, 0f, 360f, useCenter = false, style = ring)
+                drawArc(PAPER_GREEN, -90f, 360f * part, useCenter = false, style = ring)
+            }
+            Text("⚑", style = KcalTheme.type.label, color = PAPER_FLAG)
+        }
+        Column {
+            Text(stepsLabel(steps), style = KcalTheme.type.number, color = PAPER_INK)
+            Text("из ${stepsLabel(day.stepsGoal)}", style = KcalTheme.type.label, color = PAPER_INK.copy(alpha = 0.6f))
+        }
+        Column {
+            Text(speedLabel(pace), style = KcalTheme.type.number, color = PAPER_INK)
+            Text(kmLabel(distance), style = KcalTheme.type.label, color = PAPER_INK.copy(alpha = 0.6f))
+        }
+    }
+}
+
+private val PAPER = Color(0xFFFDF8EA)
+private val PAPER_EDGE = Color(0xFFD9C9A3)
+private val PAPER_INK = Color(0xFF2C2618)
+private val PAPER_TRACK = Color(0xFFEADFC3)
+private val PAPER_GREEN = Color(0xFF4C8F5A)
+private val PAPER_FLAG = Color(0xFFD95B4A)
 
 /**
  * Шаги дня, бегущие по одному: между итогами с телефона — в темпе ходьбы, свежий итог догоняется
