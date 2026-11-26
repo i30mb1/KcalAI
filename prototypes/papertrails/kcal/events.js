@@ -3,6 +3,7 @@
 // табличкой слева внизу. Ничего не копится и в дневник не пишется: это только мир.
 import * as THREE from 'three';
 import { pause, pickEvent } from './events-math.js';
+import { laneX } from './lane.js';
 
 const FINDS = ['баранка', 'горсть семечек', 'кусочек сыра', 'яблоко', 'пирожок', 'орешек', 'ложка мёда', 'сушка', 'морковка', 'ягодный пряник'];
 const PAPER = ['#d95b4a', '#f4c95a', '#4c8f5a', '#86bfe0', '#e8759c', '#fdf8ea'];
@@ -89,7 +90,8 @@ function start(pt, materials) {
       box.add(mesh(new THREE.TorusGeometry(0.07, 0.025, 6, 10), '#fdf8ea', 0, 0.4, 0));
       pt.traveller.model.getWorldPosition(at);
       // Стоящий до посылки не дойдёт — тогда она ложится у ног и открывается.
-      box.position.set(at.x, at.y, at.z - (walking ? 3.2 : 0.6));
+      const z = at.z - (walking ? 3.2 : 0.6);
+      box.position.set(laneX(z, pt.wfc.seed), at.y, z);
       banner(walking ? 'Впереди посылка!' : 'Смотри, посылка!');
       waiting(box, () => {
         confetti(box.position.x, box.position.y + 0.3, box.position.z);
@@ -99,7 +101,6 @@ function start(pt, materials) {
     },
     berries(walking) {
       pt.traveller.model.getWorldPosition(at);
-      const x = at.x;
       const z = at.z;
       let got = 0;
       const total = walking ? 5 : 3;
@@ -108,7 +109,8 @@ function start(pt, materials) {
         const berry = new THREE.Group();
         berry.add(mesh(new THREE.IcosahedronGeometry(0.1, 0), '#c8394f'));
         berry.add(mesh(new THREE.ConeGeometry(0.06, 0.07, 4), '#4c8f5a', 0, 0.11, 0));
-        berry.position.set(x + Math.sin(i * 1.7) * 0.25, 0, z - (walking ? 2 + i * 0.9 : 0.35 + i * 0.12));
+        const bz = z - (walking ? 2 + i * 0.9 : 0.35 + i * 0.12);
+        berry.position.set(laneX(bz, pt.wfc.seed) + Math.sin(i * 1.7) * 0.2, 0, bz);
         waiting(berry, () => {
           confetti(berry.position.x, berry.position.y, berry.position.z);
           got += 1;

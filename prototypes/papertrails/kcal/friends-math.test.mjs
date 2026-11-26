@@ -17,3 +17,9 @@ test('герой обходил что-то стороной — друзья в
   assert.equal(followPoint([{ x: 1.4, z: -9 }], { x: 1.4, z: -10 }, 1).x, ROAD_HALF);
   assert.equal(followPoint([], { x: -1.4, z: -10 }, 1).x, -ROAD_HALF);
 });
+
+test('дорога повернула — «на тропе» считается от её середины', () => {
+  const lane = (z) => (z < -5 ? 2 : 0);
+  assert.deepEqual(followPoint([], { x: 2, z: -10 }, 1, lane), { x: 2, z: -9 });
+  assert.equal(followPoint([], { x: 0, z: -10 }, 1, lane).x, 2 - ROAD_HALF);
+});

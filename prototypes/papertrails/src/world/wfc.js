@@ -28,6 +28,7 @@ import { CONFIG } from '../core/config.js';
 import { hash2 } from '../core/rng.js';
 import { TILES, FALLBACK_TILE, getTile, socketsOf, OPTIONS, biomeMultiplier } from './tiles.js';
 import { BIOMES, biomeIndexAt, biomeAt } from '../core/biomes.js';
+import { chunkLane } from '../../kcal/lane.js';
 
 const N = 8; // chunk edge (cells)
 const NN = N * N;
@@ -343,7 +344,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
   // border ids: H(kx,kz) = north border of chunk (kx,kz); V(kx,kz) = west border of chunk (kx,kz)
   const riverH = (kx, kz) => label(kx, kz) !== label(kx + 1, kz);
   const riverV = (kx, kz) => label(kx, kz) !== label(kx, kz + 1);
-  const riverPosH = (kx, kz) => { const p = 1 + (hash2(kx, kz, seed + 921) % (N - 2)); return kx === JKX && Math.abs(p - JLX) < 2 ? (JLX + 2 <= N - 2 ? JLX + 2 : JLX - 2) : p; };
+  const riverPosH = (kx, kz) => { const p = 1 + (hash2(kx, kz, seed + 921) % (N - 2)); return kx === JKX && Math.abs(p - JLX) < 3 ? (hash2(kx, kz, seed + 922) & 1 ? JLX + 3 : JLX - 3) : p; };
   const riverPosV = (kx, kz) => ((kx === 0 || kx === 1) && kz === 0 ? -3 + OZ : 1 + (hash2(kx, kz, seed + 923) % (N - 2)));
   // roads
   const isStartCol = (cx, cz) => (cx === 0 && (cz === 0 || cz === 1)) || (cx === -1 && cz === 0);
@@ -359,7 +360,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
     if (hasRiver && Math.abs(p - q) < 2) p = q + 2 <= N - 2 ? q + 2 : q - 2;
     return p;
   }
-  const roadPosH = (kx, kz) => (kx === JKX ? JLX : roadPos(1 + (hash2(kx, kz, seed + 941) % (N - 2)), riverH(kx, kz), riverPosH(kx, kz)));
+  const roadPosH = (kx, kz) => (kx === JKX ? JLX + chunkLane(kz, seed).north : roadPos(1 + (hash2(kx, kz, seed + 941) % (N - 2)), riverH(kx, kz), riverPosH(kx, kz)));
   const roadPosV = (kx, kz) => roadPos(1 + (hash2(kx, kz, seed + 943) % (N - 2)), riverV(kx, kz), riverPosV(kx, kz));
 
   /** Border crossings of a chunk: [{ cell, out }] for rivers and roads (order n, e, s, w). */
@@ -375,6 +376,22 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
     if (roadH(cx, cz + 1)) roads.push({ cell: (N - 1) * N + roadPosH(cx, cz + 1), out: 2 });
     if (roadV(cx, cz)) roads.push({ cell: roadPosV(cx, cz) * N, out: 3 });
     return { rivers, roads };
+  }
+
+  // KcalAI: клетки дороги прогулки в участке, с юга на север (kcal/lane.js): колонка юга, поворот, колонка севера.
+  const lane = new Uint8Array(NN); // 1 — прямая клетка дороги прогулки, 2 — уголок поворота
+  function laneCells(cz) {
+    const { north, south, jog } = chunkLane(cz, seed);
+    const a = JLX + south;
+    const b = JLX + north;
+    const cells = [];
+    for (let z = N - 1; z >= jog; z--) cells.push(z * N + a);
+    if (a !== b) cells.push(jog * N + b);
+    for (let z = jog - 1; z >= 0; z--) cells.push(z * N + b);
+    lane.fill(0);
+    for (const i of cells) lane[i] = 1;
+    if (a !== b) { lane[jog * N + a] = 2; lane[jog * N + b] = 2; }
+    return cells;
   }
 
   // ------------------------------------------------------------ planner
@@ -418,6 +435,8 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
     isSource.fill(0);
     hub = -1;
     const { rivers, roads } = X;
+    lane.fill(0);
+    const path = cx === JKX ? laneCells(cz) : null;
     const roadRun = attempt >= 4 ? cfg.roadMaxRun - 1 : cfg.roadMaxRun; // later attempts leave more slack for the run check
 
     if (isOrigin) {
@@ -442,8 +461,9 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
         fillCost(rng, cfg.riverNoise, 2.5);
         markNearRiver();
         for (let i = 0; i < NN; i++) { rBlocked[i] = rivMask[i] ? 1 : 0; if (nearRiver[i]) rCost[i] += 6; }
-        if (cx === JKX) for (let z = 0; z < N; z++) rCost[z * N + JLX] += 40;
+        if (path) for (const i of path) rCost[i] += 40;
         for (const r of roads) rBlocked[r.cell] = 1;
+        for (let i = 0; i < NN; i++) if (lane[i] === 2) rBlocked[i] = 1; // реке на повороте дороги не пройти
         for (const r of rivers) if (r !== a && r !== b) rBlocked[r.cell] = 1;
         rCost[a.cell] = 0; rCost[b.cell] = 0;
         routeBegin();
@@ -470,7 +490,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
           const a = az * N + ax;
           const b = bz * N + bx;
           fillCost(rng, cfg.riverNoise, 0);
-          for (let i = 0; i < NN; i++) { const x = i % N; const z = (i / N) | 0; rBlocked[i] = x === 0 || z === 0 || x === N - 1 || z === N - 1 || (cx === JKX && x === JLX) ? 1 : 0; }
+          for (let i = 0; i < NN; i++) { const x = i % N; const z = (i / N) | 0; rBlocked[i] = x === 0 || z === 0 || x === N - 1 || z === N - 1 || lane[i] ? 1 : 0; }
           rBlocked[a] = 1;
           routeBegin();
           for (let d = 0; d < 4; d++) routeStart((az + DZ[d]) * N + ax + DX[d], d);
@@ -487,8 +507,17 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
       }
       // ---- trunk road
       const nq = roads.length;
-      if (cx === JKX) {
-        for (let z = 0; z < N; z++) trunkMask[z * N + JLX] |= BIT[0] | BIT[2];
+      if (path) {
+        outLen = 0;
+        for (const i of path) outPath[outLen++] = i;
+        applyPath(trunkMask);
+        trunkMask[path[0]] |= BIT[2];
+        trunkMask[path[path.length - 1]] |= BIT[0];
+        // Через реку — только прямым мостом поперёк неё: иначе участок раскладывают заново.
+        for (const i of path) {
+          if (!rivMask[i]) continue;
+          if (!((trunkMask[i] === (BIT[0] | BIT[2]) && rivMask[i] === (BIT[1] | BIT[3])))) return false;
+        }
         for (const a of roads) {
           if (!trunkMask[a.cell]) {
             fillCost(rng, cfg.roadNoise, 1.5);
@@ -718,7 +747,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
       for (let d = 0; d < 2; d++) {
         const through = BIT[d] | BIT[d + 2];
         if ((trunkMask[i] & through) !== through) continue;
-        if (laneChunk && d === 0 && i % N === JLX) continue; // KcalAI: дорога прогулки прямая нарочно
+        if (laneChunk && d === 0 && lane[i]) continue; // KcalAI: дорога прогулки прямая нарочно
         const total = 1 + runLen[i * 4 + d] + runLen[i * 4 + d + 2];
         const lim = runEdge[i * 4 + d] || runEdge[i * 4 + d + 2] ? cfg.maxBorderRun : cfg.maxInnerRun;
         if (total > lim) return false;
@@ -773,7 +802,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
       for (let o = 0; o < NO; o++) {
         const t = OPT_T[o];
         let w = BW[t] * BMUL[bm + t];
-        if (laneChunk && x === JLX && !LANE_OK[t]) w = 0;
+        if (laneChunk && lane[i] === 1 && !LANE_OK[t]) w = 0;
         if (IS_FILLER[t]) {
           const open = 1 - Math.max(F, H);
           if (t === T.meadow) w *= 0.3 + 0.95 * open * open;
@@ -1113,7 +1142,7 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
       const dB = axis === 0 ? 2 : 1; // s / e side
       for (let s = 1; s <= 2; s++) {
         for (let a = 0; a < N; a++) {
-          if (laneChunk && axis === 0 && a === JLX) continue;
+          if (laneChunk && axis === 0 && Math.abs(a - JLX) <= 1) continue;
           let run = 0;
           let fromBorder = false;
           for (let b = 0; b < N; b++) {
@@ -1133,18 +1162,31 @@ export function createWFC({ seed = 1, _weights = null, _fault = 0 } = {}) {
   }
 
   // ------------------------------------------------------------ chunk generation
+  let originCz = 0; // KcalAI: участок, который сейчас собирают, — для дороги прогулки в stubFill
   function stubFill(X) {
     // guaranteed-valid last resort: terminate every crossing where it enters, meadow elsewhere
     res.fill(FALLBACK_OPT);
     const key = (id, out, code) => { const s = [0, 0, 0, 0]; s[out] = code; return id + ':' + s.join(''); };
     for (const r of X.rivers) res[r.cell] = OPT_BY.get(key('river_source', r.out, R));
     for (const r of X.roads) res[r.cell] = OPT_BY.get(key('path_end', r.out, P));
+    // KcalAI: дорога прогулки цела и в аварийном участке — герой по ней идёт всегда.
+    if (!laneChunk) return;
+    const path = laneCells(originCz);
+    const side = (from, to) => (to === from - N ? 0 : to === from + 1 ? 1 : to === from + N ? 2 : 3);
+    path.forEach((cell, i) => {
+      const bits = [0, 0, 0, 0];
+      bits[i === 0 ? 2 : side(cell, path[i - 1])] = P;
+      bits[i === path.length - 1 ? 0 : side(cell, path[i + 1])] = P;
+      const straight = (bits[0] && bits[2]) || (bits[1] && bits[3]);
+      res[cell] = OPT_BY.get((straight ? 'path_straight' : 'path_corner') + ':' + bits.join(''));
+    });
   }
 
   function generate(cx, cz) {
     const isOrigin = cx === 0 && cz === 0;
     laneChunk = cx === JKX;
     originChunk = isOrigin;
+    originCz = cz;
     const X = crossings(cx, cz);
     computeFields(cx, cz);
     let done = false;

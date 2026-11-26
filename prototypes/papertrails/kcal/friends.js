@@ -3,6 +3,7 @@
 // Мир их не знает: они сами берут героя из window.__pt и встают в ту же сцену тем же бумажным материалом.
 import * as THREE from 'three';
 import { followPoint } from './friends-math.js';
+import { laneX } from './lane.js';
 
 const INK = '#2c2618';
 const BLUSH = '#f3b5c8';
@@ -115,7 +116,7 @@ function start(pt, materials) {
         f.script(dt);
         continue;
       }
-      const { x: tx, z: tz } = followPoint(trail, at, f.back);
+      const { x: tx, z: tz } = followPoint(trail, at, f.back, (z) => laneX(z, pt.wfc.seed));
       const p = f.root.position;
       let dx = tx - p.x;
       let dz = tz - p.z;

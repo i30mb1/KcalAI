@@ -1,8 +1,7 @@
-// KcalAI: герой papertrails идёт сам — прямо на север по дороге прогулки (клетки x = 0, её прокладывает
+// KcalAI: герой papertrails идёт сам — на север по петляющей дороге прогулки (kcal/lane.js, её прокладывает
 // src/world/wfc.js), в темпе беговой дорожки со страницы дневника. Камера не вращается: север всегда вверху.
 // Читает window.KcalWalk (скорость S.vis км/ч), отдаёт направление через window.__ptInput (см. src/main.js).
-const T = 2;                                   // клетка мира — 2 единицы (TILE_SIZE)
-const LANE_X = 0;                              // дорога прогулки — колонна клеток x = 0
+import { laneX } from './lane.js';
 const out = { x: 0, z: 0 };
 
 /**
@@ -41,8 +40,9 @@ window.__ptInput = () => {
   const kmh = window.KcalTune.speed ?? S.vis;
   if (kmh <= 0.05) return out;                          // дорожка стоит — стоит и герой
   pt.state.speedMul = Math.min(1.8, Math.max(0.35, kmh / 4));   // 4 км/ч — его обычный шаг
-  // на север, мягко подтягиваясь к середине дороги (обходя карточки и прохожих, он может с неё сойти)
-  const side = Math.max(-0.6, Math.min(0.6, (LANE_X * T - pt.traveller.position.x) * 1.5));
+  // на север, мягко подтягиваясь к середине дороги чуть впереди (обходя карточки и прохожих, может с неё сойти)
+  const ahead = laneX(pt.traveller.position.z - 0.7, pt.wfc.seed);
+  const side = Math.max(-1, Math.min(1, (ahead - pt.traveller.position.x) * 1.5));
   const l = Math.hypot(side, 1);
   out.x = side / l; out.z = -1 / l;
   return out;
@@ -81,6 +81,6 @@ function placeByProgress() {
 function placeAt(steps) {
   const pt = window.__pt;
   if (!pt) return;
-  pt.traveller.teleport(LANE_X * T, -steps * STEP_UNITS, 0, -1);
+  pt.traveller.teleport(laneX(-steps * STEP_UNITS, pt.wfc.seed), -steps * STEP_UNITS, 0, -1);
   pt.follow.snap(pt.traveller);
 }

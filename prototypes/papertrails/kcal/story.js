@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { nearestHouse, stage } from './story-math.js';
 import { banner } from './events.js';
+import { laneX } from './lane.js';
 
 const TREATS = ['с пирожком', 'с баранками', 'с банкой мёда', 'с горстью орехов', 'с куском пирога', 'с яблоком'];
 const NAMES = ['Масло', 'Яйцо'];
@@ -118,7 +119,7 @@ function start(pt, materials, friends) {
     }
     if (was === 'walk') {
       pt.traveller.model.getWorldPosition(at);
-      camp.position.set(0, at.y, at.z + 0.62);
+      camp.position.set(laneX(at.z + 0.62, pt.wfc.seed), at.y, at.z + 0.62);
       camp.visible = true;
     }
     friends.forEach((f, i) => { f.script = sit(i, next === 'doze'); });
@@ -151,7 +152,7 @@ function start(pt, materials, friends) {
       const a = back ? door : from;
       // Обратно — к герою, где он сейчас.
       pt.traveller.model.getWorldPosition(at);
-      const b = back ? new THREE.Vector3(0, at.y, at.z + 0.55) : door;
+      const b = back ? new THREE.Vector3(laneX(at.z + 0.55, pt.wfc.seed), at.y, at.z + 0.55) : door;
       const was = f.root.position.clone();
       f.root.position.lerpVectors(a, b, done);
       f.root.rotation.y = Math.atan2(f.root.position.x - was.x, f.root.position.z - was.z) || f.root.rotation.y;
