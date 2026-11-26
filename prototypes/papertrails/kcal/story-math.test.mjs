@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stage, nearestHouse } from './story-math.js';
+import { stage, nearestHouse, placeStories, pickStory } from './story-math.js';
 
 // Что делают друзья, решает дорожка: идут — шагают, постояли — привал, стоят долго — дремлют.
 test('привал и дрёма — по тому, сколько стоят', () => {
@@ -19,4 +19,17 @@ test('в гости — к ближайшему домику рядом, а не
   const isHouse = (cx, cz) => houses.has(`${cx},${cz}`);
   assert.deepEqual(nearestHouse({ x: 0, z: -11 }, isHouse), { x: 2, z: -12 });
   assert.equal(nearestHouse({ x: 0, z: -40 }, isHouse), null);
+});
+
+test('какой сюжет возможен — решает место', () => {
+  assert.deepEqual(placeStories({ biome: 'snow' }), ['snowball']);
+  assert.deepEqual(placeStories({ biome: 'snow', house: true, pond: true }), ['visit', 'fishing', 'snowball']);
+  assert.deepEqual(placeStories({ biome: 'heartland' }), ['picnic']);
+  assert.deepEqual(placeStories({ biome: 'pinewood' }), ['scare']);
+});
+
+test('тот же сюжет подряд — только если другого здесь нет', () => {
+  assert.equal(pickStory(['visit', 'snowball'], 'visit', () => 0), 'snowball');
+  assert.equal(pickStory(['snowball'], 'snowball', () => 0.9), 'snowball');
+  assert.equal(pickStory([], null), null);
 });

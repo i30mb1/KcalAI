@@ -1,15 +1,17 @@
 // KcalAI: сюжеты прогулки, как в мультике. Дорожка решает, чем заняты друзья (story-math.js): идут — шагают следом;
 // постояли — привал: костёр, чай, хлеб с сыром; стоят долго — дремлют; пошли — вскочили и догоняют. Рядом домик —
-// кто-то прыжками забегает в гости и возвращается с гостинцем. Только мир: в дневник ничего не пишется.
+// кто-то прыжками забегает в гости и возвращается с гостинцем. И по месту: у пруда рыбачат, в снегу играют в
+// снежки, в поле устраивают пикник, в лесу пугаются. Только мир: в дневник ничего не пишется.
 import * as THREE from 'three';
-import { nearestHouse, stage } from './story-math.js';
+import { nearestHouse, pickStory, placeStories, stage } from './story-math.js';
+import { biomeAt } from '../src/core/biomes.js';
 import { banner } from './events.js';
 import { laneX } from './lane.js';
 
 const TREATS = ['с пирожком', 'с баранками', 'с банкой мёда', 'с горстью орехов', 'с куском пирога', 'с яблоком'];
 const NAMES = ['Масло', 'Яйцо'];
-/** Сколько домик не навещают снова и как долго сидят в гостях, секунды. */
-const VISIT_PAUSE = 90;
+/** Сколько ждать до следующего сюжета по месту и как долго сидят в гостях, секунды. */
+const STORY_PAUSE = 50;
 const VISIT_INSIDE = 6;
 const HOP_SPEED = 1.7;
 
@@ -78,13 +80,43 @@ function start(pt, materials, friends) {
   let now = 'walk';
   let stopped = 0;
   let visit = null;
-  let nextVisit = 25;
+  let nextStory = 20;
+  let lastStory = null;
+  /** Идущий сюжет по месту: чем убрать за ним реквизит. */
+  let story = null;
   let forced = null;
   let clock = 0;
 
-  const isHouse = (cx, cz) => {
+  const hasCell = (cx, cz, test) => {
     const cell = pt.world.tileAt(cx, cz);
-    return Boolean(cell && cell.tags && cell.tags.includes('house'));
+    return Boolean(cell && test(cell));
+  };
+  const isHouse = (cx, cz) => hasCell(cx, cz, (cell) => cell.tags && cell.tags.includes('house'));
+  const isPond = (cx, cz) => hasCell(cx, cz, (cell) => cell.tileId === 'pond');
+  const near = (test) => {
+    pt.traveller.model.getWorldPosition(at);
+    return nearestHouse(at, test);
+  };
+
+  const stop = () => {
+    if (story) story();
+    story = null;
+    visit = null;
+    friends.forEach((f) => {
+      f.root.visible = true;
+      f.script = null;
+    });
+  };
+
+  /** Точка рядом с героем, на тропе позади: туда ставят сценки на двоих. */
+  const behind = (dx, dz) => {
+    pt.traveller.model.getWorldPosition(at);
+    return new THREE.Vector3(laneX(at.z + dz, pt.wfc.seed) + dx, at.y, at.z + dz);
+  };
+  const ease = (f, target, dt, turn) => {
+    f.root.position.lerp(target, 1 - Math.exp(-4 * dt));
+    f.root.rotation.y += (turn - f.root.rotation.y) * (1 - Math.exp(-5 * dt));
+    for (const leg of f.legs) leg.rotation.x = 0;
   };
 
   /** Сидит у костра (или спит): ножки вперёд, чуть покачивается. */
@@ -106,11 +138,7 @@ function start(pt, materials, friends) {
     if (next === now) return;
     const was = now;
     now = next;
-    visit = null;
-    friends.forEach((f) => {
-      f.root.visible = true;
-      f.script = null;
-    });
+    stop();
     if (next === 'walk') {
       camp.visible = false;
       sleeps.forEach((z) => { z.visible = false; });
@@ -126,44 +154,171 @@ function start(pt, materials, friends) {
     banner(next === 'camp' ? 'Привал: чай у костра' : 'Задремали у костра…');
   };
 
-  /** Один из друзей прыжками — к двери, внутрь и обратно с гостинцем. */
-  const goVisiting = (house) => {
+  /** Один из друзей прыжками — туда, побыть там и обратно с добычей. */
+  const errand = (spot, { gone, going, back: returned, there }) => {
     const index = Math.floor(Math.random() * friends.length);
     const f = friends[index];
     const from = f.root.position.clone();
-    const door = new THREE.Vector3(house.x, from.y, house.z + 0.55);
-    const duration = Math.max(0.8, from.distanceTo(door) / HOP_SPEED);
+    const goal = new THREE.Vector3(spot.x, from.y, spot.z);
+    const duration = Math.max(0.8, from.distanceTo(goal) / HOP_SPEED);
     let t = 0;
+    let arrived = false;
+    let props = null;
     visit = index;
-    banner(`${NAMES[index]} заглянуло в гости`);
+    banner(going(NAMES[index]));
+    const drop = () => {
+      if (props) scene.remove(props);
+      props = null;
+    };
+    story = drop;
     f.script = (dt) => {
       t += dt;
-      const back = t > duration + VISIT_INSIDE;
-      const leg = back ? (t - duration - VISIT_INSIDE) / duration : t / duration;
-      if (!back && t >= duration) {
-        f.root.visible = false;
+      const returning = t > duration + VISIT_INSIDE;
+      if (!returning && t >= duration) {
+        if (!arrived && there) props = there(goal);
+        arrived = true;
+        if (gone) f.root.visible = false;
+        else {
+          f.body.position.y = -0.05;
+          for (const leg of f.legs) leg.rotation.x = -1.35;
+        }
         return;
       }
-      if (back && !f.root.visible) {
+      if (returning && arrived) {
+        arrived = false;
+        drop();
         f.root.visible = true;
-        banner(`${NAMES[index]} вернулось ${pick(TREATS)}!`);
+        banner(returned(NAMES[index]));
       }
-      const done = Math.min(1, leg);
-      const a = back ? door : from;
+      const done = Math.min(1, returning ? (t - duration - VISIT_INSIDE) / duration : t / duration);
       // Обратно — к герою, где он сейчас.
-      pt.traveller.model.getWorldPosition(at);
-      const b = back ? new THREE.Vector3(laneX(at.z + 0.55, pt.wfc.seed), at.y, at.z + 0.55) : door;
+      const a = returning ? goal : from;
+      const b = returning ? behind(0, 0.55) : goal;
       const was = f.root.position.clone();
       f.root.position.lerpVectors(a, b, done);
       f.root.rotation.y = Math.atan2(f.root.position.x - was.x, f.root.position.z - was.z) || f.root.rotation.y;
       f.body.position.y = Math.abs(Math.sin(done * Math.PI * Math.max(2, Math.round(duration * 2)))) * 0.45;
       f.legs[0].rotation.x = -0.5;
       f.legs[1].rotation.x = 0.5;
-      if (back && done >= 1) {
-        f.script = null;
-        visit = null;
-      }
+      if (returning && done >= 1) stop();
     };
+  };
+
+  /** Сценка на двоих на [seconds]: [play] ставит друзей и реквизит каждый кадр. */
+  const scenelet = (seconds, props, play, ending) => {
+    let t = 0;
+    if (props) scene.add(props);
+    story = () => {
+      if (props) scene.remove(props);
+    };
+    friends.forEach((f, i) => {
+      f.script = (dt) => {
+        if (i === 0) t += dt;
+        play(f, i, dt, t);
+        if (i === friends.length - 1 && t > seconds) {
+          stop();
+          banner(ending);
+        }
+      };
+    });
+  };
+
+  const STORIES = {
+    visit() {
+      const house = near(isHouse);
+      if (!house) return false;
+      errand({ x: house.x, z: house.z + 0.55 }, {
+        gone: true,
+        going: (name) => `${name} заглянуло в гости`,
+        back: (name) => `${name} вернулось ${pick(TREATS)}!`,
+      });
+      return true;
+    },
+    fishing() {
+      const pond = near(isPond);
+      if (!pond) return false;
+      errand({ x: pond.x, z: pond.z + 0.65 }, {
+        going: (name) => `${name} пошло на рыбалку`,
+        back: (name) => `${name} вернулось ${pick(['с карасём', 'с пескарём', 'со старым сапогом', 'с золотой рыбкой'])}!`,
+        there: (spot) => {
+          const rod = new THREE.Group();
+          const stick = mesh(new THREE.CylinderGeometry(0.01, 0.012, 0.6, 5), '#8a5a33', 0, 0.35, -0.2);
+          stick.rotation.x = -0.9;
+          rod.add(stick);
+          rod.add(mesh(new THREE.BoxGeometry(0.004, 0.42, 0.004), '#fdf8ea', 0, 0.28, -0.44));
+          rod.add(mesh(new THREE.IcosahedronGeometry(0.03, 0), '#d95b4a', 0, 0.07, -0.44));
+          rod.position.copy(spot);
+          scene.add(rod);
+          return rod;
+        },
+      });
+      return true;
+    },
+    snowball() {
+      const ball = mesh(new THREE.IcosahedronGeometry(0.06, 0), '#ffffff');
+      banner('Снежки!');
+      scenelet(7, ball, (f, i, dt, t) => {
+        const side = i ? 1 : -1;
+        ease(f, behind(side * 0.55, 0.7), dt, -side * 1.4);
+        // Кидают по очереди: снежок летит дугой, получивший подпрыгивает.
+        const k = (t / 1.1) % 1;
+        const from = Math.floor(t / 1.1) % 2 ? 1 : -1;
+        f.body.position.y = side !== from && k > 0.85 ? Math.sin(((k - 0.85) / 0.15) * Math.PI) * 0.18 : 0;
+        f.body.rotation.z = side === from && k < 0.2 ? from * 0.5 : 0;
+        if (i === 0) {
+          const spot = behind(0, 0.7);
+          ball.position.set(spot.x + from * 0.5 * (1 - 2 * k), spot.y + 0.3 + Math.sin(k * Math.PI) * 0.35, spot.z);
+        }
+      }, 'Ничья! Все в снегу.');
+      return true;
+    },
+    picnic() {
+      const spread = new THREE.Group();
+      for (let i = 0; i < 4; i++) {
+        for (let j = 0; j < 3; j++) {
+          spread.add(mesh(new THREE.BoxGeometry(0.17, 0.008, 0.13), (i + j) % 2 ? '#fdf8ea' : '#d95b4a', (i - 1.5) * 0.17, 0.006, (j - 1) * 0.13));
+        }
+      }
+      spread.add(mesh(new THREE.IcosahedronGeometry(0.06, 0), '#c8394f', -0.2, 0.065, 0));
+      spread.add(mesh(new THREE.SphereGeometry(0.1, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), '#d99a4e', 0.04, 0.01, -0.03));
+      spread.add(mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.14, 8), '#86bfe0', 0.22, 0.08, 0.02));
+      spread.position.copy(behind(0, 0.75));
+      banner('Пикник!');
+      scenelet(12, spread, (f, i, dt, t) => {
+        const side = i ? 1 : -1;
+        ease(f, new THREE.Vector3(spread.position.x + side * 0.45, spread.position.y, spread.position.z), dt, -side * 0.55);
+        f.body.position.y = -0.05 + Math.abs(Math.sin(t * 5 + i * 2)) * 0.015;
+        f.body.rotation.z = Math.sin(t * 1.3 + i * 3) * 0.07;
+        for (const leg of f.legs) leg.rotation.x = -1.35;
+      }, 'Вкусно посидели.');
+      return true;
+    },
+    scare() {
+      banner('Ой! Что там в лесу?');
+      scenelet(6, null, (f, i, dt, t) => {
+        // Яйцо прячется за героя и дрожит, потом выглядывает; Масло озирается.
+        const hides = i === 1;
+        const aside = hides ? (t > 3.5 ? 0.3 : 0) : -0.4;
+        ease(f, behind(aside, hides ? 0.28 : 0.65), dt, hides ? Math.PI : Math.sin(t * 3) * 1.2);
+        f.body.position.y = 0;
+        f.body.rotation.z = hides && t < 3.5 ? Math.sin(t * 40) * 0.08 : 0;
+      }, pick(['Это всего лишь шишка.', 'Фух, это ёжик.', 'Это эхо!']));
+      return true;
+    },
+  };
+
+  /** Что здесь и сейчас можно: на ходу — только то, что не требует отставать. */
+  const here = (walking) => {
+    pt.traveller.model.getWorldPosition(at);
+    const biome = biomeAt(pt.wfc.seed, Math.round(at.x / 2), Math.round(at.z / 2));
+    const house = Boolean(nearestHouse(at, isHouse));
+    const all = placeStories({ biome, house, pond: Boolean(nearestHouse(at, isPond)) });
+    return all.filter((name) => (walking ? name === 'snowball' || name === 'scare' : !(now === 'camp' && name === 'picnic')));
+  };
+  const play = (name) => {
+    if (!name || !STORIES[name]()) return false;
+    lastStory = name;
+    return true;
   };
 
   let last = performance.now();
@@ -198,30 +353,20 @@ function start(pt, materials, friends) {
       z.scale.setScalar(0.9 + t);
     });
 
-    nextVisit -= dt;
-    if (nextVisit <= 0 && visit === null && now !== 'doze') {
-      pt.traveller.model.getWorldPosition(at);
-      // На ходу в гости не бегают: герой уйдёт далеко, пока друг сидит.
-      const house = walking ? null : nearestHouse(at, isHouse);
-      if (house) {
-        goVisiting(house);
-        nextVisit = VISIT_PAUSE;
-      } else {
-        nextVisit = 10;
-      }
-    }
+    if (story || visit !== null || now === 'doze') return;
+    nextStory -= dt;
+    if (nextStory <= 0) nextStory = play(pickStory(here(walking), lastStory)) ? STORY_PAUSE : 10;
   };
   requestAnimationFrame(frame);
 
-  /** Для проверки: начать привал или дрёму сразу, отправить в гости. */
+  /** Для проверки: начать привал или дрёму сразу, разыграть сюжет по имени. */
   window.KcalStory = {
     set: (name) => { forced = name; },
-    visit: () => {
-      pt.traveller.model.getWorldPosition(at);
-      const house = nearestHouse(at, isHouse);
-      if (house) goVisiting(house);
-      return Boolean(house);
+    play: (name) => {
+      stop();
+      return play(name);
     },
+    here: () => here(false),
   };
 }
 

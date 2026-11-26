@@ -30,3 +30,16 @@ export function nearestHouse(hero, isHouse) {
   }
   return best;
 }
+
+/** Что может случиться здесь: домик и пруд рядом, а ещё — по землям (src/core/biomes.js). */
+export function placeStories({ biome, house = false, pond = false }) {
+  const byLand = { snow: 'snowball', pinewood: 'scare', desert: 'picnic', heartland: 'picnic', blossom: 'picnic' };
+  return [house && 'visit', pond && 'fishing', byLand[biome]].filter(Boolean);
+}
+
+/** Один из возможных; прошлый повторяется, только если другого здесь нет. */
+export function pickStory(stories, last, rand = Math.random) {
+  const fresh = stories.filter((s) => s !== last);
+  const pool = fresh.length ? fresh : stories;
+  return pool.length ? pool[Math.min(pool.length - 1, Math.floor(rand() * pool.length))] : null;
+}
