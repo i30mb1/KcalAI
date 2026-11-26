@@ -248,6 +248,7 @@ abstract class AppGraph {
             facts = FactsBuilder(database.diaryDao(), database.goalDao(), personalRepository, zone),
             diaryDao = database.diaryDao(),
             zone = zone,
+            daySteps = { day -> stepsRepository.day(day).total },
             // Просьбы соседа и браузера ждут ответа так же, как вопросы персонажей: новость молчит.
             asking = { day ->
                 combine(database.peerOfferDao().observeDay(day), database.webClientDao().observeDay(day)) { offers, browsers ->

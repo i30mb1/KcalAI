@@ -28,6 +28,7 @@ import n7.kcalai.database.MascotMessageEntity
 import n7.kcalai.database.MascotProfileEntity
 import n7.kcalai.database.WriteConsent
 import n7.kcalai.database.nutriments
+import n7.kcalai.database.stepsGoalOrDefault
 import n7.kcalai.mascot.voice.Topic
 import n7.kcalai.mascot.voice.Utterance
 import n7.kcalai.mascot.voice.Voices
@@ -74,6 +75,8 @@ class MascotBrain(
      * Функцией, а не таблицами: что считать просьбой, мозгу знать незачем.
      */
     private val asking: (dateEpochDay: Long) -> Flow<List<Long>> = { flowOf(emptyList()) },
+    /** Шаги дня — для итога недели; ноль — не считаются. */
+    private val daySteps: suspend (Long) -> Int = { 0 },
 ) {
 
     /** Слово берут по одному: пока один ждёт очереди и говорит, остальные ждут за ним, см. [inTurn]. */
@@ -636,7 +639,7 @@ class MascotBrain(
         val summarized = dao.lastSaid(Topic.WEEK_SUMMARY.name)
             ?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(zone).date.toEpochDays() >= monday } == true
         if (!summarized) {
-            val week = facts.lastWeek(monday)
+            val week = facts.lastWeek(monday)?.let { withSteps(it, monday, day) }
             if (week != null) return tellProgress(Mascot.BUTTER, Topic.WEEK_SUMMARY, day, now) { it.copy(week = week) }
         }
         if (dao.observeDay(day).first().any { it.topic == Topic.STREAK_DAY.name }) return false
@@ -644,6 +647,17 @@ class MascotBrain(
         val streak = generateSequence(day) { it - 1 }.takeWhile { it in days }.count()
         if (!isStreakMilestone(streak)) return false
         return tellProgress(Mascot.EGG, Topic.STREAK_DAY, day, now) { it.copy(streakDays = streak) }
+    }
+
+    /**
+     * Шаги прошлой недели к её итогу. Свой шагомер телефона хранит десять дней: позже среды начало прошлой
+     * недели уже не видно, и сумма вышла бы меньше настоящей — тогда о шагах не говорят.
+     */
+    private suspend fun withSteps(week: WeekFacts, monday: Long, today: Long): WeekFacts {
+        if (today - monday > LAST_WEEKDAY_WITH_STEPS) return week
+        val goal = (dao.profile() ?: MascotProfileEntity()).stepsGoalOrDefault
+        val walked = (monday - 7 until monday).map { daySteps(it) }
+        return week.copy(steps = walked.sum(), stepGoalDays = walked.count { it >= goal })
     }
 
     private suspend fun tellProgress(mascot: Mascot, topic: Topic, day: Long, now: Instant, tune: (Facts) -> Facts): Boolean {
@@ -790,3 +804,6 @@ private val STREAK_MILESTONES = setOf(3, 7, 14, 21, 30, 50, 100)
 
 /** Функцией не пользуются — предложение повторяется не чаще этого. */
 private val OFFER_EVERY = 30.days
+
+/** Дней от понедельника до среды: позже прошлая неделя шагов видна уже не вся. */
+private const val LAST_WEEKDAY_WITH_STEPS = 2

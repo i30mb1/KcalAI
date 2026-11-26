@@ -60,6 +60,9 @@ class MascotBrainTest {
     /** Когда пришли просьбы, ждущие ответа: браузер просится в дневник, сосед предлагает еду. */
     private val asking = MutableStateFlow<List<Long>>(emptyList())
 
+    /** Сколько шагов было в какой день; по умолчанию шагомера нет. */
+    private var walkedOn: (Long) -> Int = { 0 }
+
     private fun brain(zone: TimeZone = this.zone) = MascotBrain(
         dao = mascots,
         facts = FactsBuilder(diary, goals, PersonalRepository(diary, FakePersonalDao(), FakeBodyMetricDao(), goals, zone), zone),
@@ -67,6 +70,7 @@ class MascotBrainTest {
         zone = zone,
         random = Random(1),
         asking = { asking },
+        daySteps = { walkedOn(it) },
     )
 
     /** Пятница, 16:00. */
@@ -144,6 +148,38 @@ class MascotBrainTest {
         val said = mascots.messages.value.single { it.topic == Topic.WEEK_SUMMARY.name }
         assertEquals(Mascot.BUTTER, said.mascot)
         assertTrue("три дня" in said.text.lowercase(), said.text)
+    }
+
+    /** Шаги — в том же итоге, без второго сообщения: сколько за неделю и сколько дней с целью. */
+    @Test
+    fun `в итоге недели — и шаги`() = runTest {
+        known()
+        eat("Гречка", Instant.parse("2026-11-04T13:00:00Z"))
+        eat("Кефир", Instant.parse("2026-11-05T13:00:00Z"))
+        val lastMonday = LocalDate(2026, 11, 2).toEpochDays()
+        walkedOn = { day -> if (day in lastMonday until lastMonday + 7) (if (day < lastMonday + 2) 9_000 else 2_000) else 99_999 }
+
+        brain().react(MascotEvent.Ate(eat("Творог", monday)), monday)
+
+        val said = mascots.messages.value.single { it.topic == Topic.WEEK_SUMMARY.name }
+        val text = said.text.replace(' ', ' ').replace(' ', ' ')
+        assertTrue("28 000" in text, text)
+        assertTrue("два дня" in text.lowercase() || "2 дня" in text, text)
+    }
+
+    /** Свой шагомер хранит десять дней: с четверга прошлая неделя видна уже не вся — о шагах молчат. */
+    @Test
+    fun `итог не в начале недели — без шагов`() = runTest {
+        known()
+        eat("Гречка", Instant.parse("2026-11-04T13:00:00Z"))
+        eat("Кефир", Instant.parse("2026-11-05T13:00:00Z"))
+        walkedOn = { 9_000 }
+        val thursday = monday + 3.days
+
+        brain().react(MascotEvent.Ate(eat("Творог", thursday)), thursday)
+
+        val said = mascots.messages.value.single { it.topic == Topic.WEEK_SUMMARY.name }
+        assertFalse("шаг" in said.text.lowercase(), said.text)
     }
 
     @Test

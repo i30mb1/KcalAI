@@ -137,7 +137,7 @@ internal val ButterVoice: Voice = voice(Mascot.BUTTER) {
 
     // Итог прошлой недели — раз в неделю, тепло: что получилось, без упрёков за остальное.
     topic(Topic.WEEK_SUMMARY) {
-        say {
+        val core = pool {
             +"Итог недели: записи были {weekDays} из семи, в цель — {weekGoal}. Подтаиваю от гордости."
             +"Прошлая неделя: {weekDays} в дневнике, {weekGoal} — точно в цель. Тепло вспомнить."
             +"Неделя позади: {weekDays} с записями. Чаще всего на тарелке — {weekFood}."
@@ -145,6 +145,16 @@ internal val ButterVoice: Voice = voice(Mascot.BUTTER) {
             +"Подвожу итог недели: {weekDays} с записями. Новая начинается — я рядом."
             +"Неделя закрыта: {weekDays} в дневнике. Спасибо, что не бросаешь, — таю."
         }
+        // Шаги — хвостиком того же итога, без второго сообщения.
+        val walked = pool {
+            +"А ногами — {weekSteps}, цель шагов взята {weekWalked}."
+            +"Ещё {weekSteps} пешком, из них с целью — {weekWalked}."
+            +"Нашагалось {weekSteps}: цель шагов — {weekWalked}."
+            "А ногами за неделю — {weekSteps}." given { it.week?.stepGoalDays == 0 }
+            "Ещё нашагалось {weekSteps} — тоже в копилку." given { it.week?.stepGoalDays == 0 }
+        }
+        // Пропускается, только когда сказать нечего: шагов нет.
+        recipe { slot(core); slot(walked, skip = 0.000001) }
     }
 
     topic(Topic.YESTERDAY_WIN) {

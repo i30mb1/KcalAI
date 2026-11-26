@@ -136,6 +136,8 @@ internal fun Facts.value(key: String): String? = when (key) {
     "weekDays" -> week?.days?.takeIf { it >= 1 }?.let { countPhrase(it, "день", "дня", "дней") }
     "weekGoal" -> week?.goalDays?.takeIf { it >= 1 }?.let { countPhrase(it, "раз", "раза", "раз") }
     "weekFood" -> week?.food?.let(::foodName)
+    "weekSteps" -> week?.steps?.takeIf { it > 0 }?.let(::stepsPhrase)
+    "weekWalked" -> week?.stepGoalDays?.takeIf { it >= 1 }?.let { countPhrase(it, "день", "дня", "дней") }
     else -> null
 }
 
@@ -144,6 +146,7 @@ internal val KNOWN_KEYS = setOf(
     "name", "gap", "last", "lastTime", "meal", "mealGen", "usualTime", "usual", "usualGrams",
     "protLeft", "protIdea", "streak", "away", "absent", "fav", "food", "foodRun", "today", "mail",
     "address", "walkSteps", "walkKm", "walkTime", "daySteps", "stepsLeft", "weekDays", "weekGoal", "weekFood",
+    "weekSteps", "weekWalked",
 )
 
 /**
@@ -152,8 +155,10 @@ internal val KNOWN_KEYS = setOf(
  * @param days дней с записями
  * @param goalDays из них калории в пределах ±10% цели
  * @param food что ели чаще всего, если хоть что-то повторялось; `null` — нечего назвать
+ * @param steps шагов за неделю; ноль — шагомера нет или неделя видна не вся
+ * @param stepGoalDays дней, когда взята цель шагов
  */
-data class WeekFacts(val days: Int, val goalDays: Int, val food: String?)
+data class WeekFacts(val days: Int, val goalDays: Int, val food: String?, val steps: Int = 0, val stepGoalDays: Int = 0)
 
 /** Прогулка по дорожке и шаги дня — для итога прогулки в ленте. */
 data class WalkFacts(val steps: Int, val distanceM: Int, val elapsedS: Int, val daySteps: Int, val stepsLeft: Int)
