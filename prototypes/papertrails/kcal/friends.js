@@ -78,7 +78,7 @@ function egg(kit) {
 }
 
 /** Насколько каждый отстаёт по следам героя; side — куда чуть смотрит, стоя. */
-const PLACES = [{ side: -1, back: 0.75 }, { side: 1, back: 1.45 }];
+const PLACES = [{ side: -1, back: 0.55 }, { side: 1, back: 1.05 }];
 /** Сколько следов помнить и как часто их оставлять. */
 const TRAIL_LENGTH = 60;
 const TRAIL_STEP = 0.08;
