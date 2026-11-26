@@ -136,12 +136,12 @@ function start(pt, materials) {
       const going = Math.min(1, speed / 0.8);
       f.phase += dt * (3 + 9 * going);
       const step = Math.sin(f.phase);
-      let hop = Math.abs(step) * 0.05 * going + Math.abs(Math.sin(f.phase * 0.5)) * 0.008;
+      let hop = Math.abs(step) * 0.022 * going + Math.abs(Math.sin(f.phase * 0.5)) * 0.008;
       // Стоят — лицом к камере (она на юге), идут — по ходу.
       let turn = going > 0.1 ? Math.atan2(dx, dz) : -f.side * 0.35;
       if (f.dance > 0) {
         f.dance -= dt;
-        hop = Math.abs(Math.sin(f.phase * 1.4)) * 0.28;
+        hop = Math.abs(Math.sin(f.phase * 1.4)) * 0.11;
         turn = f.root.rotation.y + dt * 9;
         f.phase += dt * 6;
       }
@@ -150,8 +150,9 @@ function start(pt, materials) {
       f.root.rotation.y += f.dance > 0 ? turn - f.root.rotation.y : diff * k * 2;
       f.body.position.y = hop;
       f.body.rotation.z = step * 0.14 * Math.max(0.25, going);
-      f.legs[0].rotation.x = step * 0.7 * going;
-      f.legs[1].rotation.x = -step * 0.7 * going;
+      f.legs[0].rotation.x = step * 0.35 * going;
+      f.legs[1].rotation.x = -step * 0.35 * going;
+      for (const leg of f.legs) leg.visible = true;
     }
   };
   requestAnimationFrame(frame);

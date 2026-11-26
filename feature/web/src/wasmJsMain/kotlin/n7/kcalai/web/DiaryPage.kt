@@ -100,10 +100,8 @@ import n7.kcalai.webapi.offlineLine
  */
 private val COLUMN_MAX = 760.dp
 
-/** Задвинутый дневник: едва виден и чуть сдвинут; панель шагов — заметнее, в неё смотрят на ходу. */
-private const val CALM_ALPHA = 0.12f
-private const val CALM_PANEL_ALPHA = 0.45f
-private val CALM_SHIFT = 18.dp
+/** Сколько остаётся на экране от задвинутой шапки, строки ввода и панели шагов. */
+private val CALM_PEEK = 14.dp
 private const val CALM_MS = 420
 
 /** Скругление низа плашки шапки над миром прогулки. */
@@ -181,27 +179,25 @@ fun DiaryPage(link: PhoneLink) {
         // Поле справа от колонки: хватает места — шагомер стоит там отдельной панелью, а не поверх ленты.
         val gutter = (maxWidth - COLUMN_MAX) / 2
         val docked = gutter >= DOCK_PANEL + DOCK_MARGIN * 2
-        Column(
-            Modifier.widthIn(max = COLUMN_MAX).fillMaxSize().blur(blur).graphicsLayer {
-                alpha = CALM_ALPHA + (1f - CALM_ALPHA) * shownPart
-                translationY = (1f - shownPart) * CALM_SHIFT.toPx()
-            },
-        ) {
+        Column(Modifier.widthIn(max = COLUMN_MAX).fillMaxSize().blur(blur)) {
             if (diary == null) {
                 // До пуска на странице только разговор: код, отказ или пропавшая связь.
                 Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
                     IncomingLine(state.line(), action = if (state == PageState.Denied) ("Попросить" to link::askAgain) else null)
                 }
             } else {
-                Header(
-                    day = diary.day,
-                    puppets = puppets,
-                    onSettings = { settings = true },
-                    onOpen = { link.send(ToPhone.Open(it)) },
-                )
+                // Задвинутая шапка уезжает вверх — виден только краешек, чтобы было куда навести.
+                Box(Modifier.graphicsLayer { translationY = -(1f - shownPart) * (size.height - CALM_PEEK.toPx()) }) {
+                    Header(
+                        day = diary.day,
+                        puppets = puppets,
+                        onSettings = { settings = true },
+                        onOpen = { link.send(ToPhone.Open(it)) },
+                    )
+                }
                 // Смена дня — лента уезжает в сторону листания и растворяется, а не подменяется
                 // разом. Обновления того же дня сменой не считаются: ключ — дата.
-                Box(Modifier.weight(1f)) {
+                Box(Modifier.weight(1f).graphicsLayer { alpha = shownPart }) {
                     AnimatedContent(
                         targetState = diary,
                         contentKey = { it.day.date },
@@ -220,7 +216,10 @@ fun DiaryPage(link: PhoneLink) {
                         WalkPanel(diary.day, live, walking, onSetSteps = setSteps, modifier = Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 16.dp))
                     }
                 }
-                Composer(diary, link)
+                // Строка ввода уезжает вниз.
+                Box(Modifier.graphicsLayer { translationY = (1f - shownPart) * (size.height - CALM_PEEK.toPx()) }) {
+                    Composer(diary, link)
+                }
             }
         }
         if (docked && diary != null && diary.day.date == diary.day.today) {
@@ -230,8 +229,7 @@ fun DiaryPage(link: PhoneLink) {
                 walking,
                 onSetSteps = setSteps,
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = DOCK_MARGIN, end = DOCK_MARGIN).graphicsLayer {
-                    alpha = CALM_PANEL_ALPHA + (1f - CALM_PANEL_ALPHA) * shownPart
-                    translationX = (1f - shownPart) * CALM_SHIFT.toPx()
+                    translationX = (1f - shownPart) * (size.width + DOCK_MARGIN.toPx() - CALM_PEEK.toPx())
                 },
                 docked = true,
                 width = minOf(DOCK_PANEL_MAX, gutter - DOCK_MARGIN * 2),

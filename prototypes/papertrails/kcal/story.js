@@ -105,9 +105,21 @@ function start(pt, materials, friends) {
     friends.forEach((f) => {
       f.root.visible = true;
       f.script = null;
+      stand(f);
     });
   };
 
+  /** Сидя ножки подбирают под себя: торчащие вперёд выглядели некрасиво. Фигурка садится на землю. */
+  const SEAT = -0.092;
+  const tuck = (f) => {
+    for (const leg of f.legs) leg.visible = false;
+  };
+  const stand = (f) => {
+    for (const leg of f.legs) {
+      leg.visible = true;
+      leg.rotation.x = 0;
+    }
+  };
   /** Точка рядом с героем, на тропе позади: туда ставят сценки на двоих. */
   const behind = (dx, dz) => {
     pt.traveller.model.getWorldPosition(at);
@@ -116,7 +128,7 @@ function start(pt, materials, friends) {
   const ease = (f, target, dt, turn) => {
     f.root.position.lerp(target, 1 - Math.exp(-4 * dt));
     f.root.rotation.y += (turn - f.root.rotation.y) * (1 - Math.exp(-5 * dt));
-    for (const leg of f.legs) leg.rotation.x = 0;
+    stand(f);
   };
 
   /** Сидит у костра (или спит): ножки вперёд, чуть покачивается. */
@@ -129,9 +141,9 @@ function start(pt, materials, friends) {
     p.z += (camp.position.z + 0.02 - p.z) * k;
     p.y = camp.position.y;
     f.root.rotation.y += (-side * 0.55 - f.root.rotation.y) * k;
-    f.body.position.y = -0.055 + Math.sin(clock * (asleep ? 1.2 : 2.4) + index * 2) * 0.008;
+    f.body.position.y = SEAT + Math.sin(clock * (asleep ? 1.2 : 2.4) + index * 2) * 0.006;
     f.body.rotation.z = asleep ? side * -0.28 : Math.sin(clock * 1.1 + index * 3) * 0.06;
-    for (const leg of f.legs) leg.rotation.x = -1.35;
+    tuck(f);
   };
 
   const enter = (next) => {
@@ -179,8 +191,8 @@ function start(pt, materials, friends) {
         arrived = true;
         if (gone) f.root.visible = false;
         else {
-          f.body.position.y = -0.05;
-          for (const leg of f.legs) leg.rotation.x = -1.35;
+          f.body.position.y = SEAT;
+          tuck(f);
         }
         return;
       }
@@ -197,9 +209,10 @@ function start(pt, materials, friends) {
       const was = f.root.position.clone();
       f.root.position.lerpVectors(a, b, done);
       f.root.rotation.y = Math.atan2(f.root.position.x - was.x, f.root.position.z - was.z) || f.root.rotation.y;
-      f.body.position.y = Math.abs(Math.sin(done * Math.PI * Math.max(2, Math.round(duration * 2)))) * 0.45;
-      f.legs[0].rotation.x = -0.5;
-      f.legs[1].rotation.x = 0.5;
+      f.body.position.y = Math.abs(Math.sin(done * Math.PI * Math.max(2, Math.round(duration * 2)))) * 0.17;
+      stand(f);
+      f.legs[0].rotation.x = -0.2;
+      f.legs[1].rotation.x = 0.2;
       if (returning && done >= 1) stop();
     };
   };
@@ -231,8 +244,8 @@ function start(pt, materials, friends) {
         const side = i ? 1 : -1;
         const run = Math.sin(Math.min(1, t / 7) * Math.PI);
         ease(f, behind(side * 0.4, 0.7 - run * (i ? 2.6 : 3.2)), dt, t < 3.5 ? Math.PI : 0);
-        f.body.position.y = Math.abs(Math.sin(t * 11 + i)) * 0.12;
-        for (const [n, leg] of f.legs.entries()) leg.rotation.x = Math.sin(t * 11 + n * Math.PI) * 0.9;
+        f.body.position.y = Math.abs(Math.sin(t * 11 + i)) * 0.045;
+        for (const [n, leg] of f.legs.entries()) leg.rotation.x = Math.sin(t * 11 + n * Math.PI) * 0.4;
       }, `${pick(NAMES)} победило!`);
       return true;
     },
@@ -247,8 +260,9 @@ function start(pt, materials, friends) {
         const to = jumps ? 0.55 : 1.15;
         f.root.position.copy(behind(0, from + (to - from) * k));
         f.root.rotation.y = Math.PI;
-        f.body.position.y = jumps ? Math.sin(k * Math.PI) * 0.55 : -0.07 * Math.sin(k * Math.PI);
-        for (const leg of f.legs) leg.rotation.x = jumps ? -0.8 : 0;
+        // Перелёт ровно над макушкой друга, не выше.
+        f.body.position.y = jumps ? Math.sin(k * Math.PI) * 0.4 : -0.05 * Math.sin(k * Math.PI);
+        for (const leg of f.legs) leg.rotation.x = jumps ? -0.25 : 0;
       }, 'Напрыгались.');
       return true;
     },
@@ -291,7 +305,7 @@ function start(pt, materials, friends) {
         // Кидают по очереди: снежок летит дугой, получивший подпрыгивает.
         const k = (t / 1.1) % 1;
         const from = Math.floor(t / 1.1) % 2 ? 1 : -1;
-        f.body.position.y = side !== from && k > 0.85 ? Math.sin(((k - 0.85) / 0.15) * Math.PI) * 0.18 : 0;
+        f.body.position.y = side !== from && k > 0.85 ? Math.sin(((k - 0.85) / 0.15) * Math.PI) * 0.08 : 0;
         f.body.rotation.z = side === from && k < 0.2 ? from * 0.5 : 0;
         if (i === 0) {
           const spot = behind(0, 0.7);
@@ -315,9 +329,9 @@ function start(pt, materials, friends) {
       scenelet(12, spread, (f, i, dt, t) => {
         const side = i ? 1 : -1;
         ease(f, new THREE.Vector3(spread.position.x + side * 0.45, spread.position.y, spread.position.z), dt, -side * 0.55);
-        f.body.position.y = -0.05 + Math.abs(Math.sin(t * 5 + i * 2)) * 0.015;
+        f.body.position.y = SEAT + Math.abs(Math.sin(t * 5 + i * 2)) * 0.012;
         f.body.rotation.z = Math.sin(t * 1.3 + i * 3) * 0.07;
-        for (const leg of f.legs) leg.rotation.x = -1.35;
+        tuck(f);
       }, 'Вкусно посидели.');
       return true;
     },
