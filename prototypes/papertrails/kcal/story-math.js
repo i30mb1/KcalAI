@@ -1,7 +1,7 @@
 /** Постояли столько секунд — привал. */
-export const CAMP_AFTER = 45;
+export const CAMP_AFTER = 20;
 /** А столько — задремали. */
-export const DOZE_AFTER = 300;
+export const DOZE_AFTER = 180;
 /** Клетка мира, единиц (TILE_SIZE). */
 const CELL = 2;
 /** Дальше этого от героя (в клетках) домик уже не виден. */
@@ -35,6 +35,12 @@ export function nearestHouse(hero, isHouse) {
 export function placeStories({ biome, house = false, pond = false }) {
   const byLand = { snow: 'snowball', pinewood: 'scare', desert: 'picnic', heartland: 'picnic', blossom: 'picnic' };
   return [house && 'visit', pond && 'fishing', byLand[biome]].filter(Boolean);
+}
+
+/** На ходу не отстают далеко: догонялки и чехарда — везде, снежки и испуг — по земле. */
+export function walkStories({ biome }) {
+  const here = placeStories({ biome }).filter((s) => s === 'snowball' || s === 'scare');
+  return ['race', 'leapfrog', ...here];
 }
 
 /** Один из возможных; прошлый повторяется, только если другого здесь нет. */

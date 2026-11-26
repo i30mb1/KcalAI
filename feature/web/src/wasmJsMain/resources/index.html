@@ -16,6 +16,9 @@
             background: color-mix(in srgb, var(--page-bg) calc(var(--glass-tint, 0.62) * 100%), transparent);
             -webkit-backdrop-filter: blur(var(--glass-blur, 10px)); backdrop-filter: blur(var(--glass-blur, 10px)); }
         body.walking canvas#atlas { opacity: 1; }
+        /* Дневник задвинут (CalmPage.kt) — стекло под ним тоже уходит, мир виден целиком. */
+        #walk-glass { transition: opacity .4s ease; }
+        body.calm #walk-glass { opacity: 0; }
     </style>
     <script type="importmap">{ "imports": { "three": "./walk/vendor/three/build/three.module.js", "three/addons/": "./walk/vendor/three/examples/jsm/" } }</script>
     <script>

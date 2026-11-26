@@ -3,6 +3,8 @@
 // Читает window.KcalWalk (скорость S.vis км/ч), отдаёт направление через window.__ptInput (см. src/main.js).
 import { laneX } from './lane.js';
 const out = { x: 0, z: 0 };
+/** Насколько герой отходит от середины тропы, виляя. */
+const SWAY = 0.38;
 
 /**
  * Всё, что в прогулке настраивается на лету. Значения по умолчанию — здесь (подобраны на странице дневника
@@ -41,7 +43,9 @@ window.__ptInput = () => {
   if (kmh <= 0.05) return out;                          // дорожка стоит — стоит и герой
   pt.state.speedMul = Math.min(1.8, Math.max(0.35, kmh / 4));   // 4 км/ч — его обычный шаг
   // на север, мягко подтягиваясь к середине дороги чуть впереди (обходя карточки и прохожих, может с неё сойти)
-  const ahead = laneX(pt.traveller.position.z - 0.7, pt.wfc.seed);
+  // Идут не по струнке, а змейкой по ширине тропы.
+  const z = pt.traveller.position.z - 0.7;
+  const ahead = laneX(z, pt.wfc.seed) + SWAY * Math.sin(z * 1.35);
   const side = Math.max(-1, Math.min(1, (ahead - pt.traveller.position.x) * 1.5));
   const l = Math.hypot(side, 1);
   out.x = side / l; out.z = -1 / l;

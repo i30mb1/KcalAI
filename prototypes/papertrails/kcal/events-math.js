@@ -9,6 +9,6 @@ export function pickEvent(last, rand = Math.random) {
 
 /** Пауза до следующего, секунды: на ходу — чаще, стоя мир тоже не замирает. */
 export function pause(walking, rand = Math.random) {
-  const [from, to] = walking ? [20, 45] : [45, 100];
+  const [from, to] = walking ? [10, 22] : [20, 40];
   return from + (to - from) * rand();
 }

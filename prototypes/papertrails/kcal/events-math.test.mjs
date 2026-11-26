@@ -13,8 +13,8 @@ test('выпадают все события', () => {
 });
 
 test('на ходу события чаще, чем стоя', () => {
-  assert.equal(pause(true, () => 0), 20);
-  assert.equal(pause(true, () => 1), 45);
-  assert.equal(pause(false, () => 0), 45);
-  assert.equal(pause(false, () => 1), 100);
+  assert.equal(pause(true, () => 0), 10);
+  assert.equal(pause(true, () => 1), 22);
+  assert.equal(pause(false, () => 0), 20);
+  assert.equal(pause(false, () => 1), 40);
 });

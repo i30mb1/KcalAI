@@ -3,7 +3,7 @@
 // кто-то прыжками забегает в гости и возвращается с гостинцем. И по месту: у пруда рыбачат, в снегу играют в
 // снежки, в поле устраивают пикник, в лесу пугаются. Только мир: в дневник ничего не пишется.
 import * as THREE from 'three';
-import { nearestHouse, pickStory, placeStories, stage } from './story-math.js';
+import { nearestHouse, pickStory, placeStories, stage, walkStories } from './story-math.js';
 import { biomeAt } from '../src/core/biomes.js';
 import { banner } from './events.js';
 import { laneX } from './lane.js';
@@ -11,7 +11,7 @@ import { laneX } from './lane.js';
 const TREATS = ['с пирожком', 'с баранками', 'с банкой мёда', 'с горстью орехов', 'с куском пирога', 'с яблоком'];
 const NAMES = ['Масло', 'Яйцо'];
 /** Сколько ждать до следующего сюжета по месту и как долго сидят в гостях, секунды. */
-const STORY_PAUSE = 50;
+const STORY_PAUSE = 20;
 const VISIT_INSIDE = 6;
 const HOP_SPEED = 1.7;
 
@@ -80,7 +80,7 @@ function start(pt, materials, friends) {
   let now = 'walk';
   let stopped = 0;
   let visit = null;
-  let nextStory = 20;
+  let nextStory = 6;
   let lastStory = null;
   /** Идущий сюжет по месту: чем убрать за ним реквизит. */
   let story = null;
@@ -224,6 +224,34 @@ function start(pt, materials, friends) {
   };
 
   const STORIES = {
+    race() {
+      banner('Догонялки!');
+      scenelet(7, null, (f, i, dt, t) => {
+        // Забегают вперёд героя по разным краям тропы и возвращаются.
+        const side = i ? 1 : -1;
+        const run = Math.sin(Math.min(1, t / 7) * Math.PI);
+        ease(f, behind(side * 0.4, 0.7 - run * (i ? 2.6 : 3.2)), dt, t < 3.5 ? Math.PI : 0);
+        f.body.position.y = Math.abs(Math.sin(t * 11 + i)) * 0.12;
+        for (const [n, leg] of f.legs.entries()) leg.rotation.x = Math.sin(t * 11 + n * Math.PI) * 0.9;
+      }, `${pick(NAMES)} победило!`);
+      return true;
+    },
+    leapfrog() {
+      banner('Чехарда!');
+      scenelet(6, null, (f, i, dt, t) => {
+        // По очереди перепрыгивают друг через друга.
+        const turn = Math.floor(t / 1) % 2;
+        const k = t % 1;
+        const jumps = turn === i;
+        const from = jumps ? 1.15 : 0.55;
+        const to = jumps ? 0.55 : 1.15;
+        f.root.position.copy(behind(0, from + (to - from) * k));
+        f.root.rotation.y = Math.PI;
+        f.body.position.y = jumps ? Math.sin(k * Math.PI) * 0.55 : -0.07 * Math.sin(k * Math.PI);
+        for (const leg of f.legs) leg.rotation.x = jumps ? -0.8 : 0;
+      }, 'Напрыгались.');
+      return true;
+    },
     visit() {
       const house = near(isHouse);
       if (!house) return false;
@@ -311,9 +339,11 @@ function start(pt, materials, friends) {
   const here = (walking) => {
     pt.traveller.model.getWorldPosition(at);
     const biome = biomeAt(pt.wfc.seed, Math.round(at.x / 2), Math.round(at.z / 2));
+    if (walking) return walkStories({ biome });
     const house = Boolean(nearestHouse(at, isHouse));
     const all = placeStories({ biome, house, pond: Boolean(nearestHouse(at, isPond)) });
-    return all.filter((name) => (walking ? name === 'snowball' || name === 'scare' : !(now === 'camp' && name === 'picnic')));
+    // Стоя годятся и догонялки: в пустом месте иначе нечего делать.
+    return [...all.filter((name) => !(now === 'camp' && name === 'picnic')), 'race', 'leapfrog'];
   };
   const play = (name) => {
     if (!name || !STORIES[name]()) return false;

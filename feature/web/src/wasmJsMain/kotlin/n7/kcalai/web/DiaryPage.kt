@@ -1,5 +1,6 @@
 package n7.kcalai.web
 
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
@@ -99,6 +100,12 @@ import n7.kcalai.webapi.offlineLine
  */
 private val COLUMN_MAX = 760.dp
 
+/** Задвинутый дневник: едва виден и чуть сдвинут; панель шагов — заметнее, в неё смотрят на ходу. */
+private const val CALM_ALPHA = 0.12f
+private const val CALM_PANEL_ALPHA = 0.45f
+private val CALM_SHIFT = 18.dp
+private const val CALM_MS = 420
+
 /** Скругление низа плашки шапки над миром прогулки. */
 private val PLATE_CORNER = 22.dp
 
@@ -166,11 +173,20 @@ fun DiaryPage(link: PhoneLink) {
     val walking = (live?.speedKmh ?: 0.0) > MOVING_KMH
     val pageBg by animateColorAsState(if (worldShown) colors.bg.copy(alpha = 0f) else colors.bg, tween(WALK_FADE_MS))
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(pageBg), contentAlignment = Alignment.TopCenter) {
+    // На прогулке дневник уступает место миру: задвигается и бледнеет, пока им не пользуются (diaryShown).
+    val presence = rememberDiaryPresence(worldShown)
+    val shownPart by animateFloatAsState(if (presence.shown) 1f else 0f, tween(CALM_MS, easing = EaseOutStrong))
+
+    BoxWithConstraints(Modifier.fillMaxSize().background(pageBg).then(presence.watch), contentAlignment = Alignment.TopCenter) {
         // Поле справа от колонки: хватает места — шагомер стоит там отдельной панелью, а не поверх ленты.
         val gutter = (maxWidth - COLUMN_MAX) / 2
         val docked = gutter >= DOCK_PANEL + DOCK_MARGIN * 2
-        Column(Modifier.widthIn(max = COLUMN_MAX).fillMaxSize().blur(blur)) {
+        Column(
+            Modifier.widthIn(max = COLUMN_MAX).fillMaxSize().blur(blur).graphicsLayer {
+                alpha = CALM_ALPHA + (1f - CALM_ALPHA) * shownPart
+                translationY = (1f - shownPart) * CALM_SHIFT.toPx()
+            },
+        ) {
             if (diary == null) {
                 // До пуска на странице только разговор: код, отказ или пропавшая связь.
                 Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
@@ -213,7 +229,10 @@ fun DiaryPage(link: PhoneLink) {
                 live,
                 walking,
                 onSetSteps = setSteps,
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = DOCK_MARGIN, end = DOCK_MARGIN),
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = DOCK_MARGIN, end = DOCK_MARGIN).graphicsLayer {
+                    alpha = CALM_PANEL_ALPHA + (1f - CALM_PANEL_ALPHA) * shownPart
+                    translationX = (1f - shownPart) * CALM_SHIFT.toPx()
+                },
                 docked = true,
                 width = minOf(DOCK_PANEL_MAX, gutter - DOCK_MARGIN * 2),
             )

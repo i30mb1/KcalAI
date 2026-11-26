@@ -1,5 +1,5 @@
 /** Дальше этого от середины тропы (kcal/lane.js) уже лес и заборы. */
-export const ROAD_HALF = 0.25;
+export const ROAD_HALF = 0.45;
 
 const onRoad = (p, mid) => ({ x: Math.max(mid - ROAD_HALF, Math.min(mid + ROAD_HALF, p.x)), z: p.z });
 

@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stage, nearestHouse, placeStories, pickStory } from './story-math.js';
+import { stage, nearestHouse, placeStories, pickStory, walkStories } from './story-math.js';
 
 // Что делают друзья, решает дорожка: идут — шагают, постояли — привал, стоят долго — дремлют.
 test('привал и дрёма — по тому, сколько стоят', () => {
   assert.equal(stage(false, 10), 'walk');
-  assert.equal(stage(false, 45), 'camp');
-  assert.equal(stage(false, 299), 'camp');
-  assert.equal(stage(false, 300), 'doze');
+  assert.equal(stage(false, 20), 'camp');
+  assert.equal(stage(false, 179), 'camp');
+  assert.equal(stage(false, 180), 'doze');
 });
 
 test('пошли — сразу снова в путь', () => {
@@ -32,4 +32,10 @@ test('тот же сюжет подряд — только если другог
   assert.equal(pickStory(['visit', 'snowball'], 'visit', () => 0), 'snowball');
   assert.equal(pickStory(['snowball'], 'snowball', () => 0.9), 'snowball');
   assert.equal(pickStory([], null), null);
+});
+
+test('на ходу в любой земле есть чем заняться', () => {
+  for (const biome of ['snow', 'desert', 'heartland', 'blossom', 'pinewood']) {
+    assert.ok(walkStories({ biome }).includes('race') && walkStories({ biome }).includes('leapfrog'), biome);
+  }
 });
