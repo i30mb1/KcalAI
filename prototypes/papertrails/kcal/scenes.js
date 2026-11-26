@@ -49,6 +49,8 @@ export function dayGoal() {
 
 /** Дорога сегодняшнего дня: отмеченные сцены по кругу, и каждый день начинается со следующей. */
 export function todayScenes() {
+  // Демо (?demo) показывает все земли сразу, по порядку.
+  if (/[?&]demo/.test(location.search)) return SCENES.map((sc) => ({ ...sc, biomeIndex: BIOME_INDEX[sc.biome] }));
   const scenes = chosenScenes();
   const now = new Date();
   const day = Math.floor((now.getTime() - now.getTimezoneOffset() * 60000) / 86400000);
