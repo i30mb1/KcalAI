@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { milestone, pause, pickEvent } from './events-math.js';
 import { laneX } from './lane.js';
+import { goalArt, milestoneArt } from './signs.js';
 
 const FINDS = ['баранка', 'горсть семечек', 'кусочек сыра', 'яблоко', 'пирожок', 'орешек', 'ложка мёда', 'сушка', 'морковка', 'ягодный пряник'];
 const PAPER = ['#d95b4a', '#f4c95a', '#4c8f5a', '#86bfe0', '#e8759c', '#fdf8ea'];
@@ -294,39 +295,42 @@ function start(pt, materials) {
     },
   };
 
-  /** Верстовой столб с числом у тропы. */
-  const post = (text) => {
-    pt.traveller.model.getWorldPosition(at);
-    const z = at.z - 2.4;
-    const board = document.createElement('canvas');
-    board.width = 256;
-    board.height = 128;
-    const g = board.getContext('2d');
-    g.fillStyle = '#fdf8ea';
-    g.fillRect(0, 0, 256, 128);
-    g.strokeStyle = '#b78d4d';
-    g.lineWidth = 12;
-    g.strokeRect(6, 6, 244, 116);
-    g.fillStyle = '#2c2618';
-    g.font = '800 62px system-ui, sans-serif';
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillText(text, 128, 66);
-    const face = new THREE.CanvasTexture(board);
+  /** Картонная фигурка с рисунком [art] стоит на земле: тот же бумажный материал, что и у всего мира. */
+  const standee = (art, width, x, z) => {
+    const face = new THREE.CanvasTexture(art);
     face.colorSpace = THREE.SRGBColorSpace;
-    const sign = new THREE.Group();
-    sign.add(mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.75, 6), '#8a5a33', 0, 0.37, 0));
-    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.74, 0.37), new THREE.MeshBasicMaterial({ map: face, side: THREE.DoubleSide }));
-    plate.position.set(0, 0.86, 0.01);
-    sign.add(plate);
-    sign.position.set(laneX(z, pt.wfc.seed) - 0.85, at.y, z);
-    run(sign, (dt, t) => {
-      // Выскакивает из земли с отскоком и стоит, пока не пройдут.
-      const pop = Math.min(1, t * 2.5);
-      sign.scale.setScalar(pop + Math.sin(pop * Math.PI) * 0.25);
+    face.anisotropy = 4;
+    const height = (width * art.height) / art.width;
+    const geo = new THREE.PlaneGeometry(width, height).toNonIndexed();
+    geo.translate(0, height / 2, 0);
+    const card = new THREE.Mesh(geo, materials.paper({ map: face, alphaTest: 0.5, side: THREE.DoubleSide, variant: 'kcal-sign' }));
+    card.castShadow = true;
+    // Чуть откинута назад — камера смотрит сверху.
+    card.rotation.x = -0.3;
+    const stand = new THREE.Group();
+    stand.add(card);
+    stand.position.set(x, at.y, z);
+    run(stand, (dt, t) => {
+      // Раскладывается, как в книжке, с отскоком, и стоит, пока не пройдут.
+      const pop = Math.min(1, t * 2.2);
+      stand.scale.set(1, pop + Math.sin(pop * Math.PI) * 0.18, 1);
       return t < 40;
     });
-    confetti(sign.position.x, at.y + 1, z);
+    confetti(x, at.y + height, z);
+  };
+
+  /** Указатель с числом — сбоку тропы. */
+  const post = (label) => {
+    pt.traveller.model.getWorldPosition(at);
+    const z = at.z - 1.2;
+    standee(milestoneArt(label), 0.95, laneX(z, pt.wfc.seed) - 0.95, z);
+  };
+
+  /** Финиш — арка через всю тропу. */
+  const arch = () => {
+    pt.traveller.model.getWorldPosition(at);
+    const z = at.z - 1.25;
+    standee(goalArt(), 2.3, laneX(z, pt.wfc.seed), z);
   };
 
   /** Салют за цель дня: залп за залпом вокруг героя. */
@@ -343,7 +347,7 @@ function start(pt, materials) {
   const cheer = (what) => {
     if (what === 'goal') {
       banner('Цель шагов взята! Салют!');
-      post('ЦЕЛЬ ⚑');
+      arch();
       salute();
       return;
     }
