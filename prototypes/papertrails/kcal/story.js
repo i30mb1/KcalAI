@@ -14,6 +14,8 @@ const NAMES = ['Масло', 'Яйцо'];
 const STORY_PAUSE = 20;
 const VISIT_INSIDE = 6;
 const HOP_SPEED = 1.7;
+/** Чем занят Зёрнышко, пока стоит, и сколько секунд. */
+const ACTS = { wave: 3.4, look: 3.2, hop: 1.4, stretch: 2.6, spin: 1.2 };
 
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
@@ -365,6 +367,75 @@ function start(pt, materials, friends) {
     return true;
   };
 
+  // ---- Зёрнышко: стоя не столбом ----
+  // Походкой фигурки занимается мир (traveller.js, через свои шарниры); здесь крутится только она целиком и сами ручки.
+  const part = (name) => hero.getObjectByName(name);
+  const armL = part('arm_l');
+  const armR = part('arm_r');
+  const legs = [part('leg_l'), part('leg_r')];
+  let act = null;
+  let actAt = 0;
+  let nextAct = 3;
+  let lastAct = null;
+  const heroPose = (dt, walking) => {
+    // Куда стремится поза; плавно — чтобы не дёргался, когда занятие сменяется.
+    let turn = 0;
+    let lift = 0;
+    let tilt = 0;
+    let left = 0;
+    let right = 0;
+    const sitting = !walking && now !== 'walk';
+    if (walking) {
+      act = null;
+      nextAct = 4;
+    } else if (sitting) {
+      // На привале садится лицом к огню — а значит, и к тебе.
+      act = null;
+      turn = Math.PI;
+      lift = -0.13;
+      tilt = now === 'doze' ? 0.22 : Math.sin(clock * 1.1) * 0.05;
+      if (now === 'camp') left = Math.max(0, Math.sin(clock * 0.9)) * 1.1; // подносит кружку
+    } else if (act) {
+      actAt += dt;
+      const k = actAt / ACTS[act];
+      if (act === 'wave') {
+        turn = Math.PI;
+        if (k > 0.2 && k < 0.85) left = 2.4 + Math.sin(actAt * 13) * 0.45;
+      } else if (act === 'look') {
+        turn = Math.sin(k * Math.PI * 2) * 1.2;
+      } else if (act === 'hop') {
+        lift = Math.abs(Math.sin(k * Math.PI * 2)) * 0.12;
+      } else if (act === 'stretch') {
+        left = Math.sin(Math.min(1, k) * Math.PI) * 2.7;
+        right = -left;
+        tilt = Math.sin(k * Math.PI * 2) * 0.1;
+      } else {
+        turn = k * Math.PI * 2;
+        lift = Math.sin(k * Math.PI) * 0.08;
+      }
+      if (k >= 1) {
+        act = null;
+        nextAct = 3 + Math.random() * 5;
+      }
+    } else {
+      nextAct -= dt;
+      if (nextAct <= 0) {
+        act = pickStory(Object.keys(ACTS), lastAct);
+        lastAct = act;
+        actAt = 0;
+      }
+    }
+    const k = 1 - Math.exp(-9 * dt);
+    // Кружение крутится ровно, остальное догоняет по кратчайшей дуге.
+    if (act === 'spin') hero.rotation.y = turn;
+    else hero.rotation.y += Math.atan2(Math.sin(turn - hero.rotation.y), Math.cos(turn - hero.rotation.y)) * k;
+    hero.position.y += (lift - hero.position.y) * k;
+    hero.rotation.z += (tilt - hero.rotation.z) * k;
+    if (armL) armL.rotation.z += (left - armL.rotation.z) * k;
+    if (armR) armR.rotation.z += (right - armR.rotation.z) * k;
+    for (const leg of legs) if (leg) leg.visible = !sitting;
+  };
+
   let last = performance.now();
   const frame = (time) => {
     requestAnimationFrame(frame);
@@ -377,6 +448,7 @@ function start(pt, materials, friends) {
     stopped = walking ? 0 : stopped + dt;
     if (walking) forced = null;
     enter(forced || stage(walking, stopped));
+    heroPose(dt, walking);
 
     flames.forEach(({ flame, h }, i) => {
       const s = 1 + Math.sin(clock * 13 + i * 2.1) * 0.18 + Math.sin(clock * 7 + i) * 0.1;
@@ -406,6 +478,10 @@ function start(pt, materials, friends) {
   /** Для проверки: начать привал или дрёму сразу, разыграть сюжет по имени. */
   window.KcalStory = {
     set: (name) => { forced = name; },
+    act: (name) => {
+      act = name;
+      actAt = 0;
+    },
     play: (name) => {
       stop();
       return play(name);
