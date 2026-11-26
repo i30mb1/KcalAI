@@ -1,16 +1,19 @@
-// KcalAI: тропа дня — бумажный свиток слева от колонки дневника. Снизу старт, сверху флажок цели; земли — островами
+// KcalAI: тропа дня — маленький бумажный свиток в левом верхнем углу. Снизу старт, сверху флажок цели; земли — островами
 // по порядку сегодняшней дороги (window.KcalRoute, src/main.js), по извилистой тропинке идёт Зёрнышко. Шаги и темп —
 // из window.KcalWalk. Поверх страницы и мимо кликов; мира нет, места слева нет или шаги ещё не названы — не видно.
 import { routeSpot } from './trail-math.js';
 
 const NS = 'http://www.w3.org/2000/svg';
-/** Колонка дневника (COLUMN_MAX в DiaryPage.kt) — слева от неё и стоит свиток. */
+/** Колонка дневника (COLUMN_MAX в DiaryPage.kt) — свиток не должен на неё наезжать. */
 const COLUMN = 760;
 /** Размер рисунка: свиток шириной 208 и до 600 высотой, табличке справа — запас. */
-const VIEW = { w: 340, h: 620, scroll: 220 };
+const VIEW = { w: 400, h: 620, scroll: 220 };
 const TOP = 70;
 const BOTTOM = 566;
-const MIN_SCALE = 0.45;
+/** Рисунок показывается в половину: уголок экрана, а не панель. Меньше этого — подписи уже не прочесть. */
+const SCALE = 0.5;
+const MIN_SCALE = 0.35;
+const CORNER = 8;
 
 const LOOK = {
   'Поле': { c: '#f4c95a', k: 'wheat' },
@@ -113,7 +116,7 @@ function build(svg, lands) {
     const size = Math.min(1, h / 90);
     prop(svg, look.k, right ? 158 : 62, y + h / 2 + 4 * size, size);
     if (h >= 80) prop(svg, look.k, right ? 178 : 82, y + h / 2 + 16, 0.62);
-    el(svg, 'text', { x: right ? 160 : 66, y: y + 22, 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 800, fill: '#4a3b17' }, name);
+    el(svg, 'text', { x: right ? 160 : 66, y: y + 22, 'text-anchor': 'middle', 'font-size': 20, 'font-weight': 800, fill: '#4a3b17' }, name);
   });
 
   const d = `M112 ${BOTTOM + 14}` + lands.map((_, i) => {
@@ -132,8 +135,8 @@ function build(svg, lands) {
 
   const hero = grain(svg, shadow);
   const sign = el(svg, 'g', { filter: shadow });
-  const board = el(sign, 'rect', { x: 214, width: 10, height: 28, rx: 9, fill: '#fdf8ea', stroke: '#d9c9a3', 'stroke-width': 1.5 });
-  const label = el(sign, 'text', { 'font-size': 15, 'font-weight': 800, fill: '#2c2618' });
+  const board = el(sign, 'rect', { x: 212, width: 10, height: 38, rx: 9, fill: '#fdf8ea', stroke: '#d9c9a3', 'stroke-width': 1.5 });
+  const label = el(sign, 'text', { 'font-size': 23, 'font-weight': 800, fill: '#2c2618' });
   return { done, hero, board, label };
 }
 
@@ -151,15 +154,15 @@ let signed = '';
 let last = 0;
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** Свиток — в поле слева от колонки, по середине высоты; не помещается — не показываем. */
+/** Свиток — в левом верхнем углу; в поле слева от колонки не помещается и уменьшенным — не показываем. */
 function place() {
   const gutter = (innerWidth - COLUMN) / 2;
-  const scale = Math.min(1, (innerHeight - 32) / VIEW.h, (gutter - 16) / VIEW.scroll);
+  const scale = Math.min(SCALE, (innerHeight - 2 * CORNER) / VIEW.h, (gutter - 2 * CORNER) / VIEW.scroll);
   if (scale < MIN_SCALE) return false;
   svg.style.width = `${VIEW.w * scale}px`;
   svg.style.height = `${VIEW.h * scale}px`;
-  svg.style.left = `${Math.max(8, (gutter - VIEW.scroll * scale) / 2)}px`;
-  svg.style.top = `${(innerHeight - VIEW.h * scale) / 2}px`;
+  svg.style.left = `${CORNER}px`;
+  svg.style.top = `${CORNER}px`;
   return true;
 }
 
@@ -198,11 +201,11 @@ function frame(time) {
   const text = spot ? `${spot.next == null ? 'Финиш' : route.lands[spot.next]}: ${grouped(spot.left)}` : 'Дошли!';
   if (text !== signed) {
     parts.label.textContent = text;
-    parts.board.setAttribute('width', parts.label.getComputedTextLength() + 22);
+    parts.board.setAttribute('width', parts.label.getComputedTextLength() + 20);
     signed = text;
   }
-  parts.board.setAttribute('y', at.y - 44);
-  parts.label.setAttribute('x', 225);
+  parts.board.setAttribute('y', at.y - 52);
+  parts.label.setAttribute('x', 222);
   parts.label.setAttribute('y', at.y - 25);
 }
 requestAnimationFrame(frame);
