@@ -55,7 +55,6 @@ object KcalApp {
         // Итоги прогулок по дорожке — так же, как на Android.
         scope.launch { container.mascotRoutines.tellWalks() }
         scope.launch { container.mascotRoutines.askTreadmill(container.webUsed) }
-        scope.launch { container.mascotRoutines.askSteps(container.iosSteps.available, container.webUsed) }
         // Знакомая беговая дорожка — iOS подключится к ней сама, когда её включат.
         treadmill.resume()
     }
@@ -66,6 +65,8 @@ object KcalApp {
     /** Человек открыл приложение: написанное теперь стоит в ленте, шторку пора освободить. */
     fun onForeground() {
         container.notifier.cancelAll()
+        // Шаги предлагают на глазах у человека — тот же общий код, что на Android.
+        scope.launch { container.mascotRoutines.offerSteps(container.iosSteps.available) }
     }
 
     /**

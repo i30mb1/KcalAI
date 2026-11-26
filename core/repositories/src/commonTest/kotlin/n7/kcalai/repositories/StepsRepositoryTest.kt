@@ -50,6 +50,21 @@ class StepsRepositoryTest {
         assertNull(BestPhoneSteps(listOf(silent, silent)).between(0, 1))
     }
 
+    /** Health Connect, куда никто не пишет, отвечает нулём. Это не «не ходил», а «шагов нет»: плашке с нулём неоткуда взяться. */
+    @Test
+    fun `копилка пуста всю неделю — шагов нет, а не ноль`() = runBlocking {
+        assertNull(WrittenSteps(PhoneSteps { _, _ -> 0 }).between(at(0), at(20)))
+        assertNull(WrittenSteps(PhoneSteps { _, _ -> null }).between(at(0), at(20)))
+    }
+
+    @Test
+    fun `в копилку пишут — утренний ноль остаётся нулём`() = runBlocking {
+        val onlyBeforeToday = PhoneSteps { from, _ -> if (from < at(0)) 3_000 else 0 }
+
+        assertEquals(0, WrittenSteps(onlyBeforeToday).between(at(0), at(8)))
+        assertEquals(3_000, WrittenSteps(onlyBeforeToday).between(at(0) - 3_600_000, at(8)))
+    }
+
     private suspend fun walk() = walks.record(TreadmillSample(speedKmh = 4.0, distanceM = 2_000, kcal = 80, elapsedS = 1_800), at(18, 30))
 
     @Test

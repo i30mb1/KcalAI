@@ -114,6 +114,12 @@ class MainActivity : ComponentActivity() {
             }
         }
         lifecycleScope.launch {
+            // Шаги предлагают на глазах у человека: в фоне Health Connect не отвечает, и не понять, считаются ли они.
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                container.mascotRoutines.offerSteps(container.stepsAvailable)
+            }
+        }
+        lifecycleScope.launch {
             // Тряску ловим, только пока дневник на экране: в кармане она — не игра.
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 phoneShakes(this@MainActivity).collect { diary.onPhoneShaken() }

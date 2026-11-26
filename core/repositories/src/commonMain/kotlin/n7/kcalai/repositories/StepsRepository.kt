@@ -33,6 +33,23 @@ class BestPhoneSteps(private val sources: List<PhoneSteps>) : PhoneSteps {
     override suspend fun between(from: Long, to: Long): Int? = sources.mapNotNull { it.between(from, to) }.maxOrNull()
 }
 
+/**
+ * Шагомер-копилка вроде Health Connect: сам не считает, а хранит то, что пишут другие приложения. Не пишет
+ * никто — он отвечает нулём, и это не «не ходил», а «шагов нет»: пустой за неделю молчит.
+ */
+class WrittenSteps(private val source: PhoneSteps) : PhoneSteps {
+    override suspend fun between(from: Long, to: Long): Int? {
+        val steps = source.between(from, to) ?: return null
+        if (steps > 0) return steps
+        val week = source.between(to - WEEK_MS, to) ?: return null
+        return if (week > 0) 0 else null
+    }
+
+    private companion object {
+        const val WEEK_MS = 7 * 24 * 60 * 60 * 1000L
+    }
+}
+
 /** Телефон без шагомера — или пока человек не разрешил его читать. */
 object NoPhoneSteps : PhoneSteps {
     override suspend fun between(from: Long, to: Long): Int? = null

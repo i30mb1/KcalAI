@@ -271,8 +271,16 @@ class MascotBrain(
     suspend fun treadmillResult(connected: Boolean, now: Instant): MascotMessageEntity? =
         answer(if (connected) Topic.TREADMILL_YES else Topic.TREADMILL_FAILED, Mascot.GRAIN, now)
 
-    /** Спросить про шагомер телефона — один раз за всю жизнь, в свою очередь, см. [askTreadmill]. */
-    suspend fun askSteps(clock: Clock = Clock.System): MascotMessageEntity? = askOnce(MascotQuestion.STEPS, clock)
+    /**
+     * Считать шаги телефона — предложением, пока телефон их не отдаёт ([used]): раз в месяц, не чаще, в свою
+     * очередь. Не в первый день: он занят знакомством.
+     *
+     * @return заданный вопрос; `null` — шаги уже считаются, дневник только начат или рано
+     */
+    suspend fun offerSteps(used: suspend () -> Boolean, clock: Clock = Clock.System): MascotMessageEntity? {
+        if (!ateBefore(clock.now())) return null
+        return offerMonthly(MascotQuestion.STEPS, used, clock)
+    }
 
     /** «Считать» или «Не надо» про шаги телефона; второй ответ не принимается. На «Считать» отвечают после телефона. */
     suspend fun answerSteps(yes: Boolean, now: Instant): Boolean {
@@ -344,16 +352,20 @@ class MascotBrain(
      * @param used пользуются ли страницей — спрашивается и до очереди, и после: пока ждали, могли начать
      * @return заданный вопрос; `null` — пользуются или рано
      */
-    suspend fun offerWeb(used: suspend () -> Boolean, clock: Clock = Clock.System): MascotMessageEntity? {
-        if (used() || !webOfferDue(clock.now())) return null
-        return inTurn(clock) {
-            // Пока ждали очереди, могли и спросить, и начать пользоваться — тогда не нужно.
-            if (used() || !webOfferDue(clock.now())) null else insertQuestion(MascotQuestion.WEB, clock.now())
-        }
-    }
+    suspend fun offerWeb(used: suspend () -> Boolean, clock: Clock = Clock.System): MascotMessageEntity? =
+        offerMonthly(MascotQuestion.WEB, used, clock)
 
-    private suspend fun webOfferDue(now: Instant): Boolean =
-        dao.lastSaid(MascotQuestion.WEB.topic)?.let { now.toEpochMilliseconds() - it >= WEB_OFFER_EVERY.inWholeMilliseconds } ?: true
+    /** Предложение функции вопросом: пока ею не пользуются — не чаще раза в месяц. */
+    private suspend fun offerMonthly(question: MascotQuestion, used: suspend () -> Boolean, clock: Clock): MascotMessageEntity? {
+        suspend fun due(): Boolean {
+            if (used()) return false
+            val last = dao.lastSaid(question.topic) ?: return true
+            return clock.now().toEpochMilliseconds() - last >= OFFER_EVERY.inWholeMilliseconds
+        }
+        if (!due()) return null
+        // Пока ждали очереди, могли и спросить, и начать пользоваться — сверяемся заново.
+        return inTurn(clock) { if (due()) insertQuestion(question, clock.now()) else null }
+    }
 
     /**
      * Ответ на предложение вести дневник с компьютера: «да» — инструкция с адресом (нет Wi-Fi — что сделать),
@@ -402,9 +414,14 @@ class MascotBrain(
 
     private suspend fun appIsNewDue(now: Instant): Boolean {
         if (dao.lastSaid(Topic.APP_NEW.name) != null) return false
+        if (!ateBefore(now)) return false
+        return dao.observeDay(now.toLocalDateTime(zone).date.toEpochDays()).first().isEmpty()
+    }
+
+    /** Дневник уже ведут: есть записи не только за сегодня. */
+    private suspend fun ateBefore(now: Instant): Boolean {
         val today = now.toLocalDateTime(zone).date.toEpochDays()
-        if (diaryDao.since(today - FOOD_LOOKBACK_DAYS).none { it.dateEpochDay < today }) return false
-        return dao.observeDay(today).first().isEmpty()
+        return diaryDao.since(today - FOOD_LOOKBACK_DAYS).any { it.dateEpochDay < today }
     }
 
     /** Новость о докачке, если о ней ещё не рассказывали; `null` — говорить не о чем. */
@@ -748,5 +765,5 @@ internal fun isStreakMilestone(days: Int): Boolean = days in STREAK_MILESTONES |
 
 private val STREAK_MILESTONES = setOf(3, 7, 14, 21, 30, 50, 100)
 
-/** Не пользуются дневником с компьютера — предложение повторяется не чаще этого. */
-private val WEB_OFFER_EVERY = 30.days
+/** Функцией не пользуются — предложение повторяется не чаще этого. */
+private val OFFER_EVERY = 30.days

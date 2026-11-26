@@ -26,6 +26,7 @@ import n7.kcalai.semantic.LiteRtQueryEmbedder
 import n7.kcalai.work.PrefsOutboxMemory
 import n7.kcalai.work.ScanUploads
 import n7.kcalai.repositories.PhoneSteps
+import n7.kcalai.repositories.WrittenSteps
 import n7.kcalai.walk.HealthConnectSteps
 import n7.kcalai.walk.RecordedSteps
 import n7.kcalai.repositories.BestPhoneSteps
@@ -57,8 +58,11 @@ class AppContainer(context: Context) : AppGraph() {
     /** Своя запись шагов: на телефонах, где в Health Connect шаги никто не пишет. */
     val recordedSteps by lazy { RecordedSteps(appContext) }
 
-    /** Шаги телефона — из того шагомера, что насчитал больше: пустой Health Connect отвечает нулём. */
-    override fun phoneSteps(): PhoneSteps = BestPhoneSteps(listOf(healthSteps, recordedSteps))
+    /** Шаги телефона — из того шагомера, что насчитал больше; Health Connect, куда никто не пишет, молчит. */
+    override fun phoneSteps(): PhoneSteps = BestPhoneSteps(listOf(WrittenSteps(healthSteps), recordedSteps))
+
+    /** Есть ли чем считать шаги — иначе и предлагать нечего. */
+    val stepsAvailable: Boolean get() = healthSteps.available || recordedSteps.available
     override fun shade(): MascotShade = MascotNotifier(appContext)
     override fun outboxMemory(): OutboxMemory = PrefsOutboxMemory(appContext)
 
@@ -97,7 +101,6 @@ class AppContainer(context: Context) : AppGraph() {
         appScope.launch { mascotRoutines.onLaunch() }
         appScope.launch { mascotRoutines.tellWalks() }
         appScope.launch { mascotRoutines.askTreadmill(webUsed) }
-        appScope.launch { mascotRoutines.askSteps(healthSteps.available || recordedSteps.available, webUsed) }
         // Запись шагов включается сама, если «Физическую активность» уже разрешили.
         appScope.launch { recordedSteps.start() }
         startTreadmill()

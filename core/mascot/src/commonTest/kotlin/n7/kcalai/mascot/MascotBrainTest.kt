@@ -817,14 +817,34 @@ class MascotBrainTest {
         assertEquals(1, brain().messages(today).first().size)
     }
 
-    /** Про шаги телефона Зёрнышко спрашивает само один раз; ответ ложится в вопрос и второй раз не принимается. */
+    /** Шаги — функция, и её предлагают: пока телефон их не отдаёт, раз в месяц, не чаще; отдаёт — молчат. */
     @Test
-    fun `про шаги телефона спрашивают один раз, ответ — тоже один`() = runTest {
+    fun `шаги предлагают раз в месяц, пока телефон их не считает`() = runTest {
         started()
         val brain = brain()
 
-        assertEquals(MascotQuestion.STEPS.topic, brain.askSteps(at(now))?.topic)
-        assertNull(brain.askSteps(at(now + 3.days)))
+        assertEquals(MascotQuestion.STEPS.topic, brain.offerSteps(used = { false }, clock = at(now))?.topic)
+        assertTrue(brain.answerSteps(yes = false, now + 1.minutes))
+        assertNull(brain.offerSteps(used = { false }, clock = at(now + 20.days)), "через три недели — рано")
+        eat("Гречка", now + 31.days - 1.hours)
+        assertNotNull(brain.offerSteps(used = { false }, clock = at(now + 31.days)), "через месяц — снова")
+        assertNull(brain.offerSteps(used = { true }, clock = at(now + 70.days)), "уже считает — молчат")
+    }
+
+    /** Первый день занят знакомством: шаги — когда дневник уже ведут. */
+    @Test
+    fun `в первый день про шаги не спрашивают`() = runTest {
+        eat("Гречка", now - 1.hours)
+
+        assertNull(brain().offerSteps(used = { false }, clock = at(now)))
+    }
+
+    @Test
+    fun `на вопрос про шаги ответ — один`() = runTest {
+        started()
+        val brain = brain()
+        brain.offerSteps(used = { false }, clock = at(now))
+
         assertTrue(brain.answerSteps(yes = true, now))
         assertFalse(brain.answerSteps(yes = false, now + 1.minutes))
     }
@@ -859,7 +879,7 @@ class MascotBrainTest {
         val brain = brain()
 
         val treadmill = async { brain.askTreadmill(at(now)) }
-        val steps = async { brain.askSteps(at(now)) }
+        val steps = async { brain.offerSteps(used = { false }, clock = at(now)) }
         advanceUntilIdle()
 
         assertEquals(listOf<MascotQuestion?>(MascotQuestion.TREADMILL), mascots.messages.value.map { it.question })

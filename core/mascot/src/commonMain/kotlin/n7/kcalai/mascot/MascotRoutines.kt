@@ -126,13 +126,15 @@ class MascotRoutines(
     }
 
     /**
-     * Спросить про шагомер телефона — тоже тем, кто открывает дневник с компьютера: шаги видны на странице.
-     * Только если у телефона он есть ([available]); один раз за всю жизнь, см. [MascotBrain.askSteps].
+     * Предложить считать шаги телефона — всем, у кого есть шагомер ([available]), пока телефон их не отдаёт,
+     * см. [MascotBrain.offerSteps]. Зовётся, пока дневник на экране: вопрос задаётся на глазах, а Health Connect
+     * только на переднем плане и отвечает.
      */
-    suspend fun askSteps(available: Boolean, webUsed: Flow<Boolean>) {
+    suspend fun offerSteps(available: Boolean) {
         if (!available) return
-        webUsed.first { it }
-        guarded("не удалось спросить про шаги") { brain.askSteps(clock) }
+        guarded("не удалось спросить про шаги") {
+            brain.offerSteps(used = { steps.day(clock.now().toLocalDateTime(zone).date.toEpochDays()).phone != null }, clock = clock)
+        }
     }
 
     /**

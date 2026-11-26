@@ -35,6 +35,7 @@ import n7.kcalai.model.ModelDelivery
 import n7.kcalai.model.Nutriments
 import n7.kcalai.model.TreadmillSample
 import n7.kcalai.repositories.NoPhoneSteps
+import n7.kcalai.repositories.PhoneSteps
 import n7.kcalai.repositories.StepsRepository
 import n7.kcalai.repositories.WalkRepository
 import n7.kcalai.personal.PersonalRepository
@@ -61,7 +62,7 @@ class MascotRoutinesTest {
         override fun now(): Instant = this@MascotRoutinesTest.now
     }
 
-    private fun routines(): MascotRoutines {
+    private fun routines(phone: PhoneSteps = NoPhoneSteps): MascotRoutines {
         val personal = PersonalRepository(diary, FakePersonalDao(), FakeBodyMetricDao(), goals, zone)
         val brain = MascotBrain(
             dao = mascots,
@@ -70,7 +71,7 @@ class MascotRoutinesTest {
             zone = zone,
             random = Random(1),
         )
-        return MascotRoutines(brain, DiaryRepository(diary, goals, NoContributions), personal, shade, walks, StepsRepository(walks, NoPhoneSteps, zone, clock), zone, clock)
+        return MascotRoutines(brain, DiaryRepository(diary, goals, NoContributions), personal, shade, walks, StepsRepository(walks, phone, zone, clock), zone, clock)
     }
 
     private suspend fun eat(at: Instant) = diary.insert(
@@ -113,6 +114,28 @@ class MascotRoutinesTest {
         routines().tick()
 
         assertTrue(shade.posted.isEmpty())
+        assertTrue(mascots.messages.value.isEmpty())
+    }
+
+    // --- Шаги телефона ----------------------------------------------------------------------
+
+    /** Не только тем, кто открывает дневник с компьютера: без вопроса шаги не найти — плашки без доступа нет. */
+    @Test
+    fun `шаги предлагают всем, у кого есть шагомер`() = runTest {
+        eat(now - 1.days)
+
+        routines().offerSteps(available = true)
+
+        assertEquals(MascotQuestion.STEPS, mascots.messages.value.single().question)
+    }
+
+    @Test
+    fun `без шагомера и когда шаги уже считаются — не спрашивают`() = runTest {
+        eat(now - 1.days)
+
+        routines().offerSteps(available = false)
+        routines(PhoneSteps { _, _ -> 1_200 }).offerSteps(available = true)
+
         assertTrue(mascots.messages.value.isEmpty())
     }
 
