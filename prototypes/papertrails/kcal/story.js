@@ -60,9 +60,11 @@ function start(pt, materials, friends) {
   // ---- «z-z-z» над дремлющими ----
   const letterZ = () => {
     const z = new THREE.Group();
-    z.add(mesh(new THREE.BoxGeometry(0.09, 0.018, 0.012), '#fdf8ea', 0, 0.036, 0));
-    z.add(mesh(new THREE.BoxGeometry(0.09, 0.018, 0.012), '#fdf8ea', 0, -0.036, 0));
-    const slant = mesh(new THREE.BoxGeometry(0.105, 0.018, 0.012), '#fdf8ea');
+    // Тёмно-голубые и крупные: на снегу кремовых не видно.
+    z.scale.setScalar(1.5);
+    z.add(mesh(new THREE.BoxGeometry(0.09, 0.018, 0.012), '#3f6f99', 0, 0.036, 0));
+    z.add(mesh(new THREE.BoxGeometry(0.09, 0.018, 0.012), '#3f6f99', 0, -0.036, 0));
+    const slant = mesh(new THREE.BoxGeometry(0.105, 0.018, 0.012), '#3f6f99');
     slant.rotation.z = 0.68;
     z.add(slant);
     z.visible = false;
@@ -90,7 +92,7 @@ function start(pt, materials, friends) {
     const side = index ? 1 : -1;
     const p = f.root.position;
     const k = 1 - Math.exp(-3 * dt);
-    p.x += (camp.position.x + side * 0.46 - p.x) * k;
+    p.x += (camp.position.x + side * 0.38 - p.x) * k;
     p.z += (camp.position.z + 0.02 - p.z) * k;
     p.y = camp.position.y;
     f.root.rotation.y += (-side * 0.55 - f.root.rotation.y) * k;
@@ -192,7 +194,7 @@ function start(pt, materials, friends) {
       const t = (clock * 0.35 + i * 0.45) % 1;
       const p = friends[i].root.position;
       z.position.set(p.x + 0.1 + t * 0.18, p.y + 0.55 + t * 0.4, p.z);
-      z.scale.setScalar(0.6 + t * 0.7);
+      z.scale.setScalar(0.9 + t);
     });
 
     nextVisit -= dt;

@@ -9,8 +9,10 @@ const PAPER = ['#d95b4a', '#f4c95a', '#4c8f5a', '#86bfe0', '#e8759c', '#fdf8ea']
 
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
-/** Табличка о событии — поверх мира, мимо кликов, сама гаснет. */
+/** Табличка о событии — поверх мира, мимо кликов, сама гаснет. Одна: новая сменяет прошлую, а не ложится сверху. */
+let shown = null;
 export function banner(text) {
+  if (shown) shown.remove();
   const note = document.createElement('div');
   note.textContent = text;
   note.setAttribute('role', 'status');
@@ -18,6 +20,7 @@ export function banner(text) {
     + 'background:#fdf8ea;color:#2c2618;border:2px solid #d9c9a3;box-shadow:0 5px 12px #3d300c55;font:700 14px/1.35 system-ui,sans-serif;'
     + 'transition:opacity .4s,transform .4s;opacity:0;transform:translateY(10px)';
   document.body.appendChild(note);
+  shown = note;
   requestAnimationFrame(() => { note.style.opacity = '1'; note.style.transform = 'none'; });
   setTimeout(() => { note.style.opacity = '0'; }, 4200);
   setTimeout(() => note.remove(), 4800);
