@@ -54,11 +54,13 @@ export const animals = {
   followSide: 0.27,
   /** Reaction radii (world units). */
   headsUp: 1.35,
-  scatter: 0.75, // round 3: 0.6 -> 0.75 (hens scatter a step earlier, so the hop is seen)
+  scatter: 1.2, // KcalAI: 0.75 -> 1.2 — квочки разбегаются раньше, чем герой на них наступит
+  /** KcalAI: ближе этого любой зверь на земле уступает дорогу, как бы он ни был занят. */
+  giveway: 1.25,
   wag: 1.3,
   /** round 3: a bank duck slides into the water / a grazer takes a few steps aside when he comes this close. */
   slide: 0.85,
-  shuffle: 0.62,
+  shuffle: 1.1,
 
   /**
    * round 3 - the companion: ONE cat adopts the traveller. A cat of the place within `notice` trots over; when none has

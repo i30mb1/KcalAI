@@ -636,6 +636,18 @@ export function createAnimals({ scene, renderer, world, traveller, daynight, ass
     }
     return false;
   }
+  /** KcalAI: идут мимо — зверь отходит в сторону (птица вспархивает). Пугливые и клюющие удирают по-своему. */
+  function giveWay(sl, dx, dz) {
+    const sp = sl.sp;
+    if (sl.cool > 0 || sl.vig || sl.mode !== MODE_GROUND || (sl.st !== ST_IDLE && sl.st !== ST_WALK)) return false;
+    if (sp.b === 'shy' || sp.b === 'peck') return false;
+    if (!startFlee(sl, dx, dz, 0.9, false)) return false;
+    sl.st = ST_WALK;
+    sl.v = Math.max(0.5, sp.speed * 3);
+    sl.air = false;
+    sl.cool = 2.5;
+    return true;
+  }
   function tryFollow(sl, d2, tsp) {
     const sp = sl.sp;
     if (!(sp.follow > 0) || sl.leave || sl.cool > 0 || d2 > sp.notice * sp.notice || tsp < 0.4 || (sl.st === ST_IDLE && sl.idle === sl.set.sleep)) return false;
@@ -837,6 +849,8 @@ export function createAnimals({ scene, renderer, world, traveller, daynight, ass
         // walks in a line behind the one in front
         const ex = leader.x - sl.x; const ez = leader.z - sl.z;
         if (ex * ex + ez * ez > sp.gap * sp.gap) advance(sl, leader.x, leader.z, sp.speed * 1.2, dt);
+        pose = set.stand;
+      } else if (d2 < C.giveway * C.giveway && giveWay(sl, dx, dz)) {
         pose = set.stand;
       } else switch (sl.st) {
         case ST_IDLE: {
